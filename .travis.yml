@@ -16,4 +16,4 @@ script:
   #mvn package
   #mvn clean verify
   #mvn -U clean install
-  - mvn -U clean install
+  - mvn clean verify

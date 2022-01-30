@@ -521,7 +521,10 @@ public class ConfigurationImpl
 
         // set up property descriptor
         PropertyDescriptor pd;
-        try {
+        
+        pd = new PropertyDescriptor ( (String) Introspector.decapitalize(prop), getClass() );
+        
+        /*try {
             pd = new PropertyDescriptor(Introspector.decapitalize(prop),
                 getClass());
         } catch (IntrospectionException ie) {
@@ -530,7 +533,8 @@ public class ConfigurationImpl
             // be thrown. Try to create a PD with no read or write methods.
             pd = new PropertyDescriptor(Introspector.decapitalize(prop),
                 (Method) null, (Method) null);
-        }
+        }*/
+        
         pd.setDisplayName(findLocalized(prop + "-name", true, val.getScope()));
         pd.setShortDescription(findLocalized(prop + "-desc", true,
             val.getScope()));

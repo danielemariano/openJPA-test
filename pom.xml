@@ -168,11 +168,11 @@
         <jmock.version>2.9.0</jmock.version>
 
         <servlet-api.version>4.0.0</servlet-api.version>
-    	   <sonar.projectKey>danielemariano:${project.groupId}:${project.artifactId}</sonar.projectKey>
-        <sonar.links.homepage>https://github.com/danielemariano/bookkeeper-test</sonar.links.homepage>
-        <sonar.links.ci>https://travis-ci.com/danielemariano/bookkeeper-test</sonar.links.ci>
-        <sonar.links.scm>https://github.com/danielemariano/bookkeeper-test</sonar.links.scm>
-        <sonar.links.issue>https://github.com/danielemariano/bookkeeper-test/issues</sonar.links.issue>
+    	      <sonar.projectKey>danielemariano:${project.groupId}:${project.artifactId}</sonar.projectKey>
+        <sonar.links.homepage>https://github.com/danielemariano/openJPA-test</sonar.links.homepage>
+        <sonar.links.ci>https://travis-ci.com/danielemariano/openJPA-test</sonar.links.ci>
+        <sonar.links.scm>https://github.com/danielemariano/openJPA-test</sonar.links.scm>
+        <sonar.links.issue>https://github.com/danielemariano/openJPA-test/issues</sonar.links.issue>
 
     </properties>
 

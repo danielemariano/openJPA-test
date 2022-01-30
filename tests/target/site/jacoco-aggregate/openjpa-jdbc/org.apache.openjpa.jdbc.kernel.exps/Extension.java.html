@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Extension.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">Extension.java</span></div><h1>Extension.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.sql.SQLException;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * Filter listener that evaluates to a value.
+ *
+ * @author Abe White
+ */
+class Extension
+    extends AbstractVal
+    implements Val, Exp {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final JDBCFilterListener _listener;
+    private final Val _target;
+    private final Val _arg;
+    private final ClassMapping _candidate;
+<span class="nc" id="L49">    private ClassMetaData _meta = null;</span>
+<span class="nc" id="L50">    private Class _cast = null;</span>
+
+    /**
+     * Constructor.
+     */
+    public Extension(JDBCFilterListener listener, Val target,
+<span class="nc" id="L56">        Val arg, ClassMapping candidate) {</span>
+<span class="nc" id="L57">        _listener = listener;</span>
+<span class="nc" id="L58">        _target = target;</span>
+<span class="nc" id="L59">        _arg = arg;</span>
+<span class="nc" id="L60">        _candidate = candidate;</span>
+<span class="nc" id="L61">    }</span>
+
+    @Override
+    public ClassMetaData getMetaData() {
+<span class="nc" id="L65">        return _meta;</span>
+    }
+
+    @Override
+    public void setMetaData(ClassMetaData meta) {
+<span class="nc" id="L70">        _meta = meta;</span>
+<span class="nc" id="L71">    }</span>
+
+    @Override
+    public boolean isVariable() {
+<span class="nc" id="L75">        return false;</span>
+    }
+
+    @Override
+    public boolean isAggregate() {
+<span class="nc" id="L80">        return false;</span>
+    }
+
+    @Override
+    public Class getType() {
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (_cast != null)</span>
+<span class="nc" id="L86">            return _cast;</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">        Class targetClass = (_target == null) ? null : _target.getType();</span>
+<span class="nc" id="L88">        return _listener.getType(targetClass, getArgTypes());</span>
+    }
+
+    private Class[] getArgTypes() {
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if (_arg == null)</span>
+<span class="nc" id="L93">            return null;</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if (_arg instanceof Args)</span>
+<span class="nc" id="L95">            return ((Args) _arg).getTypes();</span>
+<span class="nc" id="L96">        return new Class[]{ _arg.getType() };</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L101">        _cast = type;</span>
+<span class="nc" id="L102">    }</span>
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+        // note that we tell targets and args to extensions that are sql
+        // paths to go ahead and join to their related object (if any),
+        // because we assume that, unlike most operations, if a relation
+        // field like a 1-1 is given as the target of an extension, then
+        // the extension probably acts on some field or column in the
+        // related object, not the 1-1 field itself
+<span class="nc" id="L112">        ExpState targetState = null;</span>
+<span class="nc" id="L113">        ExpState argState = null;</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (_target != null)</span>
+<span class="nc" id="L115">            targetState = _target.initialize(sel, ctx, JOIN_REL);</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (_arg != null)</span>
+<span class="nc" id="L117">            argState = _arg.initialize(sel, ctx, JOIN_REL);</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        Joins j1 = (targetState == null) ? null : targetState.joins;</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        Joins j2 = (argState == null) ? null : argState.joins;</span>
+<span class="nc" id="L120">        return new ExtensionExpState(sel.and(j1, j2), targetState,</span>
+            argState);
+    }
+
+    /**
+     * Expression state.
+     */
+    private static class ExtensionExpState
+        extends ExpState {
+
+        public final ExpState targetState;
+        public final ExpState argState;
+
+        public ExtensionExpState(Joins joins, ExpState targetState,
+            ExpState argState) {
+<span class="nc" id="L135">            super(joins);</span>
+<span class="nc" id="L136">            this.targetState = targetState;</span>
+<span class="nc" id="L137">            this.argState = argState;</span>
+<span class="nc" id="L138">        }</span>
+    }
+
+    @Override
+    public void select(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L144">        sel.select(newSQLBuffer(sel, ctx, state), this);</span>
+<span class="nc" id="L145">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L150">        ExtensionExpState estate = (ExtensionExpState) state;</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        if (_target != null)</span>
+<span class="nc" id="L152">            _target.selectColumns(sel, ctx, estate.targetState, true);</span>
+<span class="nc bnc" id="L153" title="All 2 branches missed.">        if (_arg != null)</span>
+<span class="nc" id="L154">            _arg.selectColumns(sel, ctx, estate.argState, true);</span>
+<span class="nc" id="L155">    }</span>
+
+    @Override
+    public void groupBy(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L159">        sel.groupBy(newSQLBuffer(sel, ctx, state));</span>
+<span class="nc" id="L160">    }</span>
+
+    @Override
+    public void orderBy(Select sel, ExpContext ctx, ExpState state,
+        boolean asc) {
+<span class="nc" id="L165">        sel.orderBy(newSQLBuffer(sel, ctx, state), asc, false, getSelectAs());</span>
+<span class="nc" id="L166">    }</span>
+
+    private SQLBuffer newSQLBuffer(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L169">        calculateValue(sel, ctx, state, null, null);</span>
+<span class="nc" id="L170">        SQLBuffer buf = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L171">        appendTo(sel, ctx, state, buf, 0);</span>
+<span class="nc" id="L172">        return buf;</span>
+    }
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res)
+        throws SQLException {
+<span class="nc" id="L178">        return Filters.convert(res.getObject(this,</span>
+<span class="nc" id="L179">            JavaSQLTypes.JDBC_DEFAULT, null), getType());</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L185">        ExtensionExpState estate = (ExtensionExpState) state;</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (_target != null)</span>
+<span class="nc" id="L187">            _target.calculateValue(sel, ctx, estate.targetState, null, null);</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (_arg != null)</span>
+<span class="nc" id="L189">            _arg.calculateValue(sel, ctx, estate.argState, null, null);</span>
+<span class="nc" id="L190">    }</span>
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L194">        return 1;</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L200">        ExtensionExpState estate = (ExtensionExpState) state;</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        FilterValue target = (_target == null) ? null</span>
+<span class="nc" id="L202">            : new FilterValueImpl(sel, ctx, estate.targetState, _target);</span>
+<span class="nc" id="L203">        _listener.appendTo(sql, target, getArgs(sel, ctx, estate.argState),</span>
+            _candidate, ctx.store);
+<span class="nc" id="L205">        sel.append(sql, state.joins);</span>
+<span class="nc" id="L206">    }</span>
+
+    private FilterValue[] getArgs(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc bnc" id="L209" title="All 2 branches missed.">        if (_arg == null)</span>
+<span class="nc" id="L210">            return null;</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">        if (_arg instanceof Args)</span>
+<span class="nc" id="L212">            return ((Args) _arg).newFilterValues(sel, ctx, state);</span>
+<span class="nc" id="L213">        return new FilterValue[] {</span>
+            new FilterValueImpl(sel, ctx, state, _arg)
+        };
+    }
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L220">        visitor.enter((Exp) this);</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if (_target != null)</span>
+<span class="nc" id="L222">            _target.acceptVisit(visitor);</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if (_arg != null)</span>
+<span class="nc" id="L224">            _arg.acceptVisit(visitor);</span>
+<span class="nc" id="L225">        visitor.exit((Exp) this);</span>
+<span class="nc" id="L226">    }</span>
+
+    //////////////////////
+    // Exp implementation
+    //////////////////////
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, Map contains) {
+<span class="nc" id="L234">        return initialize(sel, ctx, 0);</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L240">        calculateValue(sel, ctx, state, null, null);</span>
+<span class="nc" id="L241">        appendTo(sel, ctx, state, sql, 0);</span>
+<span class="nc" id="L242">        sel.append(sql, state.joins);</span>
+<span class="nc" id="L243">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

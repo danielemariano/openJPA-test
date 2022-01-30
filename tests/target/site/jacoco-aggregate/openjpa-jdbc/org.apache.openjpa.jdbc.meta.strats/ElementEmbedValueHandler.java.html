@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ElementEmbedValueHandler.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">ElementEmbedValueHandler.java</span></div><h1>ElementEmbedValueHandler.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+import java.util.LinkedList;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.Embeddable;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.RelationId;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.meta.ValueMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * &lt;p&gt;Handler for embedded objects as elements of a collection or map.  For
+ * embedded objects as fields, use the more powerful
+ * {@link EmbedFieldStrategy}.&lt;/p&gt;
+ *
+ * @author Abe White
+ * @since 0.4.0, 1.1.0
+ */
+<span class="nc" id="L48">public class ElementEmbedValueHandler</span>
+    extends EmbedValueHandler
+    implements RelationId {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L55">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L56">        (ElementEmbedValueHandler.class);</span>
+
+<span class="nc" id="L58">    private ValueMapping _vm = null;</span>
+<span class="nc" id="L59">    private Column[] _cols = null;</span>
+<span class="nc" id="L60">    private Object[] _args = null;</span>
+<span class="nc" id="L61">    private int _nullIdx = -1;</span>
+<span class="nc" id="L62">    private boolean _synthetic = false;</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Column[] map(ValueMapping vm, String name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L71">        DBDictionary dict = vm.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        DBIdentifier colName = DBIdentifier.newColumn(name, dict != null ? dict.delimitAll() : false);</span>
+<span class="nc" id="L73">        return map(vm, colName, io, adapt);</span>
+    }
+
+    public Column[] map(ValueMapping vm, DBIdentifier name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L78">        LinkedList cols = new LinkedList();</span>
+<span class="nc" id="L79">        LinkedList args = new LinkedList();</span>
+<span class="nc" id="L80">        super.map(vm, name, io, adapt, cols, args);</span>
+
+<span class="nc" id="L82">        ValueMappingInfo vinfo = vm.getValueInfo();</span>
+<span class="nc" id="L83">        Column nullInd = vinfo.getNullIndicatorColumn(vm, name,</span>
+<span class="nc" id="L84">            vm.getFieldMapping().getTable(), adapt);</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (nullInd != null)</span>
+<span class="nc" id="L86">            vm.setColumns(new Column[]{ nullInd });</span>
+
+        // record index of null indicator column and whether it is synthetic
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        if (nullInd != null) {</span>
+<span class="nc" id="L90">            _nullIdx = cols.indexOf(nullInd);</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">            if (_nullIdx == -1) {</span>
+<span class="nc" id="L92">                cols.addFirst(nullInd);</span>
+<span class="nc" id="L93">                args.addFirst(null);</span>
+<span class="nc" id="L94">                _nullIdx = 0;</span>
+<span class="nc" id="L95">                _synthetic = true;</span>
+            }
+        }
+
+<span class="nc" id="L99">        _vm = vm;</span>
+<span class="nc" id="L100">        _cols = (Column[]) cols.toArray(new Column[cols.size()]);</span>
+<span class="nc" id="L101">        _args = args.toArray();</span>
+<span class="nc" id="L102">        return _cols;</span>
+    }
+
+    @Override
+    public boolean objectValueRequiresLoad(ValueMapping vm) {
+<span class="nc" id="L107">        return true;</span>
+    }
+
+    @Override
+    public Object getResultArgument(ValueMapping vm) {
+<span class="nc" id="L112">        return _args;</span>
+    }
+
+    @Override
+    public Object toDataStoreValue(ValueMapping vm, Object val,
+        JDBCStore store) {
+<span class="nc" id="L118">        OpenJPAStateManager em = store.getContext().getStateManager(val);</span>
+<span class="nc" id="L119">        Object rval = null;</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        if (_cols.length &gt; 1)</span>
+<span class="nc" id="L121">            rval = new Object[_cols.length];</span>
+
+        // set null indicator column
+<span class="nc" id="L124">        int idx = 0;</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if (_synthetic) {</span>
+<span class="nc" id="L126">            Object cval = ((EmbeddedClassStrategy) vm.getEmbeddedMapping().</span>
+<span class="nc" id="L127">                getStrategy()).getNullIndicatorValue(em);</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">            if (_cols.length == 1)</span>
+<span class="nc" id="L129">                return cval;</span>
+<span class="nc" id="L130">            ((Object[]) rval)[idx++] = cval;</span>
+        }
+
+<span class="nc" id="L133">        return super.toDataStoreValue(em, vm, store, _cols, rval, idx);</span>
+    }
+
+    @Override
+    public Object toObjectValue(ValueMapping vm, Object val,
+        OpenJPAStateManager sm, JDBCStore store, JDBCFetchConfiguration fetch)
+        throws SQLException {
+        // check null indicator first
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        if (_nullIdx != -1) {</span>
+            Object nval;
+<span class="nc bnc" id="L143" title="All 2 branches missed.">            if (_cols.length == 1)</span>
+<span class="nc" id="L144">                nval = val;</span>
+            else
+<span class="nc" id="L146">                nval = ((Object[]) val)[_nullIdx];</span>
+<span class="nc" id="L147">            if (((EmbeddedClassStrategy) vm.getEmbeddedMapping().</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">                getStrategy()).indicatesNull(nval))</span>
+<span class="nc" id="L149">                return null;</span>
+        }
+
+        // create embedded instance
+<span class="nc" id="L153">        OpenJPAStateManager em = store.getContext().embed(null, null, sm, vm);</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        int idx = (_synthetic) ? 1 : 0;</span>
+<span class="nc" id="L155">        super.toObjectValue(em, vm, val, store, fetch, _cols, idx);</span>
+
+        // after loading everything from result, load the rest of the
+        // configured fields
+<span class="nc" id="L159">        em.load(fetch);</span>
+<span class="nc" id="L160">        return em.getManagedInstance();</span>
+    }
+
+    /////////////////////////////
+    // RelationId implementation
+    /////////////////////////////
+
+    @Override
+    public Object toRelationDataStoreValue(OpenJPAStateManager sm, Column col) {
+<span class="nc" id="L169">        return toRelationDataStoreValue(sm, col, 0);</span>
+    }
+
+    /**
+     * Recursive helper.
+     */
+    private Object toRelationDataStoreValue(OpenJPAStateManager sm, Column col,
+        int idx) {
+<span class="nc" id="L177">        FieldMapping field = findField(col, idx);</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">        if (field == null)</span>
+<span class="nc" id="L179">            throw new InternalException();</span>
+
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (field.getHandler() instanceof RelationId)</span>
+<span class="nc" id="L182">            return ((RelationId) field.getStrategy()).</span>
+<span class="nc" id="L183">                toRelationDataStoreValue(sm, col);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (field.getStrategy() instanceof RelationId)</span>
+<span class="nc" id="L185">            return ((RelationId) field.getStrategy()).</span>
+<span class="nc" id="L186">                toRelationDataStoreValue(sm, col);</span>
+<span class="nc" id="L187">        return toRelationDataStoreValue(sm, col, field.getIndex() + 1);</span>
+    }
+
+    /**
+     * Find the first field mapping that uses the given column starting with
+     * the given field index.
+     */
+    private FieldMapping findField(Column col, int idx) {
+<span class="nc" id="L195">        FieldMapping[] fms = _vm.getEmbeddedMapping().getFieldMappings();</span>
+        Column[] cols;
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        for (int i = idx; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">            if (fms[i].getManagement() != FieldMetaData.MANAGE_PERSISTENT)</span>
+<span class="nc" id="L199">                continue;</span>
+<span class="nc" id="L200">            cols = ((Embeddable) fms[i]).getColumns();</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">            for (int j = 0; j &lt; cols.length; j++)</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">                if (cols[j] == col)</span>
+<span class="nc" id="L203">                    return fms[i];</span>
+        }
+<span class="nc" id="L205">        return null;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,436 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SelectConstructor.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">SelectConstructor.java</span></div><h1>SelectConstructor.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStoreQuery;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.exps.AbstractExpressionVisitor;
+import org.apache.openjpa.kernel.exps.Constant;
+import org.apache.openjpa.kernel.exps.Context;
+import org.apache.openjpa.kernel.exps.Expression;
+import org.apache.openjpa.kernel.exps.QueryExpressions;
+import org.apache.openjpa.kernel.exps.Subquery;
+import org.apache.openjpa.kernel.exps.Value;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.UnsupportedException;
+
+/**
+ * Turns parsed queries into selects.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L47">public class SelectConstructor</span>
+    implements Serializable {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L52">    private boolean _extent = false;</span>
+<span class="nc" id="L53">    private Select _subselect = null;</span>
+<span class="nc" id="L54">    private static final Localizer _loc = Localizer.forPackage(SelectConstructor.class);</span>
+
+    /**
+     * Return true if we know the select to have on criteria; to be an extent.
+     * Note that even if this method returns false, {@link #evaluate} may still
+     * return null if we haven't cached whether the query is an extent yet.
+     */
+    public boolean isExtent() {
+<span class="nc" id="L62">        return _extent;</span>
+    }
+
+    public void setSubselect(Select subselect) {
+<span class="nc" id="L66">        _subselect = subselect;</span>
+<span class="nc" id="L67">    }</span>
+
+    /**
+     * Evaluate the expression, returning a new select and filling in any
+     * associated expression state. Use {@link #select} to then select the data.
+     *
+     * @param ctx fill with execution context
+     * @param state will be filled with expression state
+     */
+    public Select evaluate(ExpContext ctx, Select parent, String alias,
+        QueryExpressions exps, QueryExpressionsState state) {
+        // already know that this query is equivalent to an extent?
+        Select sel;
+<span class="nc bnc" id="L80" title="All 2 branches missed.">        if (_extent) {</span>
+<span class="nc" id="L81">            sel = ctx.store.getSQLFactory().newSelect();</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">            sel.setAutoDistinct((exps.distinct &amp; QueryExpressions.DISTINCT_AUTO) != 0);</span>
+<span class="nc" id="L83">            return sel;</span>
+        }
+
+        // create a new select and initialize it with the joins needed for
+        // the criteria of this query
+<span class="nc" id="L88">        sel = newSelect(ctx, parent, alias, exps, state);</span>
+<span class="nc" id="L89">        sel.setTablePerClassMeta(ctx.tpcMeta);</span>
+
+        // create where clause; if there are no where conditions and
+        // no ordering or projections, we return null to signify that this
+        // query should be treated like an extent
+<span class="nc" id="L94">        Select inner = sel.getFromSelect();</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        SQLBuffer where = buildWhere((inner != null) ? inner : sel, ctx,</span>
+            state.filter, exps.filter);
+<span class="nc bnc" id="L97" title="All 6 branches missed.">        if (where == null &amp;&amp; exps.projections.length == 0</span>
+            &amp;&amp; exps.ordering.length == 0
+<span class="nc bnc" id="L99" title="All 4 branches missed.">            &amp;&amp; (sel.getJoins() == null || sel.getJoins().isEmpty())) {</span>
+<span class="nc" id="L100">            _extent = true;</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">            sel.setAutoDistinct((exps.distinct &amp; QueryExpressions.DISTINCT_AUTO) != 0);</span>
+<span class="nc" id="L102">            return sel;</span>
+        }
+
+        // now set sql criteria; it goes on the inner select if present
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        if (inner != null)</span>
+<span class="nc" id="L107">            inner.where(where);</span>
+        else
+<span class="nc" id="L109">            sel.where(where);</span>
+
+        // apply grouping and having.  this does not select the grouping
+        // columns, just builds the GROUP BY clauses.  we don't build the
+        // ORDER BY clauses yet because if we decide to add this select
+        // to a union, the ORDER BY values get aliased differently
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        if (exps.having != null) {</span>
+<span class="nc" id="L116">            Exp havingExp = (Exp) exps.having;</span>
+<span class="nc" id="L117">            SQLBuffer buf = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L118">            havingExp.appendTo(sel, ctx, state.having, buf);</span>
+<span class="nc" id="L119">            sel.having(buf);</span>
+        }
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        for (int i = 0; i &lt; exps.grouping.length; i++)</span>
+<span class="nc" id="L122">            ((Val) exps.grouping[i]).groupBy(sel, ctx, state.grouping[i]);</span>
+
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        if (exps.projections.length == 1) {</span>
+<span class="nc" id="L125">            Val val = (Val) exps.projections[0];</span>
+<span class="nc bnc" id="L126" title="All 4 branches missed.">            if (val instanceof Count &amp;&amp; ((Count)val).isCountDistinctMultiCols()) {</span>
+<span class="nc" id="L127">                Select newSel = ctx.store.getSQLFactory().newSelect();</span>
+<span class="nc" id="L128">                newSel.select(&quot;COUNT(*)&quot;, val);</span>
+<span class="nc" id="L129">                newSel.setExpectedResultCount(1, true);</span>
+<span class="nc" id="L130">                newSel.setFromSelect(sel);</span>
+<span class="nc" id="L131">                sel.setExpectedResultCount(0, true);</span>
+<span class="nc" id="L132">                sel = newSel;</span>
+            }
+        }
+<span class="nc" id="L135">        return sel;</span>
+    }
+
+    /**
+     * Return a new select with expressions initialized.
+     */
+    private Select newSelect(ExpContext ctx, Select parent,
+        String alias, QueryExpressions exps, QueryExpressionsState state) {
+<span class="nc" id="L143">        Select subselect = JDBCStoreQuery.getThreadLocalSelect(_subselect);</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        Select sel = parent != null ? subselect</span>
+<span class="nc" id="L145">            : ctx.store.getSQLFactory().newSelect();</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        sel.setAutoDistinct((exps.distinct &amp; QueryExpressions.DISTINCT_AUTO) != 0);</span>
+<span class="nc" id="L147">        sel.setJoinSyntax(ctx.fetch.getJoinSyntax());</span>
+<span class="nc" id="L148">        sel.setParent(parent, alias);</span>
+
+<span class="nc" id="L150">        Context[] qryCtx = JDBCStoreQuery.getThreadLocalContext();</span>
+<span class="nc" id="L151">        Context lctx = null;</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        for (int i = 0; i &lt; qryCtx.length; i++) {</span>
+<span class="nc bnc" id="L153" title="All 2 branches missed.">            if (qryCtx[i].cloneFrom == exps.ctx()) {</span>
+<span class="nc" id="L154">                lctx = qryCtx[i];</span>
+<span class="nc" id="L155">                break;</span>
+            }
+        }
+
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        if (sel.ctx() == null)</span>
+<span class="nc" id="L160">            sel.setContext(lctx);</span>
+
+<span class="nc bnc" id="L162" title="All 4 branches missed.">        if (parent == null &amp;&amp; lctx.getSubselContexts() != null) {</span>
+            // this is the case subselect was created before parent got created
+<span class="nc" id="L164">            List&lt;Context&gt; subselCtxs = lctx.getSubselContexts();</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">            for (Context subselCtx : subselCtxs) {</span>
+<span class="nc" id="L166">                Select subsel = (Select) subselCtx.getSelect();</span>
+<span class="nc" id="L167">                Subquery subquery = subselCtx.getSubquery();</span>
+<span class="nc" id="L168">                subsel.setParent(sel, subquery.getCandidateAlias());</span>
+<span class="nc" id="L169">            }</span>
+        }
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        if (HasContainsExpressionVisitor.hasContains(exps.filter)) {</span>
+<span class="nc" id="L172">            sel.setHasSubselect(true);</span>
+        }
+<span class="nc" id="L174">        initialize(sel, ctx, exps, state);</span>
+
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        if (!sel.getAutoDistinct()) {</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">            if ((exps.distinct &amp; QueryExpressions.DISTINCT_TRUE) != 0)</span>
+<span class="nc" id="L178">                sel.setDistinct(true);</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">            else if ((exps.distinct &amp; QueryExpressions.DISTINCT_FALSE) != 0)</span>
+<span class="nc" id="L180">                sel.setDistinct(false);</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        } else if (exps.projections.length &gt; 0) {</span>
+<span class="nc bnc" id="L182" title="All 4 branches missed.">            if (!sel.isDistinct() &amp;&amp; (exps.distinct &amp; QueryExpressions.DISTINCT_TRUE) != 0){</span>
+                // if the select is not distinct but the query is, force
+                // the select to be distinct
+<span class="nc" id="L185">                sel.setDistinct(true);</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">            } else if (sel.isDistinct()) {</span>
+                // when aggregating data or making a non-distinct projection
+                // from a distinct select, we have to select from a tmp
+                // table formed by a distinct subselect in the from clause;
+                // this subselect selects the pks of the candidate (to
+                // get unique candidate values) and needed field values and
+                // applies the where conditions; the outer select applies
+                // ordering, grouping, etc
+<span class="nc" id="L194">                boolean agg = exps.isAggregate();</span>
+<span class="nc" id="L195">                boolean candidate = ProjectionExpressionVisitor.</span>
+<span class="nc" id="L196">                    hasCandidateProjections(exps.projections);</span>
+<span class="nc bnc" id="L197" title="All 6 branches missed.">                if (agg || (candidate</span>
+                    &amp;&amp; (exps.distinct &amp; QueryExpressions.DISTINCT_TRUE) == 0)) {
+<span class="nc" id="L199">                    DBDictionary dict = ctx.store.getDBDictionary();</span>
+<span class="nc" id="L200">                    dict.assertSupport(dict.supportsSubselect,</span>
+                        &quot;SupportsSubselect&quot;);
+
+<span class="nc" id="L203">                    Select inner = sel;</span>
+<span class="nc" id="L204">                    sel = ctx.store.getSQLFactory().newSelect();</span>
+<span class="nc" id="L205">                    sel.setParent(parent, alias);</span>
+<span class="nc bnc" id="L206" title="All 4 branches missed.">                    sel.setDistinct(agg</span>
+                        &amp;&amp; (exps.distinct &amp; QueryExpressions.DISTINCT_TRUE) != 0);
+<span class="nc" id="L208">                    sel.setFromSelect(inner);</span>
+
+                // auto-distincting happens to get unique candidate instances
+                // back; don't auto-distinct if the user isn't selecting
+                // candidate data
+<span class="nc bnc" id="L213" title="All 4 branches missed.">                } else if (!candidate</span>
+                    &amp;&amp; (exps.distinct &amp; QueryExpressions.DISTINCT_TRUE) == 0)
+<span class="nc" id="L215">                    sel.setDistinct(false);</span>
+            }
+        }
+<span class="nc" id="L218">        return sel;</span>
+    }
+
+    /**
+     * Initialize all expressions.
+     */
+    private void initialize(Select sel, ExpContext ctx, QueryExpressions exps,
+        QueryExpressionsState state) {
+<span class="nc" id="L226">        Map contains = null;</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (HasContainsExpressionVisitor.hasContains(exps.filter)</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">            || HasContainsExpressionVisitor.hasContains(exps.having))</span>
+<span class="nc" id="L229">            contains = new HashMap(7);</span>
+
+        // initialize filter and having expressions
+<span class="nc" id="L232">        Exp filterExp = (Exp) exps.filter;</span>
+<span class="nc" id="L233">        state.filter = filterExp.initialize(sel, ctx, contains);</span>
+<span class="nc" id="L234">        Exp havingExp = (Exp) exps.having;</span>
+<span class="nc bnc" id="L235" title="All 2 branches missed.">        if (havingExp != null)</span>
+<span class="nc" id="L236">            state.having = havingExp.initialize(sel, ctx, contains);</span>
+
+        // get the top-level joins and null the expression's joins
+        // at the same time so they aren't included in the where/having SQL
+<span class="nc" id="L240">        Joins filterJoins = state.filter.joins;</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        Joins havingJoins = (state.having == null) ? null : state.having.joins;</span>
+<span class="nc" id="L242">        Joins joins = sel.and(filterJoins, havingJoins);</span>
+
+        // initialize result values
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if (exps.projections.length &gt; 0) {</span>
+<span class="nc" id="L246">            state.projections = new ExpState[exps.projections.length];</span>
+            Val resultVal;
+<span class="nc bnc" id="L248" title="All 2 branches missed.">            for (int i = 0; i &lt; exps.projections.length; i++) {</span>
+<span class="nc" id="L249">                resultVal = (Val) exps.projections[i];</span>
+<span class="nc bnc" id="L250" title="All 4 branches missed.">                if (!ctx.store.getDBDictionary().supportsParameterInSelect &amp;&amp; resultVal instanceof Lit) {</span>
+<span class="nc" id="L251">                    ((Lit)resultVal).setRaw(true);</span>
+                }
+                // have to join through to related type for pc object
+                // projections; this ensures that we have all our joins cached
+<span class="nc" id="L255">                state.projections[i] = resultVal.initialize(sel, ctx,</span>
+                    Val.JOIN_REL | Val.FORCE_OUTER);
+<span class="nc bnc" id="L257" title="All 4 branches missed.">                if (exps.projections.length &gt; 1 &amp;&amp; resultVal instanceof Count) {</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">                    if (((Count)resultVal).isCountDistinctMultiCols())</span>
+<span class="nc" id="L259">                        throw new UnsupportedException(_loc.get(&quot;count-distinct-multi-col-only&quot;));</span>
+                }
+<span class="nc" id="L261">                joins = sel.and(joins, state.projections[i].joins);</span>
+            }
+        }
+
+        // initialize grouping
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        if (exps.grouping.length &gt; 0) {</span>
+<span class="nc" id="L267">            state.grouping = new ExpState[exps.grouping.length];</span>
+            Val groupVal;
+<span class="nc bnc" id="L269" title="All 2 branches missed.">            for (int i = 0; i &lt; exps.grouping.length; i++) {</span>
+<span class="nc" id="L270">                groupVal = (Val) exps.grouping[i];</span>
+                // have to join through to related type for pc object groupings;
+                // this ensures that we have all our joins cached
+<span class="nc" id="L273">                state.grouping[i] = groupVal.initialize(sel, ctx, Val.JOIN_REL);</span>
+<span class="nc" id="L274">                joins = sel.and(joins, state.grouping[i].joins);</span>
+            }
+        }
+
+        // initialize ordering
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        if (exps.ordering.length &gt; 0) {</span>
+<span class="nc" id="L280">            state.ordering = new ExpState[exps.ordering.length];</span>
+            Val orderVal;
+<span class="nc bnc" id="L282" title="All 2 branches missed.">            for (int i = 0; i &lt; exps.ordering.length; i++) {</span>
+<span class="nc" id="L283">                orderVal = (Val) exps.ordering[i];</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">                if (contains(orderVal, exps.grouping))</span>
+<span class="nc" id="L285">                    state.ordering[i] = orderVal.initialize(sel, ctx, Val.JOIN_REL);</span>
+                else
+<span class="nc" id="L287">                    state.ordering[i] = orderVal.initialize(sel, ctx, 0);</span>
+
+<span class="nc" id="L289">                joins = sel.and(joins, state.ordering[i].joins);</span>
+            }
+        }
+<span class="nc" id="L292">        sel.where(joins);</span>
+<span class="nc" id="L293">    }</span>
+
+    private boolean contains(Val orderVal, Value[] grouping) {
+<span class="nc bnc" id="L296" title="All 2 branches missed.">        for (int i = 0; i &lt; grouping.length; i++) {</span>
+<span class="nc" id="L297">            Val groupVal = (Val) grouping[i];</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">            if (orderVal.equals(groupVal))</span>
+<span class="nc" id="L299">                return true;</span>
+        }
+<span class="nc" id="L301">        return false;</span>
+    }
+
+    /**
+     * Create the where sql.
+     */
+    private SQLBuffer buildWhere(Select sel, ExpContext ctx, ExpState state,
+        Expression filter) {
+        // create where buffer
+<span class="nc" id="L310">        SQLBuffer where = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L311">        where.append(&quot;(&quot;);</span>
+<span class="nc" id="L312">        Exp filterExp = (Exp) filter;</span>
+<span class="nc" id="L313">        filterExp.appendTo(sel, ctx, state, where);</span>
+
+<span class="nc bnc" id="L315" title="All 4 branches missed.">        if (where.sqlEquals(&quot;(&quot;) || where.sqlEquals(&quot;(1 = 1&quot;))</span>
+<span class="nc" id="L316">            return null;</span>
+<span class="nc" id="L317">        return where.append(&quot;)&quot;);</span>
+    }
+
+    /**
+     * Select the data for this query.
+     */
+    public void select(Select sel, ExpContext ctx, ClassMapping mapping,
+        boolean subclasses, QueryExpressions exps, QueryExpressionsState state,
+        int eager) {
+<span class="nc" id="L326">        Select inner = sel.getFromSelect();</span>
+        Val val;
+<span class="nc" id="L328">        Joins joins = null;</span>
+<span class="nc" id="L329">        boolean isCountDistinctMultiCols = false;</span>
+
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        if (sel.getSubselectPath() != null)</span>
+<span class="nc" id="L332">            joins = sel.newJoins().setSubselect(sel.getSubselectPath());</span>
+
+        // build ordering clauses before select so that any eager join
+        // ordering gets applied after query ordering
+<span class="nc bnc" id="L336" title="All 2 branches missed.">        for (int i = 0; i &lt; exps.ordering.length; i++)</span>
+<span class="nc" id="L337">            ((Val) exps.ordering[i]).orderBy(sel, ctx, state.ordering[i],</span>
+                exps.ascending[i]);
+
+        // if no result string set, select matching objects like normal
+<span class="nc bnc" id="L341" title="All 4 branches missed.">        if (exps.projections.length == 0 &amp;&amp; sel.getParent() == null) {</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">            int subs = (subclasses) ? Select.SUBS_JOINABLE : Select.SUBS_NONE;</span>
+<span class="nc" id="L343">            sel.selectIdentifier(mapping, subs, ctx.store, ctx.fetch, eager);</span>
+<span class="nc bnc" id="L344" title="All 2 branches missed.">        } else if (exps.projections.length == 0) {</span>
+            // subselect for objects; we really just need the primary key values
+<span class="nc" id="L346">            sel.select(mapping.getPrimaryKeyColumns(), joins);</span>
+        } else {
+<span class="nc bnc" id="L348" title="All 2 branches missed.">            if (exps.projections.length == 1) {</span>
+<span class="nc" id="L349">                val = (Val) exps.projections[0];</span>
+<span class="nc bnc" id="L350" title="All 4 branches missed.">                if (val instanceof Count &amp;&amp; ((Count)val).isCountDistinctMultiCols()) {</span>
+<span class="nc" id="L351">                    isCountDistinctMultiCols = true;</span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">                    if (sel.getParent() != null)</span>
+<span class="nc" id="L353">                        throw new UnsupportedException(_loc.get(&quot;count-distinct-multi-col-subselect-unsupported&quot;));</span>
+                }
+            }
+
+            // if we have an inner select, we need to select the candidate
+            // class' pk columns to guarantee unique instances
+<span class="nc bnc" id="L359" title="All 4 branches missed.">            if (inner != null &amp;&amp; !isCountDistinctMultiCols)</span>
+<span class="nc" id="L360">                inner.select(mapping.getPrimaryKeyColumns(), joins);</span>
+
+            // select each result value; no need to pass on the eager mode since
+            // under projections we always use EAGER_NONE
+<span class="nc bnc" id="L364" title="All 2 branches missed.">            boolean pks = sel.getParent() != null;</span>
+<span class="nc bnc" id="L365" title="All 2 branches missed.">            for (int i = 0; i &lt; exps.projections.length; i++) {</span>
+<span class="nc" id="L366">                val = (Val) exps.projections[i];</span>
+<span class="nc bnc" id="L367" title="All 2 branches missed.">                if (inner != null) {</span>
+<span class="nc bnc" id="L368" title="All 2 branches missed.">                    if (!isCountDistinctMultiCols)</span>
+<span class="nc" id="L369">                        val.selectColumns(inner, ctx, state.projections[i], pks);</span>
+                    else
+<span class="nc" id="L371">                        val.select(inner, ctx, state.projections[i], pks);</span>
+                } else
+<span class="nc" id="L373">                    val.select(sel, ctx, state.projections[i], pks);</span>
+            }
+
+            // make sure having columns are selected since it is required by
+            // some DBs.  put them last so they don't affect result processing
+<span class="nc bnc" id="L378" title="All 4 branches missed.">            if (exps.having != null &amp;&amp; inner != null)</span>
+<span class="nc" id="L379">                ((Exp) exps.having).selectColumns(inner, ctx, state.having,</span>
+                    true);
+        }
+
+        // select ordering columns, since it is required by some DBs.  put them
+        // last so they don't affect result processing
+<span class="nc bnc" id="L385" title="All 2 branches missed.">        for (int i = 0; i &lt; exps.ordering.length; i++) {</span>
+<span class="nc" id="L386">            val = (Val) exps.ordering[i];</span>
+<span class="nc bnc" id="L387" title="All 2 branches missed.">            if (inner != null)</span>
+<span class="nc" id="L388">                val.selectColumns(inner, ctx, state.ordering[i], true);</span>
+<span class="nc" id="L389">            val.select(sel, ctx, state.ordering[i], true);</span>
+        }
+
+        // add conditions limiting the projections to the proper classes; if
+        // this isn't a projection or a subq then they will already be added
+<span class="nc bnc" id="L394" title="All 4 branches missed.">        if (exps.projections.length &gt; 0 || sel.getParent() != null) {</span>
+<span class="nc" id="L395">            ctx.store.loadSubclasses(mapping);</span>
+<span class="nc bnc" id="L396" title="All 2 branches missed.">            mapping.getDiscriminator().addClassConditions((inner != null)</span>
+<span class="nc" id="L397">                ? inner : sel, subclasses, joins);</span>
+        }
+<span class="nc" id="L399">    }</span>
+
+    /**
+     * Used to check whether a query's result projections are on the candidate.
+     */
+<span class="nc" id="L404">    private static class ProjectionExpressionVisitor</span>
+        extends AbstractExpressionVisitor {
+
+<span class="nc" id="L407">        private boolean _candidate = false;</span>
+<span class="nc" id="L408">        private int _level = 0;</span>
+
+        public static boolean hasCandidateProjections(Value[] projs) {
+<span class="nc" id="L411">            ProjectionExpressionVisitor v = new ProjectionExpressionVisitor();</span>
+<span class="nc bnc" id="L412" title="All 2 branches missed.">            for (int i = 0; i &lt; projs.length; i++) {</span>
+<span class="nc" id="L413">                projs[i].acceptVisit(v);</span>
+<span class="nc bnc" id="L414" title="All 2 branches missed.">                if (v._candidate)</span>
+<span class="nc" id="L415">                    return true;</span>
+            }
+<span class="nc" id="L417">            return false;</span>
+        }
+
+        @Override
+        public void enter(Value val) {
+<span class="nc bnc" id="L422" title="All 2 branches missed.">            if (!_candidate) {</span>
+<span class="nc bnc" id="L423" title="All 6 branches missed.">                _candidate = (_level == 0 &amp;&amp; val instanceof Constant)</span>
+                    || (val instanceof PCPath
+<span class="nc bnc" id="L425" title="All 2 branches missed.">                    &amp;&amp; !((PCPath) val).isVariablePath());</span>
+            }
+<span class="nc" id="L427">            _level++;</span>
+<span class="nc" id="L428">        }</span>
+
+        @Override
+        public void exit(Value val) {
+<span class="nc" id="L432">            _level--;</span>
+<span class="nc" id="L433">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

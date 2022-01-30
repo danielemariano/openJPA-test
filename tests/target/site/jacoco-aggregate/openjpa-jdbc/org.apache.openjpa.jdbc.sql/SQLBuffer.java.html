@@ -1,0 +1,699 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SQLBuffer.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">SQLBuffer.java</span></div><h1>SQLBuffer.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.io.Serializable;
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.exps.CollectionParam;
+import org.apache.openjpa.jdbc.kernel.exps.Val;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Sequence;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.Parameter;
+
+
+/**
+ * Buffer for SQL statements that can be used to create
+ * java.sql.PreparedStatements.
+ * This buffer holds the SQL statement parameters and their corresponding
+ * columns. The parameters introduced by the runtime system are distinguished
+ * from the parameters set by the user.
+ *
+ * @author Marc Prud'hommeaux
+ * @author Abe White
+ * @author Pinaki Poddar
+ *
+ * @since 0.2.4
+ */
+public final class SQLBuffer
+    implements Serializable, Cloneable {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    private static final String PARAMETER_TOKEN = &quot;?&quot;;
+
+    private final DBDictionary _dict;
+<span class="nc" id="L66">    private final StringBuilder _sql = new StringBuilder();</span>
+<span class="nc" id="L67">    private List _subsels = null;</span>
+<span class="nc" id="L68">    private List _params = null;</span>
+<span class="nc" id="L69">    private List _cols = null;</span>
+
+    // Even element refers to an index of the _params list
+    // Odd element refers to the user parameter
+<span class="nc" id="L73">    private List _userIndex = null;</span>
+<span class="nc" id="L74">    private List _userParams = null;</span>
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L79">    public SQLBuffer(DBDictionary dict) {</span>
+<span class="nc" id="L80">        _dict = dict;</span>
+<span class="nc" id="L81">    }</span>
+
+    /**
+     * Copy constructor.
+     */
+<span class="nc" id="L86">    public SQLBuffer(SQLBuffer buf) {</span>
+<span class="nc" id="L87">        _dict = buf._dict;</span>
+<span class="nc" id="L88">        append(buf);</span>
+<span class="nc" id="L89">    }</span>
+
+    /**
+     * Perform a shallow clone of this SQL Buffer.
+     */
+    @Override
+    public Object clone() {
+<span class="nc" id="L96">        return new SQLBuffer(this);</span>
+    }
+
+    /**
+     * Return true if the buffer is emtpy.
+     */
+    public boolean isEmpty() {
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        return _sql.length() == 0;</span>
+    }
+
+    /**
+     * Append all SQL and parameters of the given buffer.
+     */
+    public SQLBuffer append(SQLBuffer buf) {
+<span class="nc bnc" id="L110" title="All 2 branches missed.">        append(buf, _sql.length(), (_params == null) ? 0 : _params.size(), true, false);</span>
+<span class="nc" id="L111">        return this;</span>
+    }
+
+    /**
+     * Append parameters only if the given buffer at the given positions.
+    */
+    public SQLBuffer appendParamOnly(SQLBuffer buf) {
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        append(buf, _sql.length(), (_params == null) ? 0 : _params.size(), true, true);</span>
+<span class="nc" id="L119">        return this;</span>
+    }
+
+    /**
+     * Append parameters and/or SQL of the given buffer at the given positions.
+     */
+    private void append(SQLBuffer buf, int sqlIndex, int paramIndex,
+        boolean subsels, boolean paramOnly) {
+<span class="nc bnc" id="L127" title="All 2 branches missed.">        if (subsels) {</span>
+            // only allow appending of buffers with subselects, not insertion
+<span class="nc bnc" id="L129" title="All 4 branches missed.">            if (_subsels != null &amp;&amp; !_subsels.isEmpty()</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">                &amp;&amp; sqlIndex != _sql.length())</span>
+<span class="nc" id="L131">                throw new IllegalStateException();</span>
+<span class="nc bnc" id="L132" title="All 4 branches missed.">            if (buf._subsels != null &amp;&amp; !buf._subsels.isEmpty()) {</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">                if (sqlIndex != _sql.length())</span>
+<span class="nc" id="L134">                    throw new IllegalStateException();</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">                if (_subsels == null)</span>
+<span class="nc" id="L136">                    _subsels = new ArrayList(buf._subsels.size());</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                for (int i = 0; i &lt; buf._subsels.size(); i++)</span>
+<span class="nc" id="L138">                    _subsels.add(((Subselect) buf._subsels.get(i)).</span>
+<span class="nc" id="L139">                        clone(sqlIndex, paramIndex));</span>
+            }
+        }
+
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        if (!paramOnly) {</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">            if (sqlIndex == _sql.length())</span>
+<span class="nc" id="L145">                _sql.append(buf._sql.toString());</span>
+            else
+<span class="nc" id="L147">                _sql.insert(sqlIndex, buf._sql.toString());</span>
+        }
+
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if (buf._params != null) {</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">            if (_params == null)</span>
+<span class="nc" id="L152">                _params = new ArrayList();</span>
+<span class="nc bnc" id="L153" title="All 4 branches missed.">            if (_cols == null &amp;&amp; buf._cols != null) {</span>
+<span class="nc" id="L154">                _cols = new ArrayList();</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">                while (_cols.size() &lt; _params.size())</span>
+<span class="nc" id="L156">                    _cols.add(null);</span>
+            }
+
+<span class="nc bnc" id="L159" title="All 2 branches missed.">            if (paramIndex == _params.size()) {</span>
+<span class="nc" id="L160">                _params.addAll(buf._params);</span>
+<span class="nc bnc" id="L161" title="All 2 branches missed.">                if (buf._userParams != null) {</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">                    if (_userParams == null)</span>
+<span class="nc" id="L163">                        _userParams = new ArrayList();</span>
+<span class="nc" id="L164">                   _userParams.addAll(paramIndex, buf._userParams);</span>
+                }
+<span class="nc bnc" id="L166" title="All 2 branches missed.">                if (buf._userIndex != null) {</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">                    if (_userIndex == null)</span>
+<span class="nc" id="L168">                        _userIndex = new ArrayList();</span>
+<span class="nc" id="L169">                    _userIndex.addAll(buf._userIndex);</span>
+                }
+<span class="nc bnc" id="L171" title="All 2 branches missed.">                if (buf._cols != null)</span>
+<span class="nc" id="L172">                    _cols.addAll(buf._cols);</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">                else if (_cols != null)</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">                    while (_cols.size() &lt; _params.size())</span>
+<span class="nc" id="L175">                        _cols.add(null);</span>
+            } else {
+<span class="nc" id="L177">                _params.addAll(paramIndex, buf._params);</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">                if ( buf._userParams != null) {</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">                    if (_userParams == null)</span>
+<span class="nc" id="L180">                        _userParams = new ArrayList();</span>
+<span class="nc" id="L181">                    _userParams.addAll(paramIndex, buf._userParams);</span>
+                }
+<span class="nc bnc" id="L183" title="All 2 branches missed.">                if (buf._userIndex != null) {</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">                     if (_userIndex == null)</span>
+<span class="nc" id="L185">                         _userIndex = new ArrayList();</span>
+<span class="nc" id="L186">                     _userIndex.addAll(buf._userIndex);</span>
+                }
+<span class="nc bnc" id="L188" title="All 2 branches missed.">                if (buf._cols != null)</span>
+<span class="nc" id="L189">                    _cols.addAll(paramIndex, buf._cols);</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">                else if (_cols != null)</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">                    while (_cols.size() &lt; _params.size())</span>
+<span class="nc" id="L192">                        _cols.add(paramIndex, null);</span>
+            }
+        }
+
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        if (_userIndex != null) {</span>
+            // fix up user parameter index(s)
+<span class="nc bnc" id="L198" title="All 2 branches missed.">            for (int i = 0; i &lt; _userIndex.size(); i+=2) {</span>
+<span class="nc" id="L199">            	Object param = _userIndex.get(i+1);</span>
+
+<span class="nc bnc" id="L201" title="All 2 branches missed.">            	Object previousParam = (i &gt; 0) ? _userIndex.get(i-1) : null;</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            	if ( param != previousParam) {</span>
+<span class="nc" id="L203">            		_userIndex.set(i, _userParams.indexOf(param));</span>
+            	}else{
+            		//if there are multiple parameters for the in clause or the combined PK field,
+            		//we got duplicate param objects in _userParams list.
+            		//In order to find the right index, we have to skip params that's checked already.
+<span class="nc" id="L208">            		int previousUserIndex = (Integer)_userIndex.get(i-2);</span>
+<span class="nc" id="L209">            		int userParamindex = 0;</span>
+
+<span class="nc bnc" id="L211" title="All 2 branches missed.">                	for(Object next : _userParams){</span>
+<span class="nc bnc" id="L212" title="All 4 branches missed.">                        if (next == param &amp;&amp; userParamindex &gt; previousUserIndex) {</span>
+<span class="nc" id="L213">                            _userIndex.set(i, userParamindex);</span>
+<span class="nc" id="L214">                            break;</span>
+                      }
+<span class="nc" id="L216">                      userParamindex++;</span>
+<span class="nc" id="L217">                	}</span>
+            	}
+            }
+        }
+<span class="nc" id="L221">    }</span>
+
+    public SQLBuffer append(DBIdentifier name) {
+<span class="nc" id="L224">        _sql.append(_dict.toDBName(name));</span>
+<span class="nc" id="L225">        return this;</span>
+    }
+
+    public SQLBuffer append(Table table) {
+<span class="nc" id="L229">        _sql.append(_dict.getFullName(table, false));</span>
+<span class="nc" id="L230">        return this;</span>
+    }
+
+    public SQLBuffer append(Sequence seq) {
+<span class="nc" id="L234">        _sql.append(_dict.getFullName(seq));</span>
+<span class="nc" id="L235">        return this;</span>
+    }
+
+    public SQLBuffer append(Column col) {
+<span class="nc" id="L239">        _sql.append(_dict.getColumnDBName(col));</span>
+<span class="nc" id="L240">        return this;</span>
+    }
+
+    public SQLBuffer append(String s) {
+<span class="nc" id="L244">        _sql.append(s);</span>
+<span class="nc" id="L245">        return this;</span>
+    }
+
+    /**
+     * Append a subselect. This delays resolution of the select SQL.
+     */
+    public SQLBuffer append(Select sel, JDBCFetchConfiguration fetch) {
+<span class="nc" id="L252">        return append(sel, fetch, false);</span>
+    }
+
+    /**
+     * Append a subselect count. This delays resolution of the select SQL.
+     */
+    public SQLBuffer appendCount(Select sel, JDBCFetchConfiguration fetch) {
+<span class="nc" id="L259">        return append(sel, fetch, true);</span>
+    }
+
+    /**
+     * Append a subselect. This delays resolution of the select SQL.
+     */
+    private SQLBuffer append(Select sel, JDBCFetchConfiguration fetch,
+        boolean count) {
+<span class="nc" id="L267">        _sql.append(&quot;(&quot;);</span>
+<span class="nc" id="L268">        Subselect sub = new Subselect();</span>
+<span class="nc" id="L269">        sub.select = sel;</span>
+<span class="nc" id="L270">        sub.fetch = fetch;</span>
+<span class="nc" id="L271">        sub.count = count;</span>
+<span class="nc" id="L272">        sub.sqlIndex = _sql.length();</span>
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        sub.paramIndex = (_params == null) ? 0 : _params.size();</span>
+<span class="nc" id="L274">        _sql.append(&quot;)&quot;);</span>
+
+<span class="nc bnc" id="L276" title="All 2 branches missed.">        if (_subsels == null)</span>
+<span class="nc" id="L277">            _subsels = new ArrayList(2);</span>
+<span class="nc" id="L278">        _subsels.add(sub);</span>
+<span class="nc" id="L279">        return this;</span>
+    }
+
+    /**
+     * Replace a subselect.
+     */
+    public boolean replace(Select old, Select sel) {
+<span class="nc bnc" id="L286" title="All 2 branches missed.">        if (_subsels == null)</span>
+<span class="nc" id="L287">            return false;</span>
+        Subselect sub;
+<span class="nc bnc" id="L289" title="All 2 branches missed.">        for (int i = 0; i &lt; _subsels.size(); i++) {</span>
+<span class="nc" id="L290">            sub = (Subselect) _subsels.get(i);</span>
+<span class="nc bnc" id="L291" title="All 2 branches missed.">            if (sub.select == old) {</span>
+<span class="nc" id="L292">                sub.select = sel;</span>
+<span class="nc" id="L293">                return true;</span>
+            }
+        }
+<span class="nc" id="L296">        return false;</span>
+    }
+
+    /**
+     * Append a parameter value.
+     */
+    public SQLBuffer appendValue(Object o) {
+<span class="nc" id="L303">        return appendValue(o, null);</span>
+    }
+
+    /**
+     * Append a system inserted parameter value for a specific column.
+     */
+    public SQLBuffer appendValue(Object o, Column col) {
+<span class="nc" id="L310">        return appendValue(o, col, null);</span>
+    }
+
+    /**
+     * Append a user parameter value for a specific column. User parameters
+     * are marked as opposed to the parameters inserted by the internal runtime
+     * system. This helps to reuse the buffer by reparmeterizing it with new
+     * set of user parameters while the 'internal' parameters remain unchanged.
+     *
+     * @param userParam if non-null, designates a 'user' parameter.
+     */
+    public SQLBuffer appendValue(Object o, Column col, Parameter userParam) {
+<span class="nc" id="L322">        return appendValue(o, col, userParam, true);</span>
+    }
+
+    public SQLBuffer appendValue(Object o, Column col, Parameter userParam, boolean useParamToken) {
+<span class="nc bnc" id="L326" title="All 2 branches missed.">        if (o == null)</span>
+<span class="nc" id="L327">            _sql.append(&quot;NULL&quot;);</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">        else if (o instanceof Raw)</span>
+<span class="nc" id="L329">            _sql.append(o.toString());</span>
+        else {
+<span class="nc" id="L331">            Class&lt;?&gt; type = Filters.wrap(o.getClass());</span>
+<span class="nc bnc" id="L332" title="All 4 branches missed.">            if (useParamToken || !validParamLiteralType(type)) {</span>
+<span class="nc" id="L333">                _sql.append(PARAMETER_TOKEN);</span>
+
+                // initialize param and col lists; we hold off on col list until
+                // we get the first non-null col
+<span class="nc bnc" id="L337" title="All 2 branches missed.">                if (_params == null)</span>
+<span class="nc" id="L338">                    _params = new ArrayList();</span>
+<span class="nc bnc" id="L339" title="All 2 branches missed.">                if (_userParams == null)</span>
+<span class="nc" id="L340">                    _userParams = new ArrayList();</span>
+<span class="nc bnc" id="L341" title="All 4 branches missed.">                if (col != null &amp;&amp; _cols == null) {</span>
+<span class="nc" id="L342">                    _cols = new ArrayList();</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">                    while (_cols.size() &lt; _params.size())</span>
+<span class="nc" id="L344">                        _cols.add(null);</span>
+                }
+
+<span class="nc" id="L347">                _params.add(o);</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">                if (userParam != null) {</span>
+<span class="nc" id="L349">                    Object param = userParam;</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">                    if (userParam instanceof CollectionParam)</span>
+<span class="nc" id="L351">                        param = ((CollectionParam) userParam).clone();</span>
+<span class="nc" id="L352">                    _userParams.add(param);</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">                    if (_userIndex == null)</span>
+<span class="nc" id="L354">                        _userIndex = new ArrayList();</span>
+<span class="nc" id="L355">                    int index = _params.size()-1;</span>
+<span class="nc" id="L356">                    _userIndex.add(index);</span>
+<span class="nc" id="L357">                    _userIndex.add(param);</span>
+<span class="nc" id="L358">                }</span>
+                else
+<span class="nc" id="L360">                    _userParams.add(o);</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">                if (_cols != null)</span>
+<span class="nc" id="L362">                    _cols.add(col);</span>
+            } else {
+<span class="nc bnc" id="L364" title="All 2 branches missed.">                if (type == String.class) {</span>
+<span class="nc" id="L365">                    _sql.append(&quot;'&quot; + o.toString().replace(&quot;'&quot;, &quot;''&quot;) + &quot;'&quot;);</span>
+
+<span class="nc bnc" id="L367" title="All 2 branches missed.">                } else if ( type == Character.class ) {</span>
+<span class="nc bnc" id="L368" title="All 2 branches missed.">                    if (_dict.storeCharsAsNumbers) {</span>
+<span class="nc" id="L369">                        _sql.append(Integer.toString(((Character)o).charValue()));</span>
+                    } else {
+<span class="nc" id="L371">                        _sql.append(&quot;'&quot; + o.toString().replace(&quot;'&quot;, &quot;''&quot;) + &quot;'&quot;);</span>
+                    }
+<span class="nc bnc" id="L373" title="All 2 branches missed.">                } else if (type == Boolean.class) {</span>
+<span class="nc" id="L374">                    Boolean b = (Boolean) o;</span>
+                    // We store B(b)ooleans as ints. Convert
+<span class="nc" id="L376">                    _sql.append(_dict.getBooleanRepresentation().getRepresentation(b.booleanValue()));</span>
+<span class="nc" id="L377">                } else {</span>
+<span class="nc" id="L378">                    _sql.append(o.toString());</span>
+                }
+            }
+        }
+<span class="nc" id="L382">        return this;</span>
+    }
+
+    private boolean validParamLiteralType(Class&lt;?&gt; type) {
+<span class="nc bnc" id="L386" title="All 14 branches missed.">        boolean ret = type == String.class</span>
+                || type == Integer.class
+                || type == Character.class
+                || type == Boolean.class
+                || type == Short.class
+                || type == Long.class
+                || type == Byte.class;
+<span class="nc" id="L393">        return ret;</span>
+    }
+
+    /**
+     * Return the list of parameter values.
+     */
+    public List getParameters() {
+<span class="nc bnc" id="L400" title="All 2 branches missed.">        return (_params == null) ? Collections.EMPTY_LIST : _params;</span>
+    }
+
+    /**
+     * Get the user parameter positions in the list of parameters. The odd
+     * element of the returned list contains an integer index that refers
+     * to the position in the {@link #getParameters()} list. The even element
+     * of the returned list refers to the user parameter key.
+     * This structure is preferred over a normal map because a user parameter
+     * may occur more than one in the parameters.
+     */
+    public List getUserParameters() {
+<span class="nc bnc" id="L412" title="All 2 branches missed.">        if (_userIndex == null)</span>
+<span class="nc" id="L413">            return Collections.EMPTY_LIST;</span>
+<span class="nc" id="L414">        return _userIndex;</span>
+    }
+
+    /**
+     * Return the SQL for this buffer.
+     */
+    public String getSQL() {
+<span class="nc" id="L421">        return getSQL(false);</span>
+    }
+
+    /**
+     * Returns the SQL for this buffer.
+     *
+     * @param replaceParams if true, then replace parameters with the
+     * actual parameter values
+     */
+    public String getSQL(boolean replaceParams) {
+<span class="nc" id="L431">        resolveSubselects();</span>
+<span class="nc" id="L432">        String sql = _sql.toString();</span>
+<span class="nc bnc" id="L433" title="All 6 branches missed.">        if (!replaceParams || _params == null || _params.isEmpty())</span>
+<span class="nc" id="L434">            return sql;</span>
+
+<span class="nc" id="L436">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L437">        Iterator pi = _params.iterator();</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">        for (int i = 0; i &lt; sql.length(); i++) {</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">            if (sql.charAt(i) != '?') {</span>
+<span class="nc" id="L440">                buf.append(sql.charAt(i));</span>
+<span class="nc" id="L441">                continue;</span>
+            }
+
+<span class="nc bnc" id="L444" title="All 2 branches missed.">            Object param = pi.hasNext() ? pi.next() : null;</span>
+<span class="nc bnc" id="L445" title="All 2 branches missed.">            if (param == null)</span>
+<span class="nc" id="L446">                buf.append(&quot;NULL&quot;);</span>
+<span class="nc bnc" id="L447" title="All 4 branches missed.">            else if (param instanceof Number || param instanceof Boolean)</span>
+<span class="nc" id="L448">                buf.append(param);</span>
+<span class="nc bnc" id="L449" title="All 4 branches missed.">            else if (param instanceof String || param instanceof Character)</span>
+<span class="nc" id="L450">                buf.append(&quot;'&quot;).append(param).append(&quot;'&quot;);</span>
+            else
+<span class="nc" id="L452">                buf.append(&quot;?&quot;);</span>
+        }
+<span class="nc" id="L454">        return buf.toString();</span>
+    }
+
+    /**
+     * Resolve our delayed subselects.
+     */
+    private void resolveSubselects() {
+<span class="nc bnc" id="L461" title="All 4 branches missed.">        if (_subsels == null || _subsels.isEmpty())</span>
+<span class="nc" id="L462">            return;</span>
+
+        // add subsels backwards so that the stored insertion points of
+        // later subsels remain valid
+        Subselect sub;
+        SQLBuffer buf;
+<span class="nc bnc" id="L468" title="All 2 branches missed.">        for (int i = _subsels.size() - 1; i &gt;= 0; i--) {</span>
+<span class="nc" id="L469">            sub = (Subselect) _subsels.get(i);</span>
+<span class="nc bnc" id="L470" title="All 2 branches missed.">            if (sub.count)</span>
+<span class="nc" id="L471">                buf = sub.select.toSelectCount();</span>
+            else
+<span class="nc" id="L473">                buf = sub.select.toSelect(false, sub.fetch);</span>
+<span class="nc" id="L474">            buf.resolveSubselects();</span>
+<span class="nc" id="L475">            append(buf, sub.sqlIndex, sub.paramIndex, false, false);</span>
+        }
+<span class="nc" id="L477">        _subsels.clear();</span>
+<span class="nc" id="L478">    }</span>
+
+    /**
+     * Create and populate the parameters of a prepared statement using
+     * the SQL in this buffer.
+     */
+    public PreparedStatement prepareStatement(Connection conn)
+        throws SQLException {
+<span class="nc" id="L486">        return prepareStatement(conn, ResultSet.TYPE_FORWARD_ONLY,</span>
+            ResultSet.CONCUR_READ_ONLY);
+    }
+
+    /**
+     * Create and populate the parameters of a prepared statement using
+     * the SQL in this buffer.
+     */
+    public PreparedStatement prepareStatement(Connection conn, int rsType,
+        int rsConcur)
+        throws SQLException {
+<span class="nc" id="L497">        return prepareStatement(conn, null, rsType, rsConcur);</span>
+    }
+
+    /**
+     * Create and populate the parameters of a prepred statement using the
+     * SQL in this buffer and the given fetch configuration.
+     */
+    public PreparedStatement prepareStatement(Connection conn,
+        JDBCFetchConfiguration fetch, int rsType, int rsConcur)
+        throws SQLException {
+<span class="nc bnc" id="L507" title="All 4 branches missed.">        if (rsType == -1 &amp;&amp; fetch == null)</span>
+<span class="nc" id="L508">            rsType = ResultSet.TYPE_FORWARD_ONLY;</span>
+<span class="nc bnc" id="L509" title="All 2 branches missed.">        else if (rsType == -1)</span>
+<span class="nc" id="L510">            rsType = fetch.getResultSetType();</span>
+<span class="nc bnc" id="L511" title="All 2 branches missed.">        if (rsConcur == -1)</span>
+<span class="nc" id="L512">            rsConcur = ResultSet.CONCUR_READ_ONLY;</span>
+
+        PreparedStatement stmnt;
+<span class="nc bnc" id="L515" title="All 4 branches missed.">        if (rsType == ResultSet.TYPE_FORWARD_ONLY</span>
+            &amp;&amp; rsConcur == ResultSet.CONCUR_READ_ONLY)
+<span class="nc" id="L517">            stmnt = conn.prepareStatement(getSQL());</span>
+        else
+<span class="nc" id="L519">            stmnt = conn.prepareStatement(getSQL(), rsType, rsConcur);</span>
+        try {
+<span class="nc" id="L521">            setParameters(stmnt);</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">            if (fetch != null) {</span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">                if (fetch.getFetchBatchSize() &gt; 0)</span>
+<span class="nc" id="L524">                    stmnt.setFetchSize(</span>
+<span class="nc" id="L525">                        _dict.getBatchFetchSize(fetch.getFetchBatchSize()));</span>
+<span class="nc bnc" id="L526" title="All 2 branches missed.">                if (rsType != ResultSet.TYPE_FORWARD_ONLY</span>
+<span class="nc bnc" id="L527" title="All 2 branches missed.">                    &amp;&amp; fetch.getFetchDirection() != ResultSet.FETCH_FORWARD)</span>
+<span class="nc" id="L528">                    stmnt.setFetchDirection(fetch.getFetchDirection());</span>
+            }
+<span class="nc" id="L530">            return stmnt;</span>
+<span class="nc" id="L531">        } catch (SQLException se) {</span>
+            try {
+<span class="nc" id="L533">                stmnt.close();</span>
+<span class="nc" id="L534">            } catch (SQLException se2) {</span>
+<span class="nc" id="L535">            }</span>
+<span class="nc" id="L536">            throw se;</span>
+        }
+    }
+
+    /**
+     * Create and populate the parameters of a prepared statement using
+     * the SQL in this buffer.
+     */
+    public CallableStatement prepareCall(Connection conn)
+        throws SQLException {
+<span class="nc" id="L546">        return prepareCall(conn, ResultSet.TYPE_FORWARD_ONLY,</span>
+            ResultSet.CONCUR_READ_ONLY);
+    }
+
+    /**
+     * Create and populate the parameters of a prepared statement using
+     * the SQL in this buffer.
+     */
+    public CallableStatement prepareCall(Connection conn, int rsType,
+        int rsConcur)
+        throws SQLException {
+<span class="nc" id="L557">        return prepareCall(conn, null, rsType, rsConcur);</span>
+    }
+
+    /**
+     * Create and populate the parameters of a prepred statement using the
+     * SQL in this buffer and the given fetch configuration.
+     */
+    public CallableStatement prepareCall(Connection conn,
+        JDBCFetchConfiguration fetch, int rsType, int rsConcur)
+        throws SQLException {
+<span class="nc bnc" id="L567" title="All 4 branches missed.">        if (rsType == -1 &amp;&amp; fetch == null)</span>
+<span class="nc" id="L568">            rsType = ResultSet.TYPE_FORWARD_ONLY;</span>
+<span class="nc bnc" id="L569" title="All 2 branches missed.">        else if (rsType == -1)</span>
+<span class="nc" id="L570">            rsType = fetch.getResultSetType();</span>
+<span class="nc bnc" id="L571" title="All 2 branches missed.">        if (rsConcur == -1)</span>
+<span class="nc" id="L572">            rsConcur = ResultSet.CONCUR_READ_ONLY;</span>
+
+        CallableStatement stmnt;
+<span class="nc bnc" id="L575" title="All 4 branches missed.">        if (rsType == ResultSet.TYPE_FORWARD_ONLY</span>
+            &amp;&amp; rsConcur == ResultSet.CONCUR_READ_ONLY)
+<span class="nc" id="L577">            stmnt = conn.prepareCall(getSQL());</span>
+        else
+<span class="nc" id="L579">            stmnt = conn.prepareCall(getSQL(), rsType, rsConcur);</span>
+        try {
+<span class="nc" id="L581">            setParameters(stmnt);</span>
+<span class="nc bnc" id="L582" title="All 2 branches missed.">            if (fetch != null) {</span>
+<span class="nc bnc" id="L583" title="All 2 branches missed.">                if (fetch.getFetchBatchSize() &gt; 0)</span>
+<span class="nc" id="L584">                    stmnt.setFetchSize(</span>
+<span class="nc" id="L585">                        _dict.getBatchFetchSize(fetch.getFetchBatchSize()));</span>
+<span class="nc bnc" id="L586" title="All 2 branches missed.">                if (rsType != ResultSet.TYPE_FORWARD_ONLY</span>
+<span class="nc bnc" id="L587" title="All 2 branches missed.">                    &amp;&amp; fetch.getFetchDirection() != ResultSet.FETCH_FORWARD)</span>
+<span class="nc" id="L588">                    stmnt.setFetchDirection(fetch.getFetchDirection());</span>
+            }
+<span class="nc" id="L590">            return stmnt;</span>
+<span class="nc" id="L591">        } catch (SQLException se) {</span>
+            try {
+<span class="nc" id="L593">                stmnt.close();</span>
+<span class="nc" id="L594">            } catch (SQLException se2) {</span>
+<span class="nc" id="L595">            }</span>
+<span class="nc" id="L596">            throw se;</span>
+        }
+    }
+
+    /**
+     * Populate the parameters of an existing PreparedStatement
+     * with values from this buffer.
+     */
+    public void setParameters(PreparedStatement ps)
+        throws SQLException {
+<span class="nc bnc" id="L606" title="All 2 branches missed.">        if (_params == null)</span>
+<span class="nc" id="L607">            return;</span>
+
+        Column col;
+<span class="nc bnc" id="L610" title="All 2 branches missed.">        for (int i = 0; i &lt; _params.size(); i++) {</span>
+<span class="nc bnc" id="L611" title="All 2 branches missed.">            col = (_cols == null) ? null : (Column) _cols.get(i);</span>
+<span class="nc" id="L612">            _dict.setUnknown(ps, i + 1, _params.get(i), col);</span>
+        }
+<span class="nc" id="L614">    }</span>
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L618">        int hash = _sql.hashCode();</span>
+<span class="nc bnc" id="L619" title="All 2 branches missed.">        return (_params == null) ? hash : hash ^ _params.hashCode();</span>
+    }
+
+    /**
+     * Compare internal SQL without resolving subselects or stringifying
+     * parameters.
+     */
+    public boolean sqlEquals(String sql) {
+<span class="nc" id="L627">        return _sql.toString().equals(sql);</span>
+    }
+
+    @Override
+    public boolean equals(Object other) {
+<span class="nc bnc" id="L632" title="All 2 branches missed.">        if (other == this)</span>
+<span class="nc" id="L633">            return true;</span>
+<span class="nc bnc" id="L634" title="All 2 branches missed.">        if (!(other instanceof SQLBuffer))</span>
+<span class="nc" id="L635">            return false;</span>
+
+<span class="nc" id="L637">        SQLBuffer buf = (SQLBuffer) other;</span>
+<span class="nc bnc" id="L638" title="All 2 branches missed.">        return _sql.equals(buf._sql)</span>
+<span class="nc bnc" id="L639" title="All 2 branches missed.">            &amp;&amp; Objects.equals(_params, buf._params);</span>
+    }
+
+    /**
+     * Replace SQL '?' with CAST string if required by DB platform
+     * @param oper
+     * @param val
+     */
+    public void addCastForParam(String oper, Val val) {
+<span class="nc bnc" id="L648" title="All 2 branches missed.">        if (_sql.charAt(_sql.length() - 1) == '?') {</span>
+<span class="nc" id="L649">            String castString = _dict.addCastAsType(oper, val);</span>
+<span class="nc bnc" id="L650" title="All 2 branches missed.">            if (castString != null)</span>
+<span class="nc" id="L651">                _sql.replace(_sql.length() - 1, _sql.length(), castString);</span>
+        }
+<span class="nc" id="L653">    }</span>
+
+    /**
+     * Replace current buffer string with the new string
+     *
+     * @param start replace start position
+     * @param end replace end position
+     * @param newString
+     */
+    public void replaceSqlString(int start, int end, String newString) {
+<span class="nc" id="L663">        _sql.replace(start, end, newString);</span>
+<span class="nc" id="L664">    }</span>
+
+    /**
+     * Represents a subselect.
+     */
+    private static class Subselect {
+
+        public Select select;
+        public JDBCFetchConfiguration fetch;
+        public boolean count;
+        public int sqlIndex;
+        public int paramIndex;
+
+        public Subselect clone(int sqlIndex, int paramIndex) {
+<span class="nc bnc" id="L678" title="All 4 branches missed.">            if (sqlIndex == 0 &amp;&amp; paramIndex == 0)</span>
+<span class="nc" id="L679">                return this;</span>
+
+<span class="nc" id="L681">            Subselect sub = new Subselect();</span>
+<span class="nc" id="L682">            sub.select = select;</span>
+<span class="nc" id="L683">            sub.fetch = fetch;</span>
+<span class="nc" id="L684">            sub.count = count;</span>
+<span class="nc" id="L685">            sub.sqlIndex = this.sqlIndex + sqlIndex;</span>
+<span class="nc" id="L686">            sub.paramIndex = this.paramIndex + paramIndex;</span>
+<span class="nc" id="L687">            return sub;</span>
+        }
+    }
+
+    public void setParameters(List params) {
+<span class="nc" id="L692">        _params = params;</span>
+<span class="nc" id="L693">    }</span>
+
+    public List getColumns() {
+<span class="nc" id="L696">        return _cols;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

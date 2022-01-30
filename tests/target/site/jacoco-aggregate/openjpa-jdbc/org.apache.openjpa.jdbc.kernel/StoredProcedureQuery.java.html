@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>StoredProcedureQuery.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">StoredProcedureQuery.java</span></div><h1>StoredProcedureQuery.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import static java.util.Arrays.asList;
+
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.meta.MappingRepository;
+import org.apache.openjpa.jdbc.meta.QueryResultMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.StoredProcedure;
+import org.apache.openjpa.kernel.AbstractStoreQuery;
+import org.apache.openjpa.kernel.QueryContext;
+import org.apache.openjpa.kernel.QueryOperations;
+import org.apache.openjpa.kernel.StoreQuery;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.MultiQueryMetaData;
+import org.apache.openjpa.meta.QueryMetaData;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * Executes a stored procedure.
+ *
+ * @author ppoddar
+ *
+ */
+public class StoredProcedureQuery extends AbstractStoreQuery {
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L54">    private static final Object[] NO_PARAM = new Object[0];</span>
+
+    JDBCStore _store;
+    StoredProcedure _proc;
+    private MultiQueryMetaData _meta;
+
+<span class="nc" id="L60">    public StoredProcedureQuery(JDBCStore store) {</span>
+<span class="nc" id="L61">        _store = store;</span>
+<span class="nc" id="L62">    }</span>
+
+    public int getOperation() {
+<span class="nc" id="L65">        return QueryOperations.OP_SELECT;</span>
+    }
+
+    public StoredProcedure getProcedure() {
+<span class="nc" id="L69">        return _proc;</span>
+    }
+
+    public DBDictionary getDictionary() {
+<span class="nc" id="L73">        return _store.getDBDictionary();</span>
+    }
+
+    @Override
+    public boolean setQuery(Object meta) {
+<span class="nc bnc" id="L78" title="All 4 branches missed.">        if (meta == null || meta instanceof MultiQueryMetaData) {</span>
+<span class="nc" id="L79">            _meta = (MultiQueryMetaData)meta;</span>
+<span class="nc" id="L80">            return true;</span>
+        } else {
+<span class="nc" id="L82">            throw new InternalException(&quot;Unknown &quot; + meta);</span>
+        }
+    }
+
+    @Override
+    public Executor newDataStoreExecutor(ClassMetaData meta,  boolean subclasses) {
+<span class="nc" id="L88">        List&lt;QueryResultMapping&gt; mappings = null;</span>
+<span class="nc" id="L89">        List&lt;Class&lt;?&gt;&gt; classes = null;</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if (_meta != null) {</span>
+<span class="nc" id="L91">            List&lt;QueryMetaData&gt; parts = _meta.getComponents();</span>
+<span class="nc bnc" id="L92" title="All 4 branches missed.">            if (parts != null &amp;&amp; !parts.isEmpty()) {</span>
+<span class="nc" id="L93">                mappings = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L94">                classes = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L95">                MappingRepository repos = _store.getConfiguration().getMappingRepositoryInstance();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">                for (QueryMetaData part : parts) {</span>
+<span class="nc" id="L97">                    QueryResultMapping mapping = repos.getQueryResultMapping(ctx.getResultMappingScope(),</span>
+<span class="nc" id="L98">                            part.getResultSetMappingName(),</span>
+                            null, true);
+<span class="nc bnc" id="L100" title="All 2 branches missed.">                    if (mapping != null) {</span>
+<span class="nc" id="L101">                        mappings.add(mapping);</span>
+                    }
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                    if (part.getResultType() != null) {</span>
+<span class="nc" id="L104">                        classes.add(part.getResultType());</span>
+                    }
+<span class="nc" id="L106">                }</span>
+            }
+        }
+<span class="nc" id="L109">        return new StoredProcedureQueryExecutor(this, mappings, classes);</span>
+    }
+
+    @Override
+    public boolean supportsParameterDeclarations() {
+<span class="nc" id="L114">        return false;</span>
+    }
+
+    @Override
+    public boolean supportsDataStoreExecution() {
+<span class="nc" id="L119">        return true;</span>
+    }
+
+    @Override
+    public boolean requiresCandidateType() {
+<span class="nc" id="L124">        return false;</span>
+    }
+
+    @Override
+    public boolean requiresParameterDeclarations() {
+<span class="nc" id="L129">        return false;</span>
+    }
+
+
+    public class StoredProcedureQueryExecutor  extends AbstractExecutor {
+        private final List&lt;Class&lt;?&gt;&gt; _resultClasses;
+        private final List&lt;QueryResultMapping&gt; _resultMappings;
+
+        public StoredProcedureQueryExecutor(StoredProcedureQuery q, List&lt;QueryResultMapping&gt; resultMapping,
+<span class="nc" id="L138">                                            List&lt;Class&lt;?&gt;&gt; classes) {</span>
+<span class="nc" id="L139">            QueryContext ctx = q.getContext();</span>
+<span class="nc" id="L140">            _resultMappings = resultMapping;</span>
+<span class="nc" id="L141">            _resultClasses = classes;</span>
+            // Look for the named Stored Procedure in the database
+<span class="nc" id="L143">            String procName = ctx.getQueryString();</span>
+<span class="nc" id="L144">            _proc = getStoredProcedure(_store.getConnection(), _store.getDBDictionary(), procName);</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">            if (_proc == null) {</span>
+<span class="nc" id="L146">                throw new RuntimeException(&quot;Can not find stored procedure &quot; + procName);</span>
+            }
+<span class="nc" id="L148">        }</span>
+
+        StoredProcedure getStoredProcedure(Connection conn, DBDictionary dict, String procedureName) {
+            try {
+<span class="nc" id="L152">                StoredProcedure sp = dict.getStoredProcedure(conn.getMetaData(), null, null, procedureName);</span>
+<span class="nc bnc" id="L153" title="All 2 branches missed.">                if (sp != null) {</span>
+<span class="nc" id="L154">                    return sp;</span>
+                }
+<span class="nc" id="L156">            } catch (SQLException ex) {</span>
+<span class="nc" id="L157">                throw new RuntimeException(ex);</span>
+            } finally {
+                try {
+<span class="nc" id="L160">                    conn.close();</span>
+<span class="nc" id="L161">                } catch (SQLException ex) {</span>
+
+<span class="nc" id="L163">                }</span>
+            }
+<span class="nc" id="L165">            throw new RuntimeException(&quot;Procedure [&quot; + procedureName + &quot;] not found&quot;);</span>
+        }
+
+        @Override
+        public ResultObjectProvider executeQuery(StoreQuery q, Object[] params, Range range) {
+            try {
+<span class="nc" id="L171">                DBDictionary dict = _store.getDBDictionary();</span>
+<span class="nc" id="L172">                Connection conn = _store.getConnection();</span>
+<span class="nc" id="L173">                CallableStatement stmnt = conn.prepareCall(_proc.getCallSQL());</span>
+
+<span class="nc" id="L175">                final StoredProcedureQuery spq = StoredProcedureQuery.class.cast(q);</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">                for (Column c : spq.getProcedure().getInColumns()) {</span>
+<span class="nc" id="L177">                    dict.setUnknown(stmnt, c.getIndex() + 1, params[c.getIndex()], c);</span>
+                }
+<span class="nc bnc" id="L179" title="All 2 branches missed.">                for (Column c : spq.getProcedure().getInOutColumns()) {</span>
+<span class="nc" id="L180">                    final int index = c.getIndex() + 1;</span>
+<span class="nc" id="L181">                    stmnt.registerOutParameter(index, c.getType());</span>
+<span class="nc" id="L182">                    dict.setUnknown(stmnt, index, params[index - 1], c);</span>
+                }
+<span class="nc bnc" id="L184" title="All 2 branches missed.">                for (Column c : spq.getProcedure().getOutColumns()) {</span>
+<span class="nc" id="L185">                    stmnt.registerOutParameter(c.getIndex() + 1, c.getType());</span>
+                }
+
+<span class="nc" id="L188">                JDBCFetchConfiguration fetch = (JDBCFetchConfiguration)q.getContext().getFetchConfiguration();</span>
+<span class="nc" id="L189">                ResultObjectProvider rop = new XROP(_resultMappings, _resultClasses, _store, fetch, stmnt);</span>
+<span class="nc" id="L190">                rop.open();</span>
+<span class="nc" id="L191">                return rop;</span>
+<span class="nc" id="L192">            } catch (Exception e) {</span>
+<span class="nc" id="L193">                throw new RuntimeException(e);</span>
+            }
+        }
+
+        @Override
+        public Object[] toParameterArray(StoreQuery q, Map&lt;?, ?&gt; userParams) {
+<span class="nc bnc" id="L199" title="All 2 branches missed.">            if (userParams == null) return NO_PARAM;</span>
+<span class="nc" id="L200">            Object[] array = new Object[userParams.size()];</span>
+<span class="nc" id="L201">            int i = 0;</span>
+<span class="nc" id="L202">            StoredProcedureQuery storedProcedureQuery = StoredProcedureQuery.class.cast(q);</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">            for (final Column[] columns : asList(</span>
+<span class="nc" id="L204">                    storedProcedureQuery.getProcedure().getInColumns(),</span>
+<span class="nc" id="L205">                    storedProcedureQuery.getProcedure().getInOutColumns())) {</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">                for (Column c : columns) {</span>
+<span class="nc" id="L207">                    array[i] = userParams.get(c.getIdentifier().getName());</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">                    if (array[i++] == null) {</span>
+<span class="nc" id="L209">                        userParams.get(c.getIndex());</span>
+                    }
+                }
+<span class="nc" id="L212">            }</span>
+<span class="nc" id="L213">            return array;</span>
+        }
+
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Normalizer.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.identifier</a> &gt; <span class="el_source">Normalizer.java</span></div><h1>Normalizer.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.identifier;
+
+import java.util.Objects;
+
+import org.apache.openjpa.lib.identifier.IdentifierConfiguration;
+import org.apache.openjpa.lib.identifier.IdentifierRule;
+import org.apache.openjpa.lib.identifier.IdentifierUtil;
+import org.apache.openjpa.lib.util.StringUtil;
+
+/**
+ * Static utility class used for operating on string based identifiers.
+ */
+<span class="nc" id="L31">public class Normalizer {</span>
+
+<span class="fc" id="L33">    private static IdentifierUtil normalizer =</span>
+        new DBIdentifierUtilImpl(new DefaultIdentifierConfiguration());
+
+    private static IdentifierRule defaultRule;
+
+    static {
+<span class="fc" id="L39">        defaultRule = normalizer.getIdentifierConfiguration().getDefaultIdentifierRule();</span>
+<span class="fc" id="L40">    }</span>
+
+    public static IdentifierConfiguration getNamingConfiguration() {
+<span class="nc" id="L43">        return normalizer.getIdentifierConfiguration();</span>
+    }
+
+    /**
+     * Normalizes a multi-part name
+     * @param name
+     */
+    public static String normalizeMulti(String name) {
+<span class="nc bnc" id="L51" title="All 2 branches missed.">        if (StringUtil.isEmpty(name)) {</span>
+<span class="nc" id="L52">            return name;</span>
+        }
+<span class="nc" id="L54">        String[] names = normalizer.splitName(defaultRule, name);</span>
+<span class="nc" id="L55">        return normalizer.joinNames(defaultRule, names);</span>
+    }
+
+    /**
+     * Normalizes a single part name
+     * @param name
+     */
+    public static String normalizeString(String name) {
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">        if (StringUtil.isEmpty(name)) {</span>
+<span class="nc" id="L64">            return name;</span>
+        }
+<span class="pc bpc" id="L66" title="1 of 2 branches missed.">        if (!normalizer.isDelimited(defaultRule, name)) {</span>
+            // If not delimited, delimit the string if necessary
+<span class="fc" id="L68">            return normalizer.delimit(defaultRule, name);</span>
+        }
+<span class="nc" id="L70">        return name;</span>
+    }
+
+    /**
+     * Returns true if the name is delimited with default delimiters
+     * @param name
+     */
+    public static boolean isDelimited(String name) {
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        if (StringUtil.isEmpty(name)) {</span>
+<span class="nc" id="L79">            return false;</span>
+        }
+<span class="nc" id="L81">        return normalizer.isDelimited(defaultRule, name);</span>
+    }
+
+    /**
+     * Splits names into individual components and compares individually
+     * for equality
+     * @param name1
+     * @param name2
+     */
+    public static boolean fullNamesEqual(String name1, String name2) {
+<span class="nc bnc" id="L91" title="All 4 branches missed.">        if (StringUtil.isEmpty(name1) &amp;&amp; StringUtil.isEmpty(name2)) {</span>
+<span class="nc" id="L92">            return true;</span>
+        }
+        // Split multi-part names into individual components and compare
+        // each component.  If delimited, do case compare.
+<span class="nc" id="L96">        String[] names1 = normalizer.splitName(defaultRule, name1);</span>
+<span class="nc" id="L97">        String[] names2 = normalizer.splitName(defaultRule, name2);</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if (names1.length != names2.length) {</span>
+<span class="nc" id="L99">            return false;</span>
+        }
+<span class="nc bnc" id="L101" title="All 2 branches missed.">        for (int i = 0; i &lt; names1.length; i++) {</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">            if (normalizer.isDelimited(defaultRule, names1[i])) {</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                if (!Objects.equals(names1[i],names2[i])) {</span>
+<span class="nc" id="L104">                    return false;</span>
+                }
+            } else {
+<span class="nc bnc" id="L107" title="All 2 branches missed.">                if (!StringUtil.equalsIgnoreCase(names1[i],names2[i])) {</span>
+<span class="nc" id="L108">                    return false;</span>
+                }
+            }
+        }
+<span class="nc" id="L112">        return true;</span>
+    }
+
+    /**
+     * Compares two string names for equality.  If delimited, does a
+     * case comparison.  If not delimited, does a case insensitive
+     * comparison.
+     * @param name1
+     * @param name2
+     */
+    public static boolean namesEqual(String name1, String name2) {
+<span class="nc bnc" id="L123" title="All 4 branches missed.">        if (StringUtil.isEmpty(name1) &amp;&amp; StringUtil.isEmpty(name2)) {</span>
+<span class="nc" id="L124">            return true;</span>
+        }
+<span class="nc bnc" id="L126" title="All 2 branches missed.">        if (normalizer.isDelimited(defaultRule, name1)) {</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">            if (!Objects.equals(name1, name2)) {</span>
+<span class="nc" id="L128">                return false;</span>
+            }
+        } else {
+<span class="nc bnc" id="L131" title="All 2 branches missed.">            if (!StringUtil.equalsIgnoreCase(name1, name2)) {</span>
+<span class="nc" id="L132">                return false;</span>
+            }
+        }
+<span class="nc" id="L135">        return true;</span>
+    }
+
+    /**
+     * Normalizes a name, if not delimited, converts to uppercase.
+     * @param name
+     */
+    public static String normalizeUpper(String name) {
+<span class="nc" id="L143">        String nName = normalizeString(name);</span>
+        // Do not convert delimited names to upper case.  They may have
+        // been delimited to preserve case.
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        if (!isDelimited(nName)) {</span>
+<span class="nc" id="L147">            nName = name.toUpperCase();</span>
+        }
+<span class="nc" id="L149">        return nName;</span>
+    }
+
+    /**
+     * Splits a name into normalized components
+     * @param name
+     */
+    public static String[] splitName(String name) {
+<span class="fc" id="L157">        return normalizer.splitName(defaultRule, name);</span>
+    }
+
+
+    /**
+     * Splits a name into normalized components using the specified
+     * name delimiter (ex. schema:table, delim = : --&gt; { schema, table }
+     * @param name
+     */
+    public static String[] splitName(String name, String delim) {
+<span class="nc" id="L167">        return normalizer.splitName(defaultRule, name, delim);</span>
+    }
+
+    /**
+     * Joins multiple names using default identifier rules.
+     * @param names
+     */
+    public static String joinNames(String[] names) {
+<span class="fc" id="L175">        return normalizer.joinNames(defaultRule, names);</span>
+    }
+
+    /**
+     * Joins multiple names using the specified delimiter.
+     * @param names
+     */
+    public static String joinNames(String[] names, String delimiter) {
+<span class="nc" id="L183">        return normalizer.joinNames(defaultRule, names, delimiter);</span>
+    }
+
+    /**
+     * Joins two names using the default identifier rules.
+     * @param names
+     */
+    public static String joinNames(String name1, String name2) {
+<span class="nc" id="L191">        return joinNames(new String[] { name1, name2});</span>
+    }
+
+
+    /**
+     * Truncates a name to the specified length while maintaining
+     * delimiters.
+     * @param name
+     * @param length
+     */
+    public static String truncate(String name, int length) {
+<span class="nc" id="L202">        return normalizer.truncateName(defaultRule, name, length);</span>
+    }
+
+    /**
+     * Convert a normalized name to a name using the specified configuration and
+     * naming rule.
+     * Note: Currently only delimiters are converted.
+     * @param config
+     * @param rule
+     * @param name
+     */
+    public static String convert(IdentifierConfiguration config, String rule, String name) {
+<span class="nc" id="L214">        return normalizer.convert(config, rule, name);</span>
+    }
+
+    /**
+     * Combines two names using default identifier rules.
+     * @param name1
+     * @param name2
+     */
+    public static String combine(String name1, String name2) {
+<span class="nc" id="L223">        return normalizer.combineNames(defaultRule, name1, name2);</span>
+    }
+
+    /**
+     * Combines multiple names using default identifier rules.
+     * @param name1
+     * @param name2
+     */
+    public static String combine(String...names) {
+<span class="nc" id="L232">        return normalizer.combineNames(defaultRule, names);</span>
+    }
+
+
+    /**
+     * Appends one string to another using default identifier rules.
+     * @param name1
+     * @param name2
+     */
+    public static String append(String name1, String name2) {
+<span class="nc" id="L242">        return normalizer.appendNames(defaultRule, name1, name2);</span>
+    }
+
+    /**
+     * Removes Hungarian notation from a string.
+     * @param name1
+     * @param name2
+     */
+    public static String removeHungarianNotation(String name) {
+<span class="nc" id="L251">        return normalizer.removeHungarianNotation(defaultRule, name);</span>
+    }
+
+    /**
+     * Removes default delimiters from a string.
+     */
+    public static String removeDelimiters(String name) {
+<span class="nc" id="L258">        return normalizer.removeDelimiters(defaultRule, name);</span>
+    }
+
+    /**
+     * Delimits a string if necessary, optionally forcing it to be
+     * delimited.
+     */
+    public static String delimit(String name, boolean force) {
+<span class="nc" id="L266">        return normalizer.delimit(defaultRule, name, force);</span>
+    }
+
+    /**
+     * Determines whether a name can be split into multiple components.
+     */
+    public static boolean canSplit(String name) {
+<span class="nc" id="L273">        return normalizer.canSplit(defaultRule, name);</span>
+    }
+
+    /**
+     * Determines whether a name can be split into multiple components, taking
+     * into account the specified delimiter.
+     */
+    public static boolean canSplit(String name, String delim) {
+<span class="nc" id="L281">        return normalizer.canSplit(defaultRule, name, delim);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

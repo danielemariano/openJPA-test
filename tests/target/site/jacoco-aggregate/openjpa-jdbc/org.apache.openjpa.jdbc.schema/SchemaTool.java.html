@@ -1,0 +1,1733 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SchemaTool.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">SchemaTool.java</span></div><h1>SchemaTool.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.Writer;
+import java.net.URL;
+import java.security.AccessController;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import javax.sql.DataSource;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.jdbc.DelegatingDataSource;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.meta.MetaDataSerializer;
+import org.apache.openjpa.lib.util.Files;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Options;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.util.InvalidStateException;
+
+/**
+ * The SchemaTool is used to manage the database schema. Note that the
+ * tool never adds or drops unique constraints from existing tables, because
+ * JDBC {@link DatabaseMetaData} does not include information on these
+ * constraints.
+ *
+ * @author Abe White
+ * @author Patrick Linskey
+ */
+public class SchemaTool {
+
+    public static final String ACTION_ADD = &quot;add&quot;;
+    public static final String ACTION_DROP = &quot;drop&quot;;
+    public static final String ACTION_DROP_SCHEMA = &quot;dropSchema&quot;;
+    public static final String ACTION_RETAIN = &quot;retain&quot;;
+    public static final String ACTION_REFRESH = &quot;refresh&quot;;
+    public static final String ACTION_BUILD = &quot;build&quot;;
+    public static final String ACTION_REFLECT = &quot;reflect&quot;;
+    public static final String ACTION_CREATEDB = &quot;createDB&quot;;
+    public static final String ACTION_DROPDB = &quot;dropDB&quot;;
+    public static final String ACTION_IMPORT = &quot;import&quot;;
+    public static final String ACTION_EXPORT = &quot;export&quot;;
+    public static final String ACTION_DELETE_TABLE_CONTENTS = &quot;deleteTableContents&quot;;
+    public static final String ACTION_EXECUTE_SCRIPT = &quot;executeScript&quot;;
+
+<span class="nc" id="L89">    public static final String[] ACTIONS = new String[]{</span>
+        ACTION_ADD,
+        ACTION_DROP,
+        ACTION_DROP_SCHEMA,
+        ACTION_RETAIN,
+        ACTION_REFRESH,
+        ACTION_BUILD,
+        ACTION_REFLECT,
+        ACTION_CREATEDB,
+        ACTION_DROPDB,
+        ACTION_IMPORT,
+        ACTION_EXPORT,
+        ACTION_DELETE_TABLE_CONTENTS,
+        ACTION_EXECUTE_SCRIPT
+    };
+
+<span class="nc" id="L105">    protected static final Localizer _loc = Localizer.forPackage(SchemaTool.class);</span>
+
+    protected final JDBCConfiguration _conf;
+    protected final DataSource _ds;
+    protected final Log _log;
+    protected final DBDictionary _dict;
+    private final String _action;
+<span class="nc" id="L112">    private boolean _ignoreErrs = false;</span>
+<span class="nc" id="L113">    private boolean _openjpaTables = false;</span>
+<span class="nc" id="L114">    private boolean _dropTables = true;</span>
+<span class="nc" id="L115">    private boolean _dropSeqs = true;</span>
+<span class="nc" id="L116">    private boolean _pks = true;</span>
+<span class="nc" id="L117">    private boolean _fks = true;</span>
+<span class="nc" id="L118">    private boolean _indexes = true;</span>
+<span class="nc" id="L119">    private boolean _seqs = true;</span>
+<span class="nc" id="L120">    private boolean _rollbackBeforeDDL = true;</span>
+<span class="nc" id="L121">    private PrintWriter _writer = null;</span>
+<span class="nc" id="L122">    private SchemaGroup _group = null;</span>
+<span class="nc" id="L123">    private SchemaGroup _db = null;</span>
+<span class="nc" id="L124">    protected boolean _fullDB = false;</span>
+<span class="nc" id="L125">    protected String _sqlTerminator = &quot;;&quot;;</span>
+<span class="nc" id="L126">    protected String _scriptToExecute = null;</span>
+
+    /**
+     * Default constructor. Tools constructed this way will not have an
+     * action, so the {@link #run()} method will be a no-op.
+     */
+    public SchemaTool(JDBCConfiguration conf) {
+<span class="nc" id="L133">        this(conf, null);</span>
+<span class="nc" id="L134">    }</span>
+
+    /**
+     * Construct a tool to perform the given action.
+     */
+<span class="nc" id="L139">    public SchemaTool(JDBCConfiguration conf, String action) {</span>
+<span class="nc bnc" id="L140" title="All 4 branches missed.">        if (action != null &amp;&amp; !Arrays.asList(ACTIONS).contains(action)) {</span>
+<span class="nc" id="L141">            Configurations.configureInstance(this, conf, action, action);</span>
+        }
+
+<span class="nc" id="L144">        _conf = conf;</span>
+<span class="nc" id="L145">        _action = action;</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        _ds = ACTION_BUILD.equals(action) ? null : conf.getDataSource2(null);</span>
+<span class="nc" id="L147">        _log = conf.getLog(JDBCConfiguration.LOG_SCHEMA);</span>
+
+        // initialize this up-front; otherwise the dbdictionaryfactory might
+        // try to take a connection to initialize when we've already got one:
+        // bad news if the max pool is 1
+<span class="nc" id="L152">        _dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L153">    }</span>
+
+    /**
+     * Cleanup DataSource after run()/record()
+     */
+    public void clear() {
+<span class="nc bnc" id="L159" title="All 4 branches missed.">        if (_ds != null &amp;&amp; _ds instanceof DelegatingDataSource) {</span>
+            try {
+<span class="nc" id="L161">                ((DelegatingDataSource)_ds).close();</span>
+<span class="nc" id="L162">            } catch (Exception e) {</span>
+                // no-op
+<span class="nc" id="L164">            }</span>
+        }
+<span class="nc" id="L166">    }</span>
+
+    /**
+     * The action supplied on construction.
+     */
+    public String getAction() {
+<span class="nc" id="L172">        return _action;</span>
+    }
+
+    /**
+     * If true, SQLExceptions thrown during schema manipulation will be
+     * printed but ignored.
+     */
+    public boolean getIgnoreErrors() {
+<span class="nc" id="L180">        return _ignoreErrs;</span>
+    }
+
+    /**
+     * If true, SQLExceptions thrown during schema manipulation will be
+     * printed but ignored.
+     */
+    public void setIgnoreErrors(boolean ignoreErrs) {
+<span class="nc" id="L188">        _ignoreErrs = ignoreErrs;</span>
+<span class="nc" id="L189">    }</span>
+
+    /**
+     * Whether to act on special tables used by OpenJPA components
+     * for bookkeeping.
+     */
+    public boolean getOpenJPATables() {
+<span class="nc" id="L196">        return _openjpaTables;</span>
+    }
+
+    /**
+     * Whether to act on special tables used by OpenJPA components
+     * for bookkeeping.
+     */
+    public void setOpenJPATables(boolean openjpaTables) {
+<span class="nc" id="L204">        _openjpaTables = openjpaTables;</span>
+<span class="nc" id="L205">    }</span>
+
+    /**
+     * If true, tables that appear to be unused will be dropped. Defaults to
+     * true.
+     */
+    public boolean getDropTables() {
+<span class="nc" id="L212">        return _dropTables;</span>
+    }
+
+    /**
+     * If true, tables that appear to be unused will be dropped. Defaults to
+     * true.
+     */
+    public void setDropTables(boolean dropTables) {
+<span class="nc" id="L220">        _dropTables = dropTables;</span>
+<span class="nc" id="L221">    }</span>
+
+    /**
+     * If true, sequences that appear to be unused will be dropped. Defaults
+     * to true.
+     */
+    public boolean getDropSequences() {
+<span class="nc" id="L228">        return _dropSeqs;</span>
+    }
+
+    /**
+     * If true, sequences that appear to be unused will be dropped. Defaults
+     * to true.
+     */
+    public void setDropSequences(boolean dropSeqs) {
+<span class="nc" id="L236">        _dropSeqs = dropSeqs;</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        if (dropSeqs)</span>
+<span class="nc" id="L238">            setSequences(true);</span>
+<span class="nc" id="L239">    }</span>
+
+    /**
+     * If true, rollback will be performed before each DDL statement is executed. Defaults to true.
+     */
+    public boolean getRollbackBeforeDDL() {
+<span class="nc" id="L245">        return _rollbackBeforeDDL;</span>
+    }
+
+    /**
+     * If true, rollback will be performed before each DDL statement is executed. Defaults to true.
+     */
+    public void setRollbackBeforeDDL(boolean rollbackBeforeDDL) {
+<span class="nc" id="L252">        _rollbackBeforeDDL = rollbackBeforeDDL;</span>
+<span class="nc" id="L253">    }</span>
+
+    /**
+     * Whether sequences should be manipulated. Defaults to true.
+     */
+    public boolean getSequences() {
+<span class="nc" id="L259">        return _seqs;</span>
+    }
+
+    /**
+     * Whether sequences should be manipulated. Defaults to true.
+     */
+    public void setSequences(boolean seqs) {
+<span class="nc" id="L266">        _seqs = seqs;</span>
+<span class="nc" id="L267">    }</span>
+
+    /**
+     * Whether indexes on existing tables should be manipulated.
+     * Defaults to true.
+     */
+    public boolean getIndexes() {
+<span class="nc" id="L274">        return _indexes;</span>
+    }
+
+    /**
+     * Whether indexes on existing tables should be manipulated.
+     * Defaults to true.
+     */
+    public void setIndexes(boolean indexes) {
+<span class="nc" id="L282">        _indexes = indexes;</span>
+<span class="nc" id="L283">    }</span>
+
+    /**
+     * Whether foreign keys on existing tables should be manipulated.
+     * Defaults to true.
+     */
+    public boolean getForeignKeys() {
+<span class="nc" id="L290">        return _fks;</span>
+    }
+
+    /**
+     * Whether foreign keys on existing tables should be manipulated.
+     * Defaults to true.
+     */
+    public void setForeignKeys(boolean fks) {
+<span class="nc" id="L298">        _fks = fks;</span>
+<span class="nc" id="L299">    }</span>
+
+    /**
+     * Whether primary keys on existing tables should be manipulated.
+     * Defaults to true.
+     */
+    public boolean getPrimaryKeys() {
+<span class="nc" id="L306">        return _pks;</span>
+    }
+
+    /**
+     * Whether primary keys on existing tables should be manipulated.
+     * Defaults to true.
+     */
+    public void setPrimaryKeys(boolean pks) {
+<span class="nc" id="L314">        _pks = pks;</span>
+<span class="nc" id="L315">    }</span>
+
+    /**
+     * The stream to write to for the creation of SQL scripts. If the
+     * stream is non-null, all SQL will be written to this stream rather than
+     * executed against the database.
+     */
+    public Writer getWriter() {
+<span class="nc" id="L323">        return _writer;</span>
+    }
+
+    /**
+     * The stream to write to for the creation of SQL scripts. If the
+     * stream is non-null, all SQL will be written to this stream rather than
+     * executed against the database.
+     */
+    public void setWriter(Writer writer) {
+<span class="nc bnc" id="L332" title="All 2 branches missed.">        if (writer == null)</span>
+<span class="nc" id="L333">            _writer = null;</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">        else if (writer instanceof PrintWriter)</span>
+<span class="nc" id="L335">            _writer = (PrintWriter) writer;</span>
+        else
+<span class="nc" id="L337">            _writer = new PrintWriter(writer);</span>
+<span class="nc" id="L338">    }</span>
+
+    public void setSQLTerminator(String t) {
+<span class="nc" id="L341">    	_sqlTerminator = t;</span>
+<span class="nc" id="L342">    }</span>
+
+    public void setScriptToExecute(String scriptToExecute) {
+<span class="nc" id="L345">        _scriptToExecute = scriptToExecute;</span>
+<span class="nc" id="L346">    }</span>
+
+    /**
+     * Return the schema group the tool will act on.
+     */
+    public SchemaGroup getSchemaGroup() {
+<span class="nc" id="L352">        return _group;</span>
+    }
+
+    /**
+     * Set the schema group the tool will act on.
+     */
+    public void setSchemaGroup(SchemaGroup group) {
+<span class="nc" id="L359">        _group = group;</span>
+<span class="nc" id="L360">    }</span>
+
+    ///////////
+    // Actions
+    ///////////
+
+    /**
+     * Run the tool action.
+     */
+    public void run()
+        throws SQLException {
+<span class="nc bnc" id="L371" title="All 2 branches missed.">        if (_action == null)</span>
+<span class="nc" id="L372">            return;</span>
+
+<span class="nc bnc" id="L374" title="All 2 branches missed.">        if (ACTION_ADD.equals(_action))</span>
+<span class="nc" id="L375">            add();</span>
+<span class="nc bnc" id="L376" title="All 2 branches missed.">        else if (ACTION_DROP.equals(_action))</span>
+<span class="nc" id="L377">            drop();</span>
+<span class="nc bnc" id="L378" title="All 2 branches missed.">        else if (ACTION_DROP_SCHEMA.equals(_action))</span>
+<span class="nc" id="L379">            dropSchema();</span>
+<span class="nc bnc" id="L380" title="All 2 branches missed.">        else if (ACTION_RETAIN.equals(_action))</span>
+<span class="nc" id="L381">            retain();</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">        else if (ACTION_REFRESH.equals(_action))</span>
+<span class="nc" id="L383">            refresh();</span>
+<span class="nc bnc" id="L384" title="All 2 branches missed.">        else if (ACTION_BUILD.equals(_action))</span>
+<span class="nc" id="L385">            build();</span>
+<span class="nc bnc" id="L386" title="All 2 branches missed.">        else if (ACTION_CREATEDB.equals(_action))</span>
+<span class="nc" id="L387">            createDB();</span>
+<span class="nc bnc" id="L388" title="All 2 branches missed.">        else if (ACTION_DROPDB.equals(_action))</span>
+<span class="nc" id="L389">            dropDB();</span>
+<span class="nc bnc" id="L390" title="All 2 branches missed.">        else if (ACTION_DELETE_TABLE_CONTENTS.equals(_action))</span>
+<span class="nc" id="L391">            deleteTableContents();</span>
+<span class="nc bnc" id="L392" title="All 2 branches missed.">        else if (ACTION_EXECUTE_SCRIPT.equals(_action)) {</span>
+<span class="nc" id="L393">            executeScript();</span>
+        }
+<span class="nc" id="L395">    }</span>
+
+    /**
+     * Adds any components present in the schema repository but absent from
+     * the database.
+     */
+    protected void add()
+        throws SQLException {
+<span class="nc" id="L403">        add(getDBSchemaGroup(false), assertSchemaGroup());</span>
+<span class="nc" id="L404">    }</span>
+
+    /**
+     * Drops all schema components in the schema repository that also exist
+     * in the database.
+     */
+    protected void drop()
+        throws SQLException {
+<span class="nc" id="L412">        drop(getDBSchemaGroup(false), assertSchemaGroup());</span>
+<span class="nc" id="L413">    }</span>
+
+    /**
+     * Drops all schema components in the schema repository.
+     */
+    protected void dropSchema()
+        throws SQLException {
+<span class="nc" id="L420">        drop(getDBSchemaGroup(false), assertSchemaGroup(), false);</span>
+<span class="nc" id="L421">    }</span>
+
+    /**
+     * Drops database components that are not mentioned in the schema
+     * repository.
+     */
+    protected void retain()
+        throws SQLException {
+<span class="nc" id="L429">        retain(getDBSchemaGroup(true), assertSchemaGroup(),</span>
+<span class="nc" id="L430">            getDropTables(), getDropSequences());</span>
+<span class="nc" id="L431">    }</span>
+
+    /**
+     * Adds any components present in the schema repository but absent from
+     * the database, and drops unused database components.
+     */
+    protected void refresh()
+        throws SQLException {
+<span class="nc" id="L439">        SchemaGroup local = assertSchemaGroup();</span>
+<span class="nc" id="L440">        SchemaGroup db = getDBSchemaGroup(true);</span>
+<span class="nc" id="L441">        retain(db, local, getDropTables(), getDropSequences());</span>
+<span class="nc" id="L442">        add(db, local);</span>
+<span class="nc" id="L443">    }</span>
+
+    /**
+     * Re-execute all SQL used for the creation of the current database;
+     * this action is usually used when creating SQL scripts.
+     */
+    protected void createDB()
+        throws SQLException {
+<span class="nc" id="L451">        SchemaGroup group = new SchemaGroup();</span>
+<span class="nc" id="L452">        group.addSchema();</span>
+<span class="nc" id="L453">        add(group, getDBSchemaGroup(true));</span>
+<span class="nc" id="L454">    }</span>
+
+    /**
+     * Re-execute all SQL used for the creation of the current database;
+     * this action is usually used when creating SQL scripts.
+     */
+    protected void build()
+        throws SQLException {
+<span class="nc" id="L462">        SchemaGroup group = new SchemaGroup();</span>
+<span class="nc" id="L463">        group.addSchema();</span>
+<span class="nc" id="L464">        buildSchema(group, assertSchemaGroup(), true);</span>
+<span class="nc" id="L465">    }</span>
+
+    /**
+     * Drop the current database.
+     */
+    protected void dropDB()
+        throws SQLException {
+<span class="nc" id="L472">        retain(getDBSchemaGroup(true), new SchemaGroup(), true, true);</span>
+<span class="nc" id="L473">    }</span>
+
+    /**
+     * Issue DELETE statement against all known tables.
+     */
+    protected void deleteTableContents()
+        throws SQLException {
+<span class="nc" id="L480">        SchemaGroup group = getSchemaGroup();</span>
+<span class="nc" id="L481">        Schema[] schemas = group.getSchemas();</span>
+<span class="nc" id="L482">        Collection&lt;Table&gt; tables = new LinkedHashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L483" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L484">            Table[] ts = schemas[i].getTables();</span>
+<span class="nc bnc" id="L485" title="All 2 branches missed.">            for (int j = 0; j &lt; ts.length; j++)</span>
+<span class="nc" id="L486">                tables.add(ts[j]);</span>
+        }
+<span class="nc" id="L488">        Table[] tableArray = tables.toArray(new Table[tables.size()]);</span>
+<span class="nc" id="L489">        Connection conn = _ds.getConnection();</span>
+        try {
+<span class="nc" id="L491">            String[] sql = _conf.getDBDictionaryInstance()</span>
+<span class="nc" id="L492">                .getDeleteTableContentsSQL(tableArray, conn);</span>
+<span class="nc bnc" id="L493" title="All 2 branches missed.">            if (!executeSQL(sql)) {</span>
+<span class="nc" id="L494">                _log.warn(_loc.get(&quot;delete-table-contents&quot;));</span>
+            }
+        } finally {
+<span class="nc" id="L497">            closeConnection(conn);</span>
+        }
+<span class="nc" id="L499">    }</span>
+
+    protected void executeScript() throws SQLException {
+<span class="nc bnc" id="L502" title="All 2 branches missed.">        if (_scriptToExecute == null) {</span>
+<span class="nc" id="L503">            _log.warn(_loc.get(&quot;generating-execute-script-not-defined&quot;));</span>
+<span class="nc" id="L504">            return;</span>
+        }
+
+<span class="nc" id="L507">        URL url = AccessController.doPrivileged(</span>
+<span class="nc" id="L508">                J2DoPrivHelper.getResourceAction(_conf.getClassResolverInstance().</span>
+<span class="nc" id="L509">                        getClassLoader(SchemaTool.class, null), _scriptToExecute));</span>
+
+<span class="nc bnc" id="L511" title="All 2 branches missed.">        if (url == null) {</span>
+<span class="nc" id="L512">            _log.error(_loc.get(&quot;generating-execute-script-not-found&quot;, _scriptToExecute));</span>
+<span class="nc" id="L513">            return;</span>
+        }
+
+<span class="nc" id="L516">        _log.info(_loc.get(&quot;generating-execute-script&quot;, _scriptToExecute));</span>
+<span class="nc" id="L517">        BufferedReader reader = null;</span>
+        try {
+<span class="nc" id="L519">            reader = new BufferedReader(new InputStreamReader(url.openStream()));</span>
+            String sql;
+<span class="nc" id="L521">            List&lt;String&gt; script = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">            while ((sql = reader.readLine()) != null) {</span>
+<span class="nc" id="L523">                sql = sql.trim();</span>
+<span class="nc bnc" id="L524" title="All 6 branches missed.">                if (sql.startsWith(&quot;--&quot;) || sql.startsWith(&quot;/*&quot;) || sql.startsWith(&quot;//&quot;)) {</span>
+<span class="nc" id="L525">                    continue;</span>
+                }
+
+<span class="nc" id="L528">                int semiColonPosition = sql.indexOf(&quot;;&quot;);</span>
+<span class="nc bnc" id="L529" title="All 2 branches missed.">                if (semiColonPosition != -1) {</span>
+<span class="nc" id="L530">                    sql = sql.substring(0, semiColonPosition);</span>
+                }
+<span class="nc" id="L532">                script.add(sql);</span>
+<span class="nc" id="L533">            }</span>
+
+<span class="nc" id="L535">            executeSQL(script.toArray(new String[script.size()]));</span>
+<span class="nc" id="L536">        } catch (IOException e) {</span>
+<span class="nc" id="L537">            _log.error(e.getMessage(), e);</span>
+        } finally {
+            try {
+<span class="nc bnc" id="L540" title="All 2 branches missed.">                if (reader != null) {</span>
+<span class="nc" id="L541">                    reader.close();</span>
+                }
+<span class="nc" id="L543">            } catch (IOException e) {</span>
+<span class="nc" id="L544">                _log.error(e.getMessage(), e);</span>
+<span class="nc" id="L545">            }</span>
+        }
+<span class="nc" id="L547">    }</span>
+
+    /**
+     * Record the changes made to the DB in the current {@link SchemaFactory}.
+     */
+    public void record() {
+<span class="nc bnc" id="L553" title="All 4 branches missed.">        if (_db != null &amp;&amp; _writer == null)</span>
+<span class="nc" id="L554">            _conf.getSchemaFactoryInstance().storeSchema(_db);</span>
+<span class="nc" id="L555">    }</span>
+
+    /**
+     * Adds all database components in the repository schema that are not
+     * present in the given database schema to the database.
+     */
+    protected void add(SchemaGroup db, SchemaGroup repos)
+        throws SQLException {
+
+<span class="nc" id="L564">        buildSchema(db, repos, true);</span>
+<span class="nc" id="L565">    }</span>
+
+    protected void buildSchema(SchemaGroup db, SchemaGroup repos, boolean considerDatabaseState) throws SQLException {
+        // add sequences
+<span class="nc" id="L569">        Schema[] schemas = repos.getSchemas();</span>
+        Schema schema;
+<span class="nc bnc" id="L571" title="All 2 branches missed.">        if (_seqs) {</span>
+            Sequence[] seqs;
+<span class="nc bnc" id="L573" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L574">                seqs = schemas[i].getSequences();</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">                for (int j = 0; j &lt; seqs.length; j++) {</span>
+<span class="nc bnc" id="L576" title="All 4 branches missed.">                    if (considerDatabaseState &amp;&amp; db.findSequence(schemas[i], seqs[j].getQualifiedPath()) != null) {</span>
+<span class="nc bnc" id="L577" title="All 2 branches missed.">                        if (_writer == null) {</span>
+<span class="nc" id="L578">                            continue;</span>
+                        }
+                    }
+
+<span class="nc bnc" id="L582" title="All 2 branches missed.">                    if (createSequence(seqs[j])) {</span>
+<span class="nc" id="L583">                        schema = db.getSchema(seqs[j].getSchemaIdentifier());</span>
+<span class="nc bnc" id="L584" title="All 2 branches missed.">                        if (schema == null)</span>
+<span class="nc" id="L585">                            schema = db.addSchema(seqs[j].getSchemaIdentifier());</span>
+<span class="nc" id="L586">                        schema.importSequence(seqs[j]);</span>
+                    } else
+<span class="nc" id="L588">                        _log.warn(_loc.get(&quot;add-seq&quot;, seqs[j]));</span>
+                }
+            }
+        }
+
+        // order is important in this method; start with columns
+        Table[] tabs;
+<span class="nc" id="L595">        Table dbTable = null;</span>
+        Column[] cols;
+        Column col;
+<span class="nc" id="L598">        DBIdentifier defaultSchemaName = DBIdentifier.newSchema(_dict.getDefaultSchemaName());</span>
+<span class="nc bnc" id="L599" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L600">            tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L601" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc" id="L602">                cols = tabs[j].getColumns();</span>
+<span class="nc bnc" id="L603" title="All 2 branches missed.">                if (considerDatabaseState) {</span>
+<span class="nc" id="L604">                    dbTable = db.findTable(schemas[i], tabs[j].getQualifiedPath(), defaultSchemaName);</span>
+                }
+<span class="nc bnc" id="L606" title="All 2 branches missed.">                for (int k = 0; k &lt; cols.length; k++) {</span>
+<span class="nc bnc" id="L607" title="All 2 branches missed.">                    if (dbTable != null) {</span>
+<span class="nc" id="L608">                        DBIdentifier colName = cols[k].getIdentifier();</span>
+<span class="nc" id="L609">                        col = dbTable.getColumn(colName);</span>
+<span class="nc bnc" id="L610" title="All 2 branches missed.">                        if (col == null) {</span>
+<span class="nc bnc" id="L611" title="All 2 branches missed.">                            if (addColumn(cols[k]))</span>
+<span class="nc" id="L612">                                dbTable.importColumn(cols[k]);</span>
+                            else
+<span class="nc" id="L614">                                _log.warn(_loc.get(&quot;add-col&quot;, cols[k],</span>
+                                        tabs[j]));
+<span class="nc bnc" id="L616" title="All 2 branches missed.">                        } else if (!cols[k].equalsColumn(_dict, col)) {</span>
+<span class="nc" id="L617">                            _log.warn(_loc.get(&quot;bad-col&quot;, new Object[]{</span>
+<span class="nc" id="L618">                                    col, dbTable, col.getDescription(),</span>
+<span class="nc" id="L619">                                    cols[k].getDescription() }));</span>
+                        }
+                    }
+                }
+            }
+        }
+
+        // primary keys
+<span class="nc bnc" id="L627" title="All 2 branches missed.">        if (_pks) {</span>
+            PrimaryKey pk;
+<span class="nc bnc" id="L629" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L630">                tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L631" title="All 2 branches missed.">                for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc" id="L632">                    pk = tabs[j].getPrimaryKey();</span>
+<span class="nc bnc" id="L633" title="All 2 branches missed.">                    if (considerDatabaseState) {</span>
+<span class="nc" id="L634">                        dbTable = db.findTable(schemas[i], tabs[j].getQualifiedPath());</span>
+                    }
+<span class="nc bnc" id="L636" title="All 6 branches missed.">                    if (pk != null &amp;&amp; !pk.isLogical() &amp;&amp; dbTable != null) {</span>
+<span class="nc bnc" id="L637" title="All 2 branches missed.">                        if (dbTable.getPrimaryKey() == null</span>
+<span class="nc bnc" id="L638" title="All 2 branches missed.">                                &amp;&amp; addPrimaryKey(pk))</span>
+<span class="nc" id="L639">                            dbTable.importPrimaryKey(pk);</span>
+<span class="nc bnc" id="L640" title="All 2 branches missed.">                        else if (dbTable.getPrimaryKey() == null)</span>
+<span class="nc" id="L641">                            _log.warn(_loc.get(&quot;add-pk&quot;, pk, tabs[j]));</span>
+<span class="nc bnc" id="L642" title="All 2 branches missed.">                        else if (!pk.equalsPrimaryKey(dbTable.getPrimaryKey()))</span>
+<span class="nc" id="L643">                            _log.warn(_loc.get(&quot;bad-pk&quot;,</span>
+<span class="nc" id="L644">                                    dbTable.getPrimaryKey(), dbTable));</span>
+                    }
+                }
+            }
+        }
+
+        // tables
+<span class="nc" id="L651">        Set&lt;Table&gt; newTables = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L652" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L653">            tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L654" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc bnc" id="L655" title="All 4 branches missed.">                if (considerDatabaseState &amp;&amp; db.findTable(schemas[i], tabs[j].getQualifiedPath()) != null) {</span>
+<span class="nc bnc" id="L656" title="All 2 branches missed.">                    if (_writer == null) {</span>
+<span class="nc" id="L657">                        continue;</span>
+                    }
+                }
+
+<span class="nc bnc" id="L661" title="All 2 branches missed.">                if (createTable(tabs[j])) {</span>
+<span class="nc" id="L662">                    newTables.add(tabs[j]);</span>
+<span class="nc" id="L663">                    schema = db.getSchema(tabs[j].getSchemaIdentifier());</span>
+<span class="nc bnc" id="L664" title="All 2 branches missed.">                    if (schema == null)</span>
+<span class="nc" id="L665">                        schema = db.addSchema(tabs[j].getSchemaIdentifier());</span>
+<span class="nc" id="L666">                    schema.importTable(tabs[j]);</span>
+                } else
+<span class="nc" id="L668">                    _log.warn(_loc.get(&quot;add-table&quot;, tabs[j]));</span>
+            }
+        }
+
+        // indexes
+        Index[] idxs;
+        Index idx;
+<span class="nc bnc" id="L675" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L676">            tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L677" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+                // create indexes on new tables even if indexes
+                // have been turned off
+<span class="nc bnc" id="L680" title="All 4 branches missed.">                if (!_indexes &amp;&amp; !newTables.contains(tabs[j]))</span>
+<span class="nc" id="L681">                    continue;</span>
+
+<span class="nc" id="L683">                idxs = tabs[j].getIndexes();</span>
+<span class="nc bnc" id="L684" title="All 2 branches missed.">                if (considerDatabaseState) {</span>
+<span class="nc" id="L685">                    dbTable = db.findTable(schemas[i], tabs[j].getQualifiedPath());</span>
+                }
+<span class="nc bnc" id="L687" title="All 2 branches missed.">                for (int k = 0; k &lt; idxs.length; k++) {</span>
+<span class="nc bnc" id="L688" title="All 2 branches missed.">                    if (dbTable != null) {</span>
+<span class="nc" id="L689">                        idx = findIndex(dbTable, idxs[k]);</span>
+<span class="nc bnc" id="L690" title="All 2 branches missed.">                        if (idx == null) {</span>
+<span class="nc bnc" id="L691" title="All 2 branches missed.">                            if (createIndex(idxs[k], dbTable, tabs[j].getUniques()))</span>
+<span class="nc" id="L692">                                dbTable.importIndex(idxs[k]);</span>
+                            else
+<span class="nc" id="L694">                                _log.warn(_loc.get(&quot;add-index&quot;, idxs[k],</span>
+                                        tabs[j]));
+<span class="nc bnc" id="L696" title="All 2 branches missed.">                        } else if (!idxs[k].equalsIndex(idx))</span>
+<span class="nc" id="L697">                            _log.warn(_loc.get(&quot;bad-index&quot;, idx, dbTable));</span>
+                    }
+                }
+            }
+        }
+
+        // Unique Constraints on group of columns
+        Unique[] uniques;
+<span class="nc bnc" id="L705" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L706">            tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L707" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+                // create unique constraints only on new tables
+<span class="nc bnc" id="L709" title="All 2 branches missed.">                if (!newTables.contains(tabs[j])) {</span>
+<span class="nc bnc" id="L710" title="All 2 branches missed.">                    if (_writer == null) {</span>
+<span class="nc" id="L711">                        continue;</span>
+                    }
+                }
+
+<span class="nc" id="L715">                uniques = tabs[j].getUniques();</span>
+<span class="nc bnc" id="L716" title="All 4 branches missed.">                if (uniques == null || uniques.length == 0)</span>
+<span class="nc" id="L717">                    continue;</span>
+<span class="nc bnc" id="L718" title="All 2 branches missed.">                if (considerDatabaseState) {</span>
+<span class="nc" id="L719">                    dbTable = db.findTable(tabs[j]);</span>
+                }
+<span class="nc bnc" id="L721" title="All 2 branches missed.">                if (dbTable == null)</span>
+<span class="nc" id="L722">                    continue;</span>
+<span class="nc bnc" id="L723" title="All 2 branches missed.">                for (int k = 0; k &lt; uniques.length; k++) {</span>
+<span class="nc" id="L724">                    dbTable.importUnique(uniques[k]);</span>
+                }
+            }
+        }
+
+        // foreign keys
+        ForeignKey[] fks;
+        ForeignKey fk;
+<span class="nc bnc" id="L732" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L733">            tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L734" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+                // create foreign keys on new tables even if fks
+                // have been turned off
+<span class="nc bnc" id="L737" title="All 4 branches missed.">                if (!_fks &amp;&amp; !newTables.contains(tabs[j])) {</span>
+<span class="nc bnc" id="L738" title="All 2 branches missed.">                    if (_writer == null) {</span>
+<span class="nc" id="L739">                        continue;</span>
+                    }
+                }
+
+<span class="nc" id="L743">                fks = tabs[j].getForeignKeys();</span>
+<span class="nc bnc" id="L744" title="All 2 branches missed.">                if (considerDatabaseState) {</span>
+<span class="nc" id="L745">                    dbTable = db.findTable(schemas[i], tabs[j].getQualifiedPath());</span>
+                }
+<span class="nc bnc" id="L747" title="All 2 branches missed.">                for (int k = 0; k &lt; fks.length; k++) {</span>
+<span class="nc bnc" id="L748" title="All 4 branches missed.">                    if (!fks[k].isLogical() &amp;&amp; dbTable != null) {</span>
+<span class="nc" id="L749">                        fk = findForeignKey(dbTable, fks[k]);</span>
+<span class="nc bnc" id="L750" title="All 2 branches missed.">                        if (fk == null) {</span>
+<span class="nc bnc" id="L751" title="All 2 branches missed.">                            if (addForeignKey(fks[k]))</span>
+<span class="nc" id="L752">                                dbTable.importForeignKey(fks[k]);</span>
+                            else
+<span class="nc" id="L754">                                _log.warn(_loc.get(&quot;add-fk&quot;,</span>
+                                        fks[k], tabs[j]));
+<span class="nc bnc" id="L756" title="All 2 branches missed.">                        } else if (!fks[k].equalsForeignKey(fk))</span>
+<span class="nc" id="L757">                            _log.warn(_loc.get(&quot;bad-fk&quot;, fk, dbTable));</span>
+                    }
+                }
+            }
+        }
+<span class="nc" id="L762">    }</span>
+
+    /**
+     * Drops all database components that are in the given database schema
+     * but not in the repository schema.
+     */
+    protected void retain(SchemaGroup db, SchemaGroup repos, boolean tables,
+        boolean sequences)
+        throws SQLException {
+<span class="nc" id="L771">        Schema[] schemas = db.getSchemas();</span>
+<span class="nc bnc" id="L772" title="All 4 branches missed.">        if (_seqs &amp;&amp; sequences) {</span>
+            Sequence[] seqs;
+<span class="nc bnc" id="L774" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L775">                seqs = schemas[i].getSequences();</span>
+<span class="nc bnc" id="L776" title="All 2 branches missed.">                for (int j = 0; j &lt; seqs.length; j++) {</span>
+<span class="nc bnc" id="L777" title="All 2 branches missed.">                    if (!isDroppable(seqs[j]))</span>
+<span class="nc" id="L778">                        continue;</span>
+<span class="nc bnc" id="L779" title="All 2 branches missed.">                    if (repos.findSequence(seqs[j]) == null) {</span>
+<span class="nc bnc" id="L780" title="All 2 branches missed.">                        if (dropSequence(seqs[j]))</span>
+<span class="nc" id="L781">                            schemas[i].removeSequence(seqs[j]);</span>
+                        else
+<span class="nc" id="L783">                            _log.warn(_loc.get(&quot;drop-seq&quot;, seqs[j]));</span>
+                    }
+                }
+            }
+        }
+
+        // order is important in this method; start with foreign keys
+        Table[] tabs;
+        Table reposTable;
+<span class="nc bnc" id="L792" title="All 2 branches missed.">        if (_fks) {</span>
+            ForeignKey[] fks;
+            ForeignKey fk;
+<span class="nc bnc" id="L795" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L796">                tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L797" title="All 2 branches missed.">                for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc bnc" id="L798" title="All 2 branches missed.">                    if (!isDroppable(tabs[j]))</span>
+<span class="nc" id="L799">                        continue;</span>
+<span class="nc" id="L800">                    fks = tabs[j].getForeignKeys();</span>
+<span class="nc" id="L801">                    reposTable = repos.findTable(tabs[j]);</span>
+<span class="nc bnc" id="L802" title="All 4 branches missed.">                    if (!tables &amp;&amp; reposTable == null)</span>
+<span class="nc" id="L803">                        continue;</span>
+
+<span class="nc bnc" id="L805" title="All 2 branches missed.">                    for (int k = 0; k &lt; fks.length; k++) {</span>
+<span class="nc bnc" id="L806" title="All 2 branches missed.">                        if (fks[k].isLogical())</span>
+<span class="nc" id="L807">                            continue;</span>
+
+<span class="nc" id="L809">                        fk = null;</span>
+<span class="nc bnc" id="L810" title="All 2 branches missed.">                        if (reposTable != null)</span>
+<span class="nc" id="L811">                            fk = findForeignKey(reposTable, fks[k]);</span>
+<span class="nc bnc" id="L812" title="All 4 branches missed.">                        if (reposTable == null || fk == null</span>
+<span class="nc bnc" id="L813" title="All 2 branches missed.">                            || !fks[k].equalsForeignKey(fk)) {</span>
+<span class="nc bnc" id="L814" title="All 2 branches missed.">                            if (dropForeignKey(fks[k]))</span>
+<span class="nc" id="L815">                                tabs[j].removeForeignKey(fks[k]);</span>
+                            else
+<span class="nc" id="L817">                                _log.warn(_loc.get(&quot;drop-fk&quot;, fks[k],</span>
+                                    tabs[j]));
+                        }
+                    }
+                }
+            }
+        }
+
+        // primary keys
+<span class="nc bnc" id="L826" title="All 2 branches missed.">        if (_pks) {</span>
+            PrimaryKey pk;
+<span class="nc bnc" id="L828" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L829">                tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L830" title="All 2 branches missed.">                for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc bnc" id="L831" title="All 2 branches missed.">                    if (!isDroppable(tabs[j]))</span>
+<span class="nc" id="L832">                        continue;</span>
+<span class="nc" id="L833">                    pk = tabs[j].getPrimaryKey();</span>
+<span class="nc bnc" id="L834" title="All 4 branches missed.">                    if (pk != null &amp;&amp; pk.isLogical())</span>
+<span class="nc" id="L835">                        continue;</span>
+
+<span class="nc" id="L837">                    reposTable = repos.findTable(tabs[j]);</span>
+<span class="nc bnc" id="L838" title="All 4 branches missed.">                    if (pk != null &amp;&amp; reposTable != null</span>
+<span class="nc bnc" id="L839" title="All 2 branches missed.">                        &amp;&amp; (reposTable.getPrimaryKey() == null</span>
+<span class="nc bnc" id="L840" title="All 2 branches missed.">                        || !pk.equalsPrimaryKey(reposTable.getPrimaryKey()))) {</span>
+<span class="nc bnc" id="L841" title="All 2 branches missed.">                        if (dropPrimaryKey(pk))</span>
+<span class="nc" id="L842">                            tabs[j].removePrimaryKey();</span>
+                        else
+<span class="nc" id="L844">                            _log.warn(_loc.get(&quot;drop-pk&quot;, pk, tabs[j]));</span>
+                    }
+                }
+            }
+        }
+
+        // columns
+        Column[] cols;
+        Column col;
+<span class="nc" id="L853">        Collection&lt;Table&gt; drops = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L854" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L855">            tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L856" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc bnc" id="L857" title="All 2 branches missed.">                if (!isDroppable(tabs[j]))</span>
+<span class="nc" id="L858">                    continue;</span>
+<span class="nc" id="L859">                cols = tabs[j].getColumns();</span>
+<span class="nc" id="L860">                reposTable = repos.findTable(tabs[j]);</span>
+<span class="nc bnc" id="L861" title="All 2 branches missed.">                if (reposTable != null) {</span>
+<span class="nc bnc" id="L862" title="All 2 branches missed.">                    for (int k = 0; k &lt; cols.length; k++) {</span>
+<span class="nc" id="L863">                        col = reposTable.getColumn(cols[k].getIdentifier());</span>
+<span class="nc bnc" id="L864" title="All 4 branches missed.">                        if (col == null || !cols[k].equalsColumn(_dict, col)) {</span>
+<span class="nc bnc" id="L865" title="All 2 branches missed.">                            if (tabs[j].getColumns().length == 1)</span>
+<span class="nc" id="L866">                                drops.add(tabs[j]);</span>
+<span class="nc bnc" id="L867" title="All 2 branches missed.">                            else if (dropColumn(cols[k]))</span>
+<span class="nc" id="L868">                                tabs[j].removeColumn(cols[k]);</span>
+                            else
+<span class="nc" id="L870">                                _log.warn(_loc.get(&quot;drop-col&quot;, cols[k],</span>
+                                    tabs[j]));
+                        }
+                    }
+                }
+            }
+        }
+
+        // now tables
+<span class="nc bnc" id="L879" title="All 2 branches missed.">        if (tables) {</span>
+<span class="nc bnc" id="L880" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L881">                tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L882" title="All 2 branches missed.">                for (int j = 0; j &lt; tabs.length; j++)</span>
+<span class="nc bnc" id="L883" title="All 2 branches missed.">                    if (!!isDroppable(tabs[j])</span>
+<span class="nc bnc" id="L884" title="All 2 branches missed.">                        &amp;&amp; repos.findTable(tabs[j]) == null)</span>
+<span class="nc" id="L885">                        drops.add(tabs[j]);</span>
+            }
+        }
+<span class="nc" id="L888">        dropTables(drops, db);</span>
+<span class="nc" id="L889">    }</span>
+
+    protected void drop(SchemaGroup db, SchemaGroup repos)
+        throws SQLException {
+
+<span class="nc" id="L894">        drop(db, repos, true);</span>
+<span class="nc" id="L895">    }</span>
+
+    /**
+     * Drops all database components in the given repository schema.
+     */
+    private void drop(SchemaGroup db, SchemaGroup repos, boolean considerDatabaseState)
+        throws SQLException {
+        // drop sequences
+<span class="nc" id="L903">        Schema[] schemas = repos.getSchemas();</span>
+<span class="nc bnc" id="L904" title="All 2 branches missed.">        if (_seqs) {</span>
+            Sequence[] seqs;
+            Sequence dbSeq;
+<span class="nc bnc" id="L907" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L908">                seqs = schemas[i].getSequences();</span>
+<span class="nc bnc" id="L909" title="All 2 branches missed.">                for (int j = 0; j &lt; seqs.length; j++) {</span>
+<span class="nc bnc" id="L910" title="All 2 branches missed.">                    if (!isDroppable(seqs[j]))</span>
+<span class="nc" id="L911">                        continue;</span>
+<span class="nc" id="L912">                    dbSeq = db.findSequence(seqs[j]);</span>
+<span class="nc bnc" id="L913" title="All 2 branches missed.">                    if (dbSeq != null) {</span>
+<span class="nc bnc" id="L914" title="All 2 branches missed.">                        if (dropSequence(seqs[j]))</span>
+<span class="nc" id="L915">                            dbSeq.getSchema().removeSequence(dbSeq);</span>
+                        else
+<span class="nc" id="L917">                            _log.warn(_loc.get(&quot;drop-seq&quot;, seqs[j]));</span>
+                    }
+
+<span class="nc bnc" id="L920" title="All 2 branches missed.">                    if (_writer != null) {</span>
+<span class="nc" id="L921">                        dropSequence(seqs[j]);</span>
+                    }
+                }
+            }
+        }
+
+        // calculate tables to drop; we can only drop tables if we're sure
+        // the user listed the entire table definition in the stuff they want
+        // dropped; else they might just want to drop a few columns
+<span class="nc" id="L930">        Collection&lt;Table&gt; drops = new LinkedList&lt;&gt;();</span>
+        Table[] tabs;
+        Table dbTable;
+        Column[] dbCols;
+<span class="nc bnc" id="L934" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L935">            tabs = schemas[i].getTables();</span>
+            tables:
+<span class="nc bnc" id="L937" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc bnc" id="L938" title="All 2 branches missed.">                if (!isDroppable(tabs[j]))</span>
+<span class="nc" id="L939">                    continue;</span>
+
+<span class="nc bnc" id="L941" title="All 2 branches missed.">                if (!considerDatabaseState) {</span>
+<span class="nc" id="L942">                    drops.add(tabs[j]);</span>
+<span class="nc" id="L943">                    continue;</span>
+                }
+
+<span class="nc" id="L946">                dbTable = db.findTable(tabs[j]);</span>
+<span class="nc bnc" id="L947" title="All 2 branches missed.">                if (dbTable == null) {</span>
+<span class="nc bnc" id="L948" title="All 2 branches missed.">                    if (_writer != null) {</span>
+<span class="nc" id="L949">                        drops.add(tabs[j]);</span>
+                    }
+                    continue;
+                }
+
+<span class="nc" id="L954">                dbCols = dbTable.getColumns();</span>
+<span class="nc bnc" id="L955" title="All 2 branches missed.">                for (int k = 0; k &lt; dbCols.length; k++) {</span>
+<span class="nc bnc" id="L956" title="All 2 branches missed.">                    if (!dbCols[k].getIdentifier().getName().equals(_dict.getIdentityColumnName()) &amp;&amp;</span>
+<span class="nc bnc" id="L957" title="All 2 branches missed.">                        !tabs[j].containsColumn(dbCols[k]))</span>
+<span class="nc" id="L958">                        continue tables;</span>
+                }
+<span class="nc" id="L960">                drops.add(tabs[j]);</span>
+            }
+        }
+
+        // order is important in this method; start with foreign keys mentioned
+        // in the drop schema
+<span class="nc bnc" id="L966" title="All 2 branches missed.">        if (_fks) {</span>
+            ForeignKey[] fks;
+            ForeignKey fk;
+<span class="nc bnc" id="L969" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L970">                tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L971" title="All 2 branches missed.">                for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc bnc" id="L972" title="All 2 branches missed.">                    if (!isDroppable(tabs[j]))</span>
+<span class="nc" id="L973">                        continue;</span>
+<span class="nc" id="L974">                    fks = tabs[j].getForeignKeys();</span>
+<span class="nc" id="L975">                    dbTable = db.findTable(tabs[j]);</span>
+<span class="nc bnc" id="L976" title="All 2 branches missed.">                    for (int k = 0; k &lt; fks.length; k++) {</span>
+<span class="nc bnc" id="L977" title="All 2 branches missed.">                        if (fks[k].isLogical())</span>
+<span class="nc" id="L978">                            continue;</span>
+
+<span class="nc" id="L980">                        fk = null;</span>
+<span class="nc bnc" id="L981" title="All 2 branches missed.">                        if (dbTable != null)</span>
+<span class="nc" id="L982">                            fk = findForeignKey(dbTable, fks[k]);</span>
+<span class="nc bnc" id="L983" title="All 4 branches missed.">                        if (dbTable == null || fk == null)</span>
+<span class="nc" id="L984">                            continue;</span>
+
+<span class="nc bnc" id="L986" title="All 2 branches missed.">                        if (dropForeignKey(fks[k]))</span>
+<span class="nc bnc" id="L987" title="All 2 branches missed.">                            if (dbTable != null)</span>
+<span class="nc" id="L988">                                dbTable.removeForeignKey(fk);</span>
+                            else
+<span class="nc" id="L990">                                _log.warn(_loc.get(&quot;drop-fk&quot;, fks[k], tabs[j]));</span>
+                    }
+                }
+            }
+
+            // also drop imported foreign keys for tables that will be dropped
+            Table tab;
+<span class="nc bnc" id="L997" title="All 2 branches missed.">            for (Iterator&lt;Table&gt; itr = drops.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L998">                tab = itr.next();</span>
+<span class="nc" id="L999">                dbTable = db.findTable(tab);</span>
+<span class="nc bnc" id="L1000" title="All 2 branches missed.">                if (dbTable == null)</span>
+<span class="nc" id="L1001">                    continue;</span>
+
+<span class="nc" id="L1003">                fks = db.findExportedForeignKeys(dbTable.getPrimaryKey());</span>
+<span class="nc bnc" id="L1004" title="All 2 branches missed.">                for (int i = 0; i &lt; fks.length; i++) {</span>
+<span class="nc bnc" id="L1005" title="All 2 branches missed.">                    if (dropForeignKey(fks[i]))</span>
+<span class="nc" id="L1006">                        dbTable.removeForeignKey(fks[i]);</span>
+                    else
+<span class="nc" id="L1008">                        _log.warn(_loc.get(&quot;drop-fk&quot;, fks[i], dbTable));</span>
+                }
+            }
+        }
+
+        // drop the tables we calculated above
+<span class="nc" id="L1014">        dropTables(drops, db);</span>
+
+<span class="nc bnc" id="L1016" title="All 2 branches missed.">        if (considerDatabaseState) {</span>
+            // columns
+            Column[] cols;
+            Column col;
+<span class="nc bnc" id="L1020" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L1021">                tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L1022" title="All 2 branches missed.">                for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc bnc" id="L1023" title="All 2 branches missed.">                    if (!isDroppable(tabs[j]))</span>
+<span class="nc" id="L1024">                        continue;</span>
+<span class="nc" id="L1025">                    cols = tabs[j].getColumns();</span>
+<span class="nc" id="L1026">                    dbTable = db.findTable(tabs[j]);</span>
+<span class="nc bnc" id="L1027" title="All 2 branches missed.">                    for (int k = 0; k &lt; cols.length; k++) {</span>
+<span class="nc" id="L1028">                        col = null;</span>
+<span class="nc bnc" id="L1029" title="All 2 branches missed.">                        if (dbTable != null)</span>
+<span class="nc" id="L1030">                            col = dbTable.getColumn(cols[k].getIdentifier());</span>
+<span class="nc bnc" id="L1031" title="All 4 branches missed.">                        if (dbTable == null || col == null)</span>
+<span class="nc" id="L1032">                            continue;</span>
+
+<span class="nc bnc" id="L1034" title="All 2 branches missed.">                        if (dropColumn(cols[k])) {</span>
+<span class="nc" id="L1035">                           dbTable.removeColumn(col);</span>
+                        }
+                    }
+                }
+            }
+        }
+<span class="nc" id="L1041">    }</span>
+
+    /**
+     * Return true if the table is droppable.
+     */
+    protected boolean isDroppable(Table table) {
+<span class="nc bnc" id="L1047" title="All 2 branches missed.">        return _openjpaTables</span>
+<span class="nc bnc" id="L1048" title="All 2 branches missed.">            || (!DBIdentifier.toUpper(table.getIdentifier()).getName().startsWith(&quot;OPENJPA_&quot;)</span>
+<span class="nc bnc" id="L1049" title="All 2 branches missed.">            &amp;&amp; !DBIdentifier.toUpper(table.getIdentifier()).getName().startsWith(&quot;JDO_&quot;)); // legacy</span>
+    }
+
+    /**
+     * Return true if the sequence is droppable.
+     */
+    protected boolean isDroppable(Sequence seq) {
+<span class="nc bnc" id="L1056" title="All 2 branches missed.">        return _openjpaTables</span>
+<span class="nc bnc" id="L1057" title="All 2 branches missed.">            || (!DBIdentifier.toUpper(seq.getIdentifier()).getName().startsWith(&quot;OPENJPA_&quot;)</span>
+<span class="nc bnc" id="L1058" title="All 2 branches missed.">            &amp;&amp; !DBIdentifier.toUpper(seq.getIdentifier()).getName().startsWith(&quot;JDO_&quot;)); // legacy</span>
+    }
+
+    /**
+     * Find an index in the given table that matches the given one.
+     */
+    protected Index findIndex(Table dbTable, Index idx) {
+<span class="nc" id="L1065">        Index[] idxs = dbTable.getIndexes();</span>
+<span class="nc bnc" id="L1066" title="All 2 branches missed.">        for (int i = 0; i &lt; idxs.length; i++)</span>
+<span class="nc bnc" id="L1067" title="All 2 branches missed.">            if (idx.columnsMatch(idxs[i].getColumns()))</span>
+<span class="nc" id="L1068">                return idxs[i];</span>
+<span class="nc" id="L1069">        return null;</span>
+    }
+
+    /**
+     * Find a foreign key in the given table that matches the given one.
+     */
+    protected ForeignKey findForeignKey(Table dbTable, ForeignKey fk) {
+<span class="nc bnc" id="L1076" title="All 2 branches missed.">        if (fk.getConstantColumns().length &gt; 0</span>
+<span class="nc bnc" id="L1077" title="All 2 branches missed.">            || fk.getConstantPrimaryKeyColumns().length &gt; 0)</span>
+<span class="nc" id="L1078">            return null;</span>
+<span class="nc" id="L1079">        ForeignKey[] fks = dbTable.getForeignKeys();</span>
+<span class="nc bnc" id="L1080" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++)</span>
+<span class="nc bnc" id="L1081" title="All 2 branches missed.">            if (fk.columnsMatch(fks[i].getColumns(),</span>
+<span class="nc" id="L1082">                fks[i].getPrimaryKeyColumns()))</span>
+<span class="nc" id="L1083">                return fks[i];</span>
+<span class="nc" id="L1084">        return null;</span>
+    }
+
+    /**
+     * Remove the given collection of tables from the database schema. Orders
+     * the removals according to foreign key constraints on the tables.
+     */
+    protected void dropTables(Collection&lt;Table&gt; tables, SchemaGroup change)
+        throws SQLException {
+<span class="nc bnc" id="L1093" title="All 2 branches missed.">        if (tables.isEmpty())</span>
+<span class="nc" id="L1094">            return;</span>
+
+        Table table;
+        Table changeTable;
+<span class="nc bnc" id="L1098" title="All 2 branches missed.">        for (Iterator&lt;Table&gt; itr = tables.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L1099">            table = itr.next();</span>
+<span class="nc bnc" id="L1100" title="All 2 branches missed.">            if (dropTable(table)) {</span>
+<span class="nc" id="L1101">                changeTable = change.findTable(table);</span>
+<span class="nc bnc" id="L1102" title="All 2 branches missed.">                if (changeTable != null)</span>
+<span class="nc" id="L1103">                    changeTable.getSchema().removeTable(changeTable);</span>
+            } else
+<span class="nc" id="L1105">                _log.warn(_loc.get(&quot;drop-table&quot;, table));</span>
+        }
+<span class="nc" id="L1107">    }</span>
+
+    /**
+     * Add the given table to the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean createTable(Table table)
+        throws SQLException {
+<span class="nc" id="L1116">        return executeSQL(_dict.getCreateTableSQL(table, _db));</span>
+    }
+
+    /**
+     * Drop the given table from the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean dropTable(Table table)
+        throws SQLException {
+<span class="nc" id="L1126">        return executeSQL(_dict.getDropTableSQL(table));</span>
+    }
+
+    /**
+     * Add the given sequence to the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean createSequence(Sequence seq)
+        throws SQLException {
+<span class="nc" id="L1136">        return executeSQL(_dict.getCreateSequenceSQL(seq));</span>
+    }
+
+    /**
+     * Drop the given sequence from the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean dropSequence(Sequence seq)
+        throws SQLException {
+<span class="nc" id="L1146">        return executeSQL(_dict.getDropSequenceSQL(seq));</span>
+    }
+
+    /**
+     * Add the given index to the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean createIndex(Index idx, Table table)
+        throws SQLException {
+<span class="nc" id="L1156">        return createIndex(idx, table, null);</span>
+    }
+
+    public boolean createIndex(Index idx, Table table, Unique[] uniques)
+        throws SQLException {
+        // Informix will automatically create a unique index for the
+        // primary key, so don't create another index again
+
+<span class="nc bnc" id="L1164" title="All 2 branches missed.">        if (!_dict.needsToCreateIndex(idx,table,uniques))</span>
+<span class="nc" id="L1165">            return false;</span>
+
+<span class="nc" id="L1167">        int max = _dict.maxIndexesPerTable;</span>
+
+<span class="nc" id="L1169">        int len = table.getIndexes().length;</span>
+<span class="nc bnc" id="L1170" title="All 2 branches missed.">        if (table.getPrimaryKey() != null)</span>
+<span class="nc" id="L1171">            len += table.getPrimaryKey().getColumns().length;</span>
+
+<span class="nc bnc" id="L1173" title="All 2 branches missed.">        if (len &gt;= max) {</span>
+<span class="nc" id="L1174">            _log.warn(_loc.get(&quot;too-many-indexes&quot;, idx, table, max + &quot;&quot;));</span>
+<span class="nc" id="L1175">            return false;</span>
+        }
+
+<span class="nc" id="L1178">        return executeSQL(_dict.getCreateIndexSQL(idx));</span>
+    }
+
+    /**
+     * Drop the given index from the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean dropIndex(Index idx)
+        throws SQLException {
+<span class="nc" id="L1188">        return executeSQL(_dict.getDropIndexSQL(idx));</span>
+    }
+
+    /**
+     * Add the given column to the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean addColumn(Column col)
+        throws SQLException {
+<span class="nc" id="L1198">        return executeSQL(_dict.getAddColumnSQL(col));</span>
+    }
+
+    /**
+     * Drop the given column from the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean dropColumn(Column col)
+        throws SQLException {
+<span class="nc" id="L1208">        return executeSQL(_dict.getDropColumnSQL(col));</span>
+    }
+
+    /**
+     * Add the given primary key to the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean addPrimaryKey(PrimaryKey pk)
+        throws SQLException {
+<span class="nc" id="L1218">        return executeSQL(_dict.getAddPrimaryKeySQL(pk));</span>
+    }
+
+    /**
+     * Drop the given primary key from the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean dropPrimaryKey(PrimaryKey pk)
+        throws SQLException {
+<span class="nc" id="L1228">        return executeSQL(_dict.getDropPrimaryKeySQL(pk));</span>
+    }
+
+    /**
+     * Add the given foreign key to the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean addForeignKey(ForeignKey fk)
+        throws SQLException {
+<span class="nc" id="L1238">        return executeSQL(_dict.getAddForeignKeySQL(fk));</span>
+    }
+
+    /**
+     * Drop the given foreign key from the database schema.
+     *
+     * @return true if the operation was successful, false otherwise
+     */
+    public boolean dropForeignKey(ForeignKey fk)
+        throws SQLException {
+<span class="nc" id="L1248">        Connection conn = _ds.getConnection();</span>
+        try {
+<span class="nc" id="L1250">            return executeSQL(_dict.getDropForeignKeySQL(fk,conn));</span>
+        } finally {
+<span class="nc" id="L1252">            closeConnection(conn);</span>
+        }
+
+    }
+
+    /**
+     * Return the database schema.
+     */
+    public SchemaGroup getDBSchemaGroup() {
+        try {
+<span class="nc" id="L1262">            return getDBSchemaGroup(true);</span>
+<span class="nc" id="L1263">        } catch (SQLException se) {</span>
+<span class="nc" id="L1264">            throw SQLExceptions.getStore(se, _dict);</span>
+        }
+    }
+
+    /**
+     * Set the database schema.
+     */
+    public void setDBSchemaGroup(SchemaGroup db) {
+<span class="nc" id="L1272">        _db = db;</span>
+<span class="nc bnc" id="L1273" title="All 2 branches missed.">        if (db != null)</span>
+<span class="nc" id="L1274">            _fullDB = true;</span>
+<span class="nc" id="L1275">    }</span>
+
+    /**
+     * Return the database schema.
+     *
+     * @param full if false, only the tables named in the set schema
+     * repository will be generated
+     */
+    protected SchemaGroup getDBSchemaGroup(boolean full)
+        throws SQLException {
+<span class="nc bnc" id="L1285" title="All 6 branches missed.">        if (_db == null || (full &amp;&amp; !_fullDB)) {</span>
+<span class="nc" id="L1286">            SchemaGenerator gen = new SchemaGenerator(_conf);</span>
+<span class="nc" id="L1287">            gen.setPrimaryKeys(_pks);</span>
+<span class="nc" id="L1288">            gen.setForeignKeys(_fks);</span>
+<span class="nc" id="L1289">            gen.setIndexes(_indexes);</span>
+<span class="nc bnc" id="L1290" title="All 2 branches missed.">            if (full)</span>
+<span class="nc" id="L1291">                gen.generateSchemas();</span>
+            else {
+                // generate only the tables in the given repository
+                // group; some may not exist yet, which is OK; we just need
+                // to make sure we can detect the changes to the ones that
+                // do exist
+<span class="nc" id="L1297">                Collection&lt;DBIdentifier&gt; tables = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L1298">                SchemaGroup group = assertSchemaGroup();</span>
+<span class="nc" id="L1299">                Schema[] schemas = group.getSchemas();</span>
+                Table[] tabs;
+<span class="nc bnc" id="L1301" title="All 2 branches missed.">                for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L1302">                    tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L1303" title="All 2 branches missed.">                    for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc bnc" id="L1304" title="All 2 branches missed.">                        if (DBIdentifier.isNull(tabs[j].getSchemaIdentifier())) {</span>
+<span class="nc" id="L1305">                            tables.add(tabs[j].getIdentifier());</span>
+                        } else {
+<span class="nc" id="L1307">                            DBIdentifier sName = tabs[j].getFullIdentifier();</span>
+<span class="nc" id="L1308">                            tables.add(sName);</span>
+                        }
+                    }
+                }
+<span class="nc bnc" id="L1312" title="All 2 branches missed.">                if (!tables.isEmpty())</span>
+<span class="nc" id="L1313">                    gen.generateSchemas((DBIdentifier[]) tables.toArray</span>
+<span class="nc" id="L1314">                        (new DBIdentifier[tables.size()]));</span>
+            }
+<span class="nc" id="L1316">            _db = gen.getSchemaGroup();</span>
+        }
+<span class="nc" id="L1318">        return _db;</span>
+    }
+
+    protected SchemaGroup assertSchemaGroup() {
+<span class="nc" id="L1322">        SchemaGroup local = getSchemaGroup();</span>
+<span class="nc bnc" id="L1323" title="All 2 branches missed.">        if (local == null)</span>
+<span class="nc" id="L1324">            throw new InvalidStateException(_loc.get(&quot;tool-norepos&quot;));</span>
+<span class="nc" id="L1325">        return local;</span>
+    }
+
+    /////////////
+    // Utilities
+    /////////////
+
+    /**
+     * Executes the given array of non-selecting SQL statements, correctly
+     * logging the SQL calls and optionally ignoring errors.
+     *
+     * @return true if there was SQL to execute and the calls were
+     * successful, false otherwise
+     */
+    protected boolean executeSQL(String[] sql)
+        throws SQLException {
+        // if no sql, probably b/c dictionary doesn't support operation
+<span class="nc bnc" id="L1342" title="All 2 branches missed.">        if (sql.length == 0)</span>
+<span class="nc" id="L1343">            return false;</span>
+
+<span class="nc" id="L1345">        boolean err = false;</span>
+<span class="nc bnc" id="L1346" title="All 2 branches missed.">        if (_writer == null) {</span>
+            // this is outside the try-catch because a failure here is
+            // really bad, and should not be ignored.
+<span class="nc" id="L1349">            Connection conn = _ds.getConnection();</span>
+<span class="nc" id="L1350">            Statement statement = null;</span>
+<span class="nc" id="L1351">            boolean wasAuto = true;</span>
+            try {
+<span class="nc bnc" id="L1353" title="All 2 branches missed.">                if (_rollbackBeforeDDL) {</span>
+<span class="nc" id="L1354">                    wasAuto = conn.getAutoCommit();</span>
+<span class="nc bnc" id="L1355" title="All 2 branches missed.">                    if (!wasAuto) {</span>
+<span class="nc" id="L1356">                        conn.setAutoCommit(true);</span>
+                    }
+                }
+<span class="nc bnc" id="L1359" title="All 2 branches missed.">                for (int i = 0; i &lt; sql.length; i++) {</span>
+                    try {
+<span class="nc bnc" id="L1361" title="All 2 branches missed.">                        if (_rollbackBeforeDDL) {</span>
+                            // some connections require that rollback be
+                            // called on the connection before any DDL statements
+                            // can be run on it, even when autocommit is on.
+                            // This is sometimes because the connection does not
+                            // allow DDL statements when there are multiple
+                            // commands issued on the connection, and the
+                            // connection pool may have issued some validation SQL.
+                            try {
+<span class="nc" id="L1370">                                conn.rollback();</span>
+<span class="nc" id="L1371">                            } catch (Exception e) {</span>
+<span class="nc" id="L1372">                            }</span>
+                        }
+
+<span class="nc" id="L1375">                        statement = conn.createStatement();</span>
+<span class="nc" id="L1376">                        statement.executeUpdate(sql[i]);</span>
+
+                        // some connections seem to require an explicit
+                        // commit for DDL statements, even when autocommit
+                        // is on. The DataDirect drivers seem to suffer from
+                        // this limitation.
+                        try {
+<span class="nc" id="L1383">                            conn.commit();</span>
+<span class="nc" id="L1384">                        } catch (Exception e) {</span>
+<span class="nc" id="L1385">                        }</span>
+                    }
+<span class="nc" id="L1387">                    catch (SQLException se) {</span>
+<span class="nc" id="L1388">                        err = true;</span>
+<span class="nc" id="L1389">                        handleException(se);</span>
+                    } finally {
+<span class="nc bnc" id="L1391" title="All 2 branches missed.">                        if (statement != null)</span>
+                            try {
+<span class="nc" id="L1393">                                statement.close();</span>
+<span class="nc" id="L1394">                            } catch (SQLException se) {</span>
+<span class="nc" id="L1395">                            }</span>
+                    }
+                }
+            }
+            finally {
+<span class="nc bnc" id="L1400" title="All 4 branches missed.">                if (_rollbackBeforeDDL &amp;&amp; !wasAuto) {</span>
+<span class="nc" id="L1401">                    conn.setAutoCommit(false);</span>
+                }
+
+                try {
+<span class="nc" id="L1405">                    closeConnection(conn);</span>
+<span class="nc" id="L1406">                } catch (SQLException se) {</span>
+                    //X TODO why catch silently?
+<span class="nc" id="L1408">                }</span>
+            }
+<span class="nc" id="L1410">        } else {</span>
+<span class="nc bnc" id="L1411" title="All 2 branches missed.">            for (int i = 0; i &lt; sql.length; i++)</span>
+<span class="nc" id="L1412">                _writer.println(sql[i] + _sqlTerminator);</span>
+<span class="nc" id="L1413">            _writer.flush();</span>
+        }
+
+<span class="nc bnc" id="L1416" title="All 2 branches missed.">        return !err;</span>
+    }
+
+    /**
+     * Handle the given exception, logging it and optionally ignoring it,
+     * depending on the flags this SchemaTool was created with.
+     */
+    protected void handleException(SQLException sql)
+        throws SQLException {
+<span class="nc bnc" id="L1425" title="All 2 branches missed.">        if (!_ignoreErrs)</span>
+<span class="nc" id="L1426">            throw sql;</span>
+<span class="nc" id="L1427">        _log.warn(sql.getMessage(), sql);</span>
+<span class="nc" id="L1428">    }</span>
+
+    ////////
+    // Main
+    ////////
+
+    /**
+     * Usage: java org.apache.openjpa.jdbc.schema.SchemaTool [option]*
+     * [-action/-a &amp;lt;add | retain | drop | refresh | createDB | dropDB
+     * | build | reflect | import | export&amp;gt;]
+     * &amp;lt;.schema file or resource&amp;gt;*
+     *  Where the following options are recognized.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;-properties/-p &amp;lt;properties file or resource&amp;gt;&lt;/i&gt;: The
+     * path or resource name of a OpenJPA properties file containing
+     * information such as the license key	and connection data as
+     * outlined in {@link JDBCConfiguration}. Optional.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-&amp;lt;property name&amp;gt; &amp;lt;property value&amp;gt;&lt;/i&gt;: All bean
+     * properties of the OpenJPA {@link JDBCConfiguration} can be set by
+     * using their	names and supplying a value. For example:
+     * &lt;code&gt;-licenseKey adslfja83r3lkadf&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-ignoreErrors/-i &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: If false, an
+     * exception will will be thrown if the tool encounters any database
+     * exceptions; defaults to &lt;code&gt;false&lt;/code&gt;.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-file/-f &amp;lt;stdout | output file or resource&amp;gt;&lt;/i&gt;: Use this
+     * option to write a SQL script for the planned schema modifications,
+     * rather than committing them to the database. This option also
+     * applies to the &lt;code&gt;export&lt;/code&gt; and &lt;code&gt;reflect&lt;/code&gt; actions.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-openjpaTables/-kt &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Under the
+     * &lt;code&gt;reflect&lt;/code&gt; action, whether to reflect on tables with
+     * the name &lt;code&gt;OPENJPA_*&lt;/code&gt;. Under other actions, whether to
+     * drop such tables. Defaults to &lt;code&gt;false&lt;/code&gt;.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-dropTables/-dt &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set this option to
+     * true to drop tables that appear to be unused during
+     * &lt;code&gt;retain&lt;/code&gt;	and &lt;code&gt;refresh&lt;/code&gt; actions. Defaults to
+     * &lt;code&gt;true&lt;/code&gt;.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-dropSequences/-dsq &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set this option
+     * to true to drop sequences that appear to be unused during
+     * &lt;code&gt;retain&lt;/code&gt;	and &lt;code&gt;refresh&lt;/code&gt; actions. Defaults to
+     * &lt;code&gt;true&lt;/code&gt;.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-rollbackBeforeDDL/-rbddl &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set this option
+     * to true to send an initail rollback on the connection before any DDL statement
+     * is sent&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-primaryKeys/-pk &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Whether primary
+     * keys on existing tables are manipulated. Defaults to true.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-foreignKeys/-fk &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Whether foreign
+     * keys on existing tables are manipulated. Defaults to true.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-indexes/-ix &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Whether indexes
+     * on existing tables are manipulated. Defaults to true.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-sequences/-sq &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Whether to
+     * manipulate sequences. Defaults to true.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-record/-r &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set this option to
+     * &lt;code&gt;false&lt;/code&gt; to prevent writing the schema changes to the
+     * current {@link SchemaFactory}.&lt;/li&gt;
+     * &lt;/ul&gt;
+     *  Actions can be composed in a comma-separated list. The various actions
+     *  are as follows.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;add&lt;/i&gt;: Bring the schema up-to-date with the latest
+     * changes to the schema XML data by adding tables, columns,
+     * indexes, etc. This action never drops any data. This is the
+     * default action.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;retain&lt;/i&gt;: Keep all schema components in the schema XML, but
+     * drop the rest from the database. This action never adds any data.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;drop&lt;/i&gt;: Drop all the schema components in the schema XML.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;refresh&lt;/i&gt;: Equivalent to retain, then add.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;createDB&lt;/i&gt;: Execute SQL to re-create the current database.
+     * This action is typically used in conjuction with the
+     * &lt;code&gt;file&lt;/code&gt; option.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;build&lt;/i&gt;: Execute SQL to build the schema defined in the XML.
+     * Because it doesn't take the current database schema into account,
+     * this action is typically used in conjuction with the
+     * &lt;code&gt;file&lt;/code&gt; option.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;reflect&lt;/i&gt;: Reflect on the current database schema. Write the
+     * schema's XML representation to the file specified with the
+     * &lt;code&gt;file&lt;/code&gt; option, or to stdout if no file is given.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;dropDB&lt;/i&gt;: Execute SQL to drop the current database. This
+     * action implies &lt;code&gt;dropTables&lt;/code&gt;.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;deleteTableContents&lt;/i&gt;: Execute SQL to delete all rows from
+     * all tables that OpenJPA knows about.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;import&lt;/i&gt;: Import the given XML schema definition into the
+     * current {@link SchemaFactory}.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;export&lt;/i&gt;: Export the current {@link SchemaFactory}'s recorded
+     * schema to an XML schema definition file.&lt;/li&gt;
+     * &lt;/ul&gt;
+     *  Examples:
+     * &lt;ul&gt;
+     * &lt;li&gt;Write a script to stdout to re-create the current database
+     * schema:&lt;br /&gt;
+     * &lt;code&gt;java org.apache.openjpa.jdbc.schema.SchemaTool -f stdout
+     * -a createDB&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;Drop the current database schema:&lt;br /&gt;
+     * &lt;code&gt;java org.apache.openjpa.jdbc.schema.SchemaTool
+     * -a dropDB&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;Refresh the schema and delete all records in all tables:&lt;br /&gt;
+     * &lt;code&gt;java org.apache.openjpa.jdbc.schema.SchemaTool
+     * -a refresh,deleteTableContents&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;Create a schema based on an XML schema definition file:&lt;br /&gt;
+     * &lt;code&gt;java org.apache.openjpa.jdbc.schema.SchemaTool
+     * myschema.xml&lt;/code&gt;&lt;/li&gt;
+     * &lt;/ul&gt;
+     */
+    public static void main(String[] args)
+        throws IOException, SQLException {
+<span class="nc" id="L1532">        Options opts = new Options();</span>
+<span class="nc" id="L1533">        final String[] arguments = opts.setFromCmdLine(args);</span>
+<span class="nc" id="L1534">        boolean ret = Configurations.runAgainstAllAnchors(opts,</span>
+<span class="nc" id="L1535">            new Configurations.Runnable() {</span>
+            @Override
+            public boolean run(Options opts) throws Exception {
+<span class="nc" id="L1538">                JDBCConfiguration conf = new JDBCConfigurationImpl();</span>
+                try {
+<span class="nc" id="L1540">                    return SchemaTool.run(conf, arguments, opts);</span>
+                } finally {
+<span class="nc" id="L1542">                    conf.close();</span>
+                }
+            }
+        });
+<span class="nc bnc" id="L1546" title="All 2 branches missed.">        if (!ret) {</span>
+            // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L1548">            System.out.println(_loc.get(&quot;tool-usage&quot;));</span>
+            // STOP - ALLOW PRINT STATEMENTS
+        }
+<span class="nc" id="L1551">    }</span>
+
+    /**
+     * Run the tool. Returns false if any invalid options were given.
+     *
+     * @see #main
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        Options opts)
+        throws IOException, SQLException {
+<span class="nc" id="L1561">        Flags flags = new Flags();</span>
+<span class="nc" id="L1562">        flags.dropTables = opts.removeBooleanProperty</span>
+<span class="nc" id="L1563">            (&quot;dropTables&quot;, &quot;dt&quot;, flags.dropTables);</span>
+<span class="nc" id="L1564">        flags.dropSequences = opts.removeBooleanProperty</span>
+<span class="nc" id="L1565">            (&quot;dropSequences&quot;, &quot;dsq&quot;, flags.dropSequences);</span>
+<span class="nc" id="L1566">        flags.rollbackBeforeDDL = opts.removeBooleanProperty</span>
+<span class="nc" id="L1567">            (&quot;rollbackBeforeDDL&quot;, &quot;rbddl&quot;, flags.rollbackBeforeDDL);</span>
+<span class="nc" id="L1568">        flags.ignoreErrors = opts.removeBooleanProperty</span>
+<span class="nc" id="L1569">            (&quot;ignoreErrors&quot;, &quot;i&quot;, flags.ignoreErrors);</span>
+<span class="nc" id="L1570">        flags.openjpaTables = opts.removeBooleanProperty</span>
+<span class="nc" id="L1571">            (&quot;openjpaTables&quot;, &quot;ot&quot;, flags.openjpaTables);</span>
+<span class="nc" id="L1572">        flags.primaryKeys = opts.removeBooleanProperty</span>
+<span class="nc" id="L1573">            (&quot;primaryKeys&quot;, &quot;pk&quot;, flags.primaryKeys);</span>
+<span class="nc" id="L1574">        flags.foreignKeys = opts.removeBooleanProperty</span>
+<span class="nc" id="L1575">            (&quot;foreignKeys&quot;, &quot;fks&quot;, flags.foreignKeys);</span>
+<span class="nc" id="L1576">        flags.indexes = opts.removeBooleanProperty</span>
+<span class="nc" id="L1577">            (&quot;indexes&quot;, &quot;ix&quot;, flags.indexes);</span>
+<span class="nc" id="L1578">        flags.sequences = opts.removeBooleanProperty</span>
+<span class="nc" id="L1579">            (&quot;sequences&quot;, &quot;sq&quot;, flags.sequences);</span>
+<span class="nc" id="L1580">        flags.record = opts.removeBooleanProperty(&quot;record&quot;, &quot;r&quot;, flags.record);</span>
+<span class="nc" id="L1581">        String fileName = opts.removeProperty(&quot;file&quot;, &quot;f&quot;, null);</span>
+<span class="nc" id="L1582">        String schemas = opts.removeProperty(&quot;s&quot;);</span>
+<span class="nc bnc" id="L1583" title="All 2 branches missed.">        if (schemas != null)</span>
+<span class="nc" id="L1584">            opts.setProperty(&quot;schemas&quot;, schemas);</span>
+
+<span class="nc" id="L1586">        String[] actions = opts.removeProperty(&quot;action&quot;, &quot;a&quot;, flags.action)</span>
+<span class="nc" id="L1587">            .split(&quot;,&quot;);</span>
+
+        // setup a configuration instance with cmd-line info
+<span class="nc" id="L1590">        Configurations.populateConfiguration(conf, opts);</span>
+
+        // create script writer
+<span class="nc" id="L1593">        ClassLoader loader = conf.getClassResolverInstance().</span>
+<span class="nc" id="L1594">            getClassLoader(SchemaTool.class, null);</span>
+<span class="nc" id="L1595">        flags.writer = Files.getWriter(fileName, loader);</span>
+
+<span class="nc" id="L1597">        boolean returnValue = true;</span>
+<span class="nc bnc" id="L1598" title="All 2 branches missed.">        for (int i = 0; i &lt; actions.length; i++) {</span>
+<span class="nc" id="L1599">            flags.action = actions[i];</span>
+<span class="nc" id="L1600">            returnValue &amp;= run(conf, args, flags, loader);</span>
+        }
+
+<span class="nc" id="L1603">        return returnValue;</span>
+    }
+
+    /**
+     * Run the tool. Return false if invalid options were given.
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        Flags flags, ClassLoader loader)
+        throws IOException, SQLException {
+<span class="nc" id="L1612">        Log log = conf.getLog(OpenJPAConfiguration.LOG_TOOL);</span>
+<span class="nc bnc" id="L1613" title="All 2 branches missed.">        if (ACTION_REFLECT.equals(flags.action)) {</span>
+<span class="nc bnc" id="L1614" title="All 2 branches missed.">            if (args.length &gt; 0)</span>
+<span class="nc" id="L1615">                return false;</span>
+<span class="nc bnc" id="L1616" title="All 2 branches missed.">            if (flags.writer == null)</span>
+<span class="nc" id="L1617">                flags.writer = new PrintWriter(System.out);</span>
+
+<span class="nc" id="L1619">            SchemaGenerator gen = new SchemaGenerator(conf);</span>
+<span class="nc" id="L1620">            gen.setPrimaryKeys(flags.primaryKeys);</span>
+<span class="nc" id="L1621">            gen.setIndexes(flags.indexes);</span>
+<span class="nc" id="L1622">            gen.setForeignKeys(flags.foreignKeys);</span>
+<span class="nc" id="L1623">            gen.setSequences(flags.sequences);</span>
+<span class="nc" id="L1624">            gen.setOpenJPATables(flags.openjpaTables);</span>
+
+<span class="nc" id="L1626">            String schemas = conf.getSchemas();</span>
+<span class="nc bnc" id="L1627" title="All 2 branches missed.">            if (StringUtil.isEmpty(schemas))</span>
+<span class="nc" id="L1628">                schemas = &quot;all&quot;;</span>
+<span class="nc" id="L1629">            log.info(_loc.get(&quot;sch-reflect&quot;, schemas));</span>
+<span class="nc" id="L1630">            gen.generateSchemas();</span>
+
+            // record the schema
+<span class="nc" id="L1633">            log.info(_loc.get(&quot;sch-reflect-write&quot;));</span>
+<span class="nc" id="L1634">            SchemaSerializer ser = new XMLSchemaSerializer(conf);</span>
+<span class="nc" id="L1635">            ser.addAll(gen.getSchemaGroup());</span>
+<span class="nc" id="L1636">            ser.serialize(flags.writer, MetaDataSerializer.PRETTY);</span>
+<span class="nc" id="L1637">            return true;</span>
+        }
+
+<span class="nc bnc" id="L1640" title="All 2 branches missed.">        if (args.length == 0</span>
+<span class="nc bnc" id="L1641" title="All 2 branches missed.">            &amp;&amp; !ACTION_CREATEDB.equals(flags.action)</span>
+<span class="nc bnc" id="L1642" title="All 2 branches missed.">            &amp;&amp; !ACTION_DROPDB.equals(flags.action)</span>
+<span class="nc bnc" id="L1643" title="All 2 branches missed.">            &amp;&amp; !ACTION_EXPORT.equals(flags.action)</span>
+<span class="nc bnc" id="L1644" title="All 2 branches missed.">            &amp;&amp; !ACTION_DELETE_TABLE_CONTENTS.equals(flags.action))</span>
+<span class="nc" id="L1645">            return false;</span>
+
+        // parse in the arguments
+<span class="nc" id="L1648">        SchemaParser parser = new XMLSchemaParser(conf);</span>
+<span class="nc" id="L1649">        parser.setDelayConstraintResolve(true);</span>
+        File file;
+<span class="nc bnc" id="L1651" title="All 2 branches missed.">        for (int i = 0; i &lt; args.length; i++) {</span>
+<span class="nc" id="L1652">            file = Files.getFile(args[i], loader);</span>
+<span class="nc" id="L1653">            log.info(_loc.get(&quot;tool-running&quot;, file));</span>
+<span class="nc" id="L1654">            parser.parse(file);</span>
+        }
+<span class="nc" id="L1656">        parser.resolveConstraints();</span>
+
+<span class="nc bnc" id="L1658" title="All 2 branches missed.">        if (ACTION_IMPORT.equals(flags.action)) {</span>
+<span class="nc" id="L1659">            log.info(_loc.get(&quot;tool-import-store&quot;));</span>
+<span class="nc" id="L1660">            SchemaGroup schema = parser.getSchemaGroup();</span>
+<span class="nc" id="L1661">            conf.getSchemaFactoryInstance().storeSchema(schema);</span>
+<span class="nc" id="L1662">            return true;</span>
+        }
+<span class="nc bnc" id="L1664" title="All 2 branches missed.">        if (ACTION_EXPORT.equals(flags.action)) {</span>
+<span class="nc bnc" id="L1665" title="All 2 branches missed.">            if (flags.writer == null)</span>
+<span class="nc" id="L1666">                flags.writer = new PrintWriter(System.out);</span>
+
+<span class="nc" id="L1668">            log.info(_loc.get(&quot;tool-export-gen&quot;));</span>
+<span class="nc" id="L1669">            SchemaGroup schema = conf.getSchemaFactoryInstance().readSchema();</span>
+
+<span class="nc" id="L1671">            log.info(_loc.get(&quot;tool-export-write&quot;));</span>
+<span class="nc" id="L1672">            SchemaSerializer ser = new XMLSchemaSerializer(conf);</span>
+<span class="nc" id="L1673">            ser.addAll(schema);</span>
+<span class="nc" id="L1674">            ser.serialize(flags.writer, MetaDataSerializer.PRETTY);</span>
+<span class="nc" id="L1675">            return true;</span>
+        }
+
+<span class="nc" id="L1678">        SchemaTool tool = new SchemaTool(conf, flags.action);</span>
+<span class="nc" id="L1679">        tool.setIgnoreErrors(flags.ignoreErrors);</span>
+<span class="nc" id="L1680">        tool.setDropTables(flags.dropTables);</span>
+<span class="nc" id="L1681">        tool.setSequences(flags.sequences); // set before dropseqs</span>
+<span class="nc" id="L1682">        tool.setDropSequences(flags.dropSequences);</span>
+<span class="nc" id="L1683">        tool.setRollbackBeforeDDL(flags.rollbackBeforeDDL);</span>
+<span class="nc" id="L1684">        tool.setPrimaryKeys(flags.primaryKeys);</span>
+<span class="nc" id="L1685">        tool.setForeignKeys(flags.foreignKeys);</span>
+<span class="nc" id="L1686">        tool.setIndexes(flags.indexes);</span>
+<span class="nc" id="L1687">        tool.setOpenJPATables(flags.openjpaTables);</span>
+<span class="nc bnc" id="L1688" title="All 2 branches missed.">        if (args.length &gt; 0)</span>
+<span class="nc" id="L1689">            tool.setSchemaGroup(parser.getSchemaGroup());</span>
+<span class="nc bnc" id="L1690" title="All 2 branches missed.">        if (flags.writer != null)</span>
+<span class="nc" id="L1691">            tool.setWriter(flags.writer);</span>
+
+<span class="nc" id="L1693">        log.info(_loc.get(&quot;tool-action&quot;, flags.action));</span>
+        try {
+<span class="nc" id="L1695">            tool.run();</span>
+        } finally {
+<span class="nc bnc" id="L1697" title="All 2 branches missed.">            if (flags.record) {</span>
+<span class="nc" id="L1698">                log.info(_loc.get(&quot;tool-record&quot;));</span>
+<span class="nc" id="L1699">                tool.record();</span>
+            }
+        }
+<span class="nc bnc" id="L1702" title="All 2 branches missed.">        if (flags.writer != null)</span>
+<span class="nc" id="L1703">            flags.writer.flush();</span>
+
+<span class="nc" id="L1705">        return true;</span>
+    }
+
+    private void closeConnection(Connection conn) throws SQLException {
+<span class="nc bnc" id="L1709" title="All 4 branches missed.">        if (conn != null &amp;&amp; !conn.isClosed()) {</span>
+<span class="nc" id="L1710">            conn.close();</span>
+        }
+<span class="nc" id="L1712">    }</span>
+
+    /**
+     * Run flags.
+     */
+<span class="nc" id="L1717">    public static class Flags {</span>
+
+<span class="nc" id="L1719">        public String action = ACTION_ADD;</span>
+<span class="nc" id="L1720">        public Writer writer = null;</span>
+<span class="nc" id="L1721">        public boolean dropTables = true;</span>
+<span class="nc" id="L1722">        public boolean rollbackBeforeDDL = true;</span>
+<span class="nc" id="L1723">        public boolean dropSequences = true;</span>
+<span class="nc" id="L1724">        public boolean ignoreErrors = false;</span>
+<span class="nc" id="L1725">        public boolean openjpaTables = false;</span>
+<span class="nc" id="L1726">        public boolean primaryKeys = true;</span>
+<span class="nc" id="L1727">        public boolean foreignKeys = true;</span>
+<span class="nc" id="L1728">        public boolean indexes = true;</span>
+<span class="nc" id="L1729">        public boolean sequences = true;</span>
+<span class="nc" id="L1730">        public boolean record = true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

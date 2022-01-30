@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AbstractJDBCSavepointManager.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">AbstractJDBCSavepointManager.java</span></div><h1>AbstractJDBCSavepointManager.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.io.IOException;
+import java.io.NotSerializableException;
+import java.io.ObjectOutputStream;
+import java.sql.Connection;
+import java.util.Collection;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.kernel.Broker;
+import org.apache.openjpa.kernel.OpenJPASavepoint;
+import org.apache.openjpa.kernel.RestoreState;
+import org.apache.openjpa.kernel.SavepointManager;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configuration;
+
+/**
+ * Abstract {@link SavepointManager} implementation that
+ * delegates to the subclass for savepoint operations on the active
+ * {@link Connection}. This implementation issues a flush and relies
+ * on the driver/db to restore back to the flushed state.
+ *
+ * @author Steve Kim
+ * @since 0.3.4
+ */
+<span class="nc" id="L44">public abstract class AbstractJDBCSavepointManager</span>
+    implements SavepointManager, Configurable {
+
+<span class="nc" id="L47">    private boolean _restore = false;</span>
+
+    @Override
+    public void startConfiguration() {
+<span class="nc" id="L51">    }</span>
+
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc bnc" id="L55" title="All 2 branches missed.">        _restore = ((OpenJPAConfiguration) conf).getRestoreStateConstant()</span>
+            != RestoreState.RESTORE_NONE;
+<span class="nc" id="L57">    }</span>
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L61">    }</span>
+
+    /**
+     * Return whether to retain in-memory copies of field values for restore
+     * on rollback. Defaults to {@link OpenJPAConfiguration#getRestoreState).
+     */
+    public boolean getRestoreFieldState() {
+<span class="nc" id="L68">        return _restore;</span>
+    }
+
+    /**
+     * Set whether to retain in-memory copies of field values for restore
+     * on rollback. Defaults to {@link OpenJPAConfiguration#getRestoreState}.
+     */
+    public void setRestoreFieldState(boolean restore) {
+<span class="nc" id="L76">        _restore = restore;</span>
+<span class="nc" id="L77">    }</span>
+
+    @Override
+    public OpenJPASavepoint newSavepoint(String name, Broker broker) {
+        // flush after creating savepoint b/c flush may add/change states
+<span class="nc" id="L82">        OpenJPASavepoint save = new ConnectionSavepoint(broker, name, _restore);</span>
+<span class="nc" id="L83">        broker.flush();</span>
+<span class="nc" id="L84">        return save;</span>
+    }
+
+    @Override
+    public boolean supportsIncrementalFlush() {
+<span class="nc" id="L89">        return true;</span>
+    }
+
+    /**
+     * Rollback the datastore savepoint.
+     */
+    protected abstract void rollbackDataStore(ConnectionSavepoint savepoint);
+
+    /**
+     * Set the datastore savepoint.
+     */
+    protected abstract void setDataStore(ConnectionSavepoint savepoint);
+
+    /**
+     * A savepoint which provides access to the current transactional
+     * connection.
+     */
+    protected class ConnectionSavepoint extends OpenJPASavepoint {
+
+        
+        private static final long serialVersionUID = 1L;
+        private Object _savepoint;
+
+<span class="nc" id="L112">        public ConnectionSavepoint(Broker broker, String name, boolean copy) {</span>
+<span class="nc" id="L113">            super(broker, name, copy);</span>
+<span class="nc" id="L114">        }</span>
+
+        /**
+         * Return the stored savepoint object
+         */
+        public Object getDataStoreSavepoint() {
+<span class="nc" id="L120">            return _savepoint;</span>
+        }
+
+        /**
+         * Set the implementation specific savepoint object
+         */
+        public void setDataStoreSavepoint(Object savepoint) {
+<span class="nc" id="L127">            _savepoint = savepoint;</span>
+<span class="nc" id="L128">        }</span>
+
+        /**
+         * Return the current {@link Connection} for this savepoint.
+         */
+        public Connection getConnection() {
+<span class="nc" id="L134">            return ((JDBCStoreManager) getBroker().getStoreManager().</span>
+<span class="nc" id="L135">                getInnermostDelegate()).getConnection();</span>
+        }
+
+        @Override
+        public Collection rollback(Collection previous) {
+<span class="nc" id="L140">            AbstractJDBCSavepointManager.this.rollbackDataStore(this);</span>
+<span class="nc" id="L141">            return super.rollback(previous);</span>
+        }
+
+        @Override
+        public void save(Collection states) {
+<span class="nc" id="L146">            AbstractJDBCSavepointManager.this.setDataStore(this);</span>
+<span class="nc" id="L147">            super.save(states);</span>
+<span class="nc" id="L148">        }</span>
+
+        private void writeObject(ObjectOutputStream out)
+            throws IOException {
+<span class="nc" id="L152">            throw new NotSerializableException();</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

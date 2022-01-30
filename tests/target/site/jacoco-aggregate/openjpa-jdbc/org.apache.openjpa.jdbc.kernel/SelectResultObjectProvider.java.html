@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SelectResultObjectProvider.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">SelectResultObjectProvider.java</span></div><h1>SelectResultObjectProvider.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.jdbc.sql.SelectExecutor;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.util.StoreException;
+
+/**
+ * Abstract provider implementation wrapped around a {@link Select}.
+ *
+ * @author Abe White
+ */
+public abstract class SelectResultObjectProvider
+    implements ResultObjectProvider {
+
+    private final SelectExecutor _sel;
+    private final JDBCStore _store;
+    private final JDBCFetchConfiguration _fetch;
+<span class="nc" id="L41">    protected Result _res = null;</span>
+<span class="nc" id="L42">    private int _size = -1;</span>
+<span class="nc" id="L43">    private Boolean _ra = null;</span>
+
+    /**
+     * Constructor.
+     *
+     * @param sel the select to execute
+     * @param store the store to delegate loading to
+     * @param fetch the fetch configuration, or null for the default
+     */
+    public SelectResultObjectProvider(SelectExecutor sel, JDBCStore store,
+<span class="nc" id="L53">        JDBCFetchConfiguration fetch) {</span>
+<span class="nc" id="L54">        _sel = sel;</span>
+<span class="nc" id="L55">        _store = store;</span>
+<span class="nc" id="L56">        _fetch = fetch;</span>
+<span class="nc" id="L57">    }</span>
+
+    public SelectExecutor getSelect() {
+<span class="nc" id="L60">        return _sel;</span>
+    }
+
+    public JDBCStore getStore() {
+<span class="nc" id="L64">        return _store;</span>
+    }
+
+    public JDBCFetchConfiguration getFetchConfiguration() {
+<span class="nc" id="L68">        return _fetch;</span>
+    }
+
+    public Result getResult() {
+<span class="nc" id="L72">        return _res;</span>
+    }
+
+    @Override
+    public boolean supportsRandomAccess() {
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        if (_ra == null) {</span>
+            boolean ra;
+<span class="nc bnc" id="L79" title="All 2 branches missed.">            if (_res != null) {</span>
+                try {
+<span class="nc" id="L81">                    ra = _res.supportsRandomAccess();</span>
+<span class="nc" id="L82">                } catch (SQLException se) {</span>
+<span class="nc" id="L83">                    throw SQLExceptions.getStore(se, _store.getDBDictionary());</span>
+<span class="nc" id="L84">                }</span>
+            } else
+<span class="nc bnc" id="L86" title="All 2 branches missed.">                ra = _sel.supportsRandomAccess(_fetch.getReadLockLevel() &gt; 0);</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">            _ra = (ra) ? Boolean.TRUE : Boolean.FALSE;</span>
+        }
+<span class="nc" id="L89">        return _ra.booleanValue();</span>
+    }
+
+    @Override
+    public void open()
+        throws SQLException {
+<span class="nc" id="L95">        _res = _sel.execute(_store, _fetch);</span>
+<span class="nc" id="L96">    }</span>
+
+    @Override
+    public boolean next()
+        throws SQLException {
+<span class="nc" id="L101">        return _res.next();</span>
+    }
+
+    @Override
+    public boolean absolute(int pos)
+        throws SQLException {
+<span class="nc" id="L107">        return _res.absolute(pos);</span>
+    }
+
+    @Override
+    public int size()
+        throws SQLException {
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        if (_size == -1) {</span>
+            // if res is null, don't cache size
+<span class="nc bnc" id="L115" title="All 2 branches missed.">            if (_res == null)</span>
+<span class="nc" id="L116">                return Integer.MAX_VALUE;</span>
+
+<span class="nc bnc" id="L118" title="All 3 branches missed.">            switch (_fetch.getLRSSize()) {</span>
+                case LRSSizes.SIZE_UNKNOWN:
+<span class="nc" id="L120">                    _size = Integer.MAX_VALUE;</span>
+<span class="nc" id="L121">                    break;</span>
+                case LRSSizes.SIZE_LAST:
+<span class="nc bnc" id="L123" title="All 2 branches missed.">                    if (supportsRandomAccess())</span>
+<span class="nc" id="L124">                        _size = _res.size();</span>
+                    else
+<span class="nc" id="L126">                        _size = Integer.MAX_VALUE;</span>
+<span class="nc" id="L127">                    break;</span>
+                default: // query
+<span class="nc" id="L129">                    _size = _sel.getCount(_store);</span>
+            }
+        }
+<span class="nc" id="L132">        return _size;</span>
+    }
+
+    /**
+     * Allow subclasses that know the size to set it; otherwise we calculate
+     * it internally.
+     */
+    protected void setSize(int size) {
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        if (_size == -1)</span>
+<span class="nc" id="L141">            _size = size;</span>
+<span class="nc" id="L142">    }</span>
+
+    @Override
+    public void reset()
+        throws SQLException {
+<span class="nc" id="L147">        close();</span>
+<span class="nc" id="L148">        open();</span>
+<span class="nc" id="L149">    }</span>
+
+    @Override
+    public void close() {
+<span class="nc bnc" id="L153" title="All 2 branches missed.">        if (_res != null) {</span>
+<span class="nc" id="L154">            _res.close();</span>
+<span class="nc" id="L155">            _res = null;</span>
+        }
+<span class="nc" id="L157">    }</span>
+
+    @Override
+    public void handleCheckedException(Exception e) {
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (e instanceof SQLException)</span>
+<span class="nc" id="L162">            throw SQLExceptions.getStore((SQLException) e, _store.getDBDictionary(), _fetch.getReadLockLevel());</span>
+<span class="nc" id="L163">        throw new StoreException(e);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

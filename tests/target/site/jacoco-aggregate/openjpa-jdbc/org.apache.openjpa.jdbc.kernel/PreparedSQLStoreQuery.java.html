@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PreparedSQLStoreQuery.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">PreparedSQLStoreQuery.java</span></div><h1>PreparedSQLStoreQuery.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.openjpa.jdbc.kernel.exps.ExpContext;
+import org.apache.openjpa.jdbc.kernel.exps.QueryExpressionsState;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.ResultSetResult;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.jdbc.sql.SelectImpl;
+import org.apache.openjpa.kernel.ExpressionStoreQuery.AbstractExpressionExecutor;
+import org.apache.openjpa.kernel.StoreQuery;
+import org.apache.openjpa.kernel.exps.QueryExpressions;
+import org.apache.openjpa.lib.rop.RangeResultObjectProvider;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * A executor for Prepared SQL Query.
+ *
+ * @author Pinaki Poddar
+ *
+ */
+public class PreparedSQLStoreQuery extends SQLStoreQuery {
+    private static final long serialVersionUID = 1L;
+    private PreparedQueryImpl _cached;
+    public PreparedSQLStoreQuery(JDBCStore store) {
+<span class="nc" id="L55">        super(store);</span>
+<span class="nc" id="L56">    }</span>
+
+    @Override
+    public Executor newDataStoreExecutor(ClassMetaData meta,
+        boolean subclasses) {
+<span class="nc" id="L61">        return new PreparedSQLExecutor(this, meta);</span>
+    }
+
+    @Override
+    public boolean setQuery(Object query) {
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        if (query instanceof PreparedQueryImpl == false) {</span>
+<span class="nc" id="L67">            throw new InternalException(query.getClass() + &quot; not recognized&quot;);</span>
+        }
+<span class="nc" id="L69">        _cached = (PreparedQueryImpl)query;</span>
+<span class="nc" id="L70">        return true;</span>
+    }
+
+    PreparedQueryImpl getPreparedQuery() {
+<span class="nc" id="L74">        return _cached;</span>
+    }
+
+    /**
+     * Executor of a prepared query uses the QueryExpressions of the original query
+     * available via the PreparedQuery.
+     *
+     */
+    public static class PreparedSQLExecutor extends AbstractExpressionExecutor {
+        private final ClassMetaData _meta;
+        private final PreparedSQLStoreQuery _query;
+
+<span class="nc" id="L86">        public PreparedSQLExecutor(PreparedSQLStoreQuery q, ClassMetaData candidate) {</span>
+<span class="nc" id="L87">            _meta = candidate;</span>
+<span class="nc" id="L88">            _query = q;</span>
+<span class="nc" id="L89">        }</span>
+
+        @Override
+        public QueryExpressions[] getQueryExpressions() {
+<span class="nc" id="L93">            return _query.getPreparedQuery().getQueryExpressions();</span>
+        }
+
+        @Override
+        public Class[] getProjectionTypes(StoreQuery q) {
+<span class="nc" id="L98">            return _query.getPreparedQuery().getProjectionTypes();</span>
+        }
+
+        @Override
+        public ResultObjectProvider executeQuery(StoreQuery q, Object[] params, Range range) {
+<span class="nc" id="L103">            PreparedSQLStoreQuery psq = (PreparedSQLStoreQuery) q;</span>
+<span class="nc" id="L104">            PreparedQueryImpl pq = psq.getPreparedQuery();</span>
+<span class="nc" id="L105">            JDBCStore store = psq.getStore();</span>
+<span class="nc" id="L106">            DBDictionary dict = store.getDBDictionary();</span>
+
+<span class="nc" id="L108">            SQLBuffer buf = new SQLBuffer(dict).append(pq.getTargetQuery());</span>
+<span class="nc" id="L109">            Connection conn = store.getConnection();</span>
+<span class="nc" id="L110">            JDBCFetchConfiguration fetch = (JDBCFetchConfiguration)q.getContext().getFetchConfiguration();</span>
+
+            ResultObjectProvider rop;
+<span class="nc" id="L113">            PreparedStatement stmnt = null;</span>
+            try {
+<span class="nc bnc" id="L115" title="All 2 branches missed.">                stmnt = !range.lrs ? buf.prepareStatement(conn) : buf.prepareStatement(conn, fetch, -1, -1);</span>
+
+<span class="nc" id="L117">                int index = 0;</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">                for (int i = 0; i &lt; params.length; i++) {</span>
+<span class="nc" id="L119">                    dict.setUnknown(stmnt, ++index, params[i], null);</span>
+                }
+<span class="nc" id="L121">                dict.setTimeouts(stmnt, fetch, false);</span>
+
+<span class="nc" id="L123">                ResultSet rs = stmnt.executeQuery();</span>
+
+<span class="nc" id="L125">                SelectImpl cachedSelect = pq.getSelect();</span>
+<span class="nc" id="L126">                Result res = cachedSelect.getEagerResult(conn, stmnt, rs, store, fetch, false, null);</span>
+
+<span class="nc bnc" id="L128" title="All 2 branches missed.">                if (getQueryExpressions()[0].projections.length &gt; 0) {</span>
+<span class="nc" id="L129">                    ExpContext ctx = new ExpContext(store, params, fetch);</span>
+<span class="nc" id="L130">                    QueryExpressionsState state = (QueryExpressionsState)getQueryExpressions()[0].state;</span>
+<span class="nc" id="L131">                    rop = new PreparedProjectionResultObjectProvider(cachedSelect, getQueryExpressions(),</span>
+                            new QueryExpressionsState[]{state}, ctx, res);
+<span class="nc bnc" id="L133" title="All 2 branches missed.">                } else if (q.getContext().getCandidateType() != null) {</span>
+<span class="nc" id="L134">                    rop = new PreparedResultObjectProvider(cachedSelect,</span>
+                        (ClassMapping) _meta, store, fetch, res);
+                } else {
+<span class="nc" id="L137">                    rop = new SQLProjectionResultObjectProvider(store, fetch,</span>
+<span class="nc" id="L138">                        (ResultSetResult)res, q.getContext().getResultType());</span>
+                }
+<span class="nc" id="L140">            } catch (SQLException se) {</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">                if (stmnt != null)</span>
+<span class="nc" id="L142">                    try { stmnt.close(); } catch (SQLException se2) {}</span>
+<span class="nc" id="L143">                try { conn.close(); } catch (SQLException se2) {}</span>
+<span class="nc" id="L144">                throw SQLExceptions.getStore(se, dict);</span>
+<span class="nc" id="L145">            }</span>
+
+<span class="nc bnc" id="L147" title="All 4 branches missed.">            if (range.start != 0 || range.end != Long.MAX_VALUE)</span>
+<span class="nc" id="L148">                rop = new RangeResultObjectProvider(rop, range.start,range.end);</span>
+<span class="nc" id="L149">            return rop;</span>
+        }
+
+        /**
+         * Convert given userParams to an array whose ordering matches as
+         * per expected during executeXXX() methods.
+         * The given userParams is already re-parameterized, so this method have
+         * to merely copy the given Map values.
+         *
+         * @see PreparedQueryImpl#reparametrize(Map, org.apache.openjpa.kernel.Broker)
+         */
+        @Override
+        public synchronized Object[] toParameterArray(StoreQuery q, Map userParams) {
+<span class="nc" id="L162">            Object[] array = new Object[userParams.size()];</span>
+
+<span class="nc" id="L164">            Set&lt;Map.Entry&lt;Object,Object&gt;&gt; userSet = userParams.entrySet();</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">            for (Map.Entry&lt;Object,Object&gt; userEntry : userSet) {</span>
+<span class="nc" id="L166">                int idx = ((Integer)userEntry.getKey()).intValue();</span>
+<span class="nc" id="L167">                array[idx] = userEntry.getValue();</span>
+<span class="nc" id="L168">            }</span>
+<span class="nc" id="L169">            return array;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

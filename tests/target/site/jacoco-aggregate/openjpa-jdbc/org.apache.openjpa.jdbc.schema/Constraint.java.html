@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Constraint.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">Constraint.java</span></div><h1>Constraint.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+
+/**
+ * A table constraint. This class is closely aligned with the constraint
+ * information available from {@link java.sql.DatabaseMetaData}.
+ *
+ * @author Abe White
+ */
+public abstract class Constraint extends ReferenceCounter {
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L32">    private DBIdentifier _name = DBIdentifier.NULL;</span>
+<span class="nc" id="L33">    private QualifiedDBIdentifier _fullPath = null;</span>
+<span class="nc" id="L34">    private Table _table = null;</span>
+<span class="nc" id="L35">    private DBIdentifier _tableName = DBIdentifier.NULL;</span>
+<span class="nc" id="L36">    private DBIdentifier _schemaName = DBIdentifier.NULL;</span>
+<span class="nc" id="L37">    private DBIdentifier _columnName = DBIdentifier.NULL;</span>
+<span class="nc" id="L38">    private boolean _deferred = false;</span>
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L43">    Constraint() {</span>
+<span class="nc" id="L44">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param name the name of the constraint, or null if none
+     * @param table the local table of the constraint
+     * @deprecated
+     */
+    @Deprecated
+    Constraint(String name, Table table) {
+<span class="nc" id="L55">        this(DBIdentifier.newConstant(name), table);</span>
+<span class="nc" id="L56">    }</span>
+
+<span class="nc" id="L58">    Constraint(DBIdentifier name, Table table) {</span>
+<span class="nc" id="L59">        setIdentifier(name);</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">        if (table != null) {</span>
+<span class="nc" id="L61">            setTableIdentifier(table.getIdentifier());</span>
+<span class="nc" id="L62">            setSchemaIdentifier(table.getSchemaIdentifier());</span>
+        }
+<span class="nc" id="L64">        _table = table;</span>
+<span class="nc" id="L65">    }</span>
+
+    /**
+     * Called when the constraint is removed from the owning table.
+     * Invalidates the constraint.
+     */
+    void remove() {
+<span class="nc" id="L72">        _table = null;</span>
+<span class="nc" id="L73">    }</span>
+
+    /**
+     * Return the table of this constraint.
+     */
+    public Table getTable() {
+<span class="nc" id="L79">        return _table;</span>
+    }
+
+    /**
+     * Return the column's table name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getTableName() {
+<span class="nc" id="L88">        return getTableIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getTableIdentifier() {
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        return _tableName == null ? DBIdentifier.NULL : _tableName;</span>
+    }
+
+    /**
+     * Set the column's table name. You can only call this method on
+     * columns whose table object is not set.
+     * @deprecated
+     */
+    @Deprecated
+    public void setTableName(String name) {
+<span class="nc" id="L102">        setTableIdentifier(DBIdentifier.newTable(name));</span>
+<span class="nc" id="L103">    }</span>
+
+      public void setTableIdentifier(DBIdentifier name) {
+<span class="nc bnc" id="L106" title="All 2 branches missed.">          if (getTable() != null)</span>
+<span class="nc" id="L107">              throw new IllegalStateException();</span>
+<span class="nc" id="L108">          _tableName = name;</span>
+<span class="nc" id="L109">          _fullPath = null;</span>
+<span class="nc" id="L110">      }</span>
+
+
+    /**
+     * Return the column table's schema name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getSchemaName() {
+<span class="nc" id="L119">        return getSchemaIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getSchemaIdentifier() {
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        return _schemaName == null ? DBIdentifier.NULL : _schemaName;</span>
+    }
+
+    /**
+     * Set the column table's schema name. You can only call this method on
+     * columns whose table object is not set.
+     * @deprecated
+     */
+    @Deprecated
+    public void setSchemaName(String schema) {
+<span class="nc" id="L133">        setSchemaIdentifier(DBIdentifier.newSchema(schema));</span>
+<span class="nc" id="L134">    }</span>
+
+    public void setSchemaIdentifier(DBIdentifier schema) {
+<span class="nc bnc" id="L137" title="All 2 branches missed.">        if (getTable() != null)</span>
+<span class="nc" id="L138">            throw new IllegalStateException();</span>
+<span class="nc" id="L139">        _schemaName = schema;</span>
+<span class="nc" id="L140">    }</span>
+
+    /**
+     * Return the column's name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getColumnName() {
+<span class="nc" id="L148">        return getColumnIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getColumnIdentifier() {
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        return _columnName == null ? DBIdentifier.NULL : _columnName;</span>
+    }
+
+    /**
+     * Set the column's name. You can only call this method on
+     * columns whose table object is not set.
+     * @deprecated
+     */
+    @Deprecated
+    public void setColumnName(String name) {
+<span class="nc" id="L162">        setColumnIdentifier(DBIdentifier.newColumn(name));</span>
+<span class="nc" id="L163">    }</span>
+
+    public void setColumnIdentifier(DBIdentifier name) {
+<span class="nc bnc" id="L166" title="All 2 branches missed.">        if (getTable() != null)</span>
+<span class="nc" id="L167">            throw new IllegalStateException();</span>
+<span class="nc" id="L168">        _columnName = name;</span>
+<span class="nc" id="L169">    }</span>
+
+    /**
+     * Return the name of the constraint.
+     * @deprecated
+     */
+    @Deprecated
+    public String getName() {
+<span class="nc" id="L177">        return getIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getIdentifier() {
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        return _name == null ? DBIdentifier.NULL : _name;</span>
+    }
+
+
+    /**
+     * Set the name of the constraint. This method cannot be called if the
+     * constraint already belongs to a table.
+     * @deprecated
+     */
+    @Deprecated
+    public void setName(String name) {
+<span class="nc" id="L192">        setIdentifier(DBIdentifier.newConstraint(name));</span>
+<span class="nc" id="L193">    }</span>
+
+    public void setIdentifier(DBIdentifier name) {
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        if (getTable() != null)</span>
+<span class="nc" id="L197">            throw new IllegalStateException();</span>
+<span class="nc" id="L198">        _name = name;</span>
+<span class="nc" id="L199">        _fullPath = null;</span>
+<span class="nc" id="L200">    }</span>
+
+    /**
+     * Return the full name of the constraint.
+     * @deprecated
+     */
+    @Deprecated
+    public String getFullName() {
+<span class="nc" id="L208">        return getFullIdentifier().getName();</span>
+    }
+
+    public QualifiedDBIdentifier getQualifiedPath() {
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        if (_fullPath == null) {</span>
+<span class="nc" id="L213">            _fullPath = QualifiedDBIdentifier.newPath(getTableIdentifier(), getIdentifier());</span>
+        }
+<span class="nc" id="L215">        return _fullPath;</span>
+    }
+
+    public DBIdentifier getFullIdentifier() {
+<span class="nc" id="L219">        return getQualifiedPath().getIdentifier();</span>
+    }
+
+
+    /**
+     * Return whether this constraint is a logical constraint only; i.e.
+     * if it does not exist in the database.
+     */
+    public abstract boolean isLogical();
+
+    /**
+     * Return true if this is a deferred constraint.
+     */
+    public boolean isDeferred() {
+<span class="nc" id="L233">        return _deferred;</span>
+    }
+
+    /**
+     * Make this constrain deferred.
+     */
+    public void setDeferred(boolean deferred) {
+<span class="nc" id="L240">        _deferred = deferred;</span>
+<span class="nc" id="L241">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if (!getIdentifier().isNull())</span>
+<span class="nc" id="L246">            return getIdentifier().getName();</span>
+
+<span class="nc" id="L248">        String name = getClass().getName();</span>
+<span class="nc" id="L249">        name = name.substring(name.lastIndexOf('.') + 1);</span>
+<span class="nc" id="L250">        return &quot;&lt;&quot; + name.toLowerCase() + &quot;&gt;&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

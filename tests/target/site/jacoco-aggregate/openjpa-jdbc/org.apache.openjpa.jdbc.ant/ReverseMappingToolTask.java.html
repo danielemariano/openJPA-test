@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ReverseMappingToolTask.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.ant</a> &gt; <span class="el_source">ReverseMappingToolTask.java</span></div><h1>ReverseMappingToolTask.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.ant;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.util.Properties;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.meta.PropertiesReverseCustomizer;
+import org.apache.openjpa.jdbc.meta.ReverseCustomizer;
+import org.apache.openjpa.jdbc.meta.ReverseMappingTool;
+import org.apache.openjpa.lib.ant.AbstractTask;
+import org.apache.openjpa.lib.conf.ConfigurationImpl;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.util.CodeFormat;
+import org.apache.openjpa.lib.util.Files;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.tools.ant.types.EnumeratedAttribute;
+
+/**
+ * Executes the {@link ReverseMappingTool} on the specified XML files.
+ * This task can take the following arguments:
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;code&gt;package&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;directory&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;useSchemaName&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;useSchemaElement&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;useForeignKeyName&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;nullableAsObject&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;blobAsObject&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;typeMap&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;primaryKeyOnJoin&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;useDatastoreIdentity&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;useBuiltinIdentityClass&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;detachable&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;inverseRelations&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;discriminatorStrategy&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;versionStrategy&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;innerIdentityClasses&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;identityClassSuffix&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;metadata&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;customizerClass&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;customizerProperties&lt;/code&gt;&lt;/li&gt;
+ * &lt;/ul&gt; The task also accepts an embedded &lt;code&gt;codeFormat&lt;/code&gt; element with
+ * attributes for the bean properties of the {@link CodeFormat}.
+ */
+public class ReverseMappingToolTask
+    extends AbstractTask {
+
+<span class="nc" id="L72">    protected ReverseMappingTool.Flags flags = new ReverseMappingTool.Flags();</span>
+<span class="nc" id="L73">    protected String dirName = null;</span>
+<span class="nc" id="L74">    protected String typeMap = null;</span>
+<span class="nc" id="L75">    protected String customizerProperties = null;</span>
+<span class="nc" id="L76">    protected String customizerClass =</span>
+<span class="nc" id="L77">        PropertiesReverseCustomizer.class.getName();</span>
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L82">    public ReverseMappingToolTask() {</span>
+<span class="nc" id="L83">        flags.metaDataLevel = &quot;package&quot;;</span>
+<span class="nc" id="L84">        flags.format = new CodeFormat();</span>
+<span class="nc" id="L85">    }</span>
+
+    /**
+     * Set the package name for the generated classes.
+     */
+    public void setPackage(String pkg) {
+<span class="nc" id="L91">        flags.packageName = pkg;</span>
+<span class="nc" id="L92">    }</span>
+
+    /**
+     * Set the output directory for the generated classes.
+     */
+    public void setDirectory(String dirName) {
+<span class="nc" id="L98">        this.dirName = dirName;</span>
+<span class="nc" id="L99">    }</span>
+
+    /**
+     * Set whether to use the schema name when naming the classes.
+     */
+    public void setUseSchemaName(boolean useSchemaName) {
+<span class="nc" id="L105">        flags.useSchemaName = useSchemaName;</span>
+<span class="nc" id="L106">    }</span>
+
+    /**
+     * Set whether to use the schema name in generated files
+     */
+    public void setUseSchemaElement(boolean useSchemaElement) {
+<span class="nc" id="L112">    	flags.useSchemaElement = useSchemaElement;</span>
+<span class="nc" id="L113">    }</span>
+
+    /**
+     * Set whether to use foreign key names to name relations.
+     */
+    public void setUseForeignKeyName(boolean useForeignKeyName) {
+<span class="nc" id="L119">        flags.useForeignKeyName = useForeignKeyName;</span>
+<span class="nc" id="L120">    }</span>
+
+    /**
+     * Set whether to represent nullable columns as primitive wrappers.
+     */
+    public void setNullableAsObject(boolean nullableAsObject) {
+<span class="nc" id="L126">        flags.nullableAsObject = nullableAsObject;</span>
+<span class="nc" id="L127">    }</span>
+
+    /**
+     * Set whether to represent blob columns as Java objects rather than
+     * byte[] fields.
+     */
+    public void setBlobAsObject(boolean blobAsObject) {
+<span class="nc" id="L134">        flags.blobAsObject = blobAsObject;</span>
+<span class="nc" id="L135">    }</span>
+
+    /**
+     * Set whether to use generic collections on one-to-many and many-to-many
+     * relations instead of untyped collections.
+     */
+    public void setUseGenericCollections(boolean useGenericCollections) {
+<span class="nc" id="L142">        flags.useGenericCollections = useGenericCollections;</span>
+<span class="nc" id="L143">    }</span>
+
+    /**
+     * Set the SQL type map overrides.
+     */
+    public void setTypeMap(String typeMap) {
+<span class="nc" id="L149">        this.typeMap = typeMap;</span>
+<span class="nc" id="L150">    }</span>
+
+    /**
+     * Set whether to allow primary keys on join tables.
+     */
+    public void setPrimaryKeyOnJoin(boolean primaryKeyOnJoin) {
+<span class="nc" id="L156">        flags.primaryKeyOnJoin = primaryKeyOnJoin;</span>
+<span class="nc" id="L157">    }</span>
+
+    /**
+     * Set whether to use datastore identity by default.
+     */
+    public void setUseDataStoreIdentity(boolean useDataStoreIdentity) {
+<span class="nc" id="L163">        flags.useDataStoreIdentity = useDataStoreIdentity;</span>
+<span class="nc" id="L164">    }</span>
+
+    /**
+     * Set whether to use single field identity where possible.
+     */
+    public void setUseBuiltinIdentityClass(boolean useBuiltinIdentityClass) {
+<span class="nc" id="L170">        flags.useBuiltinIdentityClass = useBuiltinIdentityClass;</span>
+<span class="nc" id="L171">    }</span>
+
+    /**
+     * Set whether to generate inverse 1-many/1-1 relations for all many-1/1-1
+     * relations.
+     */
+    public void setInverseRelations(boolean inverseRelations) {
+<span class="nc" id="L178">        flags.inverseRelations = inverseRelations;</span>
+<span class="nc" id="L179">    }</span>
+
+    /**
+     * Set whether to make generated classes detachable.
+     */
+    public void setDetachable(boolean detachable) {
+<span class="nc" id="L185">        flags.detachable = detachable;</span>
+<span class="nc" id="L186">    }</span>
+
+    /**
+     * Default discriminator strategy for base class mappings.
+     */
+    public void setDiscriminatorStrategy(String discStrat) {
+<span class="nc" id="L192">        flags.discriminatorStrategy = discStrat;</span>
+<span class="nc" id="L193">    }</span>
+
+    /**
+     * Default version strategy for base class mappings.
+     */
+    public void setVersionStrategy(String versionStrat) {
+<span class="nc" id="L199">        flags.versionStrategy = versionStrat;</span>
+<span class="nc" id="L200">    }</span>
+
+    /**
+     * Whether or not to generate application identity classes as inner classes.
+     */
+    public void setInnerIdentityClasses(boolean innerAppId) {
+<span class="nc" id="L206">        flags.innerIdentityClasses = innerAppId;</span>
+<span class="nc" id="L207">    }</span>
+
+    /**
+     * The suffix to use to create the identity class name for a class, or
+     * for inner classes, the name of the inner class.
+     */
+    public void setIdentityClassSuffix(String suffix) {
+<span class="nc" id="L214">        flags.identityClassSuffix = suffix;</span>
+<span class="nc" id="L215">    }</span>
+
+    /**
+     * Set the level of the generated metadata.
+     */
+    public void setMetadata(Level level) {
+<span class="nc" id="L221">        flags.metaDataLevel = level.getValue();</span>
+<span class="nc" id="L222">    }</span>
+
+    /**
+     * Whether to generate annotations along with generated code. Defaults
+     * to false.
+     */
+    public void setGenerateAnnotations(boolean genAnnotations) {
+<span class="nc" id="L229">        flags.generateAnnotations = genAnnotations;</span>
+<span class="nc" id="L230">    }</span>
+
+    /**
+     * Whether to use field or property-based access on generated code.
+     * Defaults to field-based access.
+     */
+    public void setAccessType(AccessType accessType) {
+<span class="nc" id="L237">        flags.accessType = accessType.getValue();</span>
+<span class="nc" id="L238">    }</span>
+
+    /**
+     * Set a customizer class to use.
+     */
+    public void setCustomizerClass(String customizerClass) {
+<span class="nc" id="L244">        this.customizerClass = customizerClass;</span>
+<span class="nc" id="L245">    }</span>
+
+    /**
+     * Set a properties file to pass to the customizer class.
+     */
+    public void setCustomizerProperties(String customizerProperties) {
+<span class="nc" id="L251">        this.customizerProperties = customizerProperties;</span>
+<span class="nc" id="L252">    }</span>
+
+    public Object createCodeFormat() {
+<span class="nc" id="L255">        return flags.format;</span>
+    }
+
+    @Override
+    protected ConfigurationImpl newConfiguration() {
+<span class="nc" id="L260">        return new JDBCConfigurationImpl();</span>
+    }
+
+    @Override
+    protected void executeOn(String[] files)
+        throws Exception {
+<span class="nc" id="L266">        ClassLoader loader = getClassLoader();</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        if (!StringUtil.isEmpty(dirName))</span>
+<span class="nc" id="L268">            flags.directory = Files.getFile(dirName, loader);</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">        if (!StringUtil.isEmpty(typeMap))</span>
+<span class="nc" id="L270">            flags.typeMap = Configurations.parseProperties(typeMap);</span>
+
+        // load customizer properties
+<span class="nc" id="L273">        Properties customProps = new Properties();</span>
+<span class="nc" id="L274">        File propsFile = Files.getFile(customizerProperties, loader);</span>
+<span class="nc bnc" id="L275" title="All 2 branches missed.">        if (propsFile != null &amp;&amp; (AccessController.doPrivileged(</span>
+<span class="nc bnc" id="L276" title="All 2 branches missed.">            J2DoPrivHelper.existsAction(propsFile))).booleanValue()) {</span>
+<span class="nc" id="L277">            FileInputStream fis = null;</span>
+            try {
+<span class="nc" id="L279">                fis = AccessController.doPrivileged(</span>
+<span class="nc" id="L280">                    J2DoPrivHelper.newFileInputStreamAction(propsFile));</span>
+<span class="nc" id="L281">            } catch (PrivilegedActionException pae) {</span>
+<span class="nc" id="L282">                 throw (FileNotFoundException) pae.getException();</span>
+<span class="nc" id="L283">            }</span>
+<span class="nc" id="L284">            customProps.load(fis);</span>
+        }
+
+        // create and configure customizer
+<span class="nc" id="L288">        JDBCConfiguration conf = (JDBCConfiguration) getConfiguration();</span>
+<span class="nc" id="L289">        flags.customizer = (ReverseCustomizer) Configurations.</span>
+<span class="nc" id="L290">            newInstance(customizerClass, conf, (String)null,</span>
+<span class="nc" id="L291">                AccessController.doPrivileged(</span>
+<span class="nc" id="L292">                    J2DoPrivHelper.getClassLoaderAction(</span>
+                        ReverseCustomizer.class)));
+<span class="nc bnc" id="L294" title="All 2 branches missed.">        if (flags.customizer != null)</span>
+<span class="nc" id="L295">            flags.customizer.setConfiguration(customProps);</span>
+
+<span class="nc" id="L297">        ReverseMappingTool.run(conf, files, flags, loader);</span>
+<span class="nc" id="L298">    }</span>
+
+<span class="nc" id="L300">    public static class Level</span>
+        extends EnumeratedAttribute {
+
+        @Override
+        public String[] getValues() {
+<span class="nc" id="L305">            return new String[]{</span>
+                &quot;package&quot;,
+                &quot;class&quot;,
+                &quot;none&quot;
+            };
+        }
+    }
+
+<span class="nc" id="L313">    public static class AccessType</span>
+        extends EnumeratedAttribute {
+
+        @Override
+        public String[] getValues() {
+<span class="nc" id="L318">            return new String[]{</span>
+                &quot;field&quot;,
+                &quot;property&quot;
+            };
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

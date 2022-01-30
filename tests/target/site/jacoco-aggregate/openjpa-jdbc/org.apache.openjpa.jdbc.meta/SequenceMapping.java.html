@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SequenceMapping.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">SequenceMapping.java</span></div><h1>SequenceMapping.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.io.File;
+
+import org.apache.openjpa.jdbc.conf.JDBCSeqValue;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.jdbc.kernel.ClassTableJDBCSeq;
+import org.apache.openjpa.jdbc.kernel.TableJDBCSeq;
+import org.apache.openjpa.jdbc.kernel.ValueTableJDBCSeq;
+import org.apache.openjpa.lib.conf.PluginValue;
+import org.apache.openjpa.lib.identifier.IdentifierUtil;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.SequenceMetaData;
+
+/**
+ * Specialization of sequence metadata for ORM.
+ *
+ * @author Abe White
+ */
+public class SequenceMapping extends SequenceMetaData {
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * {@link ValueTableJDBCSeq} alias.
+     */
+    public static final String IMPL_VALUE_TABLE = &quot;value-table&quot;;
+
+    /**
+     * {@link TableJDBCSeq} alias.
+     */
+    public static final String IMPL_TABLE = &quot;table&quot;;
+
+    /**
+     * {@link ClassTableJDBCSeq} alias.
+     */
+    public static final String IMPL_CLASS_TABLE = &quot;class-table&quot;;
+
+    // plugin property names for standard props
+    private static final String PROP_TABLE = &quot;Table&quot;;
+    private static final String PROP_SEQUENCE_COL = &quot;SequenceColumn&quot;;
+    private static final String PROP_PK_COL = &quot;PrimaryKeyColumn&quot;;
+    private static final String PROP_PK_VALUE = &quot;PrimaryKeyValue&quot;;
+    private static final String PROP_UNIQUE = &quot;UniqueColumns&quot;;
+    private static final String PROP_UNIQUE_CONSTRAINT = &quot;UniqueConstraintName&quot;;
+
+<span class="nc" id="L65">    private File _mapFile = null;</span>
+<span class="nc" id="L66">    private DBIdentifier _table = DBIdentifier.NULL;</span>
+<span class="nc" id="L67">    private DBIdentifier _sequenceColumn = DBIdentifier.NULL;</span>
+<span class="nc" id="L68">    private DBIdentifier _primaryKeyColumn = DBIdentifier.NULL;</span>
+<span class="nc" id="L69">    private String _primaryKeyValue = null;</span>
+<span class="nc" id="L70">    private DBIdentifier[] _uniqueColumns   = null;</span>
+<span class="nc" id="L71">    private DBIdentifier _uniqueConstraintName = DBIdentifier.NULL;</span>
+
+    /**
+     * @deprecated
+     * @param name
+     * @param repos
+     */
+    @Deprecated
+    public SequenceMapping(String name, MappingRepository repos) {
+<span class="nc" id="L80">        super(name, repos);</span>
+<span class="nc" id="L81">    }</span>
+
+    /**
+     * Sequence names are a kernel object so DBIdentifiers must be converted to
+     * strings
+     * @param name
+     * @param repos
+     */
+    public SequenceMapping(DBIdentifier name, MappingRepository repos) {
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        super(DBIdentifier.isNull(name) ? null : name.getName(), repos);</span>
+<span class="nc" id="L91">    }</span>
+
+    /**
+     * Allow sequence to have a mapping file separate from its metadata
+     * source file.
+     */
+    public File getMappingFile() {
+<span class="nc" id="L98">        return _mapFile;</span>
+    }
+
+    /**
+     * Allow sequence to have a mapping file separate from its metadata
+     * source file.
+     */
+    public void setMappingFile(File file) {
+<span class="nc" id="L106">        _mapFile = file;</span>
+<span class="nc" id="L107">    }</span>
+
+    /**
+     * Name of sequence table, if any.
+     * @deprecated
+     */
+    @Deprecated
+    public String getTable() {
+<span class="nc" id="L115">        return getTableIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getTableIdentifier() {
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        return _table == null ? DBIdentifier.NULL : _table ;</span>
+    }
+
+    /**
+     * Name of sequence table, if any.
+     * @deprecated
+     */
+    @Deprecated
+    public void setTable(String table) {
+<span class="nc" id="L128">        setTableIdentifier(DBIdentifier.newTable(table));</span>
+<span class="nc" id="L129">    }</span>
+
+    public void setTableIdentifier(DBIdentifier table) {
+<span class="nc" id="L132">        _table = table;</span>
+<span class="nc" id="L133">    }</span>
+
+    /**
+     * Name of sequence column, if any.
+     * @deprecated
+     */
+    @Deprecated
+    public String getSequenceColumn() {
+<span class="nc" id="L141">        return getSequenceColumnIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getSequenceColumnIdentifier() {
+<span class="nc bnc" id="L145" title="All 2 branches missed.">        return _sequenceColumn == null ? DBIdentifier.NULL : _sequenceColumn;</span>
+    }
+
+    /**
+     * Name of sequence column, if any.
+     * @deprecated
+     */
+    @Deprecated
+    public void setSequenceColumn(String sequenceColumn) {
+<span class="nc" id="L154">        setSequenceColumnIdentifier(DBIdentifier.newColumn(sequenceColumn));</span>
+<span class="nc" id="L155">    }</span>
+
+    public void setSequenceColumnIdentifier(DBIdentifier sequenceColumn) {
+<span class="nc" id="L158">        _sequenceColumn = sequenceColumn;</span>
+<span class="nc" id="L159">    }</span>
+
+    /**
+     * Name of primary key column, if any.
+     * @deprecated
+     */
+    @Deprecated
+    public String getPrimaryKeyColumn() {
+<span class="nc" id="L167">        return getPrimaryKeyColumnIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getPrimaryKeyColumnIdentifier() {
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        return _primaryKeyColumn == null ? DBIdentifier.NULL : _primaryKeyColumn;</span>
+    }
+
+    /**
+     * Name of primary key column, if any.
+     * @deprecated
+     */
+    @Deprecated
+    public void setPrimaryKeyColumn(String primaryKeyColumn) {
+<span class="nc" id="L180">        setPrimaryKeyColumnIdentifier(DBIdentifier.newColumn(primaryKeyColumn));</span>
+<span class="nc" id="L181">    }</span>
+
+    public void setPrimaryKeyColumnIdentifier(DBIdentifier primaryKeyColumn) {
+<span class="nc" id="L184">        _primaryKeyColumn = primaryKeyColumn;</span>
+<span class="nc" id="L185">    }</span>
+
+    /**
+     * Primary key value, if not auto-determined.
+     */
+    public String getPrimaryKeyValue() {
+<span class="nc" id="L191">        return _primaryKeyValue;</span>
+    }
+
+    /**
+     * Primary key value, if not auto-determined.
+     */
+    public void setPrimaryKeyValue(String primaryKeyValue) {
+<span class="nc" id="L198">        _primaryKeyValue = primaryKeyValue;</span>
+<span class="nc" id="L199">    }</span>
+
+    /**
+     * @deprecated
+     * @param cols
+     */
+    @Deprecated
+    public void setUniqueColumns(String[] cols) {
+<span class="nc" id="L207">        setUniqueColumnsIdentifier(DBIdentifier.toArray(cols, DBIdentifierType.COLUMN));</span>
+<span class="nc" id="L208">    }</span>
+
+    public void setUniqueColumnsIdentifier(DBIdentifier[] cols) {
+<span class="nc" id="L211">        _uniqueColumns = cols;</span>
+<span class="nc" id="L212">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    public String[] getUniqueColumns() {
+<span class="nc" id="L219">        return DBIdentifier.toStringArray(getUniqueColumnsIdentifier());</span>
+    }
+
+    public DBIdentifier[] getUniqueColumnsIdentifier() {
+<span class="nc" id="L223">    	return _uniqueColumns;</span>
+    }
+
+
+    @Override
+    protected PluginValue newPluginValue(String property) {
+<span class="nc" id="L229">        return new JDBCSeqValue(property);</span>
+    }
+
+    @Override
+    protected void addStandardProperties(StringBuilder props) {
+<span class="nc" id="L234">        super.addStandardProperties(props);</span>
+        // Quotes are conditionally added to the following because the props
+        // are eventually passed to the Configurations.parseProperties()
+        // method, which strips off quotes. This is a problem when these
+        // properties are intentionally delimited with quotes. So, an extra
+        // set preserves the intended ones. While this is an ugly solution,
+        // it's less ugly than other ones.
+
+<span class="nc" id="L242">        appendProperty(props, PROP_TABLE, addQuotes(_table.getName()));</span>
+<span class="nc" id="L243">        appendProperty(props, PROP_SEQUENCE_COL, addQuotes(_sequenceColumn.getName()));</span>
+<span class="nc" id="L244">        appendProperty(props, PROP_PK_COL, addQuotes(_primaryKeyColumn.getName()));</span>
+<span class="nc" id="L245">        appendProperty(props, PROP_PK_VALUE, addQuotes(_primaryKeyValue));</span>
+        // Array of unique column names are passed to configuration
+        // as a single string &quot;x|y|z&quot;. The configurable (TableJDBCSeq) must
+        // parse it back.
+<span class="nc bnc" id="L249" title="All 4 branches missed.">        if (!DBIdentifier.isNull(_uniqueConstraintName) &amp;&amp; _uniqueConstraintName.getName().length() &gt; 0) {</span>
+<span class="nc" id="L250">            appendProperty(props, PROP_UNIQUE_CONSTRAINT, addQuotes(_uniqueConstraintName.getName()));</span>
+        }
+
+<span class="nc bnc" id="L253" title="All 4 branches missed.">        if (_uniqueColumns != null &amp;&amp; _uniqueColumns.length &gt; 0) {</span>
+<span class="nc" id="L254">            appendProperty(props, PROP_UNIQUE, StringUtil.join(_uniqueColumns, &quot;|&quot;));</span>
+        }
+<span class="nc" id="L256">    }</span>
+
+    private String addQuotes(String name) {
+<span class="nc bnc" id="L259" title="All 4 branches missed.">        if (name != null &amp;&amp; name.contains(IdentifierUtil.DOUBLE_QUOTE)) {</span>
+<span class="nc" id="L260">            return IdentifierUtil.DOUBLE_QUOTE + name + IdentifierUtil.DOUBLE_QUOTE;</span>
+        }
+<span class="nc" id="L262">        return name;</span>
+    }
+
+    /**
+     * @deprecated
+     * @param name
+     */
+    @Deprecated
+    public void setUniqueConstraintName(String name) {
+<span class="nc" id="L271">        _uniqueConstraintName = DBIdentifier.newConstraint(name);</span>
+<span class="nc" id="L272">    }</span>
+
+    public void setUniqueConstraintIdentifier(DBIdentifier name) {
+<span class="nc" id="L275">        _uniqueConstraintName = name;</span>
+<span class="nc" id="L276">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    public String getUniqueConstraintName() {
+<span class="nc" id="L283">        return getUniqueConstraintIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getUniqueConstraintIdentifier() {
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        return _uniqueConstraintName == null ? DBIdentifier.NULL : _uniqueConstraintName;</span>
+
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

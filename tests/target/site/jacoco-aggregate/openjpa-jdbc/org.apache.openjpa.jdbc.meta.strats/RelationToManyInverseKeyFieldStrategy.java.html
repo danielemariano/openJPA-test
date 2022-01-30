@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>RelationToManyInverseKeyFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">RelationToManyInverseKeyFieldStrategy.java</span></div><h1>RelationToManyInverseKeyFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+import java.util.Collection;
+import java.util.Iterator;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.FieldMappingInfo;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.meta.ValueMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.MetaDataModes;
+import org.apache.openjpa.util.ChangeTracker;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.MetaDataException;
+import org.apache.openjpa.util.Proxies;
+import org.apache.openjpa.util.Proxy;
+
+/**
+ * Maps a relation to a set of other objects using an inverse
+ * foreign key in the related object table.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L60">public abstract class RelationToManyInverseKeyFieldStrategy</span>
+    extends StoreCollectionFieldStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L66">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L67">        (RelationToManyInverseKeyFieldStrategy.class);</span>
+
+<span class="nc" id="L69">    private boolean _orderInsert = false;</span>
+<span class="nc" id="L70">    private boolean _orderUpdate = false;</span>
+<span class="nc" id="L71">    private boolean _uni1MFK = false;</span>
+
+    @Override
+    protected ClassMapping[] getIndependentElementMappings(boolean traverse) {
+<span class="nc" id="L75">        return field.getElementMapping().getIndependentTypeMappings();</span>
+    }
+
+    @Override
+    protected ForeignKey getJoinForeignKey(ClassMapping elem) {
+<span class="nc" id="L80">        return field.getElementMapping().getForeignKey(elem);</span>
+    }
+
+    @Override
+    protected void selectElement(Select sel, ClassMapping elem,
+        JDBCStore store, JDBCFetchConfiguration fetch, int eagerMode,
+        Joins joins) {
+<span class="nc" id="L87">        sel.select(elem, field.getElementMapping().getSelectSubclasses(),</span>
+            store, fetch, eagerMode, joins);
+<span class="nc" id="L89">    }</span>
+
+    @Override
+    protected Object loadElement(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L95">        ClassMapping elem = res.getBaseMapping();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        if (elem == null)</span>
+<span class="nc" id="L97">            elem = field.getElementMapping().getIndependentTypeMappings()[0];</span>
+<span class="nc" id="L98">        return res.load(elem, store, fetch, joins);</span>
+    }
+
+    @Override
+    protected Joins join(Joins joins, ClassMapping elem) {
+<span class="nc" id="L103">        ValueMapping vm = field.getElementMapping();</span>
+<span class="nc" id="L104">        ForeignKey fk = vm.getForeignKey(elem);</span>
+<span class="nc" id="L105">        ClassMapping owner = field.getDefiningMapping();</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        while (fk.getPrimaryKeyTable() != owner.getTable()) {</span>
+<span class="nc" id="L107">            joins = owner.joinSuperclass(joins, false);</span>
+<span class="nc" id="L108">            owner = owner.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">            if (owner == null)</span>
+<span class="nc" id="L110">                throw new InternalException();</span>
+        }
+<span class="nc" id="L112">        return joins.joinRelation(field.getName(), fk, elem,</span>
+<span class="nc" id="L113">            vm.getSelectSubclasses(), true, true);</span>
+    }
+
+    @Override
+    protected Joins joinElementRelation(Joins joins, ClassMapping elem) {
+<span class="nc" id="L118">        return joinRelation(joins, false, false);</span>
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc" id="L123">        OpenJPAConfiguration conf = field.getRepository().getConfiguration();</span>
+<span class="nc" id="L124">        boolean isNonDefaultMappingAllowed = field.getRepository().</span>
+<span class="nc" id="L125">            getMetaDataFactory().getDefaults().isNonDefaultMappingAllowed(conf);</span>
+<span class="nc" id="L126">        FieldMapping mapped = field.getMappedByMapping();</span>
+
+        // JPA 2.0 allows non-default mapping: Uni-/1-M/@JoinColumn ==&gt; foreign key strategy
+        // Bi-/1-M/@JoinColumn should result in exception
+<span class="nc bnc" id="L130" title="All 4 branches missed.">        if (!isNonDefaultMappingAllowed || mapped != null) {</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">            field.getValueInfo().assertNoSchemaComponents(field, !adapt);</span>
+        }
+<span class="nc" id="L133">        field.getKeyMapping().getValueInfo().assertNoSchemaComponents</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">            (field.getKey(), !adapt);</span>
+
+<span class="nc" id="L136">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc bnc" id="L137" title="All 4 branches missed.">        if (elem.getTypeCode() != JavaTypes.PC || elem.isEmbeddedPC()</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            || !elem.getTypeMapping().isMapped())</span>
+<span class="nc" id="L139">            throw new MetaDataException(_loc.get(&quot;not-elem-relation&quot;, field));</span>
+
+        // check for named inverse
+<span class="nc" id="L142">        FieldMappingInfo finfo = field.getMappingInfo();</span>
+<span class="nc" id="L143">        ValueMappingInfo vinfo = elem.getValueInfo();</span>
+<span class="nc" id="L144">        boolean criteria = vinfo.getUseClassCriteria();</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">        if (mapped != null) {</span>
+<span class="nc" id="L146">            mapped.resolve(MetaDataModes.MODE_META | MetaDataModes.MODE_MAPPING);</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">            if (!(mapped.getStrategy() instanceof RelationFieldStrategy</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">               || mapped.getHandler() instanceof UntypedPCValueHandler))</span>
+<span class="nc" id="L149">                throw new MetaDataException(_loc.get(&quot;not-inv-relation&quot;,</span>
+                    field, mapped));
+<span class="nc bnc" id="L151" title="All 2 branches missed.">            vinfo.assertNoSchemaComponents(elem, !adapt);</span>
+<span class="nc" id="L152">            elem.setForeignKey(mapped.getForeignKey</span>
+<span class="nc" id="L153">                (field.getDefiningMapping()));</span>
+<span class="nc" id="L154">            elem.setColumns(mapped.getDefiningMapping().</span>
+<span class="nc" id="L155">                getPrimaryKeyColumns());</span>
+<span class="nc" id="L156">            elem.setJoinDirection(ValueMapping.JOIN_EXPECTED_INVERSE);</span>
+<span class="nc" id="L157">            elem.setUseClassCriteria(criteria);</span>
+
+<span class="nc" id="L159">            ForeignKey fk = mapped.getForeignKey();</span>
+            /** Foreign key may be null if declared type of the mapped field is
+             * abstract and under table-per-class inheritance strategy will have
+             * no mapped table.
+             */
+<span class="nc bnc" id="L164" title="All 2 branches missed.">            if (fk != null) {</span>
+<span class="nc" id="L165">            	field.setOrderColumn(finfo.getOrderColumn(field,</span>
+<span class="nc" id="L166">            			fk.getTable(), adapt));</span>
+<span class="nc" id="L167">            	field.setOrderColumnIO(finfo.getColumnIO());</span>
+            }
+<span class="nc" id="L169">            return;</span>
+        } else {
+<span class="nc bnc" id="L171" title="All 2 branches missed.">            if (field.getValueInfo().getColumns().size() &gt; 0 &amp;&amp;</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">                field.getAccessType() == FieldMetaData.ONE_TO_MANY) {</span>
+<span class="nc" id="L173">                _uni1MFK = true;</span>
+            }
+        }
+
+        // map inverse foreign key in related table
+<span class="nc" id="L178">        ForeignKey fk = vinfo.getInverseTypeJoin(elem, field.getName(), adapt);</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        if (_uni1MFK) {</span>
+<span class="nc" id="L180">            Column[] locals = fk.getColumns();</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">            for (int i = 0; i &lt; locals.length; i++)</span>
+<span class="nc" id="L182">                locals[i].setUni1MFK(true);</span>
+        }
+<span class="nc" id="L184">        elem.setForeignKey(fk);</span>
+<span class="nc" id="L185">        elem.setColumnIO(vinfo.getColumnIO());</span>
+<span class="nc" id="L186">        elem.setColumns(elem.getTypeMapping().getPrimaryKeyColumns());</span>
+<span class="nc" id="L187">        elem.setJoinDirection(ValueMapping.JOIN_EXPECTED_INVERSE);</span>
+<span class="nc" id="L188">        elem.setUseClassCriteria(criteria);</span>
+<span class="nc" id="L189">        elem.mapConstraints(field.getName(), adapt);</span>
+
+<span class="nc" id="L191">        field.setOrderColumn(finfo.getOrderColumn(field, fk.getTable(),</span>
+            adapt));
+<span class="nc" id="L193">        field.setOrderColumnIO(finfo.getColumnIO());</span>
+<span class="nc" id="L194">    }</span>
+
+    @Override
+    public void initialize() {
+<span class="nc" id="L198">        Column order = field.getOrderColumn();</span>
+<span class="nc" id="L199">        _orderInsert = field.getOrderColumnIO().isInsertable(order, false);</span>
+<span class="nc" id="L200">        _orderUpdate = field.getOrderColumnIO().isUpdatable(order, false);</span>
+
+<span class="nc" id="L202">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc" id="L203">        Log log = field.getRepository().getLog();</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if (field.getMappedBy() == null</span>
+<span class="nc bnc" id="L205" title="All 4 branches missed.">            &amp;&amp; elem.getUseClassCriteria() &amp;&amp; log.isWarnEnabled()) {</span>
+<span class="nc" id="L206">            ForeignKey fk = elem.getForeignKey();</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            if (elem.getColumnIO().isAnyUpdatable(fk, false))</span>
+<span class="nc" id="L208">                log.warn(_loc.get(&quot;class-crit-owner&quot;, field));</span>
+        }
+<span class="nc" id="L210">    }</span>
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc bnc" id="L215" title="All 6 branches missed.">        if (field.getMappedBy() == null || _orderInsert || _orderUpdate)</span>
+<span class="nc" id="L216">            insert(sm, rm, sm.fetchObject(field.getIndex()));</span>
+<span class="nc" id="L217">    }</span>
+
+    private void insert(OpenJPAStateManager sm, RowManager rm, Object vals)
+        throws SQLException {
+<span class="nc bnc" id="L221" title="All 6 branches missed.">        if (field.getMappedBy() != null &amp;&amp; !_orderInsert &amp;&amp; !_orderUpdate)</span>
+<span class="nc" id="L222">            return;</span>
+<span class="nc" id="L223">        Collection coll = toCollection(vals);</span>
+<span class="nc bnc" id="L224" title="All 4 branches missed.">        if (coll == null || coll.isEmpty())</span>
+<span class="nc" id="L225">            return;</span>
+
+<span class="nc" id="L227">        ClassMapping rel = field.getElementMapping().getTypeMapping();</span>
+<span class="nc" id="L228">        int idx = 0;</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">        for (Iterator itr = coll.iterator(); itr.hasNext(); idx++)</span>
+<span class="nc" id="L230">            updateInverse(sm.getContext(), itr.next(), rel, rm, sm, idx);</span>
+<span class="nc" id="L231">    }</span>
+
+    @Override
+    public void update(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc bnc" id="L236" title="All 6 branches missed.">        if (field.getMappedBy() != null &amp;&amp; !_orderInsert &amp;&amp; !_orderUpdate)</span>
+<span class="nc" id="L237">            return;</span>
+
+<span class="nc" id="L239">        Object obj = sm.fetchObject(field.getIndex());</span>
+<span class="nc" id="L240">        ChangeTracker ct = null;</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if (obj instanceof Proxy) {</span>
+<span class="nc" id="L242">            Proxy proxy = (Proxy) obj;</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">            if (Proxies.isOwner(proxy, sm, field.getIndex()))</span>
+<span class="nc" id="L244">                ct = proxy.getChangeTracker();</span>
+        }
+<span class="nc" id="L246">        Column order = field.getOrderColumn();</span>
+
+        // if no fine-grained change tracking then just delete and reinsert
+        // if no fine-grained change tracking or if an item was removed
+        // from an ordered collection, delete and reinsert
+<span class="nc bnc" id="L251" title="All 6 branches missed.">        if (ct == null || !ct.isTracking() ||</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">            (order != null &amp;&amp; !ct.getRemoved().isEmpty())) {</span>
+<span class="nc" id="L253">            delete(sm, store, rm);</span>
+<span class="nc" id="L254">            insert(sm, rm, obj);</span>
+<span class="nc" id="L255">            return;</span>
+        }
+
+        // null inverse columns for deletes and update them with our oid for
+        // inserts
+<span class="nc" id="L260">        ClassMapping rel = field.getElementMapping().getTypeMapping();</span>
+<span class="nc" id="L261">        StoreContext ctx = store.getContext();</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        if (field.getMappedBy() == null) {</span>
+<span class="nc" id="L263">            Collection rem = ct.getRemoved();</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            for (Iterator itr = rem.iterator(); itr.hasNext();)</span>
+<span class="nc" id="L265">                updateInverse(ctx, itr.next(), rel, rm, null, 0);</span>
+        }
+
+<span class="nc" id="L268">        Collection add = ct.getAdded();</span>
+<span class="nc" id="L269">        int seq = ct.getNextSequence();</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        for (Iterator itr = add.iterator(); itr.hasNext(); seq++)</span>
+<span class="nc" id="L271">            updateInverse(ctx, itr.next(), rel, rm, sm, seq);</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        if (order != null)</span>
+<span class="nc" id="L273">            ct.setNextSequence(seq);</span>
+<span class="nc" id="L274">    }</span>
+
+    @Override
+    public void delete(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        if (field.getMappedBy() != null)</span>
+<span class="nc" id="L280">            return;</span>
+
+        // if nullable, null any existing inverse columns that refer to this obj
+<span class="nc" id="L283">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc" id="L284">        ColumnIO io = elem.getColumnIO();</span>
+<span class="nc" id="L285">        ForeignKey fk = elem.getForeignKey();</span>
+
+        //OJ-2603: Don't null an FK which is also a PK in the referencing object.
+<span class="nc" id="L288">        boolean containsPK = false;</span>
+<span class="nc" id="L289">        Column[] cols = fk.getColumns();</span>
+<span class="nc bnc" id="L290" title="All 4 branches missed.">        for (int i = 0; i &lt; cols.length &amp;&amp; !containsPK; i++){</span>
+<span class="nc" id="L291">            containsPK= cols[i].isPrimaryKey();</span>
+        }
+
+<span class="nc bnc" id="L294" title="All 6 branches missed.">        if (!elem.getUseClassCriteria() &amp;&amp; io.isAnyUpdatable(fk, true) &amp;&amp; !containsPK) {</span>
+<span class="nc" id="L295">            assertInversable();</span>
+<span class="nc" id="L296">            Row row = rm.getAllRows(fk.getTable(), Row.ACTION_UPDATE);</span>
+<span class="nc" id="L297">            row.setForeignKey(fk, io, null);</span>
+<span class="nc" id="L298">            row.whereForeignKey(fk, sm);</span>
+<span class="nc" id="L299">            rm.flushAllRows(row);</span>
+<span class="nc" id="L300">            return;</span>
+        }
+
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        if (!sm.getLoaded().get(field.getIndex()))</span>
+<span class="nc" id="L304">            return;</span>
+
+        // update fk on each field value row
+<span class="nc" id="L307">        ClassMapping rel = field.getElementMapping().getTypeMapping();</span>
+<span class="nc" id="L308">        StoreContext ctx = store.getContext();</span>
+<span class="nc" id="L309">        Collection objs = toCollection(sm.fetchObject(field.getIndex()));</span>
+<span class="nc bnc" id="L310" title="All 4 branches missed.">        if (objs != null &amp;&amp; !objs.isEmpty())</span>
+<span class="nc bnc" id="L311" title="All 2 branches missed.">            for (Iterator itr = objs.iterator(); itr.hasNext();)</span>
+<span class="nc" id="L312">                updateInverse (ctx, itr.next(), rel, rm, sm, 0);</span>
+<span class="nc" id="L313">    }</span>
+
+    /**
+     * This method updates the inverse columns of a 1-M related object
+     * with the given oid.
+     */
+    private void updateInverse(StoreContext ctx, Object inverse,
+        ClassMapping rel, RowManager rm, OpenJPAStateManager sm, int idx)
+        throws SQLException {
+<span class="nc" id="L322">        OpenJPAStateManager invsm = RelationStrategies.getStateManager(inverse,</span>
+            ctx);
+<span class="nc bnc" id="L324" title="All 2 branches missed.">        if (invsm == null)</span>
+<span class="nc" id="L325">            return;</span>
+
+<span class="nc" id="L327">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc" id="L328">        ForeignKey fk = elem.getForeignKey();</span>
+<span class="nc" id="L329">        ColumnIO io = elem.getColumnIO();</span>
+<span class="nc" id="L330">        Column order = field.getOrderColumn();</span>
+
+        int action;
+        boolean writeable;
+        boolean orderWriteable;
+<span class="nc bnc" id="L335" title="All 4 branches missed.">        if (invsm.isNew() &amp;&amp; !invsm.isFlushed()) {</span>
+            // no need to null inverse columns of new instance
+<span class="nc bnc" id="L337" title="All 4 branches missed.">            if (sm == null || sm.isDeleted())</span>
+<span class="nc" id="L338">                return;</span>
+<span class="nc" id="L339">            writeable = io.isAnyInsertable(fk, false);</span>
+<span class="nc" id="L340">            orderWriteable = _orderInsert;</span>
+<span class="nc" id="L341">            action = Row.ACTION_INSERT;</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        } else if (invsm.isDeleted()) {</span>
+            // no need to null inverse columns of deleted instance
+<span class="nc bnc" id="L344" title="All 6 branches missed.">            if (invsm.isFlushed() || sm == null || !sm.isDeleted())</span>
+<span class="nc" id="L345">                return;</span>
+<span class="nc" id="L346">            writeable = true;</span>
+<span class="nc" id="L347">            orderWriteable = false;</span>
+<span class="nc" id="L348">            action = Row.ACTION_DELETE;</span>
+        } else {
+<span class="nc bnc" id="L350" title="All 4 branches missed.">            if (sm != null &amp;&amp; sm.isDeleted())</span>
+<span class="nc" id="L351">                sm = null;</span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">            writeable = io.isAnyUpdatable(fk, sm == null);</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            orderWriteable = field.getOrderColumnIO().isUpdatable</span>
+<span class="nc" id="L354">                (order, sm == null);</span>
+<span class="nc" id="L355">            action = Row.ACTION_UPDATE;</span>
+        }
+<span class="nc bnc" id="L357" title="All 4 branches missed.">        if (!writeable &amp;&amp; !orderWriteable)</span>
+<span class="nc" id="L358">            return;</span>
+
+<span class="nc" id="L360">        assertInversable();</span>
+
+        // if this is an update, this might be the only mod to the row, so
+        // make sure the where condition is set
+<span class="nc" id="L364">        Row row = rm.getRow(fk.getTable(), action, invsm, true);</span>
+<span class="nc bnc" id="L365" title="All 2 branches missed.">        if (action == Row.ACTION_UPDATE)</span>
+<span class="nc" id="L366">            row.wherePrimaryKey(invsm);</span>
+
+        // update the inverse pointer with our oid value
+<span class="nc bnc" id="L369" title="All 2 branches missed.">        if (writeable)</span>
+<span class="nc" id="L370">            row.setForeignKey(fk, io, sm);</span>
+<span class="nc bnc" id="L371" title="All 2 branches missed.">        if (orderWriteable)</span>
+<span class="nc" id="L372">            row.setInt(order, idx);</span>
+<span class="nc" id="L373">    }</span>
+
+    @Override
+    public Object toDataStoreValue(Object val, JDBCStore store) {
+<span class="nc" id="L377">        ClassMapping cm = field.getElementMapping().getTypeMapping();</span>
+<span class="nc" id="L378">        return cm.toDataStoreValue(val, cm.getPrimaryKeyColumns(), store);</span>
+    }
+
+    @Override
+    public Joins join(Joins joins, boolean forceOuter) {
+<span class="nc" id="L383">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc" id="L384">        ClassMapping[] clss = elem.getIndependentTypeMappings();</span>
+<span class="nc bnc" id="L385" title="All 2 branches missed.">        if (clss.length != 1)</span>
+<span class="nc" id="L386">            throw RelationStrategies.unjoinable(elem);</span>
+<span class="nc bnc" id="L387" title="All 2 branches missed.">        if (forceOuter)</span>
+<span class="nc" id="L388">            return joins.outerJoinRelation(field.getName(),</span>
+<span class="nc" id="L389">                elem.getForeignKey(clss[0]), clss[0],</span>
+<span class="nc" id="L390">                elem.getSelectSubclasses(), true, true);</span>
+<span class="nc" id="L391">        return joins.joinRelation(field.getName(), elem.getForeignKey(clss[0]),</span>
+<span class="nc" id="L392">            clss[0], elem.getSelectSubclasses(), true, true);</span>
+    }
+
+    private void assertInversable() {
+<span class="nc" id="L396">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc bnc" id="L397" title="All 2 branches missed.">        if (elem.getIndependentTypeMappings().length != 1)</span>
+<span class="nc" id="L398">            throw RelationStrategies.uninversable(elem);</span>
+<span class="nc" id="L399">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

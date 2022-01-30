@@ -1,0 +1,456 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>XMLSchemaSerializer.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">XMLSchemaSerializer.java</span></div><h1>XMLSchemaSerializer.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.lib.meta.XMLMetaDataSerializer;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.xml.sax.SAXException;
+
+/**
+ * Serializes {@link Schema}s to XML matching the document
+ * type definition defined by the {@link XMLSchemaParser}. The serializer
+ * actually works at the fine-grained table level to allow you to split
+ * schemas among multiple files.
+ *  Serializers are not thread safe.
+ *
+ * @author Abe White
+ */
+public class XMLSchemaSerializer
+    extends XMLMetaDataSerializer
+    implements SchemaSerializer {
+
+<span class="nc" id="L49">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L50">        (XMLSchemaSerializer.class);</span>
+
+<span class="nc" id="L52">    private final Collection&lt;Table&gt; _tables = new TreeSet&lt;&gt;();</span>
+<span class="nc" id="L53">    private final Collection&lt;Sequence&gt; _seqs = new TreeSet&lt;&gt;();</span>
+
+    /**
+     * Constructor. Supply configuration.
+     */
+<span class="nc" id="L58">    public XMLSchemaSerializer(JDBCConfiguration conf) {</span>
+<span class="nc" id="L59">        setLog(conf.getLog(JDBCConfiguration.LOG_SCHEMA));</span>
+<span class="nc" id="L60">    }</span>
+
+    @Override
+    public Table[] getTables() {
+<span class="nc" id="L64">        return (Table[]) _tables.toArray(new Table[_tables.size()]);</span>
+    }
+
+    @Override
+    public void addTable(Table table) {
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        if (table != null)</span>
+<span class="nc" id="L70">            _tables.add(table);</span>
+<span class="nc" id="L71">    }</span>
+
+    @Override
+    public boolean removeTable(Table table) {
+<span class="nc" id="L75">        return _tables.remove(table);</span>
+    }
+
+    public Sequence[] getSequences() {
+<span class="nc" id="L79">        return (Sequence[]) _seqs.toArray(new Sequence[_seqs.size()]);</span>
+    }
+
+    public void addSequence(Sequence seq) {
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if (seq != null)</span>
+<span class="nc" id="L84">            _seqs.add(seq);</span>
+<span class="nc" id="L85">    }</span>
+
+    public boolean removeSequence(Sequence seq) {
+<span class="nc" id="L88">        return _seqs.remove(seq);</span>
+    }
+
+    @Override
+    public void addAll(Schema schema) {
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        if (schema == null)</span>
+<span class="nc" id="L94">            return;</span>
+<span class="nc" id="L95">        Table[] tables = schema.getTables();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        for (int i = 0; i &lt; tables.length; i++)</span>
+<span class="nc" id="L97">            addTable(tables[i]);</span>
+<span class="nc" id="L98">        Sequence[] seqs = schema.getSequences();</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        for (int i = 0; i &lt; seqs.length; i++)</span>
+<span class="nc" id="L100">            addSequence(seqs[i]);</span>
+<span class="nc" id="L101">    }</span>
+
+    @Override
+    public void addAll(SchemaGroup group) {
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if (group == null)</span>
+<span class="nc" id="L106">            return;</span>
+<span class="nc" id="L107">        Schema[] schemas = group.getSchemas();</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++)</span>
+<span class="nc" id="L109">            addAll(schemas[i]);</span>
+<span class="nc" id="L110">    }</span>
+
+    @Override
+    public boolean removeAll(Schema schema) {
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (schema == null)</span>
+<span class="nc" id="L115">            return false;</span>
+
+<span class="nc" id="L117">        boolean removed = false;</span>
+<span class="nc" id="L118">        Table[] tables = schema.getTables();</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        for (int i = 0; i &lt; tables.length; i++)</span>
+<span class="nc" id="L120">            removed |= removeTable(tables[i]);</span>
+<span class="nc" id="L121">        Sequence[] seqs = schema.getSequences();</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        for (int i = 0; i &lt; seqs.length; i++)</span>
+<span class="nc" id="L123">            removed |= removeSequence(seqs[i]);</span>
+<span class="nc" id="L124">        return removed;</span>
+    }
+
+    @Override
+    public boolean removeAll(SchemaGroup group) {
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (group == null)</span>
+<span class="nc" id="L130">            return false;</span>
+
+<span class="nc" id="L132">        boolean removed = false;</span>
+<span class="nc" id="L133">        Schema[] schemas = group.getSchemas();</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++)</span>
+<span class="nc" id="L135">            removed |= removeAll(schemas[i]);</span>
+<span class="nc" id="L136">        return removed;</span>
+    }
+
+    @Override
+    public void clear() {
+<span class="nc" id="L141">        _tables.clear();</span>
+<span class="nc" id="L142">        _seqs.clear();</span>
+<span class="nc" id="L143">    }</span>
+
+    @Override
+    protected Collection getObjects() {
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (_seqs.isEmpty())</span>
+<span class="nc" id="L148">            return _tables;</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">        if (_tables.isEmpty())</span>
+<span class="nc" id="L150">            return _seqs;</span>
+<span class="nc" id="L151">        List&lt;Object&gt; all = new ArrayList&lt;&gt;(_seqs.size() + _tables.size());</span>
+<span class="nc" id="L152">        all.addAll(_seqs);</span>
+<span class="nc" id="L153">        all.addAll(_tables);</span>
+<span class="nc" id="L154">        return all;</span>
+    }
+
+    @Override
+    protected void serialize(Collection objs)
+        throws SAXException {
+        // group the objects by schema
+<span class="nc" id="L161">        Map schemas = new HashMap();</span>
+        String schemaName;
+        Collection schemaObjs;
+        Object obj;
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        for (Iterator itr = objs.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L166">            obj = itr.next();</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">            if (obj instanceof Table)</span>
+<span class="nc" id="L168">                schemaName = ((Table) obj).getSchemaName();</span>
+            else
+<span class="nc" id="L170">                schemaName = ((Sequence) obj).getSchemaName();</span>
+<span class="nc" id="L171">            schemaObjs = (Collection) schemas.get(schemaName);</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">            if (schemaObjs == null) {</span>
+<span class="nc" id="L173">                schemaObjs = new LinkedList();</span>
+<span class="nc" id="L174">                schemas.put(schemaName, schemaObjs);</span>
+            }
+<span class="nc" id="L176">            schemaObjs.add(obj);</span>
+        }
+
+<span class="nc" id="L179">        startElement(&quot;schemas&quot;);</span>
+        Map.Entry entry;
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        for (Iterator itr = schemas.entrySet().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L182">            entry = (Map.Entry) itr.next();</span>
+<span class="nc" id="L183">            serializeSchema((String) entry.getKey(), (Collection)</span>
+<span class="nc" id="L184">                entry.getValue());</span>
+        }
+<span class="nc" id="L186">        endElement(&quot;schemas&quot;);</span>
+<span class="nc" id="L187">    }</span>
+
+    /**
+     * Serializes the given objects together into the current schema.
+     */
+    private void serializeSchema(String name, Collection&lt;?&gt; objs)
+        throws SAXException {
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if (objs.isEmpty())</span>
+<span class="nc" id="L195">            return;</span>
+
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        if (getLog().isTraceEnabled())</span>
+<span class="nc" id="L198">            getLog().trace(_loc.get(&quot;ser-schema&quot;, name));</span>
+
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        if (name != null)</span>
+<span class="nc" id="L201">            addAttribute(&quot;name&quot;, name);</span>
+<span class="nc" id="L202">        startElement(&quot;schema&quot;);</span>
+
+        // tables and seqs
+        Object obj;
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        for (Iterator&lt;?&gt; itr = objs.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L207">            obj = itr.next();</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">            if (obj instanceof Table)</span>
+<span class="nc" id="L209">                serializeTable((Table) obj);</span>
+            else
+<span class="nc" id="L211">                serializeSequence((Sequence) obj);</span>
+        }
+
+<span class="nc" id="L214">        endElement(&quot;schema&quot;);</span>
+<span class="nc" id="L215">    }</span>
+
+    /**
+     * Serialize the given sequence.
+     */
+    private void serializeSequence(Sequence seq)
+        throws SAXException {
+<span class="nc" id="L222">        addAttribute(&quot;name&quot;, seq.getName());</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if (seq.getInitialValue() != 1)</span>
+<span class="nc" id="L224">            addAttribute(&quot;initial-value&quot;,</span>
+<span class="nc" id="L225">                String.valueOf(seq.getInitialValue()));</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">        if (seq.getIncrement() &gt; 1)</span>
+<span class="nc" id="L227">            addAttribute(&quot;increment&quot;, String.valueOf(seq.getIncrement()));</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (seq.getAllocate() &gt; 1)</span>
+<span class="nc" id="L229">            addAttribute(&quot;allocate&quot;, String.valueOf(seq.getAllocate()));</span>
+<span class="nc" id="L230">        startElement(&quot;sequence&quot;);</span>
+<span class="nc" id="L231">        endElement(&quot;sequence&quot;);</span>
+<span class="nc" id="L232">    }</span>
+
+    /**
+     * Serializes the given table.
+     */
+    private void serializeTable(Table table)
+        throws SAXException {
+<span class="nc" id="L239">        addAttribute(&quot;name&quot;, table.getName());</span>
+<span class="nc" id="L240">        startElement(&quot;table&quot;);</span>
+
+        // primary key
+<span class="nc" id="L243">        PrimaryKey pk = table.getPrimaryKey();</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">        if (pk != null)</span>
+<span class="nc" id="L245">            serializePrimaryKey(pk);</span>
+
+        // columns
+<span class="nc" id="L248">        Column[] cols = table.getColumns();</span>
+<span class="nc bnc" id="L249" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L250">            serializeColumn(cols[i]);</span>
+
+        // foreign keys
+<span class="nc" id="L253">        ForeignKey[] fks = table.getForeignKeys();</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++)</span>
+<span class="nc" id="L255">            serializeForeignKey(fks[i]);</span>
+
+        // indexes
+<span class="nc" id="L258">        Index[] idxs = table.getIndexes();</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        for (int i = 0; i &lt; idxs.length; i++)</span>
+<span class="nc" id="L260">            serializeIndex(idxs[i]);</span>
+
+        // unique constraints
+<span class="nc" id="L263">        Unique[] unqs = table.getUniques();</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">        for (int i = 0; i &lt; unqs.length; i++)</span>
+<span class="nc" id="L265">            serializeUnique(unqs[i]);</span>
+
+<span class="nc" id="L267">        endElement(&quot;table&quot;);</span>
+<span class="nc" id="L268">    }</span>
+
+    /**
+     * Serializes the given column.
+     */
+    private void serializeColumn(Column col)
+        throws SAXException {
+<span class="nc" id="L275">        addAttribute(&quot;name&quot;, col.getName());</span>
+<span class="nc" id="L276">        addAttribute(&quot;type&quot;, Schemas.getJDBCName(col.getType()));</span>
+<span class="nc bnc" id="L277" title="All 2 branches missed.">        if (!StringUtil.isEmpty(col.getTypeName())</span>
+<span class="nc" id="L278">            &amp;&amp; !col.getTypeName().equalsIgnoreCase</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">            (Schemas.getJDBCName(col.getType())))</span>
+<span class="nc" id="L280">            addAttribute(&quot;type-name&quot;, col.getTypeName());</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">        if (col.isNotNull())</span>
+<span class="nc" id="L282">            addAttribute(&quot;not-null&quot;, &quot;true&quot;);</span>
+<span class="nc bnc" id="L283" title="All 2 branches missed.">        if (col.isAutoAssigned())</span>
+<span class="nc" id="L284">            addAttribute(&quot;auto-assign&quot;, &quot;true&quot;);</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if (col.getDefaultString() != null)</span>
+<span class="nc" id="L286">            addAttribute(&quot;default&quot;, col.getDefaultString());</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        if (col.getSize() != 0)</span>
+<span class="nc" id="L288">            addAttribute(&quot;size&quot;, String.valueOf(col.getSize()));</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">        if (col.getDecimalDigits() != 0)</span>
+<span class="nc" id="L290">            addAttribute(&quot;decimal-digits&quot;, String.valueOf</span>
+<span class="nc" id="L291">                (col.getDecimalDigits()));</span>
+<span class="nc" id="L292">        startElement(&quot;column&quot;);</span>
+<span class="nc" id="L293">        endElement(&quot;column&quot;);</span>
+<span class="nc" id="L294">    }</span>
+
+    /**
+     * Serializes the given primary key.
+     */
+    private void serializePrimaryKey(PrimaryKey pk)
+        throws SAXException {
+<span class="nc bnc" id="L301" title="All 2 branches missed.">        if (pk.getName() != null)</span>
+<span class="nc" id="L302">            addAttribute(&quot;name&quot;, pk.getName());</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        if (pk.isLogical())</span>
+<span class="nc" id="L304">            addAttribute(&quot;logical&quot;, &quot;true&quot;);</span>
+
+<span class="nc" id="L306">        Column[] cols = pk.getColumns();</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">        if (cols.length == 1)</span>
+<span class="nc" id="L308">            addAttribute(&quot;column&quot;, cols[0].getName());</span>
+<span class="nc" id="L309">        startElement(&quot;pk&quot;);</span>
+
+        // columns
+<span class="nc bnc" id="L312" title="All 2 branches missed.">        if (cols.length &gt; 1)</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L314">                serializeOn(cols[i]);</span>
+
+<span class="nc" id="L316">        endElement(&quot;pk&quot;);</span>
+<span class="nc" id="L317">    }</span>
+
+    /**
+     * Serializes the given index.
+     */
+    private void serializeIndex(Index idx)
+        throws SAXException {
+<span class="nc" id="L324">        addAttribute(&quot;name&quot;, idx.getName());</span>
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        if (idx.isUnique())</span>
+<span class="nc" id="L326">            addAttribute(&quot;unique&quot;, &quot;true&quot;);</span>
+<span class="nc" id="L327">        Column[] cols = idx.getColumns();</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">        if (cols.length == 1)</span>
+<span class="nc" id="L329">            addAttribute(&quot;column&quot;, cols[0].getName());</span>
+<span class="nc" id="L330">        startElement(&quot;index&quot;);</span>
+
+        // columns
+<span class="nc bnc" id="L333" title="All 2 branches missed.">        if (cols.length &gt; 1)</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L335">                serializeOn(cols[i]);</span>
+
+<span class="nc" id="L337">        endElement(&quot;index&quot;);</span>
+<span class="nc" id="L338">    }</span>
+
+    /**
+     * Serializes the given constraint.
+     */
+    private void serializeUnique(Unique unq)
+        throws SAXException {
+<span class="nc bnc" id="L345" title="All 2 branches missed.">        if (unq.getName() != null)</span>
+<span class="nc" id="L346">            addAttribute(&quot;name&quot;, unq.getName());</span>
+<span class="nc bnc" id="L347" title="All 2 branches missed.">        if (unq.isDeferred())</span>
+<span class="nc" id="L348">            addAttribute(&quot;deferred&quot;, &quot;true&quot;);</span>
+<span class="nc" id="L349">        Column[] cols = unq.getColumns();</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        if (cols.length == 1)</span>
+<span class="nc" id="L351">            addAttribute(&quot;column&quot;, cols[0].getName());</span>
+<span class="nc" id="L352">        startElement(&quot;unique&quot;);</span>
+
+        // columns
+<span class="nc bnc" id="L355" title="All 2 branches missed.">        if (cols.length &gt; 1)</span>
+<span class="nc bnc" id="L356" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L357">                serializeOn(cols[i]);</span>
+
+<span class="nc" id="L359">        endElement(&quot;unique&quot;);</span>
+<span class="nc" id="L360">    }</span>
+
+    /**
+     * Serializes the given foreign key.
+     */
+    private void serializeForeignKey(ForeignKey fk)
+        throws SAXException {
+<span class="nc bnc" id="L367" title="All 2 branches missed.">        if (fk.getName() != null)</span>
+<span class="nc" id="L368">            addAttribute(&quot;name&quot;, fk.getName());</span>
+
+<span class="nc bnc" id="L370" title="All 2 branches missed.">        if (fk.isDeferred())</span>
+<span class="nc" id="L371">            addAttribute(&quot;deferred&quot;, &quot;true&quot;);</span>
+
+<span class="nc bnc" id="L373" title="All 2 branches missed.">        if (fk.getDeleteAction() != ForeignKey.ACTION_NONE)</span>
+<span class="nc" id="L374">            addAttribute(&quot;delete-action&quot;, ForeignKey.getActionName</span>
+<span class="nc" id="L375">                (fk.getDeleteAction()));</span>
+<span class="nc bnc" id="L376" title="All 2 branches missed.">        if (fk.getUpdateAction() != ForeignKey.ACTION_NONE</span>
+<span class="nc bnc" id="L377" title="All 2 branches missed.">            &amp;&amp; fk.getUpdateAction() != ForeignKey.ACTION_RESTRICT)</span>
+<span class="nc" id="L378">            addAttribute(&quot;update-action&quot;, ForeignKey.getActionName</span>
+<span class="nc" id="L379">                (fk.getUpdateAction()));</span>
+
+<span class="nc" id="L381">        Column[] cols = fk.getColumns();</span>
+<span class="nc" id="L382">        Column[] pks = fk.getPrimaryKeyColumns();</span>
+<span class="nc" id="L383">        Column[] consts = fk.getConstantColumns();</span>
+<span class="nc" id="L384">        Column[] constsPK = fk.getConstantPrimaryKeyColumns();</span>
+<span class="nc" id="L385">        addAttribute(&quot;to-table&quot;, fk.getPrimaryKeyTable().getFullName());</span>
+<span class="nc bnc" id="L386" title="All 6 branches missed.">        if (cols.length == 1 &amp;&amp; consts.length == 0 &amp;&amp; constsPK.length == 0)</span>
+<span class="nc" id="L387">            addAttribute(&quot;column&quot;, cols[0].getName());</span>
+<span class="nc" id="L388">        startElement(&quot;fk&quot;);</span>
+
+        // columns
+<span class="nc bnc" id="L391" title="All 6 branches missed.">        if (cols.length &gt; 1 || consts.length &gt; 0 || constsPK.length &gt; 0)</span>
+<span class="nc bnc" id="L392" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L393">                serializeJoin(cols[i], pks[i]);</span>
+<span class="nc bnc" id="L394" title="All 2 branches missed.">        for (int i = 0; i &lt; consts.length; i++)</span>
+<span class="nc" id="L395">            serializeJoin(consts[i], fk.getConstant(consts[i]));</span>
+<span class="nc bnc" id="L396" title="All 2 branches missed.">        for (int i = 0; i &lt; constsPK.length; i++)</span>
+<span class="nc" id="L397">            serializeJoin(fk.getPrimaryKeyConstant(constsPK[i]), constsPK[i]);</span>
+
+<span class="nc" id="L399">        endElement(&quot;fk&quot;);</span>
+<span class="nc" id="L400">    }</span>
+
+    /**
+     * Serializes the given column to an 'on' element.
+     */
+    private void serializeOn(Column col)
+        throws SAXException {
+<span class="nc" id="L407">        addAttribute(&quot;column&quot;, col.getName());</span>
+<span class="nc" id="L408">        startElement(&quot;on&quot;);</span>
+<span class="nc" id="L409">        endElement(&quot;on&quot;);</span>
+<span class="nc" id="L410">    }</span>
+
+    /**
+     * Serializes the given columns to a 'join' element.
+     */
+    private void serializeJoin(Column col, Column pk)
+        throws SAXException {
+<span class="nc" id="L417">        addAttribute(&quot;column&quot;, col.getName());</span>
+<span class="nc" id="L418">        addAttribute(&quot;to-column&quot;, pk.getName());</span>
+<span class="nc" id="L419">        startElement(&quot;join&quot;);</span>
+<span class="nc" id="L420">        endElement(&quot;join&quot;);</span>
+<span class="nc" id="L421">    }</span>
+
+    /**
+     * Serializes the given values to a 'join' element.
+     */
+    private void serializeJoin(Object val, Column pk)
+        throws SAXException {
+<span class="nc" id="L428">        addAttribute(&quot;value&quot;, stringifyConstant(val));</span>
+<span class="nc" id="L429">        addAttribute(&quot;to-column&quot;, pk.getName());</span>
+<span class="nc" id="L430">        startElement(&quot;join&quot;);</span>
+<span class="nc" id="L431">        endElement(&quot;join&quot;);</span>
+<span class="nc" id="L432">    }</span>
+
+    /**
+     * Serializes the given values to a 'join' element.
+     */
+    private void serializeJoin(Column col, Object val)
+        throws SAXException {
+<span class="nc" id="L439">        addAttribute(&quot;column&quot;, col.getName());</span>
+<span class="nc" id="L440">        addAttribute(&quot;value&quot;, stringifyConstant(val));</span>
+<span class="nc" id="L441">        startElement(&quot;join&quot;);</span>
+<span class="nc" id="L442">        endElement(&quot;join&quot;);</span>
+<span class="nc" id="L443">    }</span>
+
+    /**
+     * Stringify the given constant value.
+     */
+    private static String stringifyConstant(Object val) {
+<span class="nc bnc" id="L449" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L450">            return &quot;null&quot;;</span>
+<span class="nc bnc" id="L451" title="All 2 branches missed.">        if (val instanceof String)</span>
+<span class="nc" id="L452">            return &quot;'&quot; + val + &quot;'&quot;;</span>
+<span class="nc" id="L453">        return val.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

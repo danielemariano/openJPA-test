@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>RelationMapInverseKeyFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">RelationMapInverseKeyFieldStrategy.java</span></div><h1>RelationMapInverseKeyFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+import java.util.Collection;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.kernel.EagerFetchModes;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.jdbc.sql.Union;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.MetaDataException;
+import org.apache.openjpa.util.Proxy;
+
+/**
+ * Uses an inverse foreign key in the table of the map value to determine
+ * map values. Derives map keys from a field in each value.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L50">public class RelationMapInverseKeyFieldStrategy</span>
+    extends RelationToManyInverseKeyFieldStrategy
+    implements LRSMapFieldStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L56">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L57">        (RelationMapInverseKeyFieldStrategy.class);</span>
+
+    @Override
+    public FieldMapping getFieldMapping() {
+<span class="nc" id="L61">        return field;</span>
+    }
+
+    @Override
+    public ClassMapping[] getIndependentKeyMappings(boolean traverse) {
+<span class="nc" id="L66">        return ClassMapping.EMPTY_MAPPINGS;</span>
+    }
+
+    @Override
+    public ClassMapping[] getIndependentValueMappings(boolean traverse) {
+<span class="nc" id="L71">        return getIndependentElementMappings(traverse);</span>
+    }
+
+    @Override
+    public Column[] getKeyColumns(ClassMapping cls) {
+<span class="nc" id="L76">        return cls.getFieldMapping(field.getKey().</span>
+<span class="nc" id="L77">            getValueMappedByMetaData().getIndex()).getColumns();</span>
+    }
+
+    @Override
+    public Column[] getValueColumns(ClassMapping cls) {
+<span class="nc" id="L82">        return cls.getPrimaryKeyColumns();</span>
+    }
+
+    @Override
+    public ForeignKey getJoinForeignKey(ClassMapping cls) {
+<span class="nc" id="L87">        return super.getJoinForeignKey(cls);</span>
+    }
+
+    @Override
+    public void selectKey(Select sel, ClassMapping key, OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch, Joins joins) {
+<span class="nc" id="L93">        ValueMapping vm = field.getKeyMapping();</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if (vm.isEmbedded())</span>
+<span class="nc" id="L95">            sel.select(key, field.getKeyMapping().getSelectSubclasses(),</span>
+                store, fetch, EagerFetchModes.EAGER_NONE, joins);
+        else
+<span class="nc" id="L98">            throw new InternalException();</span>
+<span class="nc" id="L99">    }</span>
+
+    @Override
+    public Object loadKey(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L105">        ValueMapping vm = field.getKeyMapping();</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        if (vm.isEmbedded())</span>
+<span class="nc" id="L107">            return vm.getValueMappedByMapping().</span>
+<span class="nc" id="L108">                loadProjection(store, fetch, res, joins);</span>
+        else
+<span class="nc" id="L110">            throw new InternalException();</span>
+    }
+
+    @Override
+    public Object deriveKey(JDBCStore store, Object value) {
+<span class="nc" id="L115">        OpenJPAStateManager sm = RelationStrategies.getStateManager(value,</span>
+<span class="nc" id="L116">            store.getContext());</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        return (sm == null) ? null : sm.fetchField(field.getKey().</span>
+<span class="nc" id="L118">            getValueMappedByMetaData().getIndex(), false);</span>
+    }
+
+    @Override
+    public Object deriveValue(JDBCStore store, Object key) {
+<span class="nc" id="L123">        return null;</span>
+    }
+
+    @Override
+    public void selectValue(Select sel, ClassMapping val,
+        OpenJPAStateManager sm, JDBCStore store, JDBCFetchConfiguration fetch,
+        Joins joins) {
+<span class="nc" id="L130">        selectElement(sel, val, store, fetch, EagerFetchModes.EAGER_NONE,</span>
+            joins);
+<span class="nc" id="L132">    }</span>
+
+    @Override
+    public Object loadValue(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L138">        return loadElement(sm, store, fetch, res, joins);</span>
+    }
+
+    @Override
+    public Result[] getResults(final OpenJPAStateManager sm,
+        final JDBCStore store, final JDBCFetchConfiguration fetch,
+        final int eagerMode, final Joins[] joins, boolean lrs)
+        throws SQLException {
+<span class="nc" id="L146">        ValueMapping val = field.getElementMapping();</span>
+<span class="nc" id="L147">        final ClassMapping[] vals = val.getIndependentTypeMappings();</span>
+<span class="nc" id="L148">        Union union = store.getSQLFactory().newUnion(vals.length);</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">        if (fetch.getSubclassFetchMode(val.getTypeMapping())</span>
+            != EagerFetchModes.EAGER_JOIN)
+<span class="nc" id="L151">            union.abortUnion();</span>
+<span class="nc" id="L152">        union.setLRS(lrs);</span>
+<span class="nc" id="L153">        union.select(new Union.Selector() {</span>
+            @Override
+            public void select(Select sel, int idx) {
+<span class="nc" id="L156">                joins[1] = selectAll(sel, vals[idx], sm, store, fetch,</span>
+                    eagerMode);
+<span class="nc" id="L158">            }</span>
+        });
+<span class="nc" id="L160">        Result res = union.execute(store, fetch);</span>
+<span class="nc" id="L161">        return new Result[]{ res, res };</span>
+    }
+
+    @Override
+    public Joins joinKeyRelation(Joins joins, ClassMapping key) {
+<span class="nc" id="L166">        return joins;</span>
+    }
+
+    @Override
+    public Joins joinKeyRelation(Joins joins, boolean forceOuter,
+        boolean traverse) {
+<span class="nc" id="L172">        ValueMapping key = field.getKeyMapping();</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        if (key.isEmbedded())</span>
+<span class="nc" id="L174">            return joins;</span>
+
+<span class="nc" id="L176">        ClassMapping[] clss = key.getIndependentTypeMappings();</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">        if (clss.length != 1) {</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            if (traverse)</span>
+<span class="nc" id="L179">                throw RelationStrategies.unjoinable(key);</span>
+<span class="nc" id="L180">            return joins;</span>
+        }
+<span class="nc bnc" id="L182" title="All 2 branches missed.">        if (forceOuter)</span>
+<span class="nc" id="L183">            return joins.outerJoinRelation(field.getName(),</span>
+<span class="nc" id="L184">                key.getForeignKey(clss[0]), clss[0], key.getSelectSubclasses(),</span>
+                false, false);
+<span class="nc" id="L186">        return joins.joinRelation(field.getName(),</span>
+<span class="nc" id="L187">            key.getForeignKey(clss[0]), clss[0], key.getSelectSubclasses(),</span>
+            false, false);
+    }
+
+    @Override
+    public Joins joinValueRelation(Joins joins, ClassMapping val) {
+<span class="nc" id="L193">        return joinElementRelation(joins, val);</span>
+    }
+
+    @Override
+    protected Proxy newLRSProxy() {
+<span class="nc" id="L198">        return new LRSProxyMap(this);</span>
+    }
+
+    @Override
+    protected void add(JDBCStore store, Object coll, Object obj) {
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (obj != null)</span>
+<span class="nc" id="L204">            ((Map) coll).put(deriveKey(store, obj), obj);</span>
+<span class="nc" id="L205">    }</span>
+
+    @Override
+    protected Collection toCollection(Object val) {
+<span class="nc bnc" id="L209" title="All 2 branches missed.">        return (val == null) ? null : ((Map) val).values();</span>
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (field.getTypeCode() != JavaTypes.MAP)</span>
+<span class="nc" id="L215">            throw new MetaDataException(_loc.get(&quot;not-map&quot;, field));</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">        if (field.getKey().getValueMappedBy() == null)</span>
+<span class="nc" id="L217">            throw new MetaDataException(_loc.get(&quot;not-mapped-by-key&quot;, field));</span>
+<span class="nc" id="L218">        super.map(adapt);</span>
+<span class="nc" id="L219">    }</span>
+
+    @Override
+    public Joins joinKey(Joins joins, boolean forceOuter) {
+<span class="nc" id="L223">        return joinRelation(join(joins, forceOuter), forceOuter, false);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>LazySchemaFactory.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">LazySchemaFactory.java</span></div><h1>LazySchemaFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configuration;
+
+/**
+ * Factory that uses database metadata to construct the system schema.
+ * The lazy schema factory only loads table data as it is requested. It
+ * does not properly support operations that require knowledge of the entire
+ * schema.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L40">public class LazySchemaFactory</span>
+    extends SchemaGroup
+    implements SchemaFactory, Configurable {
+
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L45">    private transient JDBCConfiguration _conf = null;</span>
+<span class="nc" id="L46">    private transient Connection _conn = null;</span>
+<span class="nc" id="L47">    private transient DatabaseMetaData _meta = null;</span>
+<span class="nc" id="L48">    private transient SchemaGenerator _gen = null;</span>
+
+<span class="nc" id="L50">    private boolean _indexes = false;</span>
+<span class="nc" id="L51">    private boolean _pks = false;</span>
+<span class="nc" id="L52">    private boolean _fks = false;</span>
+
+    public boolean getPrimaryKeys() {
+<span class="nc" id="L55">        return _pks;</span>
+    }
+
+    public void setPrimaryKeys(boolean pks) {
+<span class="nc" id="L59">        _pks = pks;</span>
+<span class="nc" id="L60">    }</span>
+
+    public boolean getForeignKeys() {
+<span class="nc" id="L63">        return _fks;</span>
+    }
+
+    public void setForeignKeys(boolean fks) {
+<span class="nc" id="L67">        _fks = fks;</span>
+<span class="nc" id="L68">    }</span>
+
+    public boolean getIndexes() {
+<span class="nc" id="L71">        return _indexes;</span>
+    }
+
+    public void setIndexes(boolean idx) {
+<span class="nc" id="L75">        _indexes = idx;</span>
+<span class="nc" id="L76">    }</span>
+
+    @Override
+    public SchemaGroup readSchema() {
+<span class="nc" id="L80">        return this;</span>
+    }
+
+    @Override
+    public void storeSchema(SchemaGroup schema) {
+        // nothing to do
+<span class="nc" id="L86">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Table findTable(String name) {
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L95">            return null;</span>
+<span class="nc" id="L96">        return findTable(DBIdentifier.newTable(name));</span>
+    }
+
+    public Table findTable(DBIdentifier name) {
+<span class="nc bnc" id="L100" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L101">            return null;</span>
+<span class="nc" id="L102">        return findTable(QualifiedDBIdentifier.getPath(name));</span>
+    }
+
+    @Override
+    public Table findTable(QualifiedDBIdentifier path) {
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (path == null)</span>
+<span class="nc" id="L108">            return null;</span>
+
+<span class="nc" id="L110">        Table table = super.findTable(path);</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">        if (table != null)</span>
+<span class="nc" id="L112">            return table;</span>
+
+<span class="nc" id="L114">        generateSchemaObject(path, true);</span>
+<span class="nc" id="L115">        return super.findTable(path);</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Sequence findSequence(String name) {
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L125">            return null;</span>
+<span class="nc" id="L126">        return findSequence(DBIdentifier.newSequence(name));</span>
+    }
+
+    @Override
+    public Sequence findSequence(DBIdentifier name) {
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L132">            return null;</span>
+<span class="nc" id="L133">        return findSequence(QualifiedDBIdentifier.getPath(name));</span>
+    }
+
+    @Override
+    public Sequence findSequence(QualifiedDBIdentifier name) {
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L139">            return null;</span>
+
+<span class="nc" id="L141">        Sequence seq = super.findSequence(name);</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        if (seq != null)</span>
+<span class="nc" id="L143">            return seq;</span>
+
+<span class="nc" id="L145">        generateSchemaObject(name, false);</span>
+<span class="nc" id="L146">        return super.findSequence(name);</span>
+    }
+
+    /**
+     * Generate the table or sequence with the given name.
+     */
+    private void generateSchemaObject(QualifiedDBIdentifier name, boolean isTable) {
+        // if full name, split
+<span class="nc" id="L154">        DBIdentifier schemaName = name.getSchemaName();</span>
+<span class="nc" id="L155">        DBIdentifier objectName = name.getIdentifier();</span>
+
+        // we share a single connection across all schemas, so synch
+        // on the schema group
+<span class="nc" id="L159">        synchronized (this) {</span>
+<span class="nc" id="L160">            boolean close = false;</span>
+            try {
+                // use the existing connection if possible; this method
+                // might be reentrant if generating the foreign keys for
+                // this table (see below) requires loading additional
+                // tables; in that case we don't want to spawn additional
+                // connections
+<span class="nc bnc" id="L167" title="All 2 branches missed.">                if (_conn == null) {</span>
+<span class="nc" id="L168">                    _conn = _conf.getDataSource2(null).getConnection();</span>
+<span class="nc" id="L169">                    close = true;</span>
+<span class="nc" id="L170">                    _meta = _conn.getMetaData();</span>
+                }
+
+<span class="nc bnc" id="L173" title="All 2 branches missed.">                if (isTable) {</span>
+                    // generate the table from database metadata
+<span class="nc" id="L175">                    _gen.generateTables(schemaName, objectName, _conn, _meta);</span>
+<span class="nc" id="L176">                    Table table = super.findTable(name);</span>
+
+<span class="nc bnc" id="L178" title="All 2 branches missed.">                    if (table != null) {</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">                        if (_pks)</span>
+<span class="nc" id="L180">                            _gen.generatePrimaryKeys(table.getSchemaIdentifier(),</span>
+<span class="nc" id="L181">                                table.getIdentifier(), _conn, _meta);</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">                        if (_indexes)</span>
+<span class="nc" id="L183">                            _gen.generateIndexes(table.getSchemaIdentifier(),</span>
+<span class="nc" id="L184">                                table.getIdentifier(), _conn, _meta);</span>
+
+                        // generate foreign keys from the table; this might
+                        // end up re-calling this getTable method if the foreign
+                        // key links to a table that hasn't been loaded yet
+<span class="nc bnc" id="L189" title="All 2 branches missed.">                        if (_fks)</span>
+<span class="nc" id="L190">                            _gen.generateForeignKeys(table.getSchemaIdentifier(),</span>
+<span class="nc" id="L191">                                table.getIdentifier(), _conn, _meta);</span>
+                    }
+<span class="nc" id="L193">                } else</span>
+<span class="nc" id="L194">                    _gen.generateSequences(schemaName, objectName, _conn,</span>
+                        _meta);
+<span class="nc" id="L196">            } catch (SQLException se) {</span>
+<span class="nc" id="L197">                throw SQLExceptions.getStore(se,</span>
+<span class="nc" id="L198">                    _conf.getDBDictionaryInstance());</span>
+            } finally {
+<span class="nc bnc" id="L200" title="All 2 branches missed.">                if (close) {</span>
+                    try {
+<span class="nc" id="L202">                        _conn.close();</span>
+<span class="nc" id="L203">                    } catch (SQLException se) {</span>
+<span class="nc" id="L204">                    }</span>
+<span class="nc" id="L205">                    _conn = null;</span>
+                }
+            }
+<span class="nc" id="L208">        }</span>
+<span class="nc" id="L209">    }</span>
+
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc" id="L213">        _conf = (JDBCConfiguration) conf;</span>
+<span class="nc" id="L214">        _gen = new SchemaGenerator(_conf);</span>
+<span class="nc" id="L215">        _gen.setSchemaGroup(this);</span>
+<span class="nc" id="L216">    }</span>
+
+    @Override
+    public void startConfiguration() {
+<span class="nc" id="L220">    }</span>
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L224">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

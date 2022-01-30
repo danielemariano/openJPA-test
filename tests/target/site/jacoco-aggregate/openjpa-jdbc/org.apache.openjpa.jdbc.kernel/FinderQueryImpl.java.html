@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FinderQueryImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">FinderQueryImpl.java</span></div><h1>FinderQueryImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Joinable;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.LogicalUnion;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.SelectExecutor;
+import org.apache.openjpa.jdbc.sql.SelectImpl;
+import org.apache.openjpa.jdbc.sql.Union;
+import org.apache.openjpa.kernel.FetchConfiguration;
+import org.apache.openjpa.kernel.FinderQuery;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.StoreManager;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.util.ApplicationIds;
+import org.apache.openjpa.util.Id;
+
+
+/**
+ * Implements Finder Query identified by ClassMappping for SelectExecutor that
+ * can be executed to generate Result.
+ *
+ * @author Pinaki Poddar
+ *
+ * @since 2.0.0
+ */
+public class FinderQueryImpl
+    implements FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt; {
+    private final ClassMapping _mapping;
+    private final SelectImpl _select;
+    private final Column[] _pkCols;
+    private final Joinable[]  _joins;
+    private final int[] _pkIndices;
+    private final SQLBuffer _buffer;
+    private final String _sql;
+
+    /**
+     * Attempts to construct a FinderQuery from the given Select for the given
+     * mapping. The given Select may not be amenable for caching and then a null
+     * value is returned.
+     */
+    static FinderQueryImpl newFinder(ClassMapping mapping,
+        SelectExecutor select) {
+<span class="nc" id="L71">        SelectImpl impl = extractImplementation(select);</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        if (impl == null)</span>
+<span class="nc" id="L73">            return null;</span>
+<span class="nc" id="L74">        SQLBuffer buffer = impl.getSQL();</span>
+<span class="nc" id="L75">        Column[] pkCols = mapping.getPrimaryKeyColumns();</span>
+
+        //OPENJPA-2557: Typically the number of pkCols (length) should match the number (size) of
+        //parameters.  However, there are a few cases (e.g. when extra parameters are needed for
+        //discriminator data) where the pkCols length may be different than the parameters.
+        //If we find the number of pkCols is equal to the number of parameters, we need to do
+        //one last check to verify that the buffers columns match the pkCols exactly.
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        boolean canCache = (pkCols.length == buffer.getParameters().size());</span>
+<span class="nc bnc" id="L83" title="All 4 branches missed.">        for(int i=0; i &lt; pkCols.length  &amp;&amp; canCache; i++){</span>
+<span class="nc bnc" id="L84" title="All 4 branches missed.">            canCache = canCache &amp;&amp; buffer.getColumns().contains(pkCols[i]);</span>
+        }
+
+<span class="nc bnc" id="L87" title="All 2 branches missed.">        return (canCache)</span>
+<span class="nc" id="L88">            ? new FinderQueryImpl(mapping, impl, buffer) : null;</span>
+    }
+
+    private FinderQueryImpl(ClassMapping mapping, SelectImpl select,
+        SQLBuffer buffer) {
+<span class="nc" id="L93">        super();</span>
+<span class="nc" id="L94">        _mapping = mapping;</span>
+<span class="nc" id="L95">        _select = select;</span>
+<span class="nc" id="L96">        _buffer = buffer;</span>
+<span class="nc" id="L97">        _sql = _buffer.getSQL();</span>
+<span class="nc" id="L98">        _pkCols = _mapping.getPrimaryKeyColumns();</span>
+<span class="nc" id="L99">        _joins = new Joinable[_pkCols.length];</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">        for (int i = 0; i &lt; _pkCols.length; i++)</span>
+<span class="nc" id="L101">            _joins[i] = _mapping.assertJoinable(_pkCols[i]);</span>
+<span class="nc" id="L102">        _pkIndices = new int[_pkCols.length];</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        for (int i = 0; i &lt; _pkCols.length; i++) {</span>
+<span class="nc" id="L104">            FieldMetaData pk = _mapping.getField(_joins[i].getFieldIndex());</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">            _pkIndices[i] = pk == null ? 0 : pk.getPrimaryKeyIndex();</span>
+        }
+
+<span class="nc" id="L108">    }</span>
+
+    @Override
+    public ClassMapping getIdentifier() {
+<span class="nc" id="L112">        return _mapping;</span>
+    }
+
+    @Override
+    public SelectExecutor getDelegate() {
+<span class="nc" id="L117">        return _select;</span>
+    }
+
+    @Override
+    public String getQueryString() {
+<span class="nc" id="L122">        return _sql;</span>
+    }
+
+    public Column[] getPKColumns() {
+<span class="nc" id="L126">        return _pkCols;</span>
+    }
+
+    private Object[] getPKValues(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L130">        Object[] pks = null;</span>
+<span class="nc" id="L131">        Object oid = sm.getObjectId();</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (_mapping.getIdentityType() == ClassMetaData.ID_APPLICATION)</span>
+<span class="nc" id="L133">            pks = ApplicationIds.toPKValues(oid, _mapping);</span>
+
+<span class="nc" id="L135">        Object[] val = new Object[_pkCols.length];</span>
+<span class="nc" id="L136">        int count = 0;</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">        for (int i = 0; i &lt; _pkCols.length; i++, count++) {</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            if (pks == null)</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">                val[0] = (oid == null)</span>
+<span class="nc" id="L140">                    ? null : ((Id) oid).getId();</span>
+            else {
+<span class="nc" id="L142">                val[i] = _joins[i].getJoinValue(pks[_pkIndices[i]], _pkCols[i],</span>
+                    store);
+            }
+        }
+<span class="nc" id="L146">        return val;</span>
+    }
+
+    @Override
+    public Result execute(OpenJPAStateManager sm, StoreManager store,
+        FetchConfiguration fetch) {
+<span class="nc" id="L152">        boolean forUpdate = false;</span>
+<span class="nc" id="L153">        JDBCStore jstore = (JDBCStore)store;</span>
+<span class="nc" id="L154">        Connection conn = jstore.getConnection();</span>
+<span class="nc" id="L155">        DBDictionary dict = jstore.getDBDictionary();</span>
+<span class="nc" id="L156">        PreparedStatement stmnt = null;</span>
+<span class="nc" id="L157">        ResultSet rs = null;</span>
+        try {
+<span class="nc" id="L159">            stmnt = _select.prepareStatement(conn, _sql);</span>
+<span class="nc" id="L160">            Object[] params = getPKValues(sm, jstore);</span>
+<span class="nc bnc" id="L161" title="All 2 branches missed.">            if (stmnt != null) {</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">                for (int i = 0; i &lt;params.length; i++) {</span>
+<span class="nc" id="L163">                    dict.setUnknown(stmnt, i+1, params[i], _pkCols[i]);</span>
+                }
+            }
+<span class="nc" id="L166">            dict.setTimeouts(stmnt, (JDBCFetchConfiguration)fetch, forUpdate);</span>
+<span class="nc" id="L167">            rs = _select.executeQuery(conn, stmnt, getQueryString(), jstore,</span>
+                params, _pkCols);
+<span class="nc" id="L169">            return _select.getEagerResult(conn, stmnt, rs, jstore,</span>
+                (JDBCFetchConfiguration)fetch, forUpdate, _buffer);
+<span class="nc" id="L171">        } catch (SQLException se) {</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">            if (stmnt != null)</span>
+<span class="nc" id="L173">                try { stmnt.close(); } catch (SQLException se2) {}</span>
+<span class="nc" id="L174">            try { conn.close(); } catch (SQLException se2) {}</span>
+<span class="nc" id="L175">            throw new RuntimeException(se);</span>
+        }
+    }
+
+    private static SelectImpl extractImplementation(SelectExecutor selector) {
+<span class="nc bnc" id="L180" title="All 4 branches missed.">        if (selector == null || selector.hasMultipleSelects())</span>
+<span class="nc" id="L181">            return null;</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">        if (selector instanceof SelectImpl)</span>
+<span class="nc" id="L183">            return (SelectImpl)selector;</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (selector instanceof LogicalUnion.UnionSelect)</span>
+<span class="nc" id="L185">            return ((LogicalUnion.UnionSelect)selector).getDelegate();</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (selector instanceof Union)</span>
+<span class="nc" id="L187">            return extractImplementation(((Union)selector).getSelects()[0]);</span>
+
+<span class="nc" id="L189">        return null;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L194">        return _mapping + &quot;: [&quot; + getQueryString() + &quot;]&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

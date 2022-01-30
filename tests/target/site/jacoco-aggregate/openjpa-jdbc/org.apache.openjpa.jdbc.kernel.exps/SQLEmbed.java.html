@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SQLEmbed.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">SQLEmbed.java</span></div><h1>SQLEmbed.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.UnsupportedException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Simple listener which embeds its SQL argument into the query. Listens
+ * on &lt;code&gt;sql&lt;/code&gt;.
+ *  Example:&lt;br /&gt;
+ * &lt;code&gt;&quot;price &amp;lt; sql(\&quot;(SELECT AVG (PRICE) FROM PRODUCT_TABLE)\&quot;)&quot;&lt;/code&gt;
+ *
+ */
+<span class="nc" id="L36">public class SQLEmbed</span>
+    implements JDBCFilterListener {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L42">    public static String TAG = &quot;sql&quot;;</span>
+
+<span class="nc" id="L44">    private static final Localizer _loc = Localizer.forPackage(SQLEmbed.class);</span>
+
+    @Override
+    public String getTag() {
+<span class="nc" id="L48">        return TAG;</span>
+    }
+
+    @Override
+    public boolean expectsArguments() {
+<span class="nc" id="L53">        return true;</span>
+    }
+
+    @Override
+    public boolean expectsTarget() {
+<span class="nc" id="L58">        return false;</span>
+    }
+
+    @Override
+    public Object evaluate(Object target, Class targetClass, Object[] args,
+        Class[] argClasses, Object candidate, StoreContext ctx) {
+<span class="nc" id="L64">        throw new UnsupportedException(_loc.get(&quot;no-in-mem&quot;, TAG));</span>
+    }
+
+    @Override
+    public void appendTo(SQLBuffer buf, FilterValue target, FilterValue[] args,
+        ClassMapping type, JDBCStore store) {
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        if (!args[0].isConstant())</span>
+<span class="nc" id="L71">            throw new UserException(_loc.get(&quot;const-only&quot;, TAG));</span>
+<span class="nc" id="L72">        buf.append(args[0].getValue().toString());</span>
+<span class="nc" id="L73">    }</span>
+
+    @Override
+    public Class getType(Class targetClass, Class[] argClasses) {
+<span class="nc" id="L77">        return Object.class;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

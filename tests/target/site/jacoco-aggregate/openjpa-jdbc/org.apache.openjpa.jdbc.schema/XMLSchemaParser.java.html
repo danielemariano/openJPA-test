@@ -1,0 +1,628 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>XMLSchemaParser.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">XMLSchemaParser.java</span></div><h1>XMLSchemaParser.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedList;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.meta.SourceTracker;
+import org.apache.openjpa.lib.meta.XMLMetaDataParser;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Localizer.Message;
+import org.apache.openjpa.util.UserException;
+import org.xml.sax.Attributes;
+import org.xml.sax.Locator;
+import org.xml.sax.SAXException;
+
+
+/**
+ * Custom SAX parser used to parse {@link Schema} objects. The parser
+ * will place all parsed schemas into the current {@link SchemaGroup}, set
+ * via the {@link #setSchemaGroup} method. This allows parsing of
+ * multiple files into a single schema group.
+ *  The parser deserializes from the following XML format:&lt;br /&gt;
+ * &lt;code&gt; &amp;lt;!ELEMENT schemas (schema)+&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ELEMENT schema (table|sequence)+&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST schema name CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ELEMENT table (column|index|pk|fk|unique)+&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST table name CDATA #REQUIRED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ELEMENT column EMPTY&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST column name CDATA #REQUIRED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST column type (array|bigint|binary|bit|blob|char|clob
+ * |date|decimal|distinct|double|float|integer|java_object
+ * |longvarbinary|longvarchar|null|numeric|other|real|ref|smallint|struct
+ * |time|timstamp|tinyint|varbinary|varchar) #REQUIRED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST column type-name CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST column size CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST column decimal-digits CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST column not-null (true|false) &quot;false&quot;&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST column default CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST column auto-assign (true|false) &quot;false&quot;&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ELEMENT index (on)*&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST index name CDATA #REQUIRED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST index column CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST index unique (true|false) &quot;false&quot;&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ELEMENT on EMPTY&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST on column CDATA #REQUIRED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ELEMENT pk (on)*&amp;gt;&lt;br /&gt; &amp;lt;!ATTLIST pk name CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST pk column CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ELEMENT fk (join)*&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST fk name CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST fk deferred (true|false) &quot;false&quot;&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST fk column CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST fk to-table CDATA #REQUIRED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST fk delete-action (cascade|default|restrict|none|null)
+ * &quot;none&quot;&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST fk update-action (cascade|default|restrict|none|null)
+ * &quot;none&quot;&amp;gt;&lt;br /&gt; &amp;lt;!ELEMENT unique (on)*&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST unique name CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST unique column CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST unique deferred (true|false) &quot;false&quot;&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ELEMENT join EMPTY&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST join column CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST join value CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST join to-column CDATA #REQUIRED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ELEMENT sequence EMPTY&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST sequence name CDATA #REQUIRED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST sequence initial-value CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST sequence increment CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &amp;lt;!ATTLIST sequence allocate CDATA #IMPLIED&amp;gt;&lt;br /&gt;
+ * &lt;/code&gt;
+ *  Schema parsers are not threadsafe.
+ *
+ * @author Abe White
+ */
+public class XMLSchemaParser
+    extends XMLMetaDataParser
+    implements SchemaParser {
+
+<span class="nc" id="L101">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L102">        (XMLSchemaParser.class);</span>
+
+    private final DBDictionary _dict;
+
+    // state for current parse
+<span class="nc" id="L107">    private SchemaGroup _group = null;</span>
+<span class="nc" id="L108">    private Schema _schema = null;</span>
+<span class="nc" id="L109">    private Table _table = null;</span>
+<span class="nc" id="L110">    private PrimaryKeyInfo _pk = null;</span>
+<span class="nc" id="L111">    private IndexInfo _index = null;</span>
+<span class="nc" id="L112">    private UniqueInfo _unq = null;</span>
+<span class="nc" id="L113">    private ForeignKeyInfo _fk = null;</span>
+<span class="nc" id="L114">    private boolean _delay = false;</span>
+
+    // used to collect info on schema elements before they're resolved
+<span class="nc" id="L117">    private final Collection&lt;PrimaryKeyInfo&gt; _pkInfos = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L118">    private final Collection&lt;IndexInfo&gt; _indexInfos = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L119">    private final Collection&lt;UniqueInfo&gt; _unqInfos = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L120">    private final Collection&lt;ForeignKeyInfo&gt; _fkInfos = new LinkedList&lt;&gt;();</span>
+
+    /**
+     * Constructor. Supply configuration.
+     */
+<span class="nc" id="L125">    public XMLSchemaParser(JDBCConfiguration conf) {</span>
+<span class="nc" id="L126">        _dict = conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L127">        setLog(conf.getLog(JDBCConfiguration.LOG_SCHEMA));</span>
+<span class="nc" id="L128">        setParseText(false);</span>
+<span class="nc" id="L129">        setSuffix(&quot;.schema&quot;);</span>
+<span class="nc" id="L130">    }</span>
+
+    @Override
+    public boolean getDelayConstraintResolve() {
+<span class="nc" id="L134">        return _delay;</span>
+    }
+
+    @Override
+    public void setDelayConstraintResolve(boolean delay) {
+<span class="nc" id="L139">        _delay = delay;</span>
+<span class="nc" id="L140">    }</span>
+
+    @Override
+    public void resolveConstraints() {
+<span class="nc" id="L144">        resolvePrimaryKeys();</span>
+<span class="nc" id="L145">        resolveIndexes();</span>
+<span class="nc" id="L146">        resolveForeignKeys();</span>
+<span class="nc" id="L147">        resolveUniques();</span>
+<span class="nc" id="L148">        clearConstraintInfo();</span>
+<span class="nc" id="L149">    }</span>
+
+    /**
+     * Clear constraint infos.
+     */
+    private void clearConstraintInfo() {
+<span class="nc" id="L155">        _pkInfos.clear();</span>
+<span class="nc" id="L156">        _indexInfos.clear();</span>
+<span class="nc" id="L157">        _fkInfos.clear();</span>
+<span class="nc" id="L158">        _unqInfos.clear();</span>
+<span class="nc" id="L159">    }</span>
+
+    @Override
+    public SchemaGroup getSchemaGroup() {
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        if (_group == null)</span>
+<span class="nc" id="L164">            _group = new SchemaGroup();</span>
+<span class="nc" id="L165">        return _group;</span>
+    }
+
+    @Override
+    public void setSchemaGroup(SchemaGroup group) {
+<span class="nc" id="L170">        _group = group;</span>
+<span class="nc" id="L171">    }</span>
+
+    /**
+     * Parse the schema relating to the given class. The schemas will
+     * be added to the current schema group.
+     */
+    @Override
+    protected void finish() {
+        // now resolve pk, idx, fk info
+<span class="nc" id="L180">        super.finish();</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (!_delay)</span>
+<span class="nc" id="L182">            resolveConstraints();</span>
+<span class="nc" id="L183">    }</span>
+
+    /**
+     * Transforms the collected primary key information into actual
+     * primary keys on the schema tables.
+     */
+    private void resolvePrimaryKeys() {
+        PrimaryKeyInfo pkInfo;
+        String colName;
+        Column col;
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        for (Iterator&lt;PrimaryKeyInfo&gt; itr = _pkInfos.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L194">            pkInfo = itr.next();</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">            for (Iterator&lt;String&gt; cols = pkInfo.cols.iterator(); cols.hasNext();) {</span>
+<span class="nc" id="L196">                colName = cols.next();</span>
+<span class="nc" id="L197">                col = pkInfo.pk.getTable().getColumn(colName);</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">                if (col == null)</span>
+<span class="nc" id="L199">                    throwUserException(_loc.get(&quot;pk-resolve&quot;, new Object[]</span>
+<span class="nc" id="L200">                        { colName, pkInfo.pk.getTable() }));</span>
+<span class="nc" id="L201">                pkInfo.pk.addColumn(col);</span>
+            }
+        }
+<span class="nc" id="L204">    }</span>
+
+    /**
+     * Transforms the collected index information into actual
+     * indexes on the schema tables.
+     */
+    private void resolveIndexes() {
+        IndexInfo indexInfo;
+        String colName;
+        Column col;
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        for (Iterator&lt;IndexInfo&gt; itr = _indexInfos.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L215">            indexInfo = itr.next();</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">            for (Iterator&lt;String&gt; cols = indexInfo.cols.iterator(); cols.hasNext();) {</span>
+<span class="nc" id="L217">                colName = cols.next();</span>
+<span class="nc" id="L218">                col = indexInfo.index.getTable().getColumn(colName);</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">                if (col == null)</span>
+<span class="nc" id="L220">                    throwUserException(_loc.get(&quot;index-resolve&quot;, new Object[]</span>
+                        { indexInfo.index, colName,
+<span class="nc" id="L222">                            indexInfo.index.getTable() }));</span>
+<span class="nc" id="L223">                indexInfo.index.addColumn(col);</span>
+            }
+        }
+<span class="nc" id="L226">    }</span>
+
+    /**
+     * Transforms the collected foreign key information into actual
+     * foreign keys on the schema tables.
+     */
+    private void resolveForeignKeys() {
+        ForeignKeyInfo fkInfo;
+        Table toTable;
+        Column col;
+        String colName;
+        Column pkCol;
+        String pkColName;
+        PrimaryKey pk;
+        Iterator&lt;String&gt; pks;
+        Iterator&lt;String&gt; cols;
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        for (Iterator&lt;ForeignKeyInfo&gt; itr = _fkInfos.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L243">            fkInfo = itr.next();</span>
+<span class="nc" id="L244">            toTable = _group.findTable(fkInfo.toTable);</span>
+<span class="nc bnc" id="L245" title="All 4 branches missed.">            if (toTable == null || toTable.getPrimaryKey() == null)</span>
+<span class="nc" id="L246">                throwUserException(_loc.get(&quot;fk-totable&quot;, new Object[]</span>
+<span class="nc" id="L247">                    { fkInfo.fk, fkInfo.toTable, fkInfo.fk.getTable() }));</span>
+
+            // check if only one fk column listed using shortcut
+<span class="nc" id="L250">            pk = toTable.getPrimaryKey();</span>
+<span class="nc bnc" id="L251" title="All 4 branches missed.">            if (fkInfo.cols.size() == 1 &amp;&amp; fkInfo.pks.size() == 0)</span>
+<span class="nc" id="L252">                fkInfo.pks.add(pk.getColumns()[0].getName());</span>
+
+            // make joins
+<span class="nc" id="L255">            pks = fkInfo.pks.iterator();</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">            for (cols = fkInfo.cols.iterator(); cols.hasNext();) {</span>
+<span class="nc" id="L257">                colName = (String) cols.next();</span>
+<span class="nc" id="L258">                col = fkInfo.fk.getTable().getColumn(colName);</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">                if (col == null)</span>
+<span class="nc" id="L260">                    throwUserException(_loc.get(&quot;fk-nocol&quot;,</span>
+<span class="nc" id="L261">                        fkInfo.fk, colName, fkInfo.fk.getTable()));</span>
+
+<span class="nc" id="L263">                pkColName = (String) pks.next();</span>
+<span class="nc" id="L264">                pkCol = toTable.getColumn(pkColName);</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">                if (pkCol == null)</span>
+<span class="nc" id="L266">                    throwUserException(_loc.get(&quot;fk-nopkcol&quot;, new Object[]</span>
+                        { fkInfo.fk, pkColName, toTable,
+<span class="nc" id="L268">                            fkInfo.fk.getTable() }));</span>
+
+<span class="nc" id="L270">                fkInfo.fk.join(col, pkCol);</span>
+            }
+
+            // make constant joins
+<span class="nc" id="L274">            cols = fkInfo.constCols.iterator();</span>
+<span class="nc bnc" id="L275" title="All 2 branches missed.">            for (Iterator&lt;Object&gt; vals = fkInfo.consts.iterator(); vals.hasNext();) {</span>
+<span class="nc" id="L276">                colName = cols.next();</span>
+<span class="nc" id="L277">                col = fkInfo.fk.getTable().getColumn(colName);</span>
+<span class="nc bnc" id="L278" title="All 2 branches missed.">                if (col == null)</span>
+<span class="nc" id="L279">                    throwUserException(_loc.get(&quot;fk-nocol&quot;,</span>
+<span class="nc" id="L280">                        fkInfo.fk, colName, fkInfo.fk.getTable()));</span>
+
+<span class="nc" id="L282">                fkInfo.fk.joinConstant(col, vals.next());</span>
+            }
+
+<span class="nc" id="L285">            pks = fkInfo.constColsPK.iterator();</span>
+<span class="nc bnc" id="L286" title="All 2 branches missed.">            for (Iterator&lt;Object&gt; vals = fkInfo.constsPK.iterator(); vals.hasNext();) {</span>
+<span class="nc" id="L287">                pkColName = pks.next();</span>
+<span class="nc" id="L288">                pkCol = toTable.getColumn(pkColName);</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">                if (pkCol == null)</span>
+<span class="nc" id="L290">                    throwUserException(_loc.get(&quot;fk-nopkcol&quot;, new Object[]</span>
+                        { fkInfo.fk, pkColName, toTable,
+<span class="nc" id="L292">                            fkInfo.fk.getTable() }));</span>
+
+<span class="nc" id="L294">                fkInfo.fk.joinConstant(vals.next(), pkCol);</span>
+            }
+        }
+<span class="nc" id="L297">    }</span>
+
+    /**
+     * Transforms the collected unique constraint information into actual
+     * constraints on the schema tables.
+     */
+    private void resolveUniques() {
+        UniqueInfo unqInfo;
+        String colName;
+        Column col;
+<span class="nc bnc" id="L307" title="All 2 branches missed.">        for (Iterator&lt;UniqueInfo&gt; itr = _unqInfos.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L308">            unqInfo = itr.next();</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">            for (Iterator&lt;String&gt; cols = unqInfo.cols.iterator(); cols.hasNext();) {</span>
+<span class="nc" id="L310">                colName = (String) cols.next();</span>
+<span class="nc" id="L311">                col = unqInfo.unq.getTable().getColumn(colName);</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">                if (col == null)</span>
+<span class="nc" id="L313">                    throwUserException(_loc.get(&quot;unq-resolve&quot;, new Object[]</span>
+<span class="nc" id="L314">                        { unqInfo.unq, colName, unqInfo.unq.getTable() }));</span>
+<span class="nc" id="L315">                unqInfo.unq.addColumn(col);</span>
+            }
+        }
+<span class="nc" id="L318">    }</span>
+
+    @Override
+    protected void reset() {
+<span class="nc" id="L322">        _schema = null;</span>
+<span class="nc" id="L323">        _table = null;</span>
+<span class="nc" id="L324">        _pk = null;</span>
+<span class="nc" id="L325">        _index = null;</span>
+<span class="nc" id="L326">        _fk = null;</span>
+<span class="nc" id="L327">        _unq = null;</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">        if (!_delay)</span>
+<span class="nc" id="L329">            clearConstraintInfo();</span>
+<span class="nc" id="L330">    }</span>
+
+    @Override
+    protected Reader getDocType()
+        throws IOException {
+<span class="nc" id="L335">        return new InputStreamReader(XMLSchemaParser.class</span>
+<span class="nc" id="L336">            .getResourceAsStream(&quot;schemas-doctype.rsrc&quot;));</span>
+    }
+
+    @Override
+    protected boolean startElement(String name, Attributes attrs)
+        throws SAXException {
+<span class="nc bnc" id="L342" title="All 10 branches missed.">        switch (name.charAt(0)) {</span>
+            case's':
+<span class="nc bnc" id="L344" title="All 2 branches missed.">                if (&quot;schema&quot;.equals(name))</span>
+<span class="nc" id="L345">                    startSchema(attrs);</span>
+<span class="nc bnc" id="L346" title="All 2 branches missed.">                else if (&quot;sequence&quot;.equals(name))</span>
+<span class="nc" id="L347">                    startSequence(attrs);</span>
+<span class="nc" id="L348">                return true;</span>
+            case't':
+<span class="nc" id="L350">                startTable(attrs);</span>
+<span class="nc" id="L351">                return true;</span>
+            case'c':
+<span class="nc" id="L353">                startColumn(attrs);</span>
+<span class="nc" id="L354">                return true;</span>
+            case'p':
+<span class="nc" id="L356">                startPrimaryKey(attrs);</span>
+<span class="nc" id="L357">                return true;</span>
+            case'i':
+<span class="nc" id="L359">                startIndex(attrs);</span>
+<span class="nc" id="L360">                return true;</span>
+            case'u':
+<span class="nc" id="L362">                startUnique(attrs);</span>
+<span class="nc" id="L363">                return true;</span>
+            case'f':
+<span class="nc" id="L365">                startForeignKey(attrs);</span>
+<span class="nc" id="L366">                return true;</span>
+            case'o':
+<span class="nc" id="L368">                startOn(attrs);</span>
+<span class="nc" id="L369">                return true;</span>
+            case'j':
+<span class="nc" id="L371">                startJoin(attrs);</span>
+<span class="nc" id="L372">                return true;</span>
+            default:
+<span class="nc" id="L374">                return false;</span>
+        }
+    }
+
+    @Override
+    protected void endElement(String name) {
+<span class="nc bnc" id="L380" title="All 7 branches missed.">        switch (name.charAt(0)) {</span>
+            case's':
+<span class="nc bnc" id="L382" title="All 2 branches missed.">                if (&quot;schema&quot;.equals(name))</span>
+<span class="nc" id="L383">                    endSchema();</span>
+                break;
+            case't':
+<span class="nc" id="L386">                endTable();</span>
+<span class="nc" id="L387">                break;</span>
+            case'p':
+<span class="nc" id="L389">                endPrimaryKey();</span>
+<span class="nc" id="L390">                break;</span>
+            case'i':
+<span class="nc" id="L392">                endIndex();</span>
+<span class="nc" id="L393">                break;</span>
+            case'u':
+<span class="nc" id="L395">                endUnique();</span>
+<span class="nc" id="L396">                break;</span>
+            case'f':
+<span class="nc" id="L398">                endForeignKey();</span>
+                break;
+        }
+<span class="nc" id="L401">    }</span>
+
+    private void startSchema(Attributes attrs) {
+        // creates group if not set
+<span class="nc" id="L405">        SchemaGroup group = getSchemaGroup();</span>
+
+<span class="nc" id="L407">        String name = attrs.getValue(&quot;name&quot;);</span>
+<span class="nc" id="L408">        _schema = group.getSchema(name);</span>
+<span class="nc bnc" id="L409" title="All 2 branches missed.">        if (_schema == null)</span>
+<span class="nc" id="L410">            _schema = group.addSchema(name);</span>
+<span class="nc" id="L411">    }</span>
+
+    private void endSchema() {
+<span class="nc" id="L414">        _schema = null;</span>
+<span class="nc" id="L415">    }</span>
+
+    private void startSequence(Attributes attrs) {
+<span class="nc" id="L418">        Sequence seq = _schema.addSequence(attrs.getValue(&quot;name&quot;));</span>
+<span class="nc" id="L419">        Locator locator = getLocation().getLocator();</span>
+<span class="nc bnc" id="L420" title="All 2 branches missed.">        if (locator != null) {</span>
+<span class="nc" id="L421">            seq.setLineNumber(locator.getLineNumber());</span>
+<span class="nc" id="L422">            seq.setColNumber(locator.getColumnNumber());</span>
+        }
+<span class="nc" id="L424">        seq.setSource(getSourceFile(), SourceTracker.SRC_XML);</span>
+        try {
+<span class="nc" id="L426">            String val = attrs.getValue(&quot;initial-value&quot;);</span>
+<span class="nc bnc" id="L427" title="All 2 branches missed.">            if (val != null)</span>
+<span class="nc" id="L428">                seq.setInitialValue(Integer.parseInt(val));</span>
+<span class="nc" id="L429">            val = attrs.getValue(&quot;increment&quot;);</span>
+<span class="nc bnc" id="L430" title="All 2 branches missed.">            if (val != null)</span>
+<span class="nc" id="L431">                seq.setIncrement(Integer.parseInt(val));</span>
+<span class="nc" id="L432">            val = attrs.getValue(&quot;allocate&quot;);</span>
+<span class="nc bnc" id="L433" title="All 2 branches missed.">            if (val != null)</span>
+<span class="nc" id="L434">                seq.setAllocate(Integer.parseInt(val));</span>
+<span class="nc" id="L435">        } catch (NumberFormatException nfe) {</span>
+<span class="nc" id="L436">            throwUserException(_loc.get(&quot;bad-seq-num&quot;, seq.getFullName()));</span>
+<span class="nc" id="L437">        }</span>
+<span class="nc" id="L438">    }</span>
+
+    private void startTable(Attributes attrs) {
+<span class="nc" id="L441">        _table = _schema.addTable(attrs.getValue(&quot;name&quot;));</span>
+<span class="nc" id="L442">        _table.setSource(getSourceFile(), SourceTracker.SRC_XML);</span>
+<span class="nc" id="L443">        Locator locator = getLocation().getLocator();</span>
+<span class="nc bnc" id="L444" title="All 2 branches missed.">        if (locator != null) {</span>
+<span class="nc" id="L445">            _table.setLineNumber(locator.getLineNumber());</span>
+<span class="nc" id="L446">            _table.setColNumber(locator.getColumnNumber());</span>
+        }
+<span class="nc" id="L448">    }</span>
+
+    private void endTable() {
+<span class="nc" id="L451">        _table = null;</span>
+<span class="nc" id="L452">    }</span>
+
+    private void startColumn(Attributes attrs) {
+<span class="nc" id="L455">        Column col = _table.addColumn(attrs.getValue(&quot;name&quot;));</span>
+<span class="nc" id="L456">        col.setType(_dict.getPreferredType(Schemas.getJDBCType</span>
+<span class="nc" id="L457">            (attrs.getValue(&quot;type&quot;))));</span>
+<span class="nc" id="L458">        col.setTypeName(attrs.getValue(&quot;type-name&quot;));</span>
+<span class="nc" id="L459">        String val = attrs.getValue(&quot;size&quot;);</span>
+<span class="nc bnc" id="L460" title="All 2 branches missed.">        if (val != null)</span>
+<span class="nc" id="L461">            col.setSize(Integer.parseInt(val));</span>
+<span class="nc" id="L462">        val = attrs.getValue(&quot;decimal-digits&quot;);</span>
+<span class="nc bnc" id="L463" title="All 2 branches missed.">        if (val != null)</span>
+<span class="nc" id="L464">            col.setDecimalDigits(Integer.parseInt(val));</span>
+<span class="nc" id="L465">        col.setNotNull(&quot;true&quot;.equals(attrs.getValue(&quot;not-null&quot;)));</span>
+<span class="nc bnc" id="L466" title="All 2 branches missed.">        col.setAutoAssigned(&quot;true&quot;.equals(attrs.getValue(&quot;auto-assign&quot;))</span>
+<span class="nc bnc" id="L467" title="All 2 branches missed.">            || &quot;true&quot;.equals(attrs.getValue(&quot;auto-increment&quot;))); // old attr</span>
+<span class="nc" id="L468">        col.setDefaultString(attrs.getValue(&quot;default&quot;));</span>
+<span class="nc" id="L469">    }</span>
+
+    private void startPrimaryKey(Attributes attrs) {
+<span class="nc" id="L472">        _pk = new PrimaryKeyInfo();</span>
+<span class="nc" id="L473">        _pk.pk = _table.addPrimaryKey(attrs.getValue(&quot;name&quot;));</span>
+<span class="nc" id="L474">        _pk.pk.setLogical(&quot;true&quot;.equals(attrs.getValue(&quot;logical&quot;)));</span>
+
+<span class="nc" id="L476">        String val = attrs.getValue(&quot;column&quot;);</span>
+<span class="nc bnc" id="L477" title="All 2 branches missed.">        if (val != null)</span>
+<span class="nc" id="L478">            _pk.cols.add(val);</span>
+<span class="nc" id="L479">    }</span>
+
+    private void endPrimaryKey() {
+<span class="nc" id="L482">        _pkInfos.add(_pk);</span>
+<span class="nc" id="L483">        _pk = null;</span>
+<span class="nc" id="L484">    }</span>
+
+    private void startIndex(Attributes attrs) {
+<span class="nc" id="L487">        _index = new IndexInfo();</span>
+<span class="nc" id="L488">        _index.index = _table.addIndex(attrs.getValue(&quot;name&quot;));</span>
+<span class="nc" id="L489">        _index.index.setUnique(&quot;true&quot;.equals(attrs.getValue(&quot;unique&quot;)));</span>
+
+<span class="nc" id="L491">        String val = attrs.getValue(&quot;column&quot;);</span>
+<span class="nc bnc" id="L492" title="All 2 branches missed.">        if (val != null)</span>
+<span class="nc" id="L493">            _index.cols.add(val);</span>
+<span class="nc" id="L494">    }</span>
+
+    private void endIndex() {
+<span class="nc" id="L497">        _indexInfos.add(_index);</span>
+<span class="nc" id="L498">        _index = null;</span>
+<span class="nc" id="L499">    }</span>
+
+    private void startUnique(Attributes attrs) {
+<span class="nc" id="L502">        _unq = new UniqueInfo();</span>
+<span class="nc" id="L503">        _unq.unq = _table.addUnique(attrs.getValue(&quot;name&quot;));</span>
+<span class="nc" id="L504">        _unq.unq.setDeferred(&quot;true&quot;.equals(attrs.getValue(&quot;deferred&quot;)));</span>
+
+<span class="nc" id="L506">        String val = attrs.getValue(&quot;column&quot;);</span>
+<span class="nc bnc" id="L507" title="All 2 branches missed.">        if (val != null)</span>
+<span class="nc" id="L508">            _unq.cols.add(val);</span>
+<span class="nc" id="L509">    }</span>
+
+    private void endUnique() {
+<span class="nc" id="L512">        _unqInfos.add(_unq);</span>
+<span class="nc" id="L513">        _unq = null;</span>
+<span class="nc" id="L514">    }</span>
+
+    private void startForeignKey(Attributes attrs) {
+<span class="nc" id="L517">        _fk = new ForeignKeyInfo();</span>
+<span class="nc" id="L518">        _fk.fk = _table.addForeignKey(attrs.getValue(&quot;name&quot;));</span>
+
+<span class="nc bnc" id="L520" title="All 2 branches missed.">        if (&quot;true&quot;.equals(attrs.getValue(&quot;deferred&quot;)))</span>
+<span class="nc" id="L521">            _fk.fk.setDeferred(true);</span>
+
+        // set update action before delete action in case user incorrectly
+        // sets update-action to &quot;none&quot; when there is a delete-action; otherwise
+        // setting the update-action to &quot;none&quot; will also automatically set the
+        // delete-action to &quot;none&quot;, since FKs cannot have one actio be none and
+        // the other be non-none
+<span class="nc" id="L528">        String action = attrs.getValue(&quot;update-action&quot;);</span>
+<span class="nc bnc" id="L529" title="All 2 branches missed.">        if (action != null)</span>
+<span class="nc" id="L530">            _fk.fk.setUpdateAction(ForeignKey.getAction(action));</span>
+<span class="nc" id="L531">        action = attrs.getValue(&quot;delete-action&quot;);</span>
+<span class="nc bnc" id="L532" title="All 2 branches missed.">        if (action != null)</span>
+<span class="nc" id="L533">            _fk.fk.setDeleteAction(ForeignKey.getAction(action));</span>
+
+<span class="nc" id="L535">        _fk.toTable = attrs.getValue(&quot;to-table&quot;);</span>
+<span class="nc" id="L536">        String val = attrs.getValue(&quot;column&quot;);</span>
+<span class="nc bnc" id="L537" title="All 2 branches missed.">        if (val != null)</span>
+<span class="nc" id="L538">            _fk.cols.add(val);</span>
+<span class="nc" id="L539">    }</span>
+
+    private void endForeignKey() {
+<span class="nc" id="L542">        _fkInfos.add(_fk);</span>
+<span class="nc" id="L543">        _fk = null;</span>
+<span class="nc" id="L544">    }</span>
+
+    private void startOn(Attributes attrs) {
+<span class="nc" id="L547">        String col = attrs.getValue(&quot;column&quot;);</span>
+<span class="nc bnc" id="L548" title="All 2 branches missed.">        if (_pk != null)</span>
+<span class="nc" id="L549">            _pk.cols.add(col);</span>
+<span class="nc bnc" id="L550" title="All 2 branches missed.">        else if (_index != null)</span>
+<span class="nc" id="L551">            _index.cols.add(col);</span>
+        else
+<span class="nc" id="L553">            _unq.cols.add(col);</span>
+<span class="nc" id="L554">    }</span>
+
+    private void startJoin(Attributes attrs) {
+<span class="nc" id="L557">        String col = attrs.getValue(&quot;column&quot;);</span>
+<span class="nc" id="L558">        String toCol = attrs.getValue(&quot;to-column&quot;);</span>
+<span class="nc" id="L559">        String val = attrs.getValue(&quot;value&quot;);</span>
+<span class="nc bnc" id="L560" title="All 2 branches missed.">        if (val == null) {</span>
+<span class="nc" id="L561">            _fk.cols.add(col);</span>
+<span class="nc" id="L562">            _fk.pks.add(toCol);</span>
+<span class="nc bnc" id="L563" title="All 2 branches missed.">        } else if (col == null) {</span>
+<span class="nc" id="L564">            _fk.constsPK.add(convertConstant(val));</span>
+<span class="nc" id="L565">            _fk.constColsPK.add(toCol);</span>
+        } else {
+<span class="nc" id="L567">            _fk.consts.add(convertConstant(val));</span>
+<span class="nc" id="L568">            _fk.constCols.add(col);</span>
+        }
+<span class="nc" id="L570">    }</span>
+
+    private static Object convertConstant(String val) {
+<span class="nc bnc" id="L573" title="All 2 branches missed.">        if (&quot;null&quot;.equals(val))</span>
+<span class="nc" id="L574">            return null;</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">        if (val.startsWith(&quot;'&quot;))</span>
+<span class="nc" id="L576">            return val.substring(1, val.length() - 1);</span>
+<span class="nc bnc" id="L577" title="All 2 branches missed.">        if (val.indexOf('.') == -1)</span>
+<span class="nc" id="L578">            return new Long(val);</span>
+<span class="nc" id="L579">        return new Double(val);</span>
+    }
+
+    private void throwUserException(Message msg) {
+<span class="nc" id="L583">        throw new UserException(getSourceName() + &quot;: &quot; + msg.getMessage());</span>
+    }
+
+    /**
+     * Used to hold primary key info before it is resolved.
+     */
+<span class="nc" id="L589">    private static class PrimaryKeyInfo {</span>
+
+<span class="nc" id="L591">        public PrimaryKey pk = null;</span>
+<span class="nc" id="L592">        public Collection&lt;String&gt; cols = new LinkedList&lt;&gt;();</span>
+    }
+
+    /**
+     * Used to hold index info before it is resolved.
+     */
+<span class="nc" id="L598">    private static class IndexInfo {</span>
+
+<span class="nc" id="L600">        public Index index = null;</span>
+<span class="nc" id="L601">        public Collection&lt;String&gt; cols = new LinkedList&lt;&gt;();</span>
+    }
+
+    /**
+     * Used to hold unique constraint info before it is resolved.
+     */
+<span class="nc" id="L607">    public static class UniqueInfo {</span>
+
+<span class="nc" id="L609">        public Unique unq = null;</span>
+<span class="nc" id="L610">        public Collection&lt;String&gt; cols = new LinkedList&lt;&gt;();</span>
+    }
+
+    /**
+     * Used to hold foreign key info before it is resolved.
+     */
+<span class="nc" id="L616">    private static class ForeignKeyInfo {</span>
+
+<span class="nc" id="L618">        public ForeignKey fk = null;</span>
+<span class="nc" id="L619">        public String toTable = null;</span>
+<span class="nc" id="L620">        public Collection&lt;String&gt; cols = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L621">        public Collection&lt;String&gt; pks = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L622">        public Collection&lt;Object&gt; consts = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L623">        public Collection&lt;String&gt; constCols = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L624">        public Collection&lt;Object&gt; constsPK = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L625">        public Collection&lt;String&gt; constColsPK = new LinkedList&lt;&gt;();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

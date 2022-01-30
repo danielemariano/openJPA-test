@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>BindVariableAndExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">BindVariableAndExpression.java</span></div><h1>BindVariableAndExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+
+/**
+ * Combines a bind variable expression with another.
+ *
+ * @author Abe White
+ */
+class BindVariableAndExpression
+    implements Exp {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final BindVariableExpression _bind;
+    private final Exp _exp;
+
+    /**
+     * Constructor. Supply the two combined expressions.
+     */
+<span class="nc" id="L43">    public BindVariableAndExpression(BindVariableExpression bind, Exp exp) {</span>
+<span class="nc" id="L44">        _bind = bind;</span>
+<span class="nc" id="L45">        _exp = exp;</span>
+<span class="nc" id="L46">    }</span>
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, Map contains) {
+<span class="nc" id="L50">        ExpState s1 = _bind.initialize(sel, ctx, contains);</span>
+<span class="nc" id="L51">        ExpState s2 = _exp.initialize(sel, ctx, contains);</span>
+<span class="nc" id="L52">        return new BinaryOpExpState(sel.and(s1.joins, s2.joins), s1, s2);</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer buf) {
+<span class="nc" id="L58">        boolean or = _exp instanceof OrExpression;</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        if (or)</span>
+<span class="nc" id="L60">            buf.append(&quot;(&quot;);</span>
+<span class="nc" id="L61">        _exp.appendTo(sel, ctx, ((BinaryOpExpState) state).state2, buf);</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        if (or)</span>
+<span class="nc" id="L63">            buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L64">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L69">        _exp.selectColumns(sel, ctx, ((BinaryOpExpState) state).state2, pks);</span>
+<span class="nc" id="L70">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L74">        visitor.enter(this);</span>
+<span class="nc" id="L75">        _bind.acceptVisit(visitor);</span>
+<span class="nc" id="L76">        _exp.acceptVisit(visitor);</span>
+<span class="nc" id="L77">        visitor.exit(this);</span>
+<span class="nc" id="L78">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AbstractUpdateManager.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">AbstractUpdateManager.java</span></div><h1>AbstractUpdateManager.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Discriminator;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.Strategy;
+import org.apache.openjpa.jdbc.meta.Version;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowImpl;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.PCState;
+import org.apache.openjpa.kernel.StateManagerImpl;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configuration;
+import org.apache.openjpa.util.ImplHelper;
+import org.apache.openjpa.util.OpenJPAException;
+import org.apache.openjpa.util.OptimisticException;
+
+/**
+ * Base update manager with common functionality.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L55">public abstract class AbstractUpdateManager</span>
+    implements UpdateManager, Configurable {
+
+<span class="nc" id="L58">    protected JDBCConfiguration conf = null;</span>
+<span class="nc" id="L59">    protected DBDictionary dict = null;</span>
+
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc" id="L63">        this.conf = (JDBCConfiguration) conf;</span>
+<span class="nc" id="L64">        dict = this.conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L65">    }</span>
+
+    @Override
+    public void startConfiguration() {
+<span class="nc" id="L69">    }</span>
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L73">    }</span>
+
+    @Override
+    public Collection flush(Collection states, JDBCStore store) {
+<span class="nc" id="L77">        Connection conn = store.getConnection();</span>
+        try {
+<span class="nc" id="L79">            PreparedStatementManager psMgr = newPreparedStatementManager(store,</span>
+                conn);
+<span class="nc" id="L81">            return flush(states, store, psMgr);</span>
+        } finally {
+<span class="nc" id="L83">            try { conn.close(); } catch (SQLException se) {}</span>
+        }
+    }
+
+    protected Collection flush(Collection states, JDBCStore store,
+        PreparedStatementManager psMgr) {
+        // run through all the states and update them as necessary
+<span class="nc" id="L90">        RowManager rowMgr = newRowManager();</span>
+<span class="nc" id="L91">        Collection customs = new LinkedList();</span>
+<span class="nc" id="L92">        Collection exceps = psMgr.getExceptions();</span>
+<span class="nc" id="L93">        Collection mappedByIdStates = new ArrayList();</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        for (Iterator itr = states.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L95">            OpenJPAStateManager obj = (OpenJPAStateManager)itr.next();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">            if (obj instanceof StateManagerImpl) {</span>
+<span class="nc" id="L97">                StateManagerImpl sm = (StateManagerImpl) obj;</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">                if (sm.getMappedByIdFields() != null)</span>
+<span class="nc" id="L99">                    mappedByIdStates.add(sm);</span>
+<span class="nc" id="L100">                else exceps = populateRowManager(sm, rowMgr, store, exceps,</span>
+                        customs);
+<span class="nc" id="L102">            } else</span>
+<span class="nc" id="L103">                exceps = populateRowManager(obj, rowMgr, store, exceps,</span>
+                        customs);
+<span class="nc" id="L105">        }</span>
+
+        // flush rows
+<span class="nc" id="L108">        exceps = flush(rowMgr, psMgr, exceps);</span>
+
+<span class="nc bnc" id="L110" title="All 2 branches missed.">        if (mappedByIdStates.size() != 0) {</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">            for (Iterator itr = mappedByIdStates.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L112">                StateManagerImpl sm = (StateManagerImpl) itr.next();</span>
+<span class="nc" id="L113">                exceps = populateRowManager(sm, rowMgr, store, exceps, customs);</span>
+<span class="nc" id="L114">            }</span>
+            // flush rows
+<span class="nc" id="L116">            exceps = flush(rowMgr, psMgr, exceps);</span>
+        }
+
+        // now do any custom mappings
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        for (Iterator itr = customs.iterator(); itr.hasNext();) {</span>
+            try {
+<span class="nc" id="L122">                ((CustomMapping) itr.next()).execute(store);</span>
+<span class="nc" id="L123">            } catch (SQLException se) {</span>
+<span class="nc" id="L124">                exceps = addException(exceps, SQLExceptions.getStore(se, dict));</span>
+<span class="nc" id="L125">            } catch (OpenJPAException ke) {</span>
+<span class="nc" id="L126">                exceps = addException(exceps, ke);</span>
+<span class="nc" id="L127">            }</span>
+        }
+
+        // return all exceptions
+<span class="nc" id="L131">        return exceps;</span>
+    }
+
+    /**
+     * Return a new {@link RowManager}.
+     */
+    protected abstract RowManager newRowManager();
+
+    /**
+     * Return a new {@link PreparedStatementManager}.
+     */
+    protected abstract PreparedStatementManager newPreparedStatementManager(
+        JDBCStore store, Connection conn);
+
+    /**
+     * Flush all rows of the given row manager. Add exceptions to
+     * &lt;code&gt;exceps&lt;/code&gt; (which may start as null) using
+     * {@link #addException}. Return &lt;code&gt;exceps&lt;/code&gt;.
+     */
+    protected abstract Collection flush(RowManager rowMgr,
+        PreparedStatementManager psMgr, Collection exceps);
+
+    /**
+     * Populate the row manager with rows to be flushed for the given state.
+     *
+     * @param exceps exceptions encountered when flushing will be added to
+     * this list and returned; the list may be null initially
+     * @param customs buffer custom mappings
+     * @return the exceptions list
+     */
+    protected Collection populateRowManager(OpenJPAStateManager sm,
+        RowManager rowMgr, JDBCStore store, Collection exceps,
+        Collection customs) {
+<span class="nc" id="L164">    	int action = Row.ACTION_UPDATE;</span>
+        try {
+            BitSet dirty;
+<span class="nc bnc" id="L167" title="All 4 branches missed.">            if (sm.getPCState() == PCState.PNEW &amp;&amp; !sm.isFlushed()) {</span>
+<span class="nc" id="L168">            	action = Row.ACTION_INSERT;</span>
+<span class="nc" id="L169">            	insert(sm, (ClassMapping) sm.getMetaData(), rowMgr, store,</span>
+                    customs);
+<span class="nc bnc" id="L171" title="All 2 branches missed.">            } else if (sm.getPCState() == PCState.PNEWFLUSHEDDELETED</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">                || sm.getPCState() == PCState.PDELETED) {</span>
+<span class="nc" id="L173">            	action = Row.ACTION_DELETE;</span>
+<span class="nc" id="L174">            	delete(sm, (ClassMapping) sm.getMetaData(), rowMgr, store,</span>
+                    customs);
+<span class="nc bnc" id="L176" title="All 2 branches missed.">            } else if ((dirty = ImplHelper.getUpdateFields(sm)) != null) {</span>
+<span class="nc" id="L177">                update(sm, dirty, (ClassMapping) sm.getMetaData(), rowMgr,</span>
+                    store, customs, false);
+<span class="nc bnc" id="L179" title="All 2 branches missed.">            } else if (sm.isVersionUpdateRequired()) {</span>
+<span class="nc" id="L180">                updateIndicators(sm, (ClassMapping) sm.getMetaData(), rowMgr,</span>
+                    store, customs, true);
+<span class="nc bnc" id="L182" title="All 2 branches missed.">            } else if (sm.isVersionCheckRequired()) {</span>
+<span class="nc" id="L183">                if (!((ClassMapping) sm.getMetaData()).getVersion().</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">                    checkVersion(sm, store, false))</span>
+<span class="nc" id="L185">                    exceps = addException(exceps, new OptimisticException(sm.</span>
+<span class="nc" id="L186">                        getManagedInstance()));</span>
+            }
+<span class="nc" id="L188">        } catch (SQLException se) {</span>
+<span class="nc" id="L189">            exceps = addException(exceps, SQLExceptions.getStore(se, dict));</span>
+<span class="nc" id="L190">        } catch (OpenJPAException ke) {</span>
+<span class="nc" id="L191">        	RowImpl row = (RowImpl) rowMgr.getRow(((ClassMapping) sm.getMetaData()).getTable(), action, sm, false);</span>
+<span class="nc bnc" id="L192" title="All 2 branches missed.">            if (row != null) {</span>
+<span class="nc" id="L193">                row.setFlushed(true);</span>
+            }
+<span class="nc" id="L195">            exceps = addException(exceps, ke);</span>
+<span class="nc" id="L196">        }</span>
+<span class="nc" id="L197">        return exceps;</span>
+    }
+
+    /**
+     * Add the given exception to the given list, which may start out as null.
+     */
+    protected Collection addException(Collection exceps, Exception err) {
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if (exceps == null)</span>
+<span class="nc" id="L205">            exceps = new LinkedList();</span>
+<span class="nc" id="L206">        exceps.add(err);</span>
+<span class="nc" id="L207">        return exceps;</span>
+    }
+
+    /**
+     * Recursive method to insert the given instance, base class first.
+     */
+    protected void insert(OpenJPAStateManager sm, ClassMapping mapping,
+        RowManager rowMgr, JDBCStore store, Collection customs)
+        throws SQLException {
+<span class="nc" id="L216">        Boolean custom = mapping.isCustomInsert(sm, store);</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (!Boolean.FALSE.equals(custom))</span>
+<span class="nc" id="L218">            mapping.customInsert(sm, store);</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        if (Boolean.TRUE.equals(custom))</span>
+<span class="nc" id="L220">            return;</span>
+
+<span class="nc" id="L222">        ClassMapping sup = mapping.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if (sup != null)</span>
+<span class="nc" id="L224">            insert(sm, sup, rowMgr, store, customs);</span>
+
+<span class="nc" id="L226">        mapping.insert(sm, store, rowMgr);</span>
+<span class="nc" id="L227">        FieldMapping[] fields = mapping.getDefinedFieldMappings();</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (((StateManagerImpl)sm).getMappedByIdFields() != null) {</span>
+            // when there is mappedByIdFields, the id field is not
+            // fully populated. We need to insert other fields first
+            // so that in the process of inserting other fields,
+            // the values of mappedById fields can be set into
+            // the id fields. Once the id fields are fully populated,
+            // we will then insert the id fields.
+<span class="nc" id="L235">            fields = reorderFields(fields);</span>
+        }
+
+<span class="nc" id="L238">        BitSet dirty = sm.getDirty();</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">            if (dirty.get(fields[i].getIndex())</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">                &amp;&amp; !bufferCustomInsert(fields[i], sm, store, customs)) {</span>
+<span class="nc" id="L242">                fields[i].insert(sm, store, rowMgr);</span>
+            }
+        }
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if (sup == null) {</span>
+<span class="nc" id="L246">            Version vers = mapping.getVersion();</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">            if (!bufferCustomInsert(vers, sm, store, customs))</span>
+<span class="nc" id="L248">                vers.insert(sm, store, rowMgr);</span>
+<span class="nc" id="L249">            Discriminator dsc = mapping.getDiscriminator();</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">            if (!bufferCustomInsert(dsc, sm, store, customs))</span>
+<span class="nc" id="L251">                dsc.insert(sm, store, rowMgr);</span>
+        }
+<span class="nc" id="L253">    }</span>
+
+    private FieldMapping[] reorderFields(FieldMapping[] fields) {
+<span class="nc" id="L256">        List&lt;FieldMapping&gt; pkFmds = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L257">        FieldMapping[] ret = new FieldMapping[fields.length];</span>
+<span class="nc" id="L258">        int j = 0;</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">            if (!fields[i].isPrimaryKey())</span>
+<span class="nc" id="L261">                ret[j++] = fields[i];</span>
+            else
+<span class="nc" id="L263">                pkFmds.add(fields[i]);</span>
+        }
+<span class="nc bnc" id="L265" title="All 2 branches missed.">        for (int i = 0; i &lt;pkFmds.size(); i++) {</span>
+<span class="nc" id="L266">            ret[j++] = pkFmds.get(i);</span>
+        }
+<span class="nc" id="L268">        return ret;</span>
+    }
+
+    /**
+     * If the given mapping uses a custom insert, places a
+     * {@link CustomMapping} struct for it in the given collection and
+     * returns true, else returns false.
+     */
+    private boolean bufferCustomInsert(Strategy strat, OpenJPAStateManager sm,
+        JDBCStore store, Collection customs) {
+<span class="nc" id="L278">        Boolean custom = strat.isCustomInsert(sm, store);</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        if (!Boolean.FALSE.equals(custom))</span>
+<span class="nc" id="L280">            customs.add(new CustomMapping(CustomMapping.INSERT, sm, strat));</span>
+<span class="nc" id="L281">        return Boolean.TRUE.equals(custom);</span>
+    }
+
+    /**
+     * Recursive method to delete the given instance, base class last.
+     */
+    protected void delete(OpenJPAStateManager sm, ClassMapping mapping,
+        RowManager rowMgr, JDBCStore store, Collection customs)
+        throws SQLException {
+<span class="nc" id="L290">        Boolean custom = mapping.isCustomDelete(sm, store);</span>
+<span class="nc bnc" id="L291" title="All 2 branches missed.">        if (!Boolean.FALSE.equals(custom))</span>
+<span class="nc" id="L292">            mapping.customDelete(sm, store);</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">        if (Boolean.TRUE.equals(custom))</span>
+<span class="nc" id="L294">            return;</span>
+
+<span class="nc" id="L296">        FieldMapping[] fields = mapping.getDefinedFieldMappings();</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++)</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">            if (!bufferCustomDelete(fields[i], sm, store, customs))</span>
+<span class="nc" id="L299">                fields[i].delete(sm, store, rowMgr);</span>
+
+<span class="nc" id="L301">        ClassMapping sup = mapping.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L302" title="All 2 branches missed.">        if (sup == null) {</span>
+<span class="nc" id="L303">            Version vers = mapping.getVersion();</span>
+<span class="nc bnc" id="L304" title="All 2 branches missed.">            if (!bufferCustomDelete(vers, sm, store, customs))</span>
+<span class="nc" id="L305">                vers.delete(sm, store, rowMgr);</span>
+<span class="nc" id="L306">            Discriminator dsc = mapping.getDiscriminator();</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">            if (!bufferCustomDelete(dsc, sm, store, customs))</span>
+<span class="nc" id="L308">                dsc.delete(sm, store, rowMgr);</span>
+        }
+<span class="nc" id="L310">        mapping.delete(sm, store, rowMgr);</span>
+
+<span class="nc bnc" id="L312" title="All 2 branches missed.">        if (sup != null)</span>
+<span class="nc" id="L313">            delete(sm, sup, rowMgr, store, customs);</span>
+<span class="nc" id="L314">    }</span>
+
+    /**
+     * @see #bufferCustomInsert
+     */
+    private boolean bufferCustomDelete(Strategy strat, OpenJPAStateManager sm,
+        JDBCStore store, Collection customs) {
+<span class="nc" id="L321">        Boolean custom = strat.isCustomDelete(sm, store);</span>
+<span class="nc bnc" id="L322" title="All 2 branches missed.">        if (!Boolean.FALSE.equals(custom))</span>
+<span class="nc" id="L323">            customs.add(new CustomMapping(CustomMapping.DELETE, sm, strat));</span>
+<span class="nc" id="L324">        return Boolean.TRUE.equals(custom);</span>
+    }
+
+    /**
+     * Recursive method to update the given instance.
+     */
+    protected void update(OpenJPAStateManager sm, BitSet dirty,
+        ClassMapping mapping, RowManager rowMgr, JDBCStore store,
+        Collection customs, boolean updateIndicators) throws SQLException {
+<span class="nc" id="L333">        Boolean custom = mapping.isCustomUpdate(sm, store);</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">        if (!Boolean.FALSE.equals(custom))</span>
+<span class="nc" id="L335">            mapping.customUpdate(sm, store);</span>
+<span class="nc bnc" id="L336" title="All 2 branches missed.">        if (Boolean.TRUE.equals(custom))</span>
+<span class="nc" id="L337">            return;</span>
+
+        // update all fields before all mappings so that the mappings can
+        // detect whether any fields in their rows have been modified
+<span class="nc" id="L341">        FieldMapping[] fields = mapping.getDefinedFieldMappings();</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc" id="L343">            FieldMapping field = fields[i];</span>
+<span class="nc bnc" id="L344" title="All 2 branches missed.">            if (dirty.get(field.getIndex())</span>
+<span class="nc bnc" id="L345" title="All 2 branches missed.">                &amp;&amp; !bufferCustomUpdate(field, sm, store, customs)) {</span>
+<span class="nc" id="L346">                field.update(sm, store, rowMgr);</span>
+<span class="nc bnc" id="L347" title="All 2 branches missed.">                if (!updateIndicators) {</span>
+<span class="nc" id="L348">                    FieldMapping[] inverseFieldMappings =</span>
+<span class="nc" id="L349">                        field.getInverseMappings();</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">                    if (inverseFieldMappings.length == 0) {</span>
+<span class="nc" id="L351">                        updateIndicators = true;</span>
+                    }
+                    else {
+                        for (FieldMapping inverseFieldMapping :
+<span class="nc bnc" id="L355" title="All 2 branches missed.">                            inverseFieldMappings) {</span>
+<span class="nc bnc" id="L356" title="All 2 branches missed.">                            if (inverseFieldMapping.getMappedBy() != null) {</span>
+<span class="nc" id="L357">                                updateIndicators = true;</span>
+<span class="nc" id="L358">                                break;</span>
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+<span class="nc" id="L366">        ClassMapping sup = mapping.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L367" title="All 2 branches missed.">        if (sup == null) {</span>
+<span class="nc bnc" id="L368" title="All 2 branches missed.">            if (updateIndicators) {</span>
+<span class="nc" id="L369">                updateIndicators(sm, mapping, rowMgr, store, customs, false);</span>
+            }
+        }
+        else
+<span class="nc" id="L373">            update(sm, dirty, sup, rowMgr, store, customs, updateIndicators);</span>
+
+<span class="nc" id="L375">        mapping.update(sm, store, rowMgr);</span>
+<span class="nc" id="L376">    }</span>
+
+    /**
+     * Update version and discriminator indicators.
+     */
+    protected void updateIndicators(OpenJPAStateManager sm,
+            ClassMapping mapping, RowManager rowMgr, JDBCStore store,
+            Collection customs,
+        boolean versionUpdateOnly) throws SQLException {
+<span class="nc bnc" id="L385" title="All 2 branches missed.">        while (mapping.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L386">            mapping = mapping.getJoinablePCSuperclassMapping();</span>
+
+<span class="nc" id="L388">        Version vers = mapping.getVersion();</span>
+<span class="nc bnc" id="L389" title="All 2 branches missed.">        if (!bufferCustomUpdate(vers, sm, store, customs))</span>
+<span class="nc" id="L390">            vers.update(sm, store, rowMgr);</span>
+
+<span class="nc bnc" id="L392" title="All 2 branches missed.">        if (versionUpdateOnly) {</span>
+            // if we are only updating the version column, we need to add
+            // in the primary key select
+<span class="nc" id="L395">            mapping.update(sm, store, rowMgr);</span>
+        } else {
+            // otherwise we need to make sure we update the discriminator too
+<span class="nc" id="L398">            Discriminator dsc = mapping.getDiscriminator();</span>
+<span class="nc bnc" id="L399" title="All 2 branches missed.">            if (!bufferCustomUpdate(dsc, sm, store, customs))</span>
+<span class="nc" id="L400">                dsc.update(sm, store, rowMgr);</span>
+        }
+<span class="nc" id="L402">    }</span>
+
+    /**
+     * @see #bufferCustomInsert
+     */
+    private boolean bufferCustomUpdate(Strategy strat, OpenJPAStateManager sm,
+        JDBCStore store, Collection customs) {
+<span class="nc" id="L409">        Boolean custom = strat.isCustomUpdate(sm, store);</span>
+<span class="nc bnc" id="L410" title="All 2 branches missed.">        if (!Boolean.FALSE.equals(custom))</span>
+<span class="nc" id="L411">            customs.add(new CustomMapping(CustomMapping.UPDATE, sm, strat));</span>
+<span class="nc" id="L412">        return Boolean.TRUE.equals(custom);</span>
+    }
+
+    /**
+     * Executes customized mapping updates.
+     */
+    protected static class CustomMapping {
+
+        public static final int INSERT = 0;
+        public static final int UPDATE = 1;
+        public static final int DELETE = 3;
+
+        private final int _action;
+        private final OpenJPAStateManager _sm;
+        private final Strategy _strat;
+
+        public CustomMapping(int action, OpenJPAStateManager sm, Strategy strat)
+<span class="nc" id="L429">        {</span>
+<span class="nc" id="L430">            _action = action;</span>
+<span class="nc" id="L431">            _sm = sm;</span>
+<span class="nc" id="L432">            _strat = strat;</span>
+<span class="nc" id="L433">        }</span>
+
+        public void execute(JDBCStore store) throws SQLException {
+<span class="nc bnc" id="L436" title="All 4 branches missed.">            switch (_action) {</span>
+            case INSERT:
+<span class="nc" id="L438">                _strat.customInsert(_sm, store);</span>
+<span class="nc" id="L439">                break;</span>
+            case UPDATE:
+<span class="nc" id="L441">                _strat.customUpdate(_sm, store);</span>
+<span class="nc" id="L442">                break;</span>
+            case DELETE:
+<span class="nc" id="L444">                _strat.customDelete(_sm, store);</span>
+                break;
+            }
+<span class="nc" id="L447">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

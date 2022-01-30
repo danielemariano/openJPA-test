@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ContainerFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">ContainerFieldStrategy.java</span></div><h1>ContainerFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+
+/**
+ * An abstract container mapping that handles traversing the
+ * join to examine the size of the relation.
+ *
+ * @author Marc Prud'hommeaux
+ */
+<span class="nc" id="L37">public abstract class ContainerFieldStrategy</span>
+    extends AbstractFieldStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Return all independent mappings to which this strategy must join in
+     * order to access collection elements, or empty array if none.
+     *
+     * @param traverse whether we're traversing through to the related type
+     * @see ValueMapping#getIndependentTypeMappings
+     * @see ClassMapping#EMPTY_MAPPINGS
+     */
+    protected abstract ClassMapping[] getIndependentElementMappings
+        (boolean traverse);
+
+    @Override
+    public void appendIsEmpty(SQLBuffer sql, Select sel, Joins joins) {
+<span class="nc" id="L56">        testEmpty(sql, sel, joins, true);</span>
+<span class="nc" id="L57">    }</span>
+
+    @Override
+    public void appendIsNotEmpty(SQLBuffer sql, Select sel, Joins joins) {
+<span class="nc" id="L61">        testEmpty(sql, sel, joins, false);</span>
+<span class="nc" id="L62">    }</span>
+
+    @Override
+    public void appendIsNull(SQLBuffer sql, Select sel, Joins joins) {
+<span class="nc" id="L66">        testEmpty(sql, sel, joins, true);</span>
+<span class="nc" id="L67">    }</span>
+
+    @Override
+    public void appendIsNotNull(SQLBuffer sql, Select sel, Joins joins) {
+<span class="nc" id="L71">        testEmpty(sql, sel, joins, false);</span>
+<span class="nc" id="L72">    }</span>
+
+    /**
+     * Appends SQL for a sub-select testing whether the container is empty.
+     */
+    private void testEmpty(SQLBuffer sql, Select sel, Joins joins,
+        boolean empty) {
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        if (empty)</span>
+<span class="nc" id="L80">            sql.append(&quot;0 = &quot;);</span>
+        else
+<span class="nc" id="L82">            sql.append(&quot;0 &lt; &quot;);</span>
+
+<span class="nc" id="L84">        appendSize(sql, sel, joins);</span>
+<span class="nc" id="L85">    }</span>
+
+    public abstract ForeignKey getJoinForeignKey();
+
+    @Override
+    public void appendSize(SQLBuffer sql, Select sel, Joins joins) {
+<span class="nc" id="L91">        DBDictionary dict = field.getMappingRepository().getDBDictionary();</span>
+<span class="nc" id="L92">        dict.assertSupport(dict.supportsSubselect, &quot;SupportsSubselect&quot;);</span>
+
+<span class="nc" id="L94">        ClassMapping[] ind = getIndependentElementMappings(false);</span>
+<span class="nc bnc" id="L95" title="All 4 branches missed.">        if (ind != null &amp;&amp; ind.length &gt; 1)</span>
+<span class="nc" id="L96">            throw RelationStrategies.unjoinable(field);</span>
+
+<span class="nc" id="L98">        ForeignKey fk = getJoinForeignKey();</span>
+<span class="nc" id="L99">        appendJoinCount(sql, sel, joins, dict, field, fk);</span>
+<span class="nc" id="L100">    }</span>
+
+    @Override
+    public void appendIndex(SQLBuffer sql, Select sel, Joins joins) {
+<span class="nc" id="L104">        sql.append(sel.getColumnAlias(field.getOrderColumn(),</span>
+<span class="nc" id="L105">            field.getName()));</span>
+<span class="nc" id="L106">    }</span>
+
+    protected static void appendJoinCount(SQLBuffer sql, Select sel,
+        Joins joins, DBDictionary dict, FieldMapping field, ForeignKey fk) {
+<span class="nc" id="L110">        String fullTable = dict.getFullName(fk.getTable(), false);</span>
+<span class="nc" id="L111">        sql.append(&quot;(SELECT COUNT(*) FROM &quot;).append(fullTable).</span>
+<span class="nc" id="L112">            append(&quot; WHERE &quot;);</span>
+<span class="nc" id="L113">        appendUnaliasedJoin(sql, sel, joins, dict, field, fk);</span>
+<span class="nc" id="L114">        sql.append(&quot;)&quot;);</span>
+<span class="nc" id="L115">    }</span>
+
+    public static void appendUnaliasedJoin(SQLBuffer sql, Select sel,
+        Joins joins, DBDictionary dict, FieldMapping field, ForeignKey fk) {
+<span class="nc" id="L119">        String fullTable = dict.getFullName(fk.getTable(), false);</span>
+
+<span class="nc" id="L121">        Column[] cols = fk.getColumns();</span>
+<span class="nc" id="L122">        Column[] pks = fk.getPrimaryKeyColumns();</span>
+<span class="nc" id="L123">        int count = 0;</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++, count++) {</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">            if (count &gt; 0)</span>
+<span class="nc" id="L126">                sql.append(&quot; AND &quot;);</span>
+<span class="nc" id="L127">            sql.append(fullTable).append(&quot;.&quot;).append(cols[i]).append(&quot; = &quot;).</span>
+<span class="nc" id="L128">                append(sel.getColumnAlias(pks[i], joins));</span>
+        }
+
+<span class="nc" id="L131">        cols = fk.getConstantColumns();</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++, count++) {</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">            if (count &gt; 0)</span>
+<span class="nc" id="L134">                sql.append(&quot; AND &quot;);</span>
+<span class="nc" id="L135">            sql.append(fullTable).append(&quot;.&quot;).append(cols[i]).append(&quot; = &quot;).</span>
+<span class="nc" id="L136">                appendValue(fk.getConstant(cols[i]), cols[i]);</span>
+        }
+
+<span class="nc" id="L139">        pks = fk.getConstantPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        for (int i = 0; i &lt; pks.length; i++, count++) {</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">            if (count &gt; 0)</span>
+<span class="nc" id="L142">                sql.append(&quot; AND &quot;);</span>
+<span class="nc" id="L143">            sql.append(sel.getColumnAlias(pks[i], joins)).append(&quot; = &quot;).</span>
+<span class="nc" id="L144">                appendValue(fk.getPrimaryKeyConstant(pks[i]), pks[i]);</span>
+        }
+<span class="nc" id="L146">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,1002 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TableJDBCSeq.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">TableJDBCSeq.java</span></div><h1>TableJDBCSeq.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.io.Serializable;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.transaction.NotSupportedException;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.jdbc.identifier.Normalizer;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.SchemaTool;
+import org.apache.openjpa.jdbc.schema.Schemas;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configuration;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.identifier.IdentifierUtil;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Options;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.InvalidStateException;
+import org.apache.openjpa.util.UserException;
+
+
+////////////////////////////////////////////////////////////
+// NOTE: Do not change property names; see SequenceMetaData
+// and SequenceMapping for standard property names.
+////////////////////////////////////////////////////////////
+
+/**
+ * {@link JDBCSeq} implementation that uses a database table
+ * for sequence number generation. This base implementation uses a single
+ * row for a global sequence number.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L75">public class TableJDBCSeq extends AbstractJDBCSeq implements Configurable {</span>
+
+    public static final String ACTION_DROP = &quot;drop&quot;;
+    public static final String ACTION_ADD = &quot;add&quot;;
+    public static final String ACTION_GET = &quot;get&quot;;
+    public static final String ACTION_SET = &quot;set&quot;;
+    public static final String DEFAULT_TABLE = &quot;OPENJPA_SEQUENCE_TABLE&quot;;
+
+<span class="nc" id="L83">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L84">        (TableJDBCSeq.class);</span>
+
+<span class="nc" id="L86">    private transient JDBCConfiguration _conf = null;</span>
+<span class="nc" id="L87">    private transient Log _log = null;</span>
+<span class="nc" id="L88">    private int _alloc = 50;</span>
+<span class="nc" id="L89">    private int _intValue = 1;</span>
+<span class="nc" id="L90">    private final ConcurrentHashMap&lt;ClassMapping, Status&gt; _stat = new ConcurrentHashMap&lt;&gt;();</span>
+
+<span class="nc" id="L92">    private DBIdentifier _table = DBIdentifier.newTable(DEFAULT_TABLE);</span>
+<span class="nc" id="L93">    private DBIdentifier _seqColumnName = DBIdentifier.newColumn(&quot;SEQUENCE_VALUE&quot;);</span>
+<span class="nc" id="L94">    private DBIdentifier _pkColumnName = DBIdentifier.newColumn(&quot;ID&quot;);</span>
+    private DBIdentifier[] _uniqueColumnNames;
+<span class="nc" id="L96">    private DBIdentifier _uniqueConstraintName = DBIdentifier.NULL;</span>
+
+<span class="nc" id="L98">    private Column _seqColumn = null;</span>
+<span class="nc" id="L99">    private Column _pkColumn = null;</span>
+
+    /**
+     * The sequence table name. Defaults to &lt;code&gt;OPENJPA_SEQUENCE_TABLE&lt;/code&gt;.
+     * By default, the table will be placed in the first schema listed in your
+     * &lt;code&gt;openjpa.jdbc.Schemas&lt;/code&gt; property, or in the default schema if
+     * the property is not given. If you specify a table name in the form
+     * &lt;code&gt;&amp;lt;schema&amp;gt;.&amp;lt;table&amp;gt;&lt;/code&gt;, then the given schema
+     * will be used.
+     */
+    public String getTable() {
+<span class="nc" id="L110">        return _table.getName();</span>
+    }
+
+    /**
+     * The sequence table name. Defaults to &lt;code&gt;OPENJPA_SEQUENCE_TABLE&lt;/code&gt;.
+     * By default, the table will be placed in the first schema listed in your
+     * &lt;code&gt;openjpa.jdbc.Schemas&lt;/code&gt; property, or in the default schema if
+     * the property is not given. If you specify a table name in the form
+     * &lt;code&gt;&amp;lt;schema&amp;gt;.&amp;lt;table&amp;gt;&lt;/code&gt;, then the given schema
+     * will be used.
+     */
+    public void setTable(String name) {
+        // Split the name into its individual parts
+<span class="nc" id="L123">        String[] names = Normalizer.splitName(name);</span>
+        // Join the name back together.  This will delimit as appropriate.
+<span class="nc" id="L125">        _table = DBIdentifier.newTable(Normalizer.joinNames(names));</span>
+<span class="nc" id="L126">    }</span>
+
+    /**
+     * @deprecated Use {@link #setTable}. Retained for
+     * backwards-compatibility	with auto-configuration.
+     */
+    @Deprecated
+    public void setTableName(String name) {
+<span class="nc" id="L134">        setTable(name);</span>
+<span class="nc" id="L135">    }</span>
+
+    /**
+     * The name of the column that holds the sequence value. Defaults
+     * to &lt;code&gt;SEQUENCE_VALUE&lt;/code&gt;.
+     */
+    public String getSequenceColumn() {
+<span class="nc" id="L142">        return _seqColumnName.getName();</span>
+    }
+
+    /**
+     * The name of the column that holds the sequence value. Defaults
+     * to &lt;code&gt;SEQUENCE_VALUE&lt;/code&gt;.
+     */
+    public void setSequenceColumn(String sequenceColumn) {
+<span class="nc" id="L150">        _seqColumnName = DBIdentifier.newColumn(sequenceColumn);</span>
+<span class="nc" id="L151">    }</span>
+
+    /**
+     * The name of the table's primary key column. Defaults to
+     * &lt;code&gt;ID&lt;/code&gt;.
+     */
+    public String getPrimaryKeyColumn() {
+<span class="nc" id="L158">        return _pkColumnName.getName();</span>
+    }
+
+    public DBIdentifier getPrimaryKeyColumnIdentifier() {
+<span class="nc" id="L162">        return _pkColumnName;</span>
+    }
+
+    /**
+     * The name of the table's primary key column. Defaults to
+     * &lt;code&gt;ID&lt;/code&gt;.
+     */
+    public void setPrimaryKeyColumn(String primaryKeyColumn) {
+<span class="nc" id="L170">        _pkColumnName = DBIdentifier.newColumn(primaryKeyColumn);</span>
+<span class="nc" id="L171">    }</span>
+
+    /**
+     * Return the number of sequences to allocate for each update of the
+     * sequence table. Sequence numbers will be grabbed in blocks of this
+     * value to reduce the number of transactions that must be performed on
+     * the sequence table.
+     */
+    public int getAllocate() {
+<span class="nc" id="L180">        return _alloc;</span>
+    }
+
+    /**
+     * Return the number of sequences to allocate for each update of the
+     * sequence table. Sequence numbers will be grabbed in blocks of this
+     * value to reduce the number of transactions that must be performed on
+     * the sequence table.
+     */
+    public void setAllocate(int alloc) {
+<span class="nc" id="L190">        _alloc = alloc;</span>
+<span class="nc" id="L191">    }</span>
+
+    /**
+     * Return the number as the initial number for the
+     * GeneratedValue.TABLE strategy to start with.
+     * @return an initial number
+     */
+    public int getInitialValue() {
+<span class="nc" id="L199">        return _intValue;</span>
+    }
+
+    /**
+     * Set the initial number in the table for the GeneratedValue.TABLE
+     * strategy to use as initial number.
+     * @param intValue. The initial number
+     */
+    public void setInitialValue(int intValue) {
+<span class="nc" id="L208">        _intValue = intValue;</span>
+<span class="nc" id="L209">    }</span>
+
+    /**
+     * Sets the names of the columns on which a unique constraint is set.
+     * @param columnsNames are passed as a single String concatenated with
+     * a '|' character. This method parses it back to array of Strings.
+     */
+    public void setUniqueColumns(String columnNames) {
+<span class="nc bnc" id="L217" title="All 2 branches missed.">    	_uniqueColumnNames = (StringUtil.isEmpty(columnNames))</span>
+<span class="nc" id="L218">    		? null : DBIdentifier.split(columnNames, DBIdentifierType.COLUMN, IdentifierUtil.BAR);</span>
+<span class="nc" id="L219">    }</span>
+
+    public String getUniqueColumns() {
+<span class="nc" id="L222">    	return Normalizer.joinNames(DBIdentifier.toStringArray(_uniqueColumnNames), IdentifierUtil.BAR);</span>
+    }
+
+    /**
+     * @deprecated Use {@link #setAllocate}. Retained for backwards
+     * compatibility of auto-configuration.
+     */
+    @Deprecated
+    public void setIncrement(int inc) {
+<span class="nc" id="L231">        setAllocate(inc);</span>
+<span class="nc" id="L232">    }</span>
+
+    @Override
+    public JDBCConfiguration getConfiguration() {
+<span class="nc" id="L236">        return _conf;</span>
+    }
+
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc" id="L241">        _conf = (JDBCConfiguration) conf;</span>
+<span class="nc" id="L242">        _log = _conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);</span>
+<span class="nc" id="L243">    }</span>
+
+    @Override
+    public void startConfiguration() {
+<span class="nc" id="L247">    }</span>
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L251">        buildTable();</span>
+<span class="nc" id="L252">    }</span>
+
+
+    @Override
+    public void addSchema(ClassMapping mapping, SchemaGroup group) {
+        // Since the table is created by openjpa internally
+        // we can create the table for each schema within the PU
+        // in here.
+
+<span class="nc" id="L261">        Schema[] schemas = group.getSchemas();</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L263">            QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(_table);</span>
+<span class="nc" id="L264">            DBIdentifier schemaName = path.getSchemaName();</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">            if (DBIdentifier.isEmpty(schemaName)) {</span>
+<span class="nc" id="L266">                schemaName = Schemas.getNewTableSchemaIdentifier(_conf);</span>
+            }
+<span class="nc bnc" id="L268" title="All 2 branches missed.">            if (DBIdentifier.isNull(schemaName)) {</span>
+<span class="nc" id="L269">                schemaName = schemas[i].getIdentifier();</span>
+            }
+
+            // create table in this group
+<span class="nc" id="L273">            Schema schema = group.getSchema(schemaName);</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">            if (schema == null) {</span>
+<span class="nc" id="L275">                schema = group.addSchema(schemaName);</span>
+            }
+
+<span class="nc" id="L278">            Table copy = schema.importTable(_pkColumn.getTable());</span>
+            // importTable() does not import unique constraints
+<span class="nc" id="L280">            Unique[] uniques = _pkColumn.getTable().getUniques();</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">            for (Unique u : uniques) {</span>
+<span class="nc" id="L282">            	copy.importUnique(u);</span>
+            }
+            // we need to reset the table name in the column with the
+            // fully qualified name for matching the table name from the
+            // Column.
+<span class="nc" id="L287">            _pkColumn.resetTableIdentifier(QualifiedDBIdentifier.newPath(schemaName, _pkColumn.getTableIdentifier()));</span>
+            // some databases require to create an index for the sequence table
+<span class="nc" id="L289">            _conf.getDBDictionaryInstance().createIndexIfNecessary(schema,</span>
+                    _table, _pkColumn);
+        }
+<span class="nc" id="L292">    }</span>
+
+    @Override
+    protected Object nextInternal(JDBCStore store, ClassMapping mapping) throws Exception {
+        // if needed, grab the next handful of ids
+<span class="nc" id="L297">        Status stat = getStatus(mapping);</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">        if (stat == null)</span>
+<span class="nc" id="L299">            throw new InvalidStateException(_loc.get(&quot;bad-seq-type&quot;,</span>
+<span class="nc" id="L300">                getClass(), mapping));</span>
+
+        while (true) {
+<span class="nc" id="L303">            synchronized (stat) {</span>
+                // make sure seq is at least 1, since autoassigned ids of 0 can
+                // conflict with uninitialized values
+<span class="nc" id="L306">                stat.seq = Math.max(stat.seq, 1);</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">                if (stat.seq &lt; stat.max)</span>
+<span class="nc" id="L308">                    return stat.seq++;</span>
+<span class="nc" id="L309">                allocateSequence(store, mapping, stat, _alloc, true);</span>
+<span class="nc" id="L310">            }</span>
+        }
+    }
+
+    @Override
+    protected Object currentInternal(JDBCStore store, ClassMapping mapping)
+        throws Exception {
+<span class="nc bnc" id="L317" title="All 2 branches missed.">        if (current == null) {</span>
+<span class="nc" id="L318">            CurrentSequenceRunnable runnable =</span>
+                new CurrentSequenceRunnable(store, mapping);
+            try {
+<span class="nc bnc" id="L321" title="All 2 branches missed.">                if (suspendInJTA()) {</span>
+                    // NotSupportedException is wrapped in a StoreException by
+                    // the caller.
+<span class="nc" id="L324">                    _conf.getManagedRuntimeInstance().doNonTransactionalWork(</span>
+                            runnable);
+                } else {
+<span class="nc" id="L327">                    runnable.run();</span>
+                }
+<span class="nc" id="L329">            } catch (RuntimeException re) {</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">                throw (Exception) (re.getCause() == null ? re : re.getCause());</span>
+<span class="nc" id="L331">            }</span>
+        }
+<span class="nc" id="L333">        return super.currentInternal(store, mapping);</span>
+    }
+
+    @Override
+    protected void allocateInternal(int count, JDBCStore store,
+        ClassMapping mapping)
+        throws SQLException {
+<span class="nc" id="L340">        Status stat = getStatus(mapping);</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        if (stat == null)</span>
+<span class="nc" id="L342">            return;</span>
+
+        while (true) {
+            int available;
+<span class="nc" id="L346">            synchronized (stat) {</span>
+<span class="nc" id="L347">                available = (int) (stat.max - stat.seq);</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">                if (available &gt;= count)</span>
+<span class="nc" id="L349">                    return;</span>
+<span class="nc" id="L350">            }</span>
+<span class="nc" id="L351">            allocateSequence(store, mapping, stat, count - available, false);</span>
+<span class="nc" id="L352">        }</span>
+    }
+
+    /**
+     * Return the appropriate status object for the given class, or null
+     * if cannot handle the given class. The mapping may be null.
+     */
+    protected Status getStatus(ClassMapping mapping) {
+<span class="nc" id="L360">        Status status = _stat.get(mapping);</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">        if (status == null){</span>
+<span class="nc" id="L362">            status = new Status();</span>
+<span class="nc" id="L363">            Status tStatus = _stat.putIfAbsent(mapping, status);</span>
+            // This can happen if another thread calls .put(..) sometime after our call to get. Return
+            // the value from the putIfAbsent call as that is truly in the map.
+<span class="nc bnc" id="L366" title="All 2 branches missed.">            if (tStatus != null) {</span>
+<span class="nc" id="L367">                return tStatus;</span>
+            }
+        }
+<span class="nc" id="L370">        return status;</span>
+    }
+
+    /**
+     * Add the primary key column to the given table and return it.
+     */
+    protected Column addPrimaryKeyColumn(Table table) {
+<span class="nc" id="L377">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L378">        Column pkColumn = table.addColumn(dict.getValidColumnName</span>
+<span class="nc" id="L379">            (getPrimaryKeyColumnIdentifier(), table));</span>
+<span class="nc" id="L380">        pkColumn.setType(dict.getPreferredType(Types.TINYINT));</span>
+<span class="nc" id="L381">        pkColumn.setJavaType(JavaTypes.INT);</span>
+<span class="nc" id="L382">        return pkColumn;</span>
+    }
+
+    /**
+     * Return the primary key value for the sequence table for the given class.
+     */
+    protected Object getPrimaryKey(ClassMapping mapping) {
+<span class="nc" id="L389">        return 0;</span>
+    }
+
+    /**
+     * Creates the object-level representation of the sequence table.
+     */
+    private void buildTable() {
+<span class="nc" id="L396">        DBIdentifier tableName = DBIdentifier.NULL;</span>
+<span class="nc" id="L397">        DBIdentifier schemaName = DBIdentifier.NULL;</span>
+<span class="nc" id="L398">        QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(_table);</span>
+<span class="nc bnc" id="L399" title="All 2 branches missed.">        if (!DBIdentifier.isEmpty(path.getSchemaName())) {</span>
+<span class="nc" id="L400">            schemaName = path.getSchemaName();</span>
+<span class="nc" id="L401">            tableName = path.getUnqualifiedName();</span>
+        }
+        else {
+<span class="nc" id="L404">            tableName = _table;</span>
+        }
+
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        if (DBIdentifier.isEmpty(schemaName)) {</span>
+<span class="nc" id="L408">            schemaName = Schemas.getNewTableSchemaIdentifier(_conf);</span>
+        }
+
+<span class="nc" id="L411">        SchemaGroup group = new SchemaGroup();</span>
+<span class="nc" id="L412">        Schema schema = group.addSchema(schemaName);</span>
+
+<span class="nc" id="L414">        Table table = schema.addTable(tableName);</span>
+<span class="nc" id="L415">        _pkColumn = addPrimaryKeyColumn(table);</span>
+<span class="nc" id="L416">        PrimaryKey pk = table.addPrimaryKey();</span>
+<span class="nc" id="L417">        pk.addColumn(_pkColumn);</span>
+
+<span class="nc" id="L419">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L420">        _seqColumn = table.addColumn(dict.getValidColumnName</span>
+<span class="nc" id="L421">            (_seqColumnName, table));</span>
+<span class="nc" id="L422">        _seqColumn.setType(dict.getPreferredType(Types.BIGINT));</span>
+<span class="nc" id="L423">        _seqColumn.setJavaType(JavaTypes.LONG);</span>
+
+<span class="nc bnc" id="L425" title="All 2 branches missed.">        if (_uniqueColumnNames != null) {</span>
+<span class="nc" id="L426">            DBIdentifier uniqueName = _uniqueConstraintName;</span>
+<span class="nc bnc" id="L427" title="All 2 branches missed.">            if (DBIdentifier.isEmpty(uniqueName)) {</span>
+<span class="nc" id="L428">                uniqueName = dict.getValidUniqueName(DBIdentifier.newConstraint(&quot;UNQ&quot;), table);</span>
+            }
+<span class="nc" id="L430">    		Unique u = table.addUnique(uniqueName);</span>
+<span class="nc bnc" id="L431" title="All 2 branches missed.">    		for (DBIdentifier columnName : _uniqueColumnNames) {</span>
+<span class="nc bnc" id="L432" title="All 2 branches missed.">    			if (!table.containsColumn(columnName, _conf.getDBDictionaryInstance()))</span>
+<span class="nc" id="L433">                    throw new UserException(_loc.get(&quot;unique-missing-column&quot;,</span>
+<span class="nc" id="L434">                            columnName, table.getIdentifier(),</span>
+<span class="nc" id="L435">                            table.getColumnNames()));</span>
+<span class="nc" id="L436">    			Column col = table.getColumn(columnName);</span>
+<span class="nc" id="L437">    			u.addColumn(col);</span>
+    		}
+        }
+
+<span class="nc" id="L441">    }</span>
+
+    /**
+     * Updates the max available sequence value.
+     */
+    private void allocateSequence(JDBCStore store, ClassMapping mapping,
+            Status stat, int alloc, boolean updateStatSeq) throws SQLException {
+<span class="nc" id="L448">        Runnable runnable =</span>
+            new AllocateSequenceRunnable(
+                    store, mapping, stat, alloc, updateStatSeq);
+        try {
+<span class="nc bnc" id="L452" title="All 2 branches missed.">            if (suspendInJTA()) {</span>
+                // NotSupportedException is wrapped in a StoreException by
+                // the caller.
+                try {
+<span class="nc" id="L456">                _conf.getManagedRuntimeInstance().doNonTransactionalWork(</span>
+                        runnable);
+                }
+<span class="nc" id="L459">                catch(NotSupportedException nse) {</span>
+<span class="nc" id="L460">                    SQLException sqlEx = new SQLException(</span>
+<span class="nc" id="L461">                            nse.getLocalizedMessage());</span>
+<span class="nc" id="L462">                    sqlEx.initCause(nse);</span>
+<span class="nc" id="L463">                    throw sqlEx;</span>
+<span class="nc" id="L464">                }</span>
+            } else {
+<span class="nc" id="L466">                runnable.run();</span>
+            }
+<span class="nc" id="L468">        } catch (RuntimeException re) {</span>
+<span class="nc" id="L469">            Throwable e = re.getCause();</span>
+<span class="nc bnc" id="L470" title="All 2 branches missed.">            if(e instanceof SQLException )</span>
+<span class="nc" id="L471">                throw (SQLException) e;</span>
+            else
+<span class="nc" id="L473">                throw re;</span>
+<span class="nc" id="L474">        }</span>
+<span class="nc" id="L475">    }</span>
+
+    /**
+     * Inserts the initial sequence column into the database.
+     *
+     * @param mapping
+     *            ClassMapping for the class whose sequence column will be
+     *            updated
+     * @param conn
+     *            Connection used issue SQL statements.
+     */
+    private void insertSequence(ClassMapping mapping, Connection conn)
+        throws SQLException {
+
+<span class="nc bnc" id="L489" title="All 2 branches missed.">        if (_log.isTraceEnabled())</span>
+<span class="nc" id="L490">            _log.trace(_loc.get(&quot;insert-seq&quot;));</span>
+
+<span class="nc" id="L492">        Object pk = getPrimaryKey(mapping);</span>
+<span class="nc bnc" id="L493" title="All 2 branches missed.">        if (pk == null)</span>
+<span class="nc" id="L494">            throw new InvalidStateException(_loc.get(&quot;bad-seq-type&quot;,</span>
+<span class="nc" id="L495">                getClass(), mapping));</span>
+
+<span class="nc" id="L497">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L498">        DBIdentifier tableName = resolveTableIdentifier(mapping, _pkColumn.getTable());</span>
+<span class="nc" id="L499">        SQLBuffer insert = new SQLBuffer(dict).append(&quot;INSERT INTO &quot;).</span>
+<span class="nc" id="L500">            append(tableName).append(&quot; (&quot;).</span>
+<span class="nc" id="L501">            append(_pkColumn).append(&quot;, &quot;).append(_seqColumn).</span>
+<span class="nc" id="L502">            append(&quot;) VALUES (&quot;).</span>
+<span class="nc" id="L503">            appendValue(pk, _pkColumn).append(&quot;, &quot;).</span>
+<span class="nc" id="L504">            appendValue(_intValue, _seqColumn).append(&quot;)&quot;);</span>
+
+<span class="nc" id="L506">        boolean wasAuto = conn.getAutoCommit();</span>
+<span class="nc bnc" id="L507" title="All 4 branches missed.">        if (!wasAuto &amp;&amp; !suspendInJTA())</span>
+<span class="nc" id="L508">            conn.setAutoCommit(true);</span>
+
+<span class="nc" id="L510">        PreparedStatement stmnt = null;</span>
+        try {
+<span class="nc" id="L512">            stmnt = prepareStatement(conn, insert);</span>
+<span class="nc" id="L513">            dict.setTimeouts(stmnt, _conf, true);</span>
+<span class="nc" id="L514">            executeUpdate(_conf, conn, stmnt, insert, Row.ACTION_INSERT);</span>
+        } finally {
+<span class="nc bnc" id="L516" title="All 2 branches missed.">            if (stmnt != null)</span>
+<span class="nc" id="L517">                try { stmnt.close(); } catch (SQLException se) {}</span>
+<span class="nc bnc" id="L518" title="All 4 branches missed.">            if (!wasAuto &amp;&amp; !suspendInJTA())</span>
+<span class="nc" id="L519">                conn.setAutoCommit(false);</span>
+        }
+<span class="nc" id="L521">    }</span>
+
+    /**
+     * Get the current sequence value.
+     *
+     * @param mapping
+     *            ClassMapping of the entity whose sequence value will be
+     *            obtained.
+     * @param conn
+     *            Connection used issue SQL statements.
+     *
+     * @return The current sequence value, or &lt;code&gt;SEQUENCE_NOT_FOUND&lt;/code&gt;
+     *         if the sequence could not be found.
+     */
+    protected long getSequence(ClassMapping mapping, Connection conn)
+        throws SQLException {
+<span class="nc bnc" id="L537" title="All 2 branches missed.">        if (_log.isTraceEnabled())</span>
+<span class="nc" id="L538">            _log.trace(_loc.get(&quot;get-seq&quot;));</span>
+
+<span class="nc" id="L540">        Object pk = getPrimaryKey(mapping);</span>
+<span class="nc bnc" id="L541" title="All 2 branches missed.">        if (pk == null)</span>
+<span class="nc" id="L542">            return -1;</span>
+
+<span class="nc" id="L544">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L545">        SQLBuffer sel = new SQLBuffer(dict).append(_seqColumn);</span>
+<span class="nc" id="L546">        SQLBuffer where = new SQLBuffer(dict).append(_pkColumn).append(&quot; = &quot;).</span>
+<span class="nc" id="L547">            appendValue(pk, _pkColumn);</span>
+<span class="nc" id="L548">        DBIdentifier tableName = resolveTableIdentifier(mapping, _seqColumn.getTable());</span>
+<span class="nc" id="L549">        SQLBuffer tables = new SQLBuffer(dict).append(tableName);</span>
+
+<span class="nc" id="L551">        SQLBuffer select = dict.toSelect(sel, null, tables, where, null, null,</span>
+                null, false, dict.supportsSelectForUpdate, 0, Long.MAX_VALUE,
+                false, true);
+
+<span class="nc" id="L555">        PreparedStatement stmnt = null;</span>
+<span class="nc" id="L556">        ResultSet rs = null;</span>
+        try {
+<span class="nc" id="L558">            stmnt = prepareStatement(conn, select);</span>
+<span class="nc" id="L559">            dict.setTimeouts(stmnt, _conf, false);</span>
+<span class="nc" id="L560">            rs = executeQuery(_conf, conn, stmnt, select);</span>
+<span class="nc" id="L561">            return getSequence(rs, dict);</span>
+        } finally {
+<span class="nc bnc" id="L563" title="All 2 branches missed.">            if (rs != null)</span>
+<span class="nc" id="L564">                try { rs.close(); } catch (SQLException se) {}</span>
+<span class="nc bnc" id="L565" title="All 2 branches missed.">            if (stmnt != null)</span>
+<span class="nc" id="L566">                try { stmnt.close(); } catch (SQLException se) {}</span>
+        }
+    }
+
+    /**
+     * Grabs the next handful of sequence numbers.
+     *
+     * @return true if the sequence was updated, false if no sequence
+     * row existed for this mapping
+     */
+    protected boolean setSequence(ClassMapping mapping, Status stat, int inc,
+        boolean updateStatSeq, Connection conn)
+        throws SQLException {
+<span class="nc bnc" id="L579" title="All 2 branches missed.">        if (_log.isTraceEnabled())</span>
+<span class="nc" id="L580">            _log.trace(_loc.get(&quot;update-seq&quot;));</span>
+
+<span class="nc" id="L582">        Object pk = getPrimaryKey(mapping);</span>
+<span class="nc bnc" id="L583" title="All 2 branches missed.">        if (pk == null)</span>
+<span class="nc" id="L584">            throw new InvalidStateException(_loc.get(&quot;bad-seq-type&quot;,</span>
+<span class="nc" id="L585">                getClass(), mapping));</span>
+
+<span class="nc" id="L587">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L588">        SQLBuffer where = new SQLBuffer(dict).append(_pkColumn).append(&quot; = &quot;).</span>
+<span class="nc" id="L589">            appendValue(pk, _pkColumn);</span>
+
+        // loop until we have a successful atomic select/update sequence
+<span class="nc" id="L592">        long cur = 0;</span>
+        PreparedStatement stmnt;
+        ResultSet rs;
+        SQLBuffer upd;
+<span class="nc bnc" id="L596" title="All 2 branches missed.">        for (int updates = 0; updates == 0;) {</span>
+<span class="nc" id="L597">            stmnt = null;</span>
+<span class="nc" id="L598">            rs = null;</span>
+            try {
+<span class="nc" id="L600">                cur = getSequence(mapping, conn);</span>
+<span class="nc bnc" id="L601" title="All 2 branches missed.">                if (cur == -1)</span>
+<span class="nc" id="L602">                    return false;</span>
+
+                // update the value
+<span class="nc" id="L605">                upd = new SQLBuffer(dict);</span>
+<span class="nc" id="L606">                DBIdentifier tableName = resolveTableIdentifier(mapping,</span>
+<span class="nc" id="L607">                        _seqColumn.getTable());</span>
+<span class="nc" id="L608">                upd.append(&quot;UPDATE &quot;).append(tableName).</span>
+<span class="nc" id="L609">                    append(&quot; SET &quot;).append(_seqColumn).append(&quot; = &quot;).</span>
+<span class="nc" id="L610">                    appendValue(cur + inc, _seqColumn).</span>
+<span class="nc" id="L611">                    append(&quot; WHERE &quot;).append(where).append(&quot; AND &quot;).</span>
+<span class="nc" id="L612">                    append(_seqColumn).append(&quot; = &quot;).</span>
+<span class="nc" id="L613">                    appendValue(cur, _seqColumn);</span>
+
+<span class="nc" id="L615">                stmnt = prepareStatement(conn, upd);</span>
+<span class="nc" id="L616">                dict.setTimeouts(stmnt, _conf, true);</span>
+<span class="nc" id="L617">                updates = executeUpdate(_conf, conn, stmnt, upd,</span>
+                        Row.ACTION_UPDATE);
+            } finally {
+<span class="nc bnc" id="L620" title="All 2 branches missed.">                if (rs != null)</span>
+<span class="nc" id="L621">                    try { rs.close(); } catch (SQLException se) {}</span>
+<span class="nc bnc" id="L622" title="All 2 branches missed.">                if (stmnt != null)</span>
+<span class="nc" id="L623">                    try { stmnt.close(); } catch (SQLException se) {}</span>
+<span class="nc" id="L624">            }</span>
+        }
+
+        // setup new sequence range
+<span class="nc" id="L628">        synchronized (stat) {</span>
+<span class="nc bnc" id="L629" title="All 4 branches missed.">            if (updateStatSeq &amp;&amp; stat.seq &lt; cur)</span>
+<span class="nc" id="L630">                stat.seq = cur;</span>
+<span class="nc bnc" id="L631" title="All 2 branches missed.">            if (stat.max &lt; cur + inc)</span>
+<span class="nc" id="L632">                stat.max = cur + inc;</span>
+<span class="nc" id="L633">        }</span>
+<span class="nc" id="L634">        return true;</span>
+    }
+    /**
+     * Resolve a fully qualified table name
+     *
+     * @param class
+     *            mapping to get the schema name
+     * @deprecated
+     */
+    @Deprecated
+    public String resolveTableName(ClassMapping mapping, Table table) {
+<span class="nc" id="L645">        return resolveTableIdentifier(mapping, table).getName();</span>
+    }
+
+    /**
+     * Resolve a fully qualified table name
+     *
+     * @param class
+     *            mapping to get the schema name
+     */
+    public DBIdentifier resolveTableIdentifier(ClassMapping mapping, Table table) {
+<span class="nc" id="L655">        DBIdentifier sName = mapping.getTable().getSchemaIdentifier();</span>
+<span class="nc" id="L656">        DBIdentifier tableName = DBIdentifier.NULL;</span>
+
+        //OPENJPA-2650: Don't use a schema name if the user has requested,
+        //via useSchemaName, to not use one.
+<span class="nc bnc" id="L660" title="All 2 branches missed.">        if (!_conf.getDBDictionaryInstance().useSchemaName){</span>
+<span class="nc" id="L661">            tableName = table.getIdentifier();</span>
+<span class="nc bnc" id="L662" title="All 2 branches missed.">        } else if (DBIdentifier.isNull(sName)) {</span>
+<span class="nc" id="L663">            tableName = table.getFullIdentifier();</span>
+<span class="nc bnc" id="L664" title="All 2 branches missed.">        } else if (!DBIdentifier.isNull(table.getSchemaIdentifier())) {</span>
+<span class="nc" id="L665">            tableName = table.getFullIdentifier();</span>
+        } else {
+<span class="nc" id="L667">            tableName = QualifiedDBIdentifier.newPath(sName, table.getIdentifier());</span>
+        }
+<span class="nc" id="L669">        return tableName;</span>
+    }
+
+
+    /**
+     * Creates the sequence table in the DB.
+     */
+    public void refreshTable()
+        throws SQLException {
+<span class="nc bnc" id="L678" title="All 2 branches missed.">        if (_log.isInfoEnabled())</span>
+<span class="nc" id="L679">            _log.info(_loc.get(&quot;make-seq-table&quot;));</span>
+
+        // create the table
+<span class="nc" id="L682">        SchemaTool tool = new SchemaTool(_conf);</span>
+<span class="nc" id="L683">        tool.setIgnoreErrors(true);</span>
+<span class="nc" id="L684">        tool.createTable(_pkColumn.getTable());</span>
+<span class="nc" id="L685">    }</span>
+
+    /**
+     * Drops the sequence table in the DB.
+     */
+    public void dropTable()
+        throws SQLException {
+<span class="nc bnc" id="L692" title="All 2 branches missed.">        if (_log.isInfoEnabled())</span>
+<span class="nc" id="L693">            _log.info(_loc.get(&quot;drop-seq-table&quot;));</span>
+
+        // drop the table
+<span class="nc" id="L696">        SchemaTool tool = new SchemaTool(_conf);</span>
+<span class="nc" id="L697">        tool.setIgnoreErrors(true);</span>
+<span class="nc" id="L698">        tool.dropTable(_pkColumn.getTable());</span>
+<span class="nc" id="L699">    }</span>
+
+    /////////
+    // Main
+    /////////
+
+    /**
+     * Usage: java org.apache.openjpa.jdbc.schema.TableJDBCSequence [option]*
+     * -action/-a &amp;lt;add | drop | get | set&amp;gt; [value]
+     *  Where the following options are recognized.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;-properties/-p &amp;lt;properties file or resource&amp;gt;&lt;/i&gt;: The
+     * path or resource name of a OpenJPA properties file containing
+     * information such as the license key	and connection data as
+     * outlined in {@link JDBCConfiguration}. Optional.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-&amp;lt;property name&amp;gt; &amp;lt;property value&amp;gt;&lt;/i&gt;: All bean
+     * properties of the OpenJPA {@link JDBCConfiguration} can be set by
+     * using their	names and supplying a value. For example:
+     * &lt;code&gt;-licenseKey adslfja83r3lkadf&lt;/code&gt;&lt;/li&gt;
+     * &lt;/ul&gt;
+     *  The various actions are as follows.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;add&lt;/i&gt;: Create the sequence table.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;drop&lt;/i&gt;: Drop the sequence table.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;get&lt;/i&gt;: Print the current sequence value.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;set&lt;/i&gt;: Set the sequence value.&lt;/li&gt;
+     * &lt;/ul&gt;
+     */
+    public static void main(String[] args)
+        throws Exception {
+<span class="nc" id="L729">        Options opts = new Options();</span>
+<span class="nc" id="L730">        final String[] arguments = opts.setFromCmdLine(args);</span>
+<span class="nc" id="L731">        boolean ret = Configurations.runAgainstAllAnchors(opts,</span>
+<span class="nc" id="L732">            new Configurations.Runnable() {</span>
+            @Override
+            public boolean run(Options opts) throws Exception {
+<span class="nc" id="L735">                JDBCConfiguration conf = new JDBCConfigurationImpl();</span>
+                try {
+<span class="nc" id="L737">                    return TableJDBCSeq.run(conf, arguments, opts);</span>
+                } finally {
+<span class="nc" id="L739">                    conf.close();</span>
+                }
+            }
+        });
+<span class="nc bnc" id="L743" title="All 2 branches missed.">        if (!ret) {</span>
+            // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L745">            System.out.println(_loc.get(&quot;seq-usage&quot;));</span>
+            // STOP - ALLOW PRINT STATEMENTS
+        }
+<span class="nc" id="L748">    }</span>
+
+    /**
+     * Run the tool. Returns false if invalid options were given.
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        Options opts)
+        throws Exception {
+<span class="nc" id="L756">        String action = opts.removeProperty(&quot;action&quot;, &quot;a&quot;, null);</span>
+<span class="nc" id="L757">        Configurations.populateConfiguration(conf, opts);</span>
+<span class="nc" id="L758">        return run(conf, args, action);</span>
+    }
+
+    /**
+     * Run the tool. Return false if an invalid option was given.
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        String action)
+        throws Exception {
+<span class="nc bnc" id="L767" title="All 4 branches missed.">        if (args.length &gt; 1 || (args.length != 0</span>
+<span class="nc bnc" id="L768" title="All 2 branches missed.">            &amp;&amp; !ACTION_SET.equals(action)))</span>
+<span class="nc" id="L769">            return false;</span>
+
+<span class="nc" id="L771">        TableJDBCSeq seq = new TableJDBCSeq();</span>
+<span class="nc" id="L772">        String props = Configurations.getProperties(conf.getSequence());</span>
+<span class="nc" id="L773">        Configurations.configureInstance(seq, conf, props);</span>
+
+<span class="nc bnc" id="L775" title="All 2 branches missed.">        if (ACTION_DROP.equals(action))</span>
+<span class="nc" id="L776">            seq.dropTable();</span>
+<span class="nc bnc" id="L777" title="All 2 branches missed.">        else if (ACTION_ADD.equals(action))</span>
+<span class="nc" id="L778">            seq.refreshTable();</span>
+<span class="nc bnc" id="L779" title="All 4 branches missed.">        else if (ACTION_GET.equals(action) || ACTION_SET.equals(action)) {</span>
+<span class="nc" id="L780">            Connection conn = conf.getDataSource2(null).getConnection();</span>
+            try {
+<span class="nc" id="L782">                long cur = seq.getSequence(null, conn);</span>
+<span class="nc bnc" id="L783" title="All 2 branches missed.">                if (ACTION_GET.equals(action)) {</span>
+                    // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L785">                    System.out.println(cur);</span>
+                    // STOP - ALLOW PRINT STATEMENTS
+                } else {
+                    long set;
+<span class="nc bnc" id="L789" title="All 2 branches missed.">                    if (args.length &gt; 0)</span>
+<span class="nc" id="L790">                        set = Long.parseLong(args[0]);</span>
+                    else
+<span class="nc" id="L792">                        set = cur + seq.getAllocate();</span>
+<span class="nc bnc" id="L793" title="All 2 branches missed.">                    if (set &lt; cur)</span>
+<span class="nc" id="L794">                        set = cur;</span>
+                    else {
+<span class="nc" id="L796">                        Status stat = seq.getStatus(null);</span>
+<span class="nc" id="L797">                        seq.setSequence(null, stat, (int) (set - cur), true,</span>
+                            conn);
+<span class="nc" id="L799">                        set = stat.seq;</span>
+                    }
+                    // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L802">                    System.err.println(set);</span>
+                    // STOP - ALLOW PRINT STATEMENTS
+                }
+            }
+<span class="nc" id="L806">            catch (NumberFormatException nfe) {</span>
+<span class="nc" id="L807">                return false;</span>
+            } finally {
+<span class="nc" id="L809">                try { conn.close(); } catch (SQLException se) {}</span>
+            }
+<span class="nc" id="L811">        } else</span>
+<span class="nc" id="L812">            return false;</span>
+<span class="nc" id="L813">        return true;</span>
+    }
+
+    /**
+     * Helper struct to hold status information.
+     */
+<span class="nc" id="L819">    protected static class Status implements Serializable {</span>
+        private static final long serialVersionUID = 1L;
+<span class="nc" id="L821">        public long seq = 1L;</span>
+<span class="nc" id="L822">        public long max = 0L;</span>
+    }
+
+    /**
+     * This method is to provide override for non-JDBC or JDBC-like
+     * implementation of preparing statement.
+     */
+    protected PreparedStatement prepareStatement(Connection conn, SQLBuffer buf)
+        throws SQLException {
+<span class="nc" id="L831">        return buf.prepareStatement(conn);</span>
+    }
+
+    /**
+     * This method is to provide override for non-JDBC or JDBC-like
+     * implementation of executing update.
+     */
+    protected int executeUpdate(JDBCConfiguration conf, Connection conn,
+        PreparedStatement stmnt, SQLBuffer buf, int opcode) throws SQLException
+    {
+<span class="nc" id="L841">        return stmnt.executeUpdate();</span>
+    }
+
+    /**
+     * This method is to provide override for non-JDBC or JDBC-like
+     * implementation of executing query.
+     */
+    protected ResultSet executeQuery(JDBCConfiguration conf, Connection conn,
+        PreparedStatement stmnt, SQLBuffer buf) throws SQLException {
+<span class="nc" id="L850">        return stmnt.executeQuery();</span>
+    }
+
+    /**
+     * This method is to provide override for non-JDBC or JDBC-like
+     * implementation of getting sequence from the result set.
+     */
+    protected long getSequence(ResultSet rs, DBDictionary dict)
+            throws SQLException {
+<span class="nc bnc" id="L859" title="All 4 branches missed.">        if (rs == null || !rs.next())</span>
+<span class="nc" id="L860">            return -1;</span>
+<span class="nc" id="L861">        return dict.getLong(rs, 1);</span>
+    }
+
+    public void setUniqueConstraintName(String uniqueConstraintName) {
+<span class="nc" id="L865">        _uniqueConstraintName = DBIdentifier.newConstraint(uniqueConstraintName);</span>
+<span class="nc" id="L866">    }</span>
+
+    public void setUniqueConstraintName(DBIdentifier uniqueConstraintName) {
+<span class="nc" id="L869">        _uniqueConstraintName = uniqueConstraintName;</span>
+<span class="nc" id="L870">    }</span>
+
+    public String getUniqueConstraintName() {
+<span class="nc" id="L873">        return _uniqueConstraintName.getName();</span>
+    }
+
+    public DBIdentifier getUniqueConstraintIdentifier() {
+<span class="nc" id="L877">        return _uniqueConstraintName;</span>
+    }
+
+    /**
+     * AllocateSequenceRunnable is a runnable wrapper that will inserts the
+     * initial sequence value into the database.
+     */
+    protected class AllocateSequenceRunnable implements Runnable {
+
+<span class="nc" id="L886">        JDBCStore store = null;</span>
+<span class="nc" id="L887">        ClassMapping mapping = null;</span>
+<span class="nc" id="L888">        Status stat = null;</span>
+        int alloc;
+        boolean updateStatSeq;
+
+        AllocateSequenceRunnable(JDBCStore store, ClassMapping mapping,
+<span class="nc" id="L893">                Status stat, int alloc, boolean updateStatSeq) {</span>
+<span class="nc" id="L894">            this.store = store;</span>
+<span class="nc" id="L895">            this.mapping = mapping;</span>
+<span class="nc" id="L896">            this.stat = stat;</span>
+<span class="nc" id="L897">            this.alloc = alloc;</span>
+<span class="nc" id="L898">            this.updateStatSeq = updateStatSeq;</span>
+<span class="nc" id="L899">        }</span>
+
+        /**
+         * This method actually obtains the current sequence value.
+         *
+         * @throws RuntimeException
+         *             any SQLExceptions that occur when obtaining the sequence
+         *             value are wrapped in a runtime exception to avoid
+         *             breaking the Runnable method signature. The caller can
+         *             obtain the &quot;real&quot; exception by calling getCause().
+         */
+        @Override
+        public void run() throws RuntimeException {
+<span class="nc" id="L912">            Connection conn = null;</span>
+<span class="nc" id="L913">            SQLException err = null;</span>
+            try {
+                // Try to use the store's connection.
+
+<span class="nc" id="L917">                conn = getConnection(store);</span>
+<span class="nc" id="L918">                boolean sequenceSet =</span>
+<span class="nc" id="L919">                    setSequence(mapping, stat, alloc, updateStatSeq, conn);</span>
+<span class="nc" id="L920">                closeConnection(conn);</span>
+
+<span class="nc bnc" id="L922" title="All 2 branches missed.">                if (!sequenceSet) {</span>
+                    // insert a new sequence column. Prefer connection2 / non-jta-data-source when inserting a
+                    // sequence column regardless of Seq.type.
+<span class="nc" id="L925">                    conn = _conf.getDataSource2(store.getContext()).getConnection();</span>
+                    try {
+<span class="nc" id="L927">                        insertSequence(mapping, conn);</span>
+<span class="nc" id="L928">                    } catch (SQLException e) {</span>
+                        // it is possible another thread already got in and inserted this sequence. Try to keep going
+<span class="nc bnc" id="L930" title="All 2 branches missed.">                        if (_log.isTraceEnabled()) {</span>
+<span class="nc" id="L931">                            _log.trace(</span>
+                                &quot;Caught an exception while trying to insert sequence. Will try to reselect the &quot; +
+                                &quot;seqence. &quot;, e);
+                        }
+<span class="nc" id="L935">                    }</span>
+
+<span class="nc" id="L937">                    conn.close();</span>
+
+                    // now we should be able to update using the connection per
+                    // on the seq type.
+<span class="nc" id="L941">                    conn = getConnection(store);</span>
+<span class="nc bnc" id="L942" title="All 2 branches missed.">                    if (!setSequence(mapping, stat, alloc, updateStatSeq, conn))</span>
+                    {
+<span class="nc bnc" id="L944" title="All 2 branches missed.">                        throw (err != null) ? err : new SQLException(_loc.get(</span>
+<span class="nc" id="L945">                                &quot;no-seq-row&quot;, mapping, _table).getMessage());</span>
+                    }
+<span class="nc" id="L947">                    closeConnection(conn);</span>
+                }
+<span class="nc" id="L949">            } catch (SQLException e) {</span>
+<span class="nc bnc" id="L950" title="All 2 branches missed.">                if (conn != null) {</span>
+<span class="nc" id="L951">                    closeConnection(conn);</span>
+                }
+<span class="nc" id="L953">                RuntimeException re = new RuntimeException(e.getMessage());</span>
+<span class="nc" id="L954">                re.initCause(e);</span>
+<span class="nc" id="L955">                throw re;</span>
+<span class="nc" id="L956">            }</span>
+<span class="nc" id="L957">        }</span>
+    }
+
+    /**
+     * CurentSequenceRunnable is a runnable wrapper which obtains the current
+     * sequence value from the database.
+     */
+    protected class CurrentSequenceRunnable implements Runnable {
+        private JDBCStore _store;
+        private ClassMapping _mapping;
+
+<span class="nc" id="L968">        CurrentSequenceRunnable(JDBCStore store, ClassMapping mapping) {</span>
+<span class="nc" id="L969">            _store = store;</span>
+<span class="nc" id="L970">            _mapping = mapping;</span>
+<span class="nc" id="L971">        }</span>
+
+        /**
+         * This method actually obtains the current sequence value.
+         *
+         * @throws RuntimeException
+         *             any SQLExceptions that occur when obtaining the sequence
+         *             value are wrapped in a runtime exception to avoid
+         *             breaking the Runnable method signature. The caller can
+         *             obtain the &quot;real&quot; exception by calling getCause().
+         */
+        @Override
+        public void run() throws RuntimeException {
+<span class="nc" id="L984">            Connection conn = null;</span>
+            try {
+<span class="nc" id="L986">                conn = getConnection(_store);</span>
+<span class="nc" id="L987">                long cur = getSequence(_mapping, conn);</span>
+<span class="nc bnc" id="L988" title="All 2 branches missed.">                if (cur != -1 ) // USE the constant</span>
+<span class="nc" id="L989">                    current = cur;</span>
+<span class="nc" id="L990">            } catch (SQLException sqle) {</span>
+<span class="nc" id="L991">                RuntimeException re = new RuntimeException(sqle.getMessage());</span>
+<span class="nc" id="L992">                re.initCause(sqle);</span>
+<span class="nc" id="L993">                throw re;</span>
+            } finally {
+<span class="nc bnc" id="L995" title="All 2 branches missed.">                if (conn != null) {</span>
+<span class="nc" id="L996">                    closeConnection(conn);</span>
+                }
+            }
+<span class="nc" id="L999">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

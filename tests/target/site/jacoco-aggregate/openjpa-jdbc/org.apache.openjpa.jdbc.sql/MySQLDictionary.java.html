@@ -1,0 +1,534 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MySQLDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">MySQLDictionary.java</span></div><h1>MySQLDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.kernel.exps.FilterValue;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.util.ExceptionInfo;
+import org.apache.openjpa.util.StoreException;
+
+/**
+ * Dictionary for MySQL.
+ */
+public class MySQLDictionary
+    extends DBDictionary {
+
+    public static final String SELECT_HINT = &quot;openjpa.hint.MySQLSelectHint&quot;;
+
+    public static final String DELIMITER_BACK_TICK = &quot;`&quot;;
+
+    /**
+     * The MySQL table type to use when creating tables; defaults to innodb.
+     */
+<span class="nc" id="L60">    public String tableType = &quot;innodb&quot;;</span>
+
+    /**
+     * Whether to use clobs; defaults to true. Set this to false if you have an
+     * old version of MySQL which does not handle clobs properly.
+     */
+<span class="nc" id="L66">    public boolean useClobs = true;</span>
+
+    /**
+     * Whether the driver automatically deserializes blobs.
+     */
+<span class="nc" id="L71">    public boolean driverDeserializesBlobs = false;</span>
+
+    /**
+     * Whether to inline multi-table bulk-delete operations into MySQL's
+     * combined &lt;code&gt;DELETE FROM foo, bar, baz&lt;/code&gt; syntax.
+     * Defaults to false, since this may fail in the presence of InnoDB tables
+     * with foreign keys.
+     * @link http://dev.mysql.com/doc/refman/5.0/en/delete.html
+     */
+<span class="nc" id="L80">    public boolean optimizeMultiTableDeletes = false;</span>
+
+    public static final String tinyBlobTypeName = &quot;TINYBLOB&quot;;
+    public static final String mediumBlobTypeName = &quot;MEDIUMBLOB&quot;;
+    public static final String longBlobTypeName = &quot;LONGBLOB&quot;;
+    public static final String tinyTextTypeName = &quot;TINYTEXT&quot;;
+    public static final String mediumTextTypeName = &quot;MEDIUMTEXT&quot;;
+    public static final String longTextTypeName = &quot;LONGTEXT&quot;;
+
+<span class="nc" id="L89">    public MySQLDictionary() {</span>
+<span class="nc" id="L90">        platform = &quot;MySQL&quot;;</span>
+<span class="nc" id="L91">        validationSQL = &quot;SELECT NOW()&quot;;</span>
+<span class="nc" id="L92">        distinctCountColumnSeparator = &quot;,&quot;;</span>
+
+<span class="nc" id="L94">        supportsDeferredConstraints = false;</span>
+<span class="nc" id="L95">        constraintNameMode = CONS_NAME_MID;</span>
+<span class="nc" id="L96">        supportsMultipleNontransactionalResultSets = false;</span>
+<span class="nc" id="L97">        requiresAliasForSubselect = true; // new versions</span>
+<span class="nc" id="L98">        requiresTargetForDelete = true;</span>
+<span class="nc" id="L99">        supportsSelectStartIndex = true;</span>
+<span class="nc" id="L100">        supportsSelectEndIndex = true;</span>
+
+<span class="nc" id="L102">        datePrecision = MICRO;</span>
+
+<span class="nc" id="L104">        concatenateFunction = &quot;CONCAT({0},{1})&quot;;</span>
+
+<span class="nc" id="L106">        maxTableNameLength = 64;</span>
+<span class="nc" id="L107">        maxColumnNameLength = 64;</span>
+<span class="nc" id="L108">        maxIndexNameLength = 64;</span>
+<span class="nc" id="L109">        maxConstraintNameLength = 64;</span>
+<span class="nc" id="L110">        maxIndexesPerTable = 32;</span>
+<span class="nc" id="L111">        schemaCase = SCHEMA_CASE_PRESERVE;</span>
+
+<span class="nc" id="L113">        supportsAutoAssign = true;</span>
+<span class="nc" id="L114">        lastGeneratedKeyQuery = &quot;SELECT LAST_INSERT_ID()&quot;;</span>
+<span class="nc" id="L115">        autoAssignClause = &quot;AUTO_INCREMENT&quot;;</span>
+
+<span class="nc" id="L117">        clobTypeName = &quot;TEXT&quot;;</span>
+<span class="nc" id="L118">        longVarcharTypeName = &quot;TEXT&quot;;</span>
+<span class="nc" id="L119">        longVarbinaryTypeName = &quot;LONG VARBINARY&quot;;</span>
+<span class="nc" id="L120">        timestampTypeName = &quot;DATETIME&quot;;</span>
+<span class="nc" id="L121">        xmlTypeName = &quot;TEXT&quot;;</span>
+<span class="nc" id="L122">        fixedSizeTypeNameSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;BOOL&quot;, &quot;LONG VARBINARY&quot;, &quot;MEDIUMBLOB&quot;, &quot;LONGBLOB&quot;,
+            &quot;TINYBLOB&quot;, &quot;LONG VARCHAR&quot;, &quot;MEDIUMTEXT&quot;, &quot;LONGTEXT&quot;, &quot;TEXT&quot;,
+            &quot;TINYTEXT&quot;, &quot;DOUBLE PRECISION&quot;, &quot;ENUM&quot;, &quot;SET&quot;, &quot;DATETIME&quot;,
+        }));
+<span class="nc" id="L127">        reservedWordSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;AUTO_INCREMENT&quot;, &quot;BINARY&quot;, &quot;BLOB&quot;, &quot;CHANGE&quot;, &quot;ENUM&quot;, &quot;INFILE&quot;,
+            &quot;INT1&quot;, &quot;INT2&quot;, &quot;INT4&quot;, &quot;FLOAT1&quot;, &quot;FLOAT2&quot;, &quot;FLOAT4&quot;, &quot;LOAD&quot;,
+            &quot;MEDIUMINT&quot;, &quot;OUTFILE&quot;, &quot;REPLACE&quot;, &quot;STARTING&quot;, &quot;TEXT&quot;, &quot;UNSIGNED&quot;,
+            &quot;ZEROFILL&quot;, &quot;INDEX&quot;,
+        }));
+
+        // reservedWordSet subset that CANNOT be used as valid column names
+        // (i.e., without surrounding them with double-quotes)
+<span class="nc" id="L136">        invalidColumnWordSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;ADD&quot;, &quot;ALL&quot;, &quot;ALTER&quot;, &quot;AND&quot;, &quot;AS&quot;, &quot;ASC&quot;, &quot;BETWEEN&quot;, &quot;BINARY&quot;,
+            &quot;BLOB&quot;, &quot;BOTH&quot;, &quot;BY&quot;, &quot;CASCADE&quot;, &quot;CASE&quot;, &quot;CHANGE&quot;, &quot;CHAR&quot;,
+            &quot;CHARACTER&quot;, &quot;CHECK&quot;, &quot;COLLATE&quot;, &quot;COLUMN&quot;, &quot;CONSTRAINT&quot;, &quot;CONTINUE&quot;,
+            &quot;CONVERT&quot;, &quot;CREATE&quot;, &quot;CROSS&quot;, &quot;CURRENT_DATE&quot;, &quot;CURRENT_TIME&quot;,
+            &quot;CURRENT_TIMESTAMP&quot;, &quot;CURRENT_USER&quot;, &quot;CURSOR&quot;, &quot;DEC&quot;, &quot;DECIMAL&quot;,
+            &quot;DECLARE&quot;, &quot;DEFAULT&quot;, &quot;DELETE&quot;, &quot;DESC&quot;, &quot;DESCRIBE&quot;, &quot;DISTINCT&quot;,
+            &quot;DOUBLE&quot;, &quot;DROP&quot;, &quot;ELSE&quot;, &quot;END-EXEC&quot;, &quot;EXISTS&quot;, &quot;FALSE&quot;, &quot;FETCH&quot;,
+            &quot;FLOAT&quot;, &quot;FLOAT4&quot;, &quot;FOR&quot;, &quot;FOREIGN&quot;, &quot;FROM&quot;, &quot;GRANT&quot;, &quot;GROUP&quot;,
+            &quot;HAVING&quot;, &quot;IN&quot;, &quot;INFILE&quot;, &quot;INNER&quot;, &quot;INSENSITIVE&quot;, &quot;INSERT&quot;, &quot;INT&quot;,
+            &quot;INT1&quot;, &quot;INT2&quot;, &quot;INT4&quot;, &quot;INTEGER&quot;, &quot;INTERVAL&quot;, &quot;INTO&quot;, &quot;IS&quot;, &quot;JOIN&quot;,
+            &quot;KEY&quot;, &quot;LEADING&quot;, &quot;LEFT&quot;, &quot;LIKE&quot;, &quot;LOAD&quot;, &quot;MATCH&quot;, &quot;MEDIUMINT&quot;,
+            &quot;NATURAL&quot;, &quot;NOT&quot;, &quot;NULL&quot;, &quot;NUMERIC&quot;, &quot;ON&quot;, &quot;OPTION&quot;, &quot;OR&quot;, &quot;ORDER&quot;,
+            &quot;OUTER&quot;, &quot;OUTFILE&quot;, &quot;PRECISION&quot;, &quot;PRIMARY&quot;, &quot;PROCEDURE&quot;, &quot;READ&quot;,
+            &quot;REAL&quot;, &quot;REFERENCES&quot;, &quot;REPLACE&quot;, &quot;RESTRICT&quot;, &quot;REVOKE&quot;, &quot;RIGHT&quot;,
+            &quot;SCHEMA&quot;, &quot;SELECT&quot;, &quot;SET&quot;, &quot;SMALLINT&quot;, &quot;SQL&quot;, &quot;SQLSTATE&quot;,
+            &quot;STARTING&quot;, &quot;TABLE&quot;, &quot;THEN&quot;, &quot;TO&quot;, &quot;TRAILING&quot;, &quot;TRUE&quot;, &quot;UNION&quot;,
+            &quot;UNIQUE&quot;, &quot;UNSIGNED&quot;, &quot;UPDATE&quot;, &quot;USAGE&quot;, &quot;USING&quot;, &quot;VALUES&quot;,
+            &quot;VARCHAR&quot;, &quot;VARYING&quot;, &quot;WHEN&quot;, &quot;WHERE&quot;, &quot;WITH&quot;, &quot;WRITE&quot;, &quot;ZEROFILL&quot;,
+            &quot;INDEX&quot;,
+        }));
+
+<span class="nc" id="L158">        requiresSearchStringEscapeForLike = true;</span>
+
+        // MySQL requires double-escape for strings
+<span class="nc" id="L161">        searchStringEscape = &quot;\\\\&quot;;</span>
+
+<span class="nc" id="L163">        typeModifierSet.addAll(Arrays.asList(new String[] { &quot;UNSIGNED&quot;, &quot;ZEROFILL&quot; }));</span>
+
+<span class="nc" id="L165">        setLeadingDelimiter(DELIMITER_BACK_TICK);</span>
+<span class="nc" id="L166">        setTrailingDelimiter(DELIMITER_BACK_TICK);</span>
+
+<span class="nc" id="L168">        fixedSizeTypeNameSet.remove(&quot;NUMERIC&quot;);</span>
+
+<span class="nc" id="L170">        dateFractionDigits = 0;</span>
+<span class="nc" id="L171">    }</span>
+
+    @Override
+    public void connectedConfiguration(Connection conn) throws SQLException {
+<span class="nc" id="L175">        super.connectedConfiguration(conn);</span>
+
+<span class="nc" id="L177">        DatabaseMetaData metaData = conn.getMetaData();</span>
+<span class="nc" id="L178">        int maj = 0;</span>
+<span class="nc" id="L179">        int min = 0;</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        if (isJDBC3) {</span>
+<span class="nc" id="L181">            maj = metaData.getDatabaseMajorVersion();</span>
+<span class="nc" id="L182">            min = metaData.getDatabaseMinorVersion();</span>
+        } else {
+            try {
+                // The product version looks like 4.1.3-nt or 5.1.30
+<span class="nc" id="L186">                String productVersion = metaData.getDatabaseProductVersion();</span>
+<span class="nc" id="L187">                int[] versions = getMajorMinorVersions(productVersion);</span>
+<span class="nc" id="L188">                maj = versions[0];</span>
+<span class="nc" id="L189">                min = versions[1];</span>
+<span class="nc" id="L190">            } catch (IllegalArgumentException e) {</span>
+                // we don't understand the version format.
+                // That is ok. We just take the default values.
+<span class="nc bnc" id="L193" title="All 2 branches missed.">                if (log.isWarnEnabled())</span>
+<span class="nc" id="L194">                    log.warn(e.toString(), e);</span>
+<span class="nc" id="L195">            }</span>
+        }
+<span class="nc bnc" id="L197" title="All 6 branches missed.">        if (maj &lt; 4 || (maj == 4 &amp;&amp; min &lt; 1)) {</span>
+<span class="nc" id="L198">            supportsSubselect = false;</span>
+<span class="nc" id="L199">            allowsAliasInBulkClause = false;</span>
+<span class="nc" id="L200">            supportsForeignKeysComposite = false;</span>
+        }
+<span class="nc bnc" id="L202" title="All 6 branches missed.">        if (maj &gt; 5 || (maj == 5 &amp;&amp; min &gt;= 1)) {</span>
+<span class="nc" id="L203">            supportsXMLColumn = true;</span>
+        }
+<span class="nc bnc" id="L205" title="All 6 branches missed.">        if (maj &gt; 5 || (maj == 5 &amp;&amp; min &gt;= 7)) {</span>
+            // from this version on MySQL supports fractions of a second
+<span class="nc" id="L207">            timestampTypeName = &quot;DATETIME{0}&quot;;</span>
+<span class="nc" id="L208">            fixedSizeTypeNameSet.remove(timestampTypeName);</span>
+<span class="nc" id="L209">            fractionalTypeNameSet.add(timestampTypeName);</span>
+        }
+
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        if (metaData.getDriverMajorVersion() &lt; 5) {</span>
+<span class="nc" id="L213">            driverDeserializesBlobs = true;</span>
+        }
+<span class="nc" id="L215">    }</span>
+
+    @Override
+    public Connection decorate(Connection conn)  throws SQLException {
+<span class="nc" id="L219">        conn = super.decorate(conn);</span>
+<span class="nc" id="L220">        String driver = conf.getConnectionDriverName();</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if (&quot;com.mysql.jdbc.ReplicationDriver&quot;.equals(driver))</span>
+<span class="nc" id="L222">            conn.setReadOnly(true);</span>
+<span class="nc" id="L223">        return conn;</span>
+    }
+
+    private static int[] getMajorMinorVersions(String versionStr)
+        throws IllegalArgumentException {
+<span class="nc" id="L228">        int beginIndex = 0;</span>
+
+<span class="nc" id="L230">        versionStr = versionStr.trim();</span>
+<span class="nc" id="L231">        char[] charArr = versionStr.toCharArray();</span>
+<span class="nc bnc" id="L232" title="All 2 branches missed.">        for (int i = 0; i &lt; charArr.length; i++) {</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">            if (Character.isDigit(charArr[i])) {</span>
+<span class="nc" id="L234">                beginIndex = i;</span>
+<span class="nc" id="L235">                break;</span>
+            }
+        }
+
+<span class="nc" id="L239">        int endIndex = charArr.length;</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        for (int i = beginIndex+1; i &lt; charArr.length; i++) {</span>
+<span class="nc bnc" id="L241" title="All 4 branches missed.">            if (charArr[i] != '.' &amp;&amp; !Character.isDigit(charArr[i])) {</span>
+<span class="nc" id="L242">                endIndex = i;</span>
+<span class="nc" id="L243">                break;</span>
+            }
+        }
+
+<span class="nc" id="L247">        String[] arr = versionStr.substring(beginIndex, endIndex).split(&quot;\\.&quot;);</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (arr.length &lt; 2)</span>
+<span class="nc" id="L249">            throw new IllegalArgumentException();</span>
+
+<span class="nc" id="L251">        int maj = Integer.parseInt(arr[0]);</span>
+<span class="nc" id="L252">        int min = Integer.parseInt(arr[1]);</span>
+<span class="nc" id="L253">        return new int[]{maj, min};</span>
+    }
+
+    @Override
+    public String[] getCreateTableSQL(Table table) {
+<span class="nc" id="L258">        String[] sql = super.getCreateTableSQL(table);</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (!StringUtil.isEmpty(tableType))</span>
+<span class="nc" id="L260">            sql[0] = sql[0] + &quot; ENGINE = &quot; + tableType;</span>
+<span class="nc" id="L261">        return sql;</span>
+    }
+
+    @Override
+    public String[] getDropIndexSQL(Index index) {
+<span class="nc" id="L266">        return new String[]{ &quot;DROP INDEX &quot; + getFullName(index) + &quot; ON &quot;</span>
+<span class="nc" id="L267">            + getFullName(index.getTable(), false) };</span>
+    }
+
+    /**
+     * Return &lt;code&gt;ALTER TABLE &amp;lt;table name&amp;gt; DROP PRIMARY KEY&lt;/code&gt;.
+     */
+    @Override
+    public String[] getDropPrimaryKeySQL(PrimaryKey pk) {
+<span class="nc bnc" id="L275" title="All 2 branches missed.">        if (DBIdentifier.isNull(pk.getIdentifier()))</span>
+<span class="nc" id="L276">            return new String[0];</span>
+<span class="nc" id="L277">        return new String[]{ &quot;ALTER TABLE &quot;</span>
+<span class="nc" id="L278">            + getFullName(pk.getTable(), false)</span>
+            + &quot; DROP PRIMARY KEY&quot; };
+    }
+
+    /**
+     * Return &lt;code&gt;ALTER TABLE &amp;lt;table name&amp;gt; DROP FOREIGN KEY
+     * &amp;lt;fk name&amp;gt;&lt;/code&gt;.
+     */
+    @Override
+    public String[] getDropForeignKeySQL(ForeignKey fk, Connection conn) {
+<span class="nc bnc" id="L288" title="All 2 branches missed.">        if (DBIdentifier.isNull(fk.getIdentifier())) {</span>
+<span class="nc" id="L289">            DBIdentifier fkName = fk.loadIdentifierFromDB(this,conn);</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">            String[] retVal = (fkName == null) ?  new String[0] :</span>
+<span class="nc" id="L291">                new String[]{ &quot;ALTER TABLE &quot;</span>
+<span class="nc" id="L292">                + getFullName(fk.getTable(), false)</span>
+<span class="nc" id="L293">                + &quot; DROP FOREIGN KEY &quot; + toDBName(fkName) };</span>
+<span class="nc" id="L294">            return retVal;</span>
+        }
+<span class="nc" id="L296">        return new String[]{ &quot;ALTER TABLE &quot;</span>
+<span class="nc" id="L297">            + getFullName(fk.getTable(), false)</span>
+<span class="nc" id="L298">            + &quot; DROP FOREIGN KEY &quot; + toDBName(fk.getIdentifier()) };</span>
+    }
+
+    @Override
+    public String[] getAddPrimaryKeySQL(PrimaryKey pk) {
+<span class="nc" id="L303">        String[] sql = super.getAddPrimaryKeySQL(pk);</span>
+
+        // mysql requires that a column be declared NOT NULL before
+        // it can be made a primary key.
+<span class="nc" id="L307">        Column[] cols = pk.getColumns();</span>
+<span class="nc" id="L308">        String[] ret = new String[cols.length + sql.length];</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L310">            ret[i] = &quot;ALTER TABLE &quot; + getFullName(cols[i].getTable(), false)</span>
+<span class="nc" id="L311">                + &quot; CHANGE &quot; + toDBName(cols[i].getIdentifier())</span>
+<span class="nc" id="L312">                + &quot; &quot; + toDBName(cols[i].getIdentifier()) // name twice</span>
+<span class="nc" id="L313">                + &quot; &quot; + getTypeName(cols[i]) + &quot; NOT NULL&quot;;</span>
+        }
+
+<span class="nc" id="L316">        System.arraycopy(sql, 0, ret, cols.length, sql.length);</span>
+<span class="nc" id="L317">        return ret;</span>
+    }
+
+    @Override
+    public String[] getDeleteTableContentsSQL(Table[] tables,Connection conn) {
+        // mysql &gt;= 4 supports more-optimal delete syntax
+<span class="nc bnc" id="L323" title="All 2 branches missed.">        if (!optimizeMultiTableDeletes)</span>
+<span class="nc" id="L324">            return super.getDeleteTableContentsSQL(tables,conn);</span>
+        else {
+<span class="nc" id="L326">            StringBuilder buf = new StringBuilder(tables.length * 8);</span>
+<span class="nc" id="L327">            buf.append(&quot;DELETE FROM &quot;);</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">            for (int i = 0; i &lt; tables.length; i++) {</span>
+<span class="nc" id="L329">                buf.append(toDBName(tables[i].getFullIdentifier()));</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">                if (i &lt; tables.length - 1)</span>
+<span class="nc" id="L331">                    buf.append(&quot;, &quot;);</span>
+            }
+<span class="nc" id="L333">            return new String[] { buf.toString() };</span>
+        }
+    }
+
+    @Override
+    protected void appendSelectRange(SQLBuffer buf, long start, long end,
+        boolean subselect) {
+<span class="nc" id="L340">        buf.append(&quot; LIMIT &quot;).appendValue(start).append(&quot;, &quot;);</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        if (end == Long.MAX_VALUE)</span>
+<span class="nc" id="L342">            buf.appendValue(Long.MAX_VALUE);</span>
+        else
+<span class="nc" id="L344">            buf.appendValue(end - start);</span>
+<span class="nc" id="L345">    }</span>
+
+    @Override
+    protected Column newColumn(ResultSet colMeta)
+        throws SQLException {
+<span class="nc" id="L350">        Column col = super.newColumn(colMeta);</span>
+<span class="nc bnc" id="L351" title="All 4 branches missed.">        if (col.isNotNull() &amp;&amp; &quot;0&quot;.equals(col.getDefaultString()))</span>
+<span class="nc" id="L352">            col.setDefaultString(null);</span>
+<span class="nc" id="L353">        return col;</span>
+    }
+
+    @Override
+    public Object getBlobObject(ResultSet rs, int column, JDBCStore store)
+        throws SQLException {
+        // if the user has set a get-blob strategy explicitly or the driver
+        // does not automatically deserialize, delegate to super
+<span class="nc bnc" id="L361" title="All 6 branches missed.">        if (useGetBytesForBlobs || useGetObjectForBlobs || !driverDeserializesBlobs)</span>
+<span class="nc" id="L362">            return super.getBlobObject(rs, column, store);</span>
+
+        // most mysql drivers deserialize on getObject
+<span class="nc" id="L365">        return rs.getObject(column);</span>
+    }
+
+    @Override
+    public int getPreferredType(int type) {
+<span class="nc bnc" id="L370" title="All 4 branches missed.">        if (type == Types.CLOB &amp;&amp; !useClobs) {</span>
+<span class="nc" id="L371">            return Types.LONGVARCHAR;</span>
+        }
+<span class="nc bnc" id="L373" title="All 2 branches missed.">        else if (type == Types.TIME_WITH_TIMEZONE) {</span>
+            // MySQL doesn't support SQL-2003 'WITH TIMEZONE' nor the respective JDBC types.
+<span class="nc" id="L375">            return Types.TIME;</span>
+        }
+<span class="nc bnc" id="L377" title="All 2 branches missed.">        else if (type == Types.TIMESTAMP_WITH_TIMEZONE) {</span>
+            // MySQL doesn't support SQL-2003 'WITH TIMEZONE' nor the respective JDBC types.
+<span class="nc" id="L379">            return Types.TIMESTAMP;</span>
+        }
+
+<span class="nc" id="L382">        return super.getPreferredType(type);</span>
+    }
+
+
+    /**
+     * Append XML comparison.
+     *
+     * @param buf the SQL buffer to write the comparison
+     * @param op the comparison operation to perform
+     * @param lhs the left hand side of the comparison
+     * @param rhs the right hand side of the comparison
+     * @param lhsxml indicates whether the left operand maps to XML
+     * @param rhsxml indicates whether the right operand maps to XML
+     */
+    @Override
+    public void appendXmlComparison(SQLBuffer buf, String op, FilterValue lhs,
+        FilterValue rhs, boolean lhsxml, boolean rhsxml) {
+<span class="nc" id="L399">        super.appendXmlComparison(buf, op, lhs, rhs, lhsxml, rhsxml);</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">        if (lhsxml)</span>
+<span class="nc" id="L401">            appendXmlValue(buf, lhs);</span>
+        else
+<span class="nc" id="L403">            lhs.appendTo(buf);</span>
+<span class="nc" id="L404">        buf.append(&quot; &quot;).append(op).append(&quot; &quot;);</span>
+<span class="nc bnc" id="L405" title="All 2 branches missed.">        if (rhsxml)</span>
+<span class="nc" id="L406">            appendXmlValue(buf, rhs);</span>
+        else
+<span class="nc" id="L408">            rhs.appendTo(buf);</span>
+<span class="nc" id="L409">    }</span>
+
+    /**
+     * Append XML column value so that it can be used in comparisons.
+     *
+     * @param buf the SQL buffer to write the value
+     * @param val the value to be written
+     */
+    private void appendXmlValue(SQLBuffer buf, FilterValue val) {
+<span class="nc" id="L418">        buf.append(&quot;ExtractValue(&quot;).</span>
+<span class="nc" id="L419">            append(val.getColumnAlias(val.getFieldMapping().getColumns()[0])).</span>
+<span class="nc" id="L420">            append(&quot;,'/*/&quot;);</span>
+<span class="nc" id="L421">        val.appendTo(buf);</span>
+<span class="nc" id="L422">        buf.append(&quot;')&quot;);</span>
+<span class="nc" id="L423">    }</span>
+
+    @Override
+    public int getBatchFetchSize(int batchFetchSize) {
+<span class="nc" id="L427">        return Integer.MIN_VALUE;</span>
+    }
+
+    /**
+     * Check to see if we have set the {@link #SELECT_HINT} in the
+     * fetch configuration, and if so, append the MySQL hint after the
+     * &quot;SELECT&quot; part of the query.
+     */
+    @Override
+    public String getSelectOperation(JDBCFetchConfiguration fetch) {
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        Object hint = fetch == null ? null : fetch.getHint(SELECT_HINT);</span>
+<span class="nc" id="L438">        String select = &quot;SELECT&quot;;</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">        if (hint != null)</span>
+<span class="nc" id="L440">            select += &quot; &quot; + hint;</span>
+<span class="nc" id="L441">        return select;</span>
+    }
+
+    @Override
+    protected Collection&lt;String&gt; getSelectTableAliases(Select sel) {
+<span class="nc" id="L446">        Set&lt;String&gt; result = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L447">        List&lt;String&gt; selects = sel.getIdentifierAliases();</span>
+<span class="nc bnc" id="L448" title="All 2 branches missed.">        for (String s : selects) {</span>
+<span class="nc" id="L449">            String tableAlias = s.substring(0, s.indexOf('.'));</span>
+<span class="nc" id="L450">            result.add(tableAlias);</span>
+<span class="nc" id="L451">        }</span>
+<span class="nc" id="L452">        return result;</span>
+    }
+
+    @Override
+    protected int matchErrorState(Map&lt;Integer,Set&lt;String&gt;&gt; errorStates, SQLException ex) {
+<span class="nc" id="L457">        int state = super.matchErrorState(errorStates, ex);</span>
+        // OPENJPA-1616 - Special case for MySQL not returning a SQLState for timeouts
+<span class="nc bnc" id="L459" title="All 6 branches missed.">        if (state == ExceptionInfo.GENERAL &amp;&amp; ex.getErrorCode() == 0 &amp;&amp; ex.getSQLState() == null) {</span>
+            // look at the nested MySQL exception for more details
+<span class="nc" id="L461">            SQLException sqle = ex.getNextException();</span>
+<span class="nc bnc" id="L462" title="All 4 branches missed.">            if (sqle != null &amp;&amp; sqle.toString().startsWith(&quot;com.mysql.jdbc.exceptions.MySQLTimeoutException&quot;)) {</span>
+<span class="nc bnc" id="L463" title="All 4 branches missed.">                if (conf != null &amp;&amp; conf.getLockTimeout() != -1) {</span>
+<span class="nc" id="L464">                    state = StoreException.LOCK;</span>
+                } else {
+<span class="nc" id="L466">                    state = StoreException.QUERY;</span>
+                }
+            }
+        }
+<span class="nc" id="L470">        return state;</span>
+    }
+
+    @Override
+    public boolean isFatalException(int subtype, SQLException ex) {
+<span class="nc bnc" id="L475" title="All 6 branches missed.">        if ((subtype == StoreException.LOCK  &amp;&amp; ex.getErrorCode() == 1205)</span>
+<span class="nc bnc" id="L476" title="All 2 branches missed.">          ||(subtype == StoreException.QUERY &amp;&amp; ex.getErrorCode() == 1317)) {</span>
+<span class="nc" id="L477">            return false;</span>
+        }
+<span class="nc bnc" id="L479" title="All 4 branches missed.">        if (ex.getErrorCode() == 0 &amp;&amp; ex.getSQLState() == null)</span>
+<span class="nc" id="L480">            return false;</span>
+<span class="nc" id="L481">        return super.isFatalException(subtype, ex);</span>
+    }
+
+    /**
+     * OPENJPA-740 Special case for MySql special column types,
+     * like LONGTEXT, LONGBLOG etc..
+     * @see org.apache.openjpa.jdbc.sql.DBDictionary#getTypeName(org.apache.openjpa.jdbc.schema.Column)
+     */
+    @Override
+    public String getTypeName(Column col) {
+        // handle blobs differently, if the DBItentifierType is NULL (e.g. no column definition is set).
+<span class="nc bnc" id="L492" title="All 4 branches missed.">        if (col.getType() == Types.BLOB &amp;&amp; col.getTypeIdentifier().getType() == DBIdentifierType.NULL) {</span>
+<span class="nc bnc" id="L493" title="All 2 branches missed.">            if (col.getSize() &lt;= 0)   // unknown size</span>
+<span class="nc" id="L494">                return blobTypeName;  // return old default of 64KB</span>
+<span class="nc bnc" id="L495" title="All 2 branches missed.">            else if (col.getSize() &lt;= 255)</span>
+<span class="nc" id="L496">                return tinyBlobTypeName;</span>
+<span class="nc bnc" id="L497" title="All 2 branches missed.">            else if (col.getSize() &lt;= 65535)</span>
+<span class="nc" id="L498">                return blobTypeName;  // old default of 64KB</span>
+<span class="nc bnc" id="L499" title="All 2 branches missed.">            else if (col.getSize() &lt;= 16777215)</span>
+<span class="nc" id="L500">                return mediumBlobTypeName;</span>
+            else
+<span class="nc" id="L502">                return longBlobTypeName;</span>
+<span class="nc bnc" id="L503" title="All 4 branches missed.">        } else if (col.getType() == Types.CLOB &amp;&amp; col.getTypeIdentifier().getType() == DBIdentifierType.NULL) {</span>
+<span class="nc bnc" id="L504" title="All 2 branches missed.">            if (col.getSize() &lt;= 0)   // unknown size</span>
+<span class="nc" id="L505">                return clobTypeName;  // return old default of 64KB</span>
+<span class="nc bnc" id="L506" title="All 2 branches missed.">            else if (col.getSize() &lt;= 255)</span>
+<span class="nc" id="L507">                return tinyTextTypeName;</span>
+<span class="nc bnc" id="L508" title="All 2 branches missed.">            else if (col.getSize() &lt;= 65535)</span>
+<span class="nc" id="L509">                return clobTypeName;  // old default of 64KB</span>
+<span class="nc bnc" id="L510" title="All 2 branches missed.">            else if (col.getSize() &lt;= 16777215)</span>
+<span class="nc" id="L511">                return mediumTextTypeName;</span>
+            else
+<span class="nc" id="L513">                return longTextTypeName;</span>
+        } else {
+<span class="nc" id="L515">            return super.getTypeName(col);</span>
+        }
+    }
+
+    @Override
+    public void indexOf(SQLBuffer buf, FilterValue str, FilterValue find,
+        FilterValue start) {
+<span class="nc" id="L522">        buf.append(&quot;LOCATE(&quot;);</span>
+<span class="nc" id="L523">        find.appendTo(buf);</span>
+<span class="nc" id="L524">        buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L525">        str.appendTo(buf);</span>
+<span class="nc bnc" id="L526" title="All 2 branches missed.">        if (start != null) {</span>
+<span class="nc" id="L527">            buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L528">            start.appendTo(buf);</span>
+        }
+<span class="nc" id="L530">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L531">    }</span>
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

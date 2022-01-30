@@ -1,0 +1,402 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ValueMappingInfo.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">ValueMappingInfo.java</span></div><h1>ValueMappingInfo.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.util.Collections;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Information about the mapping from a field value to the schema, in
+ * raw form. The columns and tables used in mapping info will not be part of
+ * the {@link SchemaGroup} used at runtime. Rather, they will be structs
+ * with the relevant pieces of information filled in.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L44">public class ValueMappingInfo extends MappingInfo {</span>
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L47">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L48">        (ValueMappingInfo.class);</span>
+
+<span class="nc" id="L50">    private boolean _criteria = false;</span>
+<span class="nc" id="L51">    private boolean _canNull = true;</span>
+<span class="nc" id="L52">    private List&lt;Column&gt; _mapsIdCols = null;</span>
+
+    /**
+     * Whether to use class criteria when joining to related type.
+     */
+    public boolean getUseClassCriteria() {
+<span class="nc" id="L58">        return _criteria;</span>
+    }
+
+    /**
+     * Whether to use class criteria when joining to related type.
+     */
+    public void setUseClassCriteria(boolean criteria) {
+<span class="nc" id="L65">        _criteria = criteria;</span>
+<span class="nc" id="L66">    }</span>
+
+    /**
+     * Whether user has explicitly turned null indicator column off.
+     */
+    public boolean canIndicateNull() {
+<span class="nc" id="L72">        return _canNull;</span>
+    }
+
+    /**
+     * Whether user has explicitly turned null indicator column off.
+     */
+    public void setCanIndicateNull(boolean ind) {
+<span class="nc" id="L79">        _canNull = ind;</span>
+<span class="nc" id="L80">    }</span>
+
+    /**
+     * Return the join from this value to its related type.
+     *
+     * @param name base name for value mapping
+     * @param inversable whether an inverse join is allowed
+     * @deprecated
+     */
+    @Deprecated
+    public ForeignKey getTypeJoin(final ValueMapping val, final String name,
+        boolean inversable, boolean adapt) {
+<span class="nc" id="L92">        return getTypeJoin(val, DBIdentifier.newForeignKey(name), inversable, adapt);</span>
+    }
+
+    public ForeignKey getTypeJoin(final ValueMapping val, final DBIdentifier name,
+        boolean inversable, boolean adapt) {
+<span class="nc" id="L97">        ClassMapping rel = val.getTypeMapping();</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if (rel == null)</span>
+<span class="nc" id="L99">            return null;</span>
+
+<span class="nc" id="L101">        ForeignKeyDefaults def = new ForeignKeyDefaults() {</span>
+            @Override
+            public ForeignKey get(Table local, Table foreign, boolean inverse) {
+<span class="nc" id="L104">                return val.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L105">                    getForeignKey(val, name, local, foreign, inverse);</span>
+            }
+
+            @Override
+            public void populate(Table local, Table foreign, Column col,
+                Object target, boolean inverse, int pos, int cols) {
+<span class="nc" id="L111">                val.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L112">                    populateForeignKeyColumn(val, name, local, foreign, col,</span>
+                        target, inverse, pos, cols);
+<span class="nc" id="L114">            }</span>
+        };
+<span class="nc" id="L116">        Table table = getTable(val);</span>
+<span class="nc" id="L117">        return createForeignKey(val, null, getColumns(), def,</span>
+<span class="nc" id="L118">            table, val.getFieldMapping().</span>
+<span class="nc" id="L119">            getDefiningMapping(), rel, inversable, adapt);</span>
+    }
+
+    public Table getTable(ValueMapping val) {
+<span class="nc" id="L123">        FieldMapping field = val.getFieldMapping();</span>
+<span class="nc" id="L124">        Table table = field.getTable();</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if (table == null) {</span>
+<span class="nc" id="L126">            ClassMapping cls = (ClassMapping)field.getDefiningMetaData();</span>
+<span class="nc" id="L127">            ValueMapping val1 = (ValueMapping)cls.getEmbeddingMetaData();</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">            if (val1 != null)</span>
+<span class="nc" id="L129">                return getTable(val1);</span>
+        }
+<span class="nc" id="L131">        return table;</span>
+    }
+
+    /**
+     * Return the join from the related type to this value.
+     * @deprecated
+     */
+    @Deprecated
+    public ForeignKey getInverseTypeJoin(final ValueMapping val,
+        final String name, boolean adapt) {
+<span class="nc" id="L141">        return getInverseTypeJoin(val, DBIdentifier.newForeignKey(name), adapt);</span>
+    }
+
+    public ForeignKey getInverseTypeJoin(final ValueMapping val,
+        final DBIdentifier name, boolean adapt) {
+<span class="nc" id="L146">        ClassMapping rel = val.getTypeMapping();</span>
+<span class="nc bnc" id="L147" title="All 4 branches missed.">        if (rel == null || rel.getTable() == null)</span>
+<span class="nc" id="L148">            return null;</span>
+
+<span class="nc" id="L150">        ForeignKeyDefaults def = new ForeignKeyDefaults() {</span>
+            @Override
+            public ForeignKey get(Table local, Table foreign, boolean inverse) {
+<span class="nc bnc" id="L153" title="All 2 branches missed.">                return val.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L154">                    getForeignKey(val, name, local, foreign, !inverse);</span>
+            }
+
+            @Override
+            public void populate(Table local, Table foreign, Column col,
+                Object target, boolean inverse, int pos, int cols) {
+<span class="nc bnc" id="L160" title="All 2 branches missed.">                val.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L161">                    populateForeignKeyColumn(val, name, local, foreign, col,</span>
+                        target, !inverse, pos, cols);
+<span class="nc" id="L163">            }</span>
+        };
+<span class="nc" id="L165">        return createForeignKey(val, null, getColumns(), def, rel.getTable(),</span>
+<span class="nc" id="L166">            rel, val.getFieldMapping().getDefiningMapping(), false, adapt);</span>
+    }
+
+    /**
+     * Return the columns for this value, based on the given templates.
+     * @deprecated
+     */
+    @Deprecated
+    public Column[] getColumns(ValueMapping val, String name,
+        Column[] tmplates, Table table, boolean adapt) {
+<span class="nc" id="L176">        return getColumns(val, DBIdentifier.newColumn(name), tmplates, table, adapt);</span>
+    }
+
+    public Column[] getColumns(ValueMapping val, DBIdentifier name,
+        Column[] tmplates, Table table, boolean adapt) {
+<span class="nc" id="L181">        orderColumnsByTargetField(val, tmplates, adapt);</span>
+<span class="nc" id="L182">        val.getMappingRepository().getMappingDefaults().populateColumns</span>
+<span class="nc" id="L183">            (val, name, table, tmplates);</span>
+<span class="nc" id="L184">        return createColumns(val, null, tmplates, table, adapt);</span>
+    }
+
+    /**
+     * Make given columns match up with the target fields supplied on the
+     * templates.
+     */
+    private void orderColumnsByTargetField(ValueMapping val, Column[] tmplates,
+        boolean adapt) {
+<span class="nc bnc" id="L193" title="All 4 branches missed.">        if (tmplates.length &lt; 2 || tmplates[0].getTargetField() == null)</span>
+<span class="nc" id="L194">            return;</span>
+<span class="nc" id="L195">        List&lt;Column&gt; cols = getColumns();</span>
+<span class="nc bnc" id="L196" title="All 4 branches missed.">        if (cols.isEmpty() || cols.size() != tmplates.length)</span>
+<span class="nc" id="L197">            return;</span>
+
+<span class="nc" id="L199">        int pos = 0;</span>
+<span class="nc" id="L200">        Column cur = cols.get(0);</span>
+        Column next;
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.size(); i++) {</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">            if (cur.getTargetField() == null)</span>
+<span class="nc" id="L204">                throw new MetaDataException(_loc.get(&quot;no-targetfield&quot;, val));</span>
+
+<span class="nc" id="L206">            pos = findTargetField(tmplates, cur.getTargetField());</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            if (pos == -1)</span>
+<span class="nc" id="L208">                throw new MetaDataException(_loc.get(&quot;bad-targetfield&quot;,</span>
+<span class="nc" id="L209">                    val, cur.getTargetField()));</span>
+
+<span class="nc" id="L211">            next = cols.get(pos);</span>
+<span class="nc" id="L212">            cols.set(pos, cur);</span>
+<span class="nc" id="L213">            cur = next;</span>
+        }
+<span class="nc" id="L215">    }</span>
+
+    /**
+     * Return the position of the template column with the given target field.
+     */
+    public int findTargetField(Column[] tmplates, String target) {
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        for (int i = 0; i &lt; tmplates.length; i++)</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">            if (target.equals(tmplates[i].getTargetField()))</span>
+<span class="nc" id="L223">                return i;</span>
+<span class="nc" id="L224">        return -1;</span>
+    }
+
+    /**
+     * Return a unique constraint for the given columns, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public Unique getUnique(ValueMapping val, String name, boolean adapt) {
+<span class="nc" id="L233">        return getUnique(val, DBIdentifier.newConstraint(name), adapt);</span>
+    }
+
+    public Unique getUnique(ValueMapping val, DBIdentifier name, boolean adapt) {
+<span class="nc" id="L237">        Column[] cols = val.getColumns();</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if (cols.length == 0)</span>
+<span class="nc" id="L239">            return null;</span>
+
+<span class="nc" id="L241">        Unique unq = val.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L242">            getUnique(val, name, cols[0].getTable(), cols);</span>
+<span class="nc" id="L243">        return createUnique(val, null, unq, cols, adapt);</span>
+    }
+
+    /**
+     * Return an index for the given columns, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public Index getIndex(ValueMapping val, String name, boolean adapt) {
+<span class="nc" id="L252">        return getIndex(val, DBIdentifier.newIndex(name), adapt);</span>
+    }
+
+    public Index getIndex(ValueMapping val, DBIdentifier name, boolean adapt) {
+<span class="nc" id="L256">        Column[] cols = val.getColumns();</span>
+<span class="nc bnc" id="L257" title="All 2 branches missed.">        if (cols.length == 0)</span>
+<span class="nc" id="L258">            return null;</span>
+
+<span class="nc" id="L260">        Index idx = val.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L261">            getIndex(val, name, cols[0].getTable(), cols);</span>
+<span class="nc" id="L262">        return createIndex(val, null, idx, cols, adapt);</span>
+    }
+
+    /**
+     * Return the null indicator column for this value, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public Column getNullIndicatorColumn(ValueMapping val, String name,
+        Table table, boolean adapt) {
+<span class="nc" id="L272">        return getNullIndicatorColumn(val, DBIdentifier.newColumn(name), table, adapt);</span>
+    }
+
+    public Column getNullIndicatorColumn(ValueMapping val, DBIdentifier name,
+        Table table, boolean adapt) {
+        // reset IO
+<span class="nc" id="L278">        setColumnIO(null);</span>
+
+        // has the user explicitly turned null indicator off?
+<span class="nc bnc" id="L281" title="All 2 branches missed.">        if (!_canNull)</span>
+<span class="nc" id="L282">            return null;</span>
+
+        // extract given null-ind column
+<span class="nc" id="L285">        List&lt;Column&gt; cols = getColumns();</span>
+<span class="nc bnc" id="L286" title="All 2 branches missed.">        Column given = (cols.isEmpty()) ? null : (Column) cols.get(0);</span>
+<span class="nc" id="L287">        MappingDefaults def = val.getMappingRepository().getMappingDefaults();</span>
+<span class="nc bnc" id="L288" title="All 6 branches missed.">        if (given == null &amp;&amp; (!adapt &amp;&amp; !def.defaultMissingInfo()))</span>
+<span class="nc" id="L289">            return null;</span>
+
+<span class="nc" id="L291">        Column tmplate = new Column();</span>
+<span class="nc" id="L292">        DBIdentifier sName = DBIdentifier.append(name, &quot;_null&quot;);</span>
+<span class="nc" id="L293">        tmplate.setIdentifier(sName);</span>
+<span class="nc" id="L294">        tmplate.setJavaType(JavaTypes.INT);</span>
+<span class="nc bnc" id="L295" title="All 4 branches missed.">        if (!def.populateNullIndicatorColumns(val, name, table, new Column[]</span>
+            { tmplate }) &amp;&amp; given == null)
+<span class="nc" id="L297">            return null;</span>
+
+<span class="nc bnc" id="L299" title="All 4 branches missed.">        if (given != null &amp;&amp; (given.getFlag(Column.FLAG_UNINSERTABLE)</span>
+<span class="nc bnc" id="L300" title="All 2 branches missed.">            || given.getFlag(Column.FLAG_UNUPDATABLE))) {</span>
+<span class="nc" id="L301">            ColumnIO io = new ColumnIO();</span>
+<span class="nc bnc" id="L302" title="All 2 branches missed.">            io.setInsertable(0, !given.getFlag(Column.FLAG_UNINSERTABLE));</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">            io.setUpdatable(0, !given.getFlag(Column.FLAG_UNUPDATABLE));</span>
+<span class="nc" id="L304">            setColumnIO(io);</span>
+        }
+
+<span class="nc bnc" id="L307" title="All 4 branches missed.">        if (given != null &amp;&amp; !DBIdentifier.isNull(given.getIdentifier())) {</span>
+            // test if given column name is actually a field name, in which
+            // case we use its column as the null indicator column
+<span class="nc" id="L310">            ClassMapping embed = val.getEmbeddedMapping();</span>
+<span class="nc bnc" id="L311" title="All 2 branches missed.">            FieldMapping efm = (embed == null) ? null</span>
+<span class="nc" id="L312">                : embed.getFieldMapping(given.getIdentifier().getName());</span>
+<span class="nc bnc" id="L313" title="All 4 branches missed.">            if (efm != null &amp;&amp; efm.getColumns().length &gt; 0)</span>
+<span class="nc" id="L314">                given.setIdentifier(efm.getColumns()[0].getIdentifier());</span>
+        }
+<span class="nc bnc" id="L316" title="All 6 branches missed.">        boolean compat = given == null || DBIdentifier.isNull(given.getIdentifier())</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">            || table == null || !table.isNameTaken(given.getIdentifier());</span>
+
+<span class="nc" id="L319">        return mergeColumn(val, &quot;null-ind&quot;, tmplate, compat, given,</span>
+<span class="nc" id="L320">            table, adapt, def.defaultMissingInfo());</span>
+    }
+
+    /**
+     * Synchronize internal information with the mapping data for the given
+     * value.
+     */
+    public void syncWith(ValueMapping val) {
+<span class="nc" id="L328">        clear(false);</span>
+
+<span class="nc" id="L330">        _criteria = val.getUseClassCriteria();</span>
+<span class="nc" id="L331">        setColumnIO(val.getColumnIO());</span>
+<span class="nc bnc" id="L332" title="All 4 branches missed.">        if (val.getForeignKey() != null &amp;&amp; val.getTypeMapping() != null</span>
+<span class="nc bnc" id="L333" title="All 2 branches missed.">            &amp;&amp; val.getTypeMapping().getTable() != null) {</span>
+<span class="nc" id="L334">            FieldMapping fm = val.getFieldMapping();</span>
+<span class="nc bnc" id="L335" title="All 2 branches missed.">            Table local = (fm.getJoinForeignKey() != null) ? fm.getTable()</span>
+<span class="nc" id="L336">                : fm.getDefiningMapping().getTable();</span>
+            Table foreign;
+<span class="nc bnc" id="L338" title="All 2 branches missed.">            if (val.getJoinDirection() == ValueMapping.JOIN_EXPECTED_INVERSE) {</span>
+<span class="nc" id="L339">                foreign = local;</span>
+<span class="nc" id="L340">                local = val.getTypeMapping().getTable();</span>
+<span class="nc" id="L341">                setJoinDirection(JOIN_FORWARD);</span>
+            } else {
+<span class="nc" id="L343">                foreign = val.getTypeMapping().getTable();</span>
+<span class="nc bnc" id="L344" title="All 2 branches missed.">                setJoinDirection((val.getJoinDirection() == ValueMapping.JOIN_FORWARD)</span>
+<span class="nc" id="L345">                    ? JOIN_FORWARD : JOIN_INVERSE);</span>
+            }
+<span class="nc" id="L347">            syncForeignKey(val, val.getForeignKey(), local, foreign);</span>
+<span class="nc" id="L348">        } else</span>
+<span class="nc" id="L349">            syncColumns(val, val.getColumns(), false);</span>
+
+<span class="nc" id="L351">        syncIndex(val, val.getValueIndex());</span>
+<span class="nc" id="L352">        syncUnique(val, val.getValueUnique());</span>
+
+        // explicit handler strategy if the handler isn't the expected default
+<span class="nc bnc" id="L355" title="All 2 branches missed.">        if (val.getHandler() != null) {</span>
+<span class="nc" id="L356">            ValueHandler def = val.getFieldMapping().getMappingRepository().</span>
+<span class="nc" id="L357">                defaultHandler(val);</span>
+<span class="nc bnc" id="L358" title="All 4 branches missed.">            if (def == null || val.getHandler().getClass() != def.getClass())</span>
+<span class="nc" id="L359">                setStrategy(val.getHandler().getClass().getName());</span>
+        }
+<span class="nc" id="L361">    }</span>
+
+    @Override
+    protected void clear(boolean canFlags) {
+<span class="nc" id="L365">        super.clear(canFlags);</span>
+<span class="nc bnc" id="L366" title="All 2 branches missed.">        if (canFlags) {</span>
+<span class="nc" id="L367">            _criteria = false;</span>
+<span class="nc" id="L368">            _canNull = true;</span>
+        }
+<span class="nc" id="L370">    }</span>
+
+    @Override
+    public void copy(MappingInfo info) {
+<span class="nc" id="L374">        super.copy(info);</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">        if (!(info instanceof ValueMappingInfo))</span>
+<span class="nc" id="L376">            return;</span>
+
+<span class="nc" id="L378">        ValueMappingInfo vinfo = (ValueMappingInfo) info;</span>
+<span class="nc bnc" id="L379" title="All 2 branches missed.">        if (!_criteria)</span>
+<span class="nc" id="L380">            _criteria = vinfo.getUseClassCriteria();</span>
+<span class="nc bnc" id="L381" title="All 2 branches missed.">        if (_canNull)</span>
+<span class="nc" id="L382">            _canNull = vinfo.canIndicateNull();</span>
+<span class="nc" id="L383">    }</span>
+
+    /**
+     * Raw column data.
+     */
+    public List&lt;Column&gt; getMapsIdColumns() {
+<span class="nc bnc" id="L389" title="All 2 branches missed.">        if (_mapsIdCols == null) {</span>
+<span class="nc" id="L390">            return Collections.emptyList();</span>
+        }
+<span class="nc" id="L392">        return  _mapsIdCols;</span>
+    }
+
+    /**
+     * Raw column data.
+     */
+    public void setMapsIdColumns(List&lt;Column&gt; cols) {
+<span class="nc" id="L399">        _mapsIdCols = cols;</span>
+<span class="nc" id="L400">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

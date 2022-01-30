@@ -1,0 +1,57 @@
+// ------------------------------------------------------------------
+// Transitive dependencies of this project determined from the
+// maven pom organized by organization.
+// ------------------------------------------------------------------
+
+OpenJPA Fetching Statistic Tool -- WAS Bundle
+
+
+From: 'an unknown organization'
+  - Java(TM) EE 7 Specification APIs (http://java.net/javaee-api/) javax:javaee-api:jar:7.0
+    License: CDDL + GPLv2 with classpath exception  (http://glassfish.java.net/nonav/public/CDDL+GPL.html)
+  - JavaBeans Activation Framework (JAF) (http://java.sun.com/products/javabeans/jaf/index.jsp) javax.activation:activation:jar:1.1
+    License: Common Development and Distribution License (CDDL) v1.0  (https://glassfish.dev.java.net/public/CDDLv1.0.html)
+  - Serp (http://serp.sourceforge.net) net.sourceforge.serp:serp:jar:1.15.1
+    License: BSD  (LICENSE.txt)
+
+From: 'Apache Software Foundation' (http://www.apache.org)
+  - JMS 1.1 (http://geronimo.apache.org/specs/geronimo-jms_1.1_spec) org.apache.geronimo.specs:geronimo-jms_1.1_spec:jar:1.1.1
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+  - JTA 1.1 (http://geronimo.apache.org/specs/geronimo-jta_1.1_spec) org.apache.geronimo.specs:geronimo-jta_1.1_spec:jar:1.1.1
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+  - OpenJPA Fetching Statistic Tool (http://openjpa.apache.org/openjpa-tools/openjpa-fetch-statistics) org.apache.openjpa:openjpa-fetch-statistics:jar:3.1.3-SNAPSHOT
+    License: Apache License 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+  - OpenJPA JDBC (http://openjpa.apache.org/openjpa-jdbc) org.apache.openjpa:openjpa-jdbc:jar:3.1.3-SNAPSHOT
+    License: Apache License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+  - OpenJPA Kernel (http://openjpa.apache.org/openjpa-kernel) org.apache.openjpa:openjpa-kernel:jar:3.1.3-SNAPSHOT
+    License: Apache License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+  - OpenJPA Utilities Library (http://openjpa.apache.org/openjpa-lib) org.apache.openjpa:openjpa-lib:jar:3.1.3-SNAPSHOT
+    License: Apache License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+  - OpenJPA Persistence (http://openjpa.apache.org/openjpa-persistence) org.apache.openjpa:openjpa-persistence:jar:3.1.3-SNAPSHOT
+    License: Apache License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+  - OpenJPA Persistence JDBC (http://openjpa.apache.org/openjpa-persistence-jdbc) org.apache.openjpa:openjpa-persistence-jdbc:jar:3.1.3-SNAPSHOT
+    License: Apache License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+From: 'GlassFish Community' (https://javaee.github.io/glassfish)
+  - javax.annotation API (http://jcp.org/en/jsr/detail?id=250) javax.annotation:javax.annotation-api:jar:1.3.2
+    License: CDDL + GPLv2 with classpath exception  (https://github.com/javaee/javax.annotation/blob/master/LICENSE)
+
+From: 'Oracle' (http://www.oracle.com)
+  - JavaMail API (http://javamail.java.net/javax.mail) com.sun.mail:javax.mail:jar:1.5.0
+    License: CDDL/GPLv2+CE  (https://glassfish.java.net/public/CDDL+GPL_1_1.html)
+
+From: 'The Apache Software Foundation' (http://www.apache.org)
+  - Apache Geronimo JPA Spec 2.2 (http://geronimo.apache.org/maven/specs/geronimo-jpa_2.2_spec/1.1) org.apache.geronimo.specs:geronimo-jpa_2.2_spec:bundle:1.1
+    License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+  - Apache XBean :: ASM shaded (repackaged) (http://geronimo.apache.org/maven/xbean/4.17/xbean-asm8-shaded) org.apache.xbean:xbean-asm8-shaded:bundle:4.17
+    License: $license.name  (http://asm.ow2.org/license.html)    License: $license.name  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+From: 'The Apache Software Foundation' (https://www.apache.org/)
+  - Apache Commons Collections (https://commons.apache.org/proper/commons-collections/) org.apache.commons:commons-collections4:jar:4.4
+    License: Apache License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+  - Apache Commons Pool (http://commons.apache.org/proper/commons-pool/) org.apache.commons:commons-pool2:jar:2.6.0
+    License: Apache License, Version 2.0  (https://www.apache.org/licenses/LICENSE-2.0.txt)
+
+
+
+

@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DerbyDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">DerbyDictionary.java</span></div><h1>DerbyDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Arrays;
+
+import javax.sql.DataSource;
+
+import org.apache.openjpa.util.StoreException;
+
+/**
+ * Dictionary for Apache Derby (formerly Cloudscape).
+ */
+public class DerbyDictionary
+    extends AbstractDB2Dictionary {
+
+    /**
+     * If true, we will shutdown the embedded database when closing
+     * the DataSource.
+     */
+<span class="nc" id="L41">    public boolean shutdownOnClose = true;</span>
+
+<span class="nc" id="L43">    public DerbyDictionary() {</span>
+<span class="nc" id="L44">        platform = &quot;Apache Derby&quot;;</span>
+<span class="nc" id="L45">        validationSQL = &quot;VALUES(1)&quot;;</span>
+<span class="nc" id="L46">        stringLengthFunction = &quot;LENGTH({0})&quot;;</span>
+<span class="nc" id="L47">        substringFunctionName = &quot;SUBSTR&quot;;</span>
+<span class="nc" id="L48">        toUpperCaseFunction = &quot;UPPER(CAST({0} AS VARCHAR(&quot; + varcharCastLength + &quot;)))&quot;;</span>
+<span class="nc" id="L49">        toLowerCaseFunction = &quot;LOWER(CAST({0} AS VARCHAR(&quot; + varcharCastLength + &quot;)))&quot;;</span>
+
+        // Derby name length restriction has been relaxed
+        //http://www.archivum.info/derby-dev@db.apache.org/2004-12/msg00270.html
+<span class="nc" id="L53">        maxConstraintNameLength = 128;</span>
+<span class="nc" id="L54">        maxIndexNameLength = 128;</span>
+<span class="nc" id="L55">        maxColumnNameLength = 128;</span>
+<span class="nc" id="L56">        maxTableNameLength = 128;</span>
+
+<span class="nc" id="L58">        useGetBytesForBlobs = true;</span>
+<span class="nc" id="L59">        useSetBytesForBlobs = true;</span>
+
+<span class="nc" id="L61">        allowsAliasInBulkClause = false;</span>
+<span class="nc" id="L62">        supportsDeferredConstraints = false;</span>
+<span class="nc" id="L63">        supportsParameterInSelect = false;</span>
+<span class="nc" id="L64">        supportsSelectForUpdate = true;</span>
+<span class="nc" id="L65">        supportsDefaultDeleteAction = false;</span>
+<span class="nc" id="L66">        requiresCastForMathFunctions = true;</span>
+<span class="nc" id="L67">        requiresCastForComparisons = true;</span>
+<span class="nc" id="L68">        supportsSimpleCaseExpression = false;</span>
+<span class="nc" id="L69">        supportsNullUniqueColumn = false;</span>
+
+<span class="nc" id="L71">        supportsComments = true;</span>
+
+        // Derby does still not support 'WITH TIMEZONE' from the SQL92 standard
+
+<span class="nc" id="L75">        fixedSizeTypeNameSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;BIGINT&quot;, &quot;INTEGER&quot;, &quot;TEXT&quot;
+        }));
+<span class="nc" id="L78">        reservedWordSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;BOOLEAN&quot;, &quot;CALL&quot;, &quot;ENDEXEC&quot;, &quot;EXPLAIN&quot;, &quot;FUNCTION&quot;,
+            &quot;GET_CURRENT_CONNECTION&quot;, &quot;INOUT&quot;, &quot;LONGINT&quot;, &quot;LTRIM&quot;, &quot;NONE&quot;,
+            &quot;NVARCHAR&quot;, &quot;OFF&quot;, &quot;OUT&quot;, &quot;RTRIM&quot;, &quot;SUBSTR&quot;, &quot;XML&quot;, &quot;XMLEXISTS&quot;,
+            &quot;XMLPARSE&quot;, &quot;XMLSERIALIZE&quot;,
+        }));
+
+        // reservedWordSet subset that CANNOT be used as valid column names
+        // (i.e., without surrounding them with double-quotes)
+<span class="nc" id="L87">        invalidColumnWordSet.addAll(Arrays.asList(new String[] {</span>
+            &quot;ADD&quot;, &quot;ALL&quot;, &quot;ALLOCATE&quot;, &quot;ALTER&quot;, &quot;AND&quot;, &quot;ANY&quot;, &quot;ARE&quot;, &quot;AS&quot;, &quot;ASC&quot;,
+            &quot;ASSERTION&quot;, &quot;AT&quot;, &quot;AUTHORIZATION&quot;, &quot;AVG&quot;, &quot;BEGIN&quot;, &quot;BETWEEN&quot;,
+            &quot;BIT&quot;, &quot;BOOLEAN&quot;, &quot;BOTH&quot;, &quot;BY&quot;, &quot;CALL&quot;, &quot;CASCADE&quot;, &quot;CASCADED&quot;,
+            &quot;CASE&quot;, &quot;CAST&quot;, &quot;CHAR&quot;, &quot;CHARACTER&quot;, &quot;CHARACTER_LENGTH&quot;, &quot;CHECK&quot;,
+            &quot;CLOSE&quot;, &quot;COALESCE&quot;, &quot;COLLATE&quot;, &quot;COLLATION&quot;, &quot;COLUMN&quot;, &quot;COMMIT&quot;, &quot;CONNECT&quot;,
+            &quot;CONNECTION&quot;, &quot;CONSTRAINT&quot;, &quot;CONSTRAINTS&quot;, &quot;CONTINUE&quot;, &quot;CONVERT&quot;,
+            &quot;CORRESPONDING&quot;, &quot;CREATE&quot;, &quot;CURRENT&quot;, &quot;CURRENT_DATE&quot;, &quot;CURRENT_ROLE&quot;,
+            &quot;CURRENT_TIME&quot;, &quot;CURRENT_TIMESTAMP&quot;, &quot;CURRENT_USER&quot;, &quot;CURSOR&quot;,
+            &quot;DEALLOCATE&quot;, &quot;DEC&quot;, &quot;DECIMAL&quot;, &quot;DECLARE&quot;, &quot;DEFAULT&quot;, &quot;DEFERRABLE&quot;,
+            &quot;DEFERRED&quot;, &quot;DELETE&quot;, &quot;DESC&quot;, &quot;DESCRIBE&quot;, &quot;DIAGNOSTICS&quot;,
+            &quot;DISCONNECT&quot;, &quot;DISTINCT&quot;, &quot;DOUBLE&quot;, &quot;DROP&quot;, &quot;ELSE&quot;, &quot;END&quot;,
+            &quot;END-EXEC&quot;, &quot;ESCAPE&quot;, &quot;EXCEPT&quot;, &quot;EXCEPTION&quot;, &quot;EXEC&quot;, &quot;EXECUTE&quot;,
+            &quot;EXISTS&quot;, &quot;EXPLAIN&quot;, &quot;EXTERNAL&quot;, &quot;FALSE&quot;, &quot;FETCH&quot;, &quot;FIRST&quot;, &quot;FLOAT&quot;,
+            &quot;FOR&quot;, &quot;FOREIGN&quot;, &quot;FOUND&quot;, &quot;FROM&quot;, &quot;FULL&quot;, &quot;FUNCTION&quot;, &quot;GET&quot;,
+            &quot;GETCURRENTCONNECTION&quot;, &quot;GLOBAL&quot;, &quot;GO&quot;, &quot;GOTO&quot;, &quot;GRANT&quot;, &quot;GROUP&quot;, &quot;HAVING&quot;, &quot;HOUR&quot;,
+            &quot;IDENTITY&quot;, &quot;IMMEDIATE&quot;, &quot;IN&quot;, &quot;INDICATOR&quot;, &quot;INITIALLY&quot;, &quot;INNER&quot;,
+            &quot;INOUT&quot;, &quot;INPUT&quot;, &quot;INSENSITIVE&quot;, &quot;INSERT&quot;, &quot;INT&quot;, &quot;INTEGER&quot;,
+            &quot;INTERSECT&quot;, &quot;INTO&quot;, &quot;IS&quot;, &quot;ISOLATION&quot;, &quot;JOIN&quot;, &quot;KEY&quot;, &quot;LAST&quot;,
+            &quot;LEADING&quot;, &quot;LEFT&quot;, &quot;LIKE&quot;, &quot;LOWER&quot;, &quot;LTRIM&quot;, &quot;MATCH&quot;, &quot;MAX&quot;, &quot;MIN&quot;,
+            &quot;MINUTE&quot;, &quot;NATIONAL&quot;, &quot;NATURAL&quot;, &quot;NCHAR&quot;, &quot;NEXT&quot;, &quot;NO&quot;, &quot;NONE&quot;, &quot;NOT&quot;,
+            &quot;NULL&quot;, &quot;NULLIF&quot;, &quot;NUMERIC&quot;, &quot;NVARCHAR&quot;, &quot;OF&quot;, &quot;ON&quot;, &quot;ONLY&quot;, &quot;OPEN&quot;,
+            &quot;OPTION&quot;, &quot;OR&quot;, &quot;ORDER&quot;, &quot;OUT&quot;, &quot;OUTER&quot;, &quot;OUTPUT&quot;, &quot;OVER&quot;, &quot;OVERLAPS&quot;,
+            &quot;PAD&quot;, &quot;PARTIAL&quot;, &quot;PREPARE&quot;, &quot;PRESERVE&quot;, &quot;PRIMARY&quot;, &quot;PRIOR&quot;,
+            &quot;PRIVILEGES&quot;, &quot;PROCEDURE&quot;, &quot;PUBLIC&quot;, &quot;READ&quot;, &quot;REAL&quot;, &quot;REFERENCES&quot;,
+            &quot;RELATIVE&quot;, &quot;RESTRICT&quot;, &quot;REVOKE&quot;, &quot;RIGHT&quot;, &quot;ROLLBACK&quot;, &quot;ROWS&quot;,
+            &quot;ROW_NUMBER&quot;, &quot;RTRIM&quot;, &quot;SCHEMA&quot;, &quot;SCROLL&quot;, &quot;SECOND&quot;, &quot;SELECT&quot;, &quot;SESSION_USER&quot;,
+            &quot;SET&quot;, &quot;SMALLINT&quot;, &quot;SOME&quot;, &quot;SPACE&quot;, &quot;SQL&quot;, &quot;SQLCODE&quot;, &quot;SQLERROR&quot;,
+            &quot;SQLSTATE&quot;, &quot;SUBSTR&quot;, &quot;SUBSTRING&quot;, &quot;SUM&quot;, &quot;SYSTEM_USER&quot;, &quot;TABLE&quot;,
+            &quot;TEMPORARY&quot;, &quot;TIMEZONE_HOUR&quot;, &quot;TIMEZONE_MINUTE&quot;, &quot;TO&quot;, &quot;TRAILING&quot;,
+            &quot;TRANSACTION&quot;, &quot;TRANSLATE&quot;, &quot;TRANSLATION&quot;, &quot;TRIM&quot;, &quot;TRUE&quot;, &quot;UNION&quot;,
+            &quot;UNIQUE&quot;, &quot;UNKNOWN&quot;, &quot;UPDATE&quot;, &quot;UPPER&quot;, &quot;USER&quot;, &quot;USING&quot;, &quot;VALUES&quot;,
+            &quot;VARCHAR&quot;, &quot;VARYING&quot;, &quot;VIEW&quot;, &quot;WHENEVER&quot;, &quot;WHERE&quot;, &quot;WITH&quot;, &quot;WORK&quot;,
+            &quot;WRITE&quot;, &quot;XML&quot;, &quot;XMLEXISTS&quot;, &quot;XMLPARSE&quot;, &quot;XMLQUERY&quot;, &quot;XMLSERIALIZE&quot;, &quot;YEAR&quot;,
+        }));
+<span class="nc" id="L122">    }</span>
+
+    @Override
+    public void connectedConfiguration(Connection conn) throws SQLException {
+<span class="nc" id="L126">        super.connectedConfiguration(conn);</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">        if (versionEqualOrLaterThan(10, 5)) {</span>
+<span class="nc" id="L128">            supportsSelectStartIndex = true;</span>
+<span class="nc" id="L129">            supportsSelectEndIndex   = true;</span>
+        }
+<span class="nc" id="L131">    }</span>
+
+    /**
+     * Appends a range to the given buffer.
+     * &lt;br&gt;
+     * A range query is never appended to a subselct clause.
+     * &lt;br&gt;
+     * If this dictionary supports {@link DBDictionary#supportsSelectStartIndex offset}
+     * and {@link DBDictionary#supportsSelectEndIndex limit} on queries then the
+     * syntax is &lt;pre&gt;
+     * [ OFFSET {start} ROWS ]
+     * [ FETCH NEXT {end-start} ROWS ONLY ]
+     * &lt;/pre&gt;
+     * Otherwise, the offset is not used and the syntax is &lt;pre&gt;
+     * [ FETCH FIRST {end} ROWS ONLY ]
+     * &lt;/pre&gt;
+     * @param buf the SQL buffer to be appended
+     * @param start starting offset. {@code 0} means offset is not used.
+     * @param end number of rows to be fetched. {@code Long.MAX_VALUE} means no limit.
+     * @param subselect flags if the buffer represents a SQL Subquery clause
+     */
+    @Override
+    protected void appendSelectRange(SQLBuffer buf, long start, long end, boolean subselect) {
+        // do not generate FETCH FIRST clause for subselect
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (subselect)</span>
+<span class="nc" id="L156">            return;</span>
+<span class="nc bnc" id="L157" title="All 4 branches missed.">        if (supportsSelectStartIndex &amp;&amp; supportsSelectEndIndex) {</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">            if (isUsingOffset(start))</span>
+<span class="nc" id="L159">                buf.append(&quot; OFFSET &quot;).append(Long.toString(start)).append(&quot; ROWS &quot;);</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">            if (isUsingLimit(end)) {</span>
+<span class="nc" id="L161">                long rowCount = end - start;</span>
+<span class="nc" id="L162">                buf.append(&quot; FETCH NEXT &quot;).append(Long.toString(rowCount)).append(&quot; ROWS ONLY&quot;);</span>
+<span class="nc" id="L163">            }</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        } else if (isUsingLimit(end)) {</span>
+<span class="nc" id="L165">            buf.append(&quot; FETCH FIRST &quot;).append(Long.toString(end)).append(&quot; ROWS ONLY&quot;);</span>
+        }
+<span class="nc" id="L167">    }</span>
+
+    @Override
+    public void closeDataSource(DataSource dataSource) {
+<span class="nc" id="L171">        super.closeDataSource(dataSource);</span>
+
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        if (!shutdownOnClose)</span>
+<span class="nc" id="L174">            return;</span>
+
+        // as well as closing the DataSource, we also need to
+        // shut down the instance if we are using an embedded database, which
+        // can only be done by connecting to the same URL with the
+        // &quot;;shutdown=true&quot; string appended to the end
+        // see: http://db.apache.org/derby/docs/dev/devguide/tdevdvlp40464.html
+<span class="nc bnc" id="L181" title="All 4 branches missed.">        if (conf != null &amp;&amp; conf.getConnectionDriverName() != null &amp;&amp;</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">            conf.getConnectionDriverName().indexOf(&quot;EmbeddedDriver&quot;) != -1) {</span>
+            try {
+<span class="nc" id="L184">                DriverManager.getConnection(conf.getConnectionURL()</span>
+                    + &quot;;shutdown=true&quot;);
+<span class="nc" id="L186">            } catch (SQLException e) {</span>
+                // we actually expect a SQLException to be thrown here:
+                // Derby strangely uses that as a mechanism to report
+                // a successful shutdown
+<span class="nc" id="L190">            }</span>
+        }
+<span class="nc" id="L192">    }</span>
+
+    @Override
+    public boolean isFatalException(int subtype, SQLException ex) {
+<span class="nc" id="L196">        int errorCode = ex.getErrorCode();</span>
+<span class="nc bnc" id="L197" title="All 6 branches missed.">        if ((subtype == StoreException.LOCK ||</span>
+             subtype == StoreException.QUERY) &amp;&amp; errorCode &lt;= 30000) {
+<span class="nc" id="L199">            return false;</span>
+        }
+<span class="nc" id="L201">        return super.isFatalException(subtype, ex);</span>
+    }
+
+    /**
+     * Applies range calculation on the actual number of rows selected by a
+     * {@code COUNT(*)} query. A range query may use either only the limit or
+     * both offset and limit based on database dictionary support and
+     * accordingly the number of rows in the result set needs to be modified.
+     *
+     * @param select
+     * @param count
+     * @return
+     */
+
+    @Override
+    public int applyRange(Select select, int count) {
+<span class="nc" id="L217">        long start = select.getStartIndex();</span>
+<span class="nc" id="L218">        long end = select.getEndIndex();</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        if (supportsSelectStartIndex) {</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">            if (start &gt; 0)</span>
+<span class="nc" id="L221">                count -= start;</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">            if (end != Long.MAX_VALUE) {</span>
+<span class="nc" id="L223">                long size = end - start;</span>
+<span class="nc" id="L224">                count = (int) Math.min(count, size);</span>
+            }
+        }
+<span class="nc" id="L227">        return count;</span>
+    }
+
+    /**
+     * Derby doesn't support SQL-2003 'WITH TIMEZONE' nor the respective JDBC types.
+     */
+    @Override
+    public int getPreferredType(int type) {
+<span class="nc bnc" id="L235" title="All 3 branches missed.">        switch (type) {</span>
+            case Types.TIME_WITH_TIMEZONE:
+<span class="nc" id="L237">                return Types.TIME;</span>
+            case Types.TIMESTAMP_WITH_TIMEZONE:
+<span class="nc" id="L239">                return Types.TIMESTAMP;</span>
+            default:
+<span class="nc" id="L241">                return type;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ImmutableValueHandler.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">ImmutableValueHandler.java</span></div><h1>ImmutableValueHandler.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * Handler for simple type and string values.
+ *
+ */
+<span class="nc" id="L36">public class ImmutableValueHandler extends AbstractValueHandler {</span>
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L40">    private static final ImmutableValueHandler _instance =</span>
+        new ImmutableValueHandler();
+
+    /**
+     * Singleton instance.
+     */
+    public static ImmutableValueHandler getInstance() {
+<span class="nc" id="L47">        return _instance;</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Column[] map(ValueMapping vm, String name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L57">        DBDictionary dict = vm.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">        DBIdentifier colName = DBIdentifier.newColumn(name, dict != null ? dict.delimitAll() : false);</span>
+<span class="nc" id="L59">        return map(vm, colName, io, adapt);</span>
+    }
+
+    public Column[] map(ValueMapping vm, DBIdentifier name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L64">        Column col = new Column();</span>
+<span class="nc" id="L65">        col.setIdentifier(name);</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        if (vm.getTypeCode() == JavaTypes.DATE)</span>
+<span class="nc" id="L67">            col.setJavaType(JavaSQLTypes.getDateTypeCode(vm.getType()));</span>
+        else
+<span class="nc" id="L69">            col.setJavaType(vm.getTypeCode());</span>
+<span class="nc" id="L70">        return new Column[]{ col };</span>
+    }
+
+    @Override
+    public boolean isVersionable(ValueMapping vm) {
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        switch (vm.getTypeCode()) {</span>
+            case JavaTypes.BOOLEAN:
+            case JavaTypes.BYTE:
+            case JavaTypes.CHAR:
+            case JavaTypes.INT:
+            case JavaTypes.LONG:
+            case JavaTypes.SHORT:
+            case JavaTypes.BOOLEAN_OBJ:
+            case JavaTypes.BYTE_OBJ:
+            case JavaTypes.CHAR_OBJ:
+            case JavaTypes.INT_OBJ:
+            case JavaTypes.LONG_OBJ:
+            case JavaTypes.SHORT_OBJ:
+            case JavaTypes.STRING:
+            case JavaTypes.DATE:
+            case JavaTypes.LOCAL_DATE:
+            case JavaTypes.LOCAL_TIME:
+            case JavaTypes.LOCAL_DATETIME:
+            case JavaTypes.OFFSET_TIME:
+            case JavaTypes.OFFSET_DATETIME:
+            case JavaTypes.BIGINTEGER:
+            case JavaTypes.LOCALE:
+<span class="nc" id="L97">                return true;</span>
+            default:
+<span class="nc" id="L99">                return false;</span>
+        }
+    }
+
+    @Override
+    public Object toDataStoreValue(ValueMapping vm, Object val,
+        JDBCStore store) {
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        if (val != null)</span>
+<span class="nc" id="L107">            return val;</span>
+
+<span class="nc" id="L109">        FieldMapping field = vm.getFieldMapping();</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">        if (field.getNullValue() != FieldMetaData.NULL_DEFAULT)</span>
+<span class="nc" id="L111">            return null;</span>
+
+<span class="nc" id="L113">        Column[] cols = vm.getColumns();</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (cols[0].getDefaultString() != null)</span>
+<span class="nc" id="L115">            return null;</span>
+
+        // honor the user's null-value=default
+<span class="nc" id="L118">        return JavaSQLTypes.getEmptyValue(vm.getTypeCode());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

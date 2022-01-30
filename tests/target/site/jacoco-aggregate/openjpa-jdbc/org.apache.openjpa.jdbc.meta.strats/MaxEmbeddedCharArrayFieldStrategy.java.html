@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MaxEmbeddedCharArrayFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">MaxEmbeddedCharArrayFieldStrategy.java</span></div><h1>MaxEmbeddedCharArrayFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.io.CharArrayReader;
+import java.io.CharArrayWriter;
+import java.io.IOException;
+import java.io.Reader;
+import java.lang.reflect.Array;
+import java.sql.Clob;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Mapping for CLOB character array on a dictionary that has a maximum
+ * embedded CLOB size.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+<span class="nc" id="L48">public class MaxEmbeddedCharArrayFieldStrategy</span>
+    extends MaxEmbeddedLobFieldStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L54">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L55">        (MaxEmbeddedCharArrayFieldStrategy.class);</span>
+
+<span class="nc" id="L57">    private int _maxSize = 0;</span>
+
+    @Override
+    protected int getExpectedJavaType() {
+<span class="nc" id="L61">        return JavaSQLTypes.CHAR_STREAM;</span>
+    }
+
+    @Override
+    protected void update(OpenJPAStateManager sm, Row row)
+        throws SQLException {
+<span class="nc" id="L67">        char[] c = PrimitiveWrapperArrays.</span>
+<span class="nc" id="L68">            toCharArray(sm.fetchObject(field.getIndex()));</span>
+<span class="nc bnc" id="L69" title="All 4 branches missed.">        if (c == null || c.length &gt; _maxSize)</span>
+<span class="nc" id="L70">            row.setNull(field.getColumns()[0], true);</span>
+        else
+<span class="nc" id="L72">            row.setCharacterStream(field.getColumns()[0],</span>
+                new CharArrayReader(c), c.length);
+<span class="nc" id="L74">    }</span>
+
+    @Override
+    protected Boolean isCustom(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L78">        Object val = sm.fetchObject(field.getIndex());</span>
+<span class="nc bnc" id="L79" title="All 4 branches missed.">        return (val != null &amp;&amp; Array.getLength(val) &gt; _maxSize) ? null</span>
+<span class="nc" id="L80">            : Boolean.FALSE;</span>
+    }
+
+    @Override
+    protected void putData(OpenJPAStateManager sm, ResultSet rs,
+        DBDictionary dict)
+        throws SQLException {
+<span class="nc" id="L87">        Clob clob = rs.getClob(1);</span>
+<span class="nc" id="L88">        dict.putChars(clob, PrimitiveWrapperArrays.</span>
+<span class="nc" id="L89">            toCharArray(sm.fetchObject(field.getIndex())));</span>
+<span class="nc" id="L90">    }</span>
+
+    @Override
+    protected Object load(Column col, Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L95">        Reader reader = res.getCharacterStream(col, joins);</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        if (reader == null)</span>
+<span class="nc" id="L97">            return null;</span>
+
+        try {
+<span class="nc" id="L100">            CharArrayWriter writer = new CharArrayWriter();</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">            for (int c; (c = reader.read()) != -1;)</span>
+<span class="nc" id="L102">                writer.write(c);</span>
+<span class="nc" id="L103">            return PrimitiveWrapperArrays.toObjectValue(field,</span>
+<span class="nc" id="L104">                writer.toCharArray());</span>
+<span class="nc" id="L105">        } catch (IOException ioe) {</span>
+<span class="nc" id="L106">            throw new SQLException(ioe.toString());</span>
+        }
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (field.getType() != char[].class</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">            &amp;&amp; field.getType() != Character[].class)</span>
+<span class="nc" id="L114">            throw new MetaDataException(_loc.get(&quot;not-chars&quot;, field));</span>
+<span class="nc" id="L115">        super.map(adapt);</span>
+<span class="nc" id="L116">    }</span>
+
+    @Override
+    public void initialize() {
+<span class="nc" id="L120">        DBDictionary dict = field.getMappingRepository().getDBDictionary();</span>
+<span class="nc" id="L121">        _maxSize = dict.maxEmbeddedClobSize;</span>
+<span class="nc" id="L122">    }</span>
+
+    @Override
+    protected Object getValue(OpenJPAStateManager sm) {
+<span class="nc" id="L126">        char[] c = PrimitiveWrapperArrays.</span>
+<span class="nc" id="L127">        toCharArray(sm.fetchObject(field.getIndex()));</span>
+<span class="nc bnc" id="L128" title="All 4 branches missed.">        if (c == null || c.length &gt; _maxSize)</span>
+<span class="nc" id="L129">            return null;</span>
+        else
+<span class="nc" id="L131">            return c;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

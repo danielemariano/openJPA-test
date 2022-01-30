@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>HSQLDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">HSQLDictionary.java</span></div><h1>HSQLDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Arrays;
+import java.util.Locale;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.exps.FilterValue;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.OpenJPAException;
+import org.apache.openjpa.util.ReferentialIntegrityException;
+
+/**
+ * Dictionary for HyperSQL (HSQLDB) database.
+ */
+public class HSQLDictionary extends DBDictionary {
+
+    /**
+     * Sets whether HSQL should use &quot;CREATED CACHED TABLE&quot; rather than
+     * &quot;CREATE TABLE&quot;, which allows disk-based database operations.
+     */
+<span class="nc" id="L51">    public boolean cacheTables = false;</span>
+
+    private int dbMajorVersion;
+    private int dbMinorVersion;
+    private int violation_of_unique_index_or_constraint;
+
+<span class="nc" id="L57">    private SQLBuffer _oneBuffer = new SQLBuffer(this).append(&quot;1&quot;);</span>
+
+<span class="nc" id="L59">    public HSQLDictionary() {</span>
+<span class="nc" id="L60">        platform = &quot;HSQL&quot;;</span>
+<span class="nc" id="L61">        validationSQL = &quot;CALL 1&quot;;</span>
+<span class="nc" id="L62">        concatenateFunction = &quot;CONCAT({0},{1})&quot;;</span>
+<span class="nc" id="L63">        closePoolSQL = &quot;SHUTDOWN&quot;;</span>
+
+<span class="nc" id="L65">        supportsAutoAssign = true;</span>
+<span class="nc" id="L66">        lastGeneratedKeyQuery = &quot;CALL IDENTITY()&quot;;</span>
+<span class="nc" id="L67">        autoAssignClause = &quot;IDENTITY&quot;;</span>
+<span class="nc" id="L68">        autoAssignTypeName = &quot;INTEGER&quot;;</span>
+<span class="nc" id="L69">        nextSequenceQuery = &quot;SELECT NEXT VALUE FOR {0} FROM&quot;</span>
+            + &quot; INFORMATION_SCHEMA.SYSTEM_SEQUENCES&quot;;
+<span class="nc" id="L71">        crossJoinClause = &quot;JOIN&quot;;</span>
+<span class="nc" id="L72">        requiresConditionForCrossJoin = true;</span>
+<span class="nc" id="L73">        stringLengthFunction = &quot;LENGTH({0})&quot;;</span>
+<span class="nc" id="L74">        trimLeadingFunction = &quot;LTRIM({0})&quot;;</span>
+<span class="nc" id="L75">        trimTrailingFunction = &quot;RTRIM({0})&quot;;</span>
+<span class="nc" id="L76">        trimBothFunction = &quot;LTRIM(RTRIM({0}))&quot;;</span>
+
+<span class="nc" id="L78">        supportsSelectForUpdate = false;</span>
+<span class="nc" id="L79">        supportsSelectStartIndex = true;</span>
+<span class="nc" id="L80">        supportsSelectEndIndex = true;</span>
+<span class="nc" id="L81">        supportsDeferredConstraints = false;</span>
+
+<span class="nc" id="L83">        doubleTypeName = &quot;NUMERIC&quot;;</span>
+
+<span class="nc" id="L85">        supportsNullTableForGetPrimaryKeys = false;</span>
+<span class="nc" id="L86">        supportsNullTableForGetIndexInfo = false;</span>
+
+<span class="nc" id="L88">        requiresCastForMathFunctions = true;</span>
+<span class="nc" id="L89">        requiresCastForComparisons = true;</span>
+
+<span class="nc" id="L91">        reservedWordSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;BEFORE&quot;, &quot;BIGINT&quot;, &quot;BINARY&quot;, &quot;CACHED&quot;, &quot;DATETIME&quot;, &quot;LIMIT&quot;,
+            &quot;LONGVARBINARY&quot;, &quot;LONGVARCHAR&quot;, &quot;OBJECT&quot;, &quot;OTHER&quot;,
+            &quot;SAVEPOINT&quot;, &quot;TEMP&quot;, &quot;TEXT&quot;, &quot;TRIGGER&quot;, &quot;TINYINT&quot;,
+            &quot;VARBINARY&quot;, &quot;VARCHAR_IGNORECASE&quot;,
+        }));
+
+<span class="nc" id="L98">        fixedSizeTypeNameSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;TEXT&quot;
+        }));
+<span class="nc" id="L101">        fixedSizeTypeNameSet.remove(&quot;NUMERIC&quot;);</span>
+<span class="nc" id="L102">        fixedSizeTypeNameSet.remove(&quot;DECIMAL&quot;);</span>
+<span class="nc" id="L103">    }</span>
+
+    /**
+     * Determine HSQLDB version and configure itself accordingly.
+     */
+    @Override
+    public void connectedConfiguration(Connection conn) throws SQLException {
+<span class="nc" id="L110">        super.connectedConfiguration(conn);</span>
+
+<span class="nc" id="L112">        determineHSQLDBVersion(conn) ;</span>
+
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (dbMajorVersion == 1) {</span>
+<span class="nc" id="L115">            blobTypeName = &quot;VARBINARY&quot;;</span>
+<span class="nc" id="L116">            useGetObjectForBlobs = true;</span>
+<span class="nc" id="L117">            rangePosition = RANGE_PRE_DISTINCT;</span>
+            // HSQL 1.8.0 does support schema names in the table (&quot;schema.table&quot;),
+            // but doesn't support it for columns references (&quot;schema.table.column&quot;)
+<span class="nc" id="L120">            useSchemaName = false;</span>
+        }
+<span class="nc bnc" id="L122" title="All 4 branches missed.">        if (dbMajorVersion &gt; 1 &amp;&amp; dbMinorVersion &gt; 0) {</span>
+<span class="nc" id="L123">            nextSequenceQuery += &quot; LIMIT 1&quot;;</span>
+        }
+        String packageName;
+        String fieldName;
+<span class="nc bnc" id="L127" title="All 2 branches missed.">        if (dbMajorVersion &gt; 1) {</span>
+            // default value for &quot;X_23505&quot;
+<span class="nc" id="L129">            violation_of_unique_index_or_constraint = 104;</span>
+<span class="nc" id="L130">            packageName = &quot;org.hsqldb.error.ErrorCode&quot;;</span>
+<span class="nc" id="L131">            fieldName = &quot;X_23505&quot;;</span>
+        } else {
+            // default value for &quot;VIOLATION_OF_UNIQUE_INDEX&quot;
+<span class="nc" id="L134">            violation_of_unique_index_or_constraint = 9;</span>
+<span class="nc" id="L135">            packageName = &quot;org.hsqldb.Trace&quot;;</span>
+<span class="nc" id="L136">            fieldName = &quot;VIOLATION_OF_UNIQUE_INDEX&quot;;</span>
+        }
+        try {
+<span class="nc" id="L139">            Class&lt;?&gt; cls = Class.forName(packageName);</span>
+<span class="nc" id="L140">            Field fld = cls.getField(fieldName);</span>
+<span class="nc" id="L141">            violation_of_unique_index_or_constraint = fld.getInt(null);</span>
+<span class="nc" id="L142">        } catch (Exception e) {</span>
+<span class="nc" id="L143">        }</span>
+<span class="nc" id="L144">    }</span>
+
+    /**
+     * Determine HSQLDB version either by using JDBC 3 method or, if it
+     * is not available, by parsing the value returned by
+     * {@linkplain DatabaseMetaData#getDatabaseProductVersion()}.
+     */
+    protected void determineHSQLDBVersion(Connection con) throws SQLException {
+<span class="nc" id="L152">        DatabaseMetaData metaData = con.getMetaData();</span>
+
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        if (isJDBC3) {</span>
+<span class="nc" id="L155">            dbMajorVersion = metaData.getDatabaseMajorVersion();</span>
+<span class="nc" id="L156">            dbMinorVersion = metaData.getDatabaseMinorVersion();</span>
+        } else {
+            // String is like &quot;2.0.0&quot;
+<span class="nc" id="L159">            String productVersion = metaData.getDatabaseProductVersion();</span>
+<span class="nc" id="L160">            String[] version = productVersion.split(&quot;\\.&quot;) ;</span>
+<span class="nc" id="L161">            dbMajorVersion = Integer.parseInt(version[0]) ;</span>
+<span class="nc" id="L162">            dbMinorVersion = Integer.parseInt(version[1]);</span>
+        }
+<span class="nc" id="L164">    }</span>
+
+    @Override
+    public int getJDBCType(int metaTypeCode, boolean lob) {
+<span class="nc" id="L168">        int type = super.getJDBCType(metaTypeCode, lob);</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        switch (type) {</span>
+            case Types.BIGINT:
+<span class="nc bnc" id="L171" title="All 2 branches missed.">                if (metaTypeCode == JavaTypes.BIGINTEGER)</span>
+<span class="nc" id="L172">                    return Types.NUMERIC;</span>
+                break;
+        }
+<span class="nc" id="L175">        return type;</span>
+    }
+
+    @Override
+    public int getPreferredType(int type) {
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        if (dbMajorVersion &gt; 1) {</span>
+<span class="nc" id="L181">            return super.getPreferredType(type);</span>
+        }
+<span class="nc bnc" id="L183" title="All 3 branches missed.">        switch (type) {</span>
+            case Types.CLOB:
+<span class="nc" id="L185">                return Types.VARCHAR;</span>
+            case Types.BLOB:
+<span class="nc" id="L187">                return Types.VARBINARY;</span>
+            default:
+<span class="nc" id="L189">                return super.getPreferredType(type);</span>
+        }
+    }
+
+    @Override
+    public String[] getAddPrimaryKeySQL(PrimaryKey pk) {
+<span class="nc" id="L195">        return new String[0];</span>
+    }
+
+    @Override
+    public String[] getDropPrimaryKeySQL(PrimaryKey pk) {
+<span class="nc" id="L200">        return new String[0];</span>
+    }
+
+    @Override
+    public String[] getAddColumnSQL(Column column) {
+<span class="nc" id="L205">        return new String[]{ &quot;ALTER TABLE &quot;</span>
+<span class="nc" id="L206">            + getFullName(column.getTable(), false)</span>
+<span class="nc" id="L207">            + &quot; ADD COLUMN &quot; + getDeclareColumnSQL(column, true) };</span>
+    }
+
+    @Override
+    public String[] getCreateTableSQL(Table table) {
+<span class="nc" id="L212">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L213">        buf.append(&quot;CREATE &quot;);</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (cacheTables)</span>
+<span class="nc" id="L215">            buf.append(&quot;CACHED &quot;);</span>
+<span class="nc" id="L216">        buf.append(&quot;TABLE &quot;).append(getFullName(table, false)).append(&quot; (&quot;);</span>
+
+<span class="nc" id="L218">        Column[] cols = table.getColumns();</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">            if (i &gt; 0)</span>
+<span class="nc" id="L221">                buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L222">            buf.append(getDeclareColumnSQL(cols[i], false));</span>
+        }
+
+<span class="nc" id="L225">        PrimaryKey pk = table.getPrimaryKey();</span>
+        String pkStr;
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (pk != null) {</span>
+<span class="nc" id="L228">            pkStr = getPrimaryKeyConstraintSQL(pk);</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">            if (!StringUtil.isEmpty(pkStr))</span>
+<span class="nc" id="L230">                buf.append(&quot;, &quot;).append(pkStr);</span>
+        }
+
+<span class="nc" id="L233">        Unique[] unqs = table.getUniques();</span>
+        String unqStr;
+<span class="nc bnc" id="L235" title="All 2 branches missed.">        for (int i = 0; i &lt; unqs.length; i++) {</span>
+<span class="nc" id="L236">            unqStr = getUniqueConstraintSQL(unqs[i]);</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">            if (unqStr != null)</span>
+<span class="nc" id="L238">                buf.append(&quot;, &quot;).append(unqStr);</span>
+        }
+
+<span class="nc" id="L241">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L242">        return new String[]{ buf.toString() };</span>
+    }
+
+    @Override
+    protected String getPrimaryKeyConstraintSQL(PrimaryKey pk) {
+<span class="nc" id="L247">        Column[] cols = pk.getColumns();</span>
+<span class="nc bnc" id="L248" title="All 4 branches missed.">        if (cols.length == 1 &amp;&amp; cols[0].isAutoAssigned())</span>
+<span class="nc" id="L249">            return null;</span>
+<span class="nc" id="L250">        return super.getPrimaryKeyConstraintSQL(pk);</span>
+    }
+
+    @Override
+    public boolean isSystemIndex(String name, Table table) {
+<span class="nc" id="L255">        return name.toUpperCase(Locale.ENGLISH).startsWith(&quot;SYS_&quot;);</span>
+    }
+
+    @Override
+    public boolean isSystemIndex(DBIdentifier name, Table table) {
+<span class="nc bnc" id="L260" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L261">            return false;</span>
+        }
+<span class="nc" id="L263">        return name.getName().toUpperCase(Locale.ENGLISH).startsWith(&quot;SYS_&quot;);</span>
+    }
+
+    @Override
+    protected String getSequencesSQL(String schemaName, String sequenceName) {
+<span class="nc" id="L268">        return getSequencesSQL(DBIdentifier.newSchema(schemaName), DBIdentifier.newSequence(sequenceName));</span>
+    }
+
+    @Override
+    protected String getSequencesSQL(DBIdentifier schemaName, DBIdentifier sequenceName) {
+<span class="nc" id="L273">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L274">        buf.append(&quot;SELECT SEQUENCE_SCHEMA, SEQUENCE_NAME FROM &quot;).</span>
+<span class="nc" id="L275">            append(&quot;INFORMATION_SCHEMA.SYSTEM_SEQUENCES&quot;);</span>
+<span class="nc bnc" id="L276" title="All 4 branches missed.">        if (!DBIdentifier.isNull(schemaName) || !DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L277">            buf.append(&quot; WHERE &quot;);</span>
+<span class="nc bnc" id="L278" title="All 2 branches missed.">        if (!DBIdentifier.isNull(schemaName)) {</span>
+<span class="nc" id="L279">            buf.append(&quot;SEQUENCE_SCHEMA = ?&quot;);</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">            if (!DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L281">                buf.append(&quot; AND &quot;);</span>
+        }
+<span class="nc bnc" id="L283" title="All 2 branches missed.">        if (!DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L284">            buf.append(&quot;SEQUENCE_NAME = ?&quot;);</span>
+<span class="nc" id="L285">        return buf.toString();</span>
+    }
+
+    @Override
+    public SQLBuffer toOperation(String op, SQLBuffer selects,
+        SQLBuffer from, SQLBuffer where, SQLBuffer group, SQLBuffer having,
+        SQLBuffer order, boolean distinct, long start, long end,
+        String forUpdateClause) {
+        // hsql requires ordering when limit is used
+<span class="nc bnc" id="L294" title="All 6 branches missed.">        if ((start != 0 || end != Long.MAX_VALUE)</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">            &amp;&amp; (order == null || order.isEmpty()))</span>
+<span class="nc" id="L296">            order = _oneBuffer;</span>
+<span class="nc" id="L297">        return super.toOperation(op, selects, from, where, group, having,</span>
+            order, distinct, start, end, forUpdateClause);
+    }
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, String catalog,
+        String schemaName, String tableName, String columnName, Connection conn)
+        throws SQLException {
+<span class="nc" id="L305">        return getColumns(meta, DBIdentifier.newCatalog(catalog), DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L306">            DBIdentifier.newTable(tableName), DBIdentifier.newColumn(columnName), conn);</span>
+    }
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, DBIdentifier catalog,
+            DBIdentifier schemaName, DBIdentifier tableName, DBIdentifier columnName, Connection conn)
+        throws SQLException {
+<span class="nc" id="L313">        Column[] cols = super.getColumns(meta, catalog, schemaName, tableName,</span>
+            columnName, conn);
+
+<span class="nc bnc" id="L316" title="All 4 branches missed.">        for (int i = 0; cols != null &amp;&amp; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">            if (&quot;BOOLEAN&quot;.equalsIgnoreCase(cols[i].getTypeIdentifier().getName()))</span>
+<span class="nc" id="L318">                cols[i].setType(Types.BIT);</span>
+<span class="nc" id="L319">        return cols;</span>
+    }
+
+    @Override
+    public void setDouble(PreparedStatement stmnt, int idx, double val,
+        Column col)
+        throws SQLException {
+        // HSQL has a bug where it cannot store a double if it is
+        // exactly the same as Long.MAX_VALUE or MIN_VALUE
+<span class="nc bnc" id="L328" title="All 4 branches missed.">        if (val == Long.MAX_VALUE || val == Long.MIN_VALUE) {</span>
+<span class="nc" id="L329">            stmnt.setLong(idx, (long) val);</span>
+        } else  {
+<span class="nc" id="L331">            super.setDouble(stmnt, idx, val, col);</span>
+        }
+<span class="nc" id="L333">    }</span>
+
+    @Override
+    public void setBigDecimal(PreparedStatement stmnt, int idx, BigDecimal val,
+        Column col)
+        throws SQLException {
+        // hsql can't compare a BigDecimal equal to any other type, so try
+        // to set type based on column
+<span class="nc bnc" id="L341" title="All 4 branches missed.">        int type = (val == null || col == null) ? JavaTypes.BIGDECIMAL</span>
+<span class="nc" id="L342">            : col.getJavaType();</span>
+<span class="nc bnc" id="L343" title="All 3 branches missed.">        switch (type) {</span>
+            case JavaTypes.DOUBLE:
+            case JavaTypes.DOUBLE_OBJ:
+<span class="nc" id="L346">                setDouble(stmnt, idx, val.doubleValue(), col);</span>
+<span class="nc" id="L347">                break;</span>
+            case JavaTypes.FLOAT:
+            case JavaTypes.FLOAT_OBJ:
+<span class="nc" id="L350">                setDouble(stmnt, idx, val.floatValue(), col);</span>
+<span class="nc" id="L351">                break;</span>
+            default:
+<span class="nc" id="L353">                super.setBigDecimal(stmnt, idx, val, col);</span>
+        }
+<span class="nc" id="L355">    }</span>
+
+    @Override
+    protected void appendSelectRange(SQLBuffer buf, long start, long end,
+        boolean subselect) {
+<span class="nc bnc" id="L360" title="All 2 branches missed.">        if (dbMajorVersion &gt; 1) {</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">            if (start != 0)</span>
+<span class="nc" id="L362">                buf.append(&quot; OFFSET &quot;).appendValue(start);</span>
+<span class="nc bnc" id="L363" title="All 2 branches missed.">            if (end != Long.MAX_VALUE)</span>
+<span class="nc" id="L364">                buf.append(&quot; LIMIT &quot;).appendValue(end - start);</span>
+<span class="nc" id="L365">            return;</span>
+        }
+        // HSQL doesn't parameters in range
+<span class="nc" id="L368">        buf.append(&quot; LIMIT &quot;).append(String.valueOf(start)).append(&quot; &quot;);</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">        if (end == Long.MAX_VALUE)</span>
+<span class="nc" id="L370">            buf.append(String.valueOf(0));</span>
+        else
+<span class="nc" id="L372">            buf.append(String.valueOf(end - start));</span>
+<span class="nc" id="L373">    }</span>
+
+    @Override
+    public void indexOf(SQLBuffer buf, FilterValue str, FilterValue find,
+        FilterValue start) {
+<span class="nc" id="L378">        buf.append(&quot;LOCATE(&quot;);</span>
+<span class="nc" id="L379">        find.appendTo(buf);</span>
+<span class="nc" id="L380">        buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L381">        str.appendTo(buf);</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">        if (start != null) {</span>
+<span class="nc" id="L383">            buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L384">            start.appendTo(buf);</span>
+        }
+<span class="nc" id="L386">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L387">    }</span>
+
+    @Override
+    public String getPlaceholderValueString(Column col) {
+<span class="nc" id="L391">        String type = getTypeName(col.getType());</span>
+<span class="nc" id="L392">        int idx = type.indexOf(&quot;{0}&quot;);</span>
+<span class="nc bnc" id="L393" title="All 2 branches missed.">        if (idx != -1) {</span>
+<span class="nc" id="L394">            String pre = type.substring(0, idx);</span>
+<span class="nc bnc" id="L395" title="All 2 branches missed.">            if (type.length() &gt; idx + 3)</span>
+<span class="nc" id="L396">                type = pre + type.substring(idx + 3);</span>
+            else
+<span class="nc" id="L398">                type = pre;</span>
+        }
+<span class="nc" id="L400">        return &quot;NULL AS &quot; + type;</span>
+    }
+
+    @Override
+    public OpenJPAException newStoreException(String msg, SQLException[] causes,
+        Object failed) {
+<span class="nc" id="L406">        OpenJPAException ke = super.newStoreException(msg, causes, failed);</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        if (ke instanceof ReferentialIntegrityException</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">            &amp;&amp; causes[0].getErrorCode() == -violation_of_unique_index_or_constraint) {</span>
+<span class="nc" id="L409">            ((ReferentialIntegrityException) ke).setIntegrityViolation</span>
+<span class="nc" id="L410">                (ReferentialIntegrityException.IV_UNIQUE);</span>
+        }
+<span class="nc" id="L412">        return ke;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

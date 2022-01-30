@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SimpleResultList.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-lib</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.lib.rop</a> &gt; <span class="el_source">SimpleResultList.java</span></div><h1>SimpleResultList.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.lib.rop;
+
+import java.io.ObjectStreamException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+/**
+ * An almost stateless {@link ResultList} designed for use with result
+ * object providers backed by efficient random-access data structures, such
+ * as the {@link ListResultObjectProvider}. This result list does not
+ * perform any caching.
+ *
+ * @author Abe White
+ */
+public class SimpleResultList extends AbstractNonSequentialResultList {
+
+    private final transient ResultObjectProvider _rop;
+<span class="nc" id="L37">    private boolean _closed = false;</span>
+<span class="nc" id="L38">    private int _size = -1;</span>
+
+<span class="nc" id="L40">    public SimpleResultList(ResultObjectProvider rop) {</span>
+<span class="nc" id="L41">        _rop = rop;</span>
+        try {
+<span class="nc" id="L43">            _rop.open();</span>
+<span class="nc" id="L44">        } catch (RuntimeException re) {</span>
+<span class="nc" id="L45">            close();</span>
+<span class="nc" id="L46">            throw re;</span>
+<span class="nc" id="L47">        } catch (Exception e) {</span>
+<span class="nc" id="L48">            close();</span>
+<span class="nc" id="L49">            _rop.handleCheckedException(e);</span>
+<span class="nc" id="L50">        }</span>
+<span class="nc" id="L51">    }</span>
+
+    @Override
+    public boolean isProviderOpen() {
+<span class="nc bnc" id="L55" title="All 2 branches missed.">        return !_closed;</span>
+    }
+
+    @Override
+    public boolean isClosed() {
+<span class="nc" id="L60">        return _closed;</span>
+    }
+
+    @Override
+    public void close() {
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (!_closed) {</span>
+<span class="nc" id="L66">            _closed = true;</span>
+            try {
+<span class="nc" id="L68">                _rop.close();</span>
+<span class="nc" id="L69">            } catch (Exception e) {</span>
+<span class="nc" id="L70">            }</span>
+        }
+<span class="nc" id="L72">    }</span>
+
+    @Override
+    public Object getInternal(int index) {
+        try {
+<span class="nc bnc" id="L77" title="All 2 branches missed.">            if (!_rop.absolute(index))</span>
+<span class="nc" id="L78">                return PAST_END;</span>
+<span class="nc" id="L79">            return _rop.getResultObject();</span>
+<span class="nc" id="L80">        } catch (RuntimeException re) {</span>
+<span class="nc" id="L81">            close();</span>
+<span class="nc" id="L82">            throw re;</span>
+<span class="nc" id="L83">        } catch (Exception e) {</span>
+<span class="nc" id="L84">            close();</span>
+<span class="nc" id="L85">            _rop.handleCheckedException(e);</span>
+<span class="nc" id="L86">            return PAST_END;</span>
+        }
+    }
+
+    @Override
+    public int size() {
+<span class="nc" id="L92">        assertOpen();</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        if (_size != -1)</span>
+<span class="nc" id="L94">            return _size;</span>
+        try {
+<span class="nc" id="L96">            _size = _rop.size();</span>
+<span class="nc" id="L97">            return _size;</span>
+<span class="nc" id="L98">        } catch (RuntimeException re) {</span>
+<span class="nc" id="L99">            close();</span>
+<span class="nc" id="L100">            throw re;</span>
+<span class="nc" id="L101">        } catch (Exception e) {</span>
+<span class="nc" id="L102">            close();</span>
+<span class="nc" id="L103">            _rop.handleCheckedException(e);</span>
+<span class="nc" id="L104">            return -1;</span>
+        }
+    }
+
+    public Object writeReplace() throws ObjectStreamException {
+<span class="nc bnc" id="L109" title="All 2 branches missed.">        if (_closed)</span>
+<span class="nc" id="L110">            return this;</span>
+
+        // load results into list
+<span class="nc" id="L113">        List list = new ArrayList();</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        for (Iterator itr = iterator(); itr.hasNext();)</span>
+<span class="nc" id="L115">            list.add(itr.next());</span>
+<span class="nc" id="L116">        return list;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

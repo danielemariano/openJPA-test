@@ -1,0 +1,464 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PagingResultObjectProvider.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">PagingResultObjectProvider.java</span></div><h1>PagingResultObjectProvider.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.BitSet;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.jdbc.sql.SelectExecutor;
+import org.apache.openjpa.kernel.FetchConfiguration;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.util.Closeable;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * Object provider implementation that fetches one page of results at a
+ * a time as it scrolls. If the {@link #getPagedFields} method returns a
+ * non-null bit set, this this provider is a good fit for your configuration.
+ * The method tests the following conditions:
+ * &lt;ul&gt;
+ * &lt;li&gt;The eager fetch mode is &lt;code&gt;parallel&lt;/code&gt;.&lt;/li&gt;
+ * &lt;li&gt;The select's result should be treated as a large result set.&lt;/li&gt;
+ * &lt;li&gt;The mapping being selected has fields that use parallel selects
+ * under the current fetch configuration.&lt;/li&gt;
+ * &lt;/ul&gt;
+ *  To use this provider, select the candidate mapping with eager fetch
+ * mode set to &lt;code&gt;join&lt;/code&gt;. This provider will take care of performing
+ * &lt;code&gt;parallel&lt;/code&gt; mode batch selects for each page it reads.
+ *
+ * @author Abe White
+ */
+public class PagingResultObjectProvider
+    extends SelectResultObjectProvider {
+
+    private final ClassMapping[] _mappings;
+    private final Object[] _page;
+    private final int[] _idxs;
+    private final BitSet[] _paged;
+<span class="nc" id="L63">    private int _pos = -1; // logical pos</span>
+<span class="nc" id="L64">    private int _pagePos = -1; // pos of page start</span>
+
+    /**
+     * Return a bit set representing batch select fields that will be paged,
+     * or null if no fields need paging, which indicates that this provider
+     * should not be used.
+     *
+     * @see #PagingResultObjectProvider
+     */
+    public static BitSet getPagedFields(Select sel, ClassMapping mapping,
+        JDBCStore store, JDBCFetchConfiguration fetch, int eagerMode,
+        long size) {
+        // if we have a range then we always use paging if there are any
+        // eager select fields; otherwise it depends on lrs and fetch settings
+<span class="nc bnc" id="L78" title="All 4 branches missed.">        if (size == Long.MAX_VALUE || !sel.getAutoDistinct()) {</span>
+            // not lrs?
+<span class="nc bnc" id="L80" title="All 2 branches missed.">            if (!sel.isLRS())</span>
+<span class="nc" id="L81">                return null;</span>
+            // not configured for lazy loading?
+<span class="nc bnc" id="L83" title="All 2 branches missed.">            if (fetch.getFetchBatchSize() &lt; 0)</span>
+<span class="nc" id="L84">                return null;</span>
+        }
+
+        // not configured for eager selects?
+<span class="nc" id="L88">        eagerMode = Math.min(eagerMode, fetch.getEagerFetchMode());</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        if (eagerMode != EagerFetchModes.EAGER_PARALLEL)</span>
+<span class="nc" id="L90">            return null;</span>
+
+        // are there any mappings that require batched selects?
+<span class="nc" id="L93">        FieldMapping[] fms = mapping.getDefinedFieldMappings();</span>
+<span class="nc" id="L94">        BitSet paged = null;</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">            if (fetch.requiresFetch(fms[i]) != FetchConfiguration.FETCH_LOAD)</span>
+<span class="nc" id="L97">                continue;</span>
+
+<span class="nc bnc" id="L99" title="All 2 branches missed.">            if (fms[i].supportsSelect(sel, Select.EAGER_PARALLEL, null, store,</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">                fetch) &gt; 0 &amp;&amp; (fms[i].isEagerSelectToMany() || fms[i].</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">                supportsSelect(sel, Select.EAGER_OUTER, null, store, fetch) == 0))</span>
+            {
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                if (paged == null)</span>
+<span class="nc" id="L104">                    paged = new BitSet();</span>
+<span class="nc" id="L105">                paged.set(fms[i].getIndex());</span>
+            }
+        }
+<span class="nc" id="L108">        return paged;</span>
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param sel the select to execute
+     * @param mapping the mapping of the result objects
+     * @param store the store manager to delegate loading to
+     * @param fetch the fetch configuration, or null for default
+     * @param paged the bit set returned from {@link #getPagedFields}
+     * @param size the known maximum size of the result, or
+     * {@link Long#MAX_VALUE} for no known limit
+     */
+    public PagingResultObjectProvider(SelectExecutor sel,
+        ClassMapping mapping, JDBCStore store, JDBCFetchConfiguration fetch,
+        BitSet paged, long size) {
+<span class="nc" id="L125">        this(sel, new ClassMapping[]{ mapping }, store, fetch,</span>
+            new BitSet[]{ paged }, size);
+<span class="nc" id="L127">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param sel the select to execute
+     * @param mappings the mappings for the independent classes of the
+     * result objects
+     * @param store the store manager to delegate loading to
+     * @param fetch the fetch configuration, or null for default
+     * @param paged the bit sets returned from {@link #getPagedFields}
+     * for each select in the possible union
+     * @param size the known maximum size of the result, or
+     * {@link Long#MAX_VALUE} for no known limit
+     */
+    public PagingResultObjectProvider(SelectExecutor sel,
+        ClassMapping[] mappings, JDBCStore store, JDBCFetchConfiguration fetch,
+        BitSet[] paged, long size) {
+<span class="nc" id="L145">        super(sel, store, fetch);</span>
+<span class="nc" id="L146">        _mappings = mappings;</span>
+<span class="nc" id="L147">        _paged = paged;</span>
+
+        // don't let system construct this type of rop for stupid sizes
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if (size &lt;= 1)</span>
+<span class="nc" id="L151">            throw new InternalException(&quot;size=&quot; + size);</span>
+
+        // try to find a good page size.  if the known size &lt; batch size, use
+        // it.  if the batch size is set, then use that; if it's sorta close
+        // to the size, then use the size / 2 to get two full pages rather
+        // than a possible big one and small one
+<span class="nc" id="L157">        int batch = getFetchConfiguration().getFetchBatchSize();</span>
+        int pageSize;
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        if (batch &lt; 0)</span>
+<span class="nc" id="L160">            pageSize = (int) size;</span>
+        else {
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            if (batch == 0)</span>
+<span class="nc" id="L163">                batch = 50; // reasonable default</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">            if (size &lt;= batch)</span>
+<span class="nc" id="L165">                pageSize = (int) size;</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">            else if (size &lt;= batch * 2) {</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">                if (size % 2 == 0)</span>
+<span class="nc" id="L168">                    pageSize = (int) (size / 2);</span>
+                else
+<span class="nc" id="L170">                    pageSize = (int) (size / 2 + 1);</span>
+            } else
+<span class="nc" id="L172">                pageSize = batch;</span>
+        }
+
+<span class="nc" id="L175">        _page = new Object[pageSize];</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        if (_paged.length &gt; 1)</span>
+<span class="nc" id="L177">            _idxs = new int[pageSize];</span>
+        else
+<span class="nc" id="L179">            _idxs = null;</span>
+<span class="nc" id="L180">    }</span>
+
+    /**
+     * Return the page size in use.
+     */
+    public int getPageSize() {
+<span class="nc" id="L186">        return _page.length;</span>
+    }
+
+    @Override
+    public void open()
+        throws SQLException {
+<span class="nc" id="L192">        super.open();</span>
+<span class="nc" id="L193">        _pos = -1;</span>
+<span class="nc" id="L194">    }</span>
+
+    @Override
+    public boolean next()
+        throws SQLException {
+<span class="nc" id="L199">        _pos++;</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        if (inPage())</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">            return _page[_pos - _pagePos] != null;</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        if (!super.next()) {</span>
+<span class="nc" id="L203">            setSize(_pos);</span>
+<span class="nc" id="L204">            return false;</span>
+        }
+<span class="nc" id="L206">        return true;</span>
+    }
+
+    @Override
+    public boolean absolute(int pos)
+        throws SQLException {
+<span class="nc" id="L212">        _pos = pos;</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        if (inPage())</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">            return _page[_pos - _pagePos] != null;</span>
+<span class="nc" id="L215">        return super.absolute(pos);</span>
+    }
+
+    @Override
+    public Object getResultObject()
+        throws SQLException {
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if (!inPage())</span>
+<span class="nc" id="L222">            fillPage();</span>
+<span class="nc" id="L223">        return _page[_pos - _pagePos];</span>
+    }
+
+    /**
+     * Test whether our current position is within the cached page of results.
+     */
+    private boolean inPage() {
+<span class="nc bnc" id="L230" title="All 6 branches missed.">        return _pagePos != -1 &amp;&amp; _pos &gt;= _pagePos</span>
+            &amp;&amp; _pos &lt; _pagePos + _page.length;
+    }
+
+    /**
+     * Start a new page at the present position.
+     */
+    private void fillPage()
+        throws SQLException {
+        // clear page
+<span class="nc" id="L240">        Arrays.fill(_page, null);</span>
+
+        // cache result objects
+<span class="nc" id="L243">        JDBCStoreManager storeMgr = (JDBCStoreManager) getStore();</span>
+        ClassMapping mapping;
+        Result res;
+        int idx;
+<span class="nc bnc" id="L247" title="All 2 branches missed.">        for (int i = 0; i &lt; _page.length; i++) {</span>
+<span class="nc" id="L248">            res = getResult();</span>
+<span class="nc" id="L249">            idx = res.indexOf();</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">            if (_idxs != null)</span>
+<span class="nc" id="L251">                _idxs[i] = idx;</span>
+<span class="nc" id="L252">            mapping = res.getBaseMapping();</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">            if (mapping == null)</span>
+<span class="nc" id="L254">                mapping = _mappings[idx];</span>
+
+            // rather than use the standard result.load(), we go direct to
+            // the store manager so we can pass in our eager-fetched fields as
+            // fields to exclude from the initial load of the objects
+<span class="nc" id="L259">            _page[i] = storeMgr.load(mapping, getFetchConfiguration(),</span>
+                _paged[idx], res);
+<span class="nc bnc" id="L261" title="All 4 branches missed.">            if (i != _page.length - 1 &amp;&amp; !getResult().next()) {</span>
+<span class="nc" id="L262">                setSize(_pos + i + 1);</span>
+<span class="nc" id="L263">                break;</span>
+            }
+        }
+
+        // load data for eager fields
+<span class="nc" id="L268">        _pagePos = _pos;</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">        if (_page[0] != null) {</span>
+<span class="nc bnc" id="L270" title="All 4 branches missed.">            if (_page.length &gt; 1 &amp;&amp; _page[1] == null)</span>
+<span class="nc" id="L271">                loadEagerFields();</span>
+            else
+<span class="nc" id="L273">                executeEagerSelects();</span>
+        }
+<span class="nc" id="L275">    }</span>
+
+    /**
+     * When there is only one instance in a page, load fields as normal.
+     */
+    private void loadEagerFields()
+        throws SQLException {
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        int idx = (_idxs == null) ? 0 : _idxs[0];</span>
+<span class="nc bnc" id="L283" title="All 2 branches missed.">        if (_paged[idx] == null)</span>
+<span class="nc" id="L284">            return;</span>
+
+<span class="nc" id="L286">        JDBCStore store = getStore();</span>
+<span class="nc" id="L287">        OpenJPAStateManager sm = store.getContext().getStateManager(_page[0]);</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">        for (int i = 0, len = _paged[idx].length(); i &lt; len; i++) {</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">            if (_paged[idx].get(i)) {</span>
+<span class="nc" id="L290">                _mappings[idx].getFieldMapping(i).load(sm, store,</span>
+<span class="nc" id="L291">                    getFetchConfiguration());</span>
+            }
+        }
+<span class="nc" id="L294">    }</span>
+
+    /**
+     * Load eager batch selects for current page of results.
+     */
+    private void executeEagerSelects()
+        throws SQLException {
+<span class="nc bnc" id="L301" title="All 2 branches missed.">        if (_idxs == null) {</span>
+<span class="nc" id="L302">            executeEagerSelects(_mappings[0], _paged[0], 0, _page.length);</span>
+<span class="nc" id="L303">            return;</span>
+        }
+
+<span class="nc" id="L306">        int start = 0;</span>
+<span class="nc" id="L307">        int idx = _idxs[0];</span>
+<span class="nc" id="L308">        int pos = 0;</span>
+<span class="nc bnc" id="L309" title="All 4 branches missed.">        for (; pos &lt; _page.length &amp;&amp; _page[pos] != null; pos++) {</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">            if (idx != _idxs[pos]) {</span>
+<span class="nc bnc" id="L311" title="All 2 branches missed.">                if (_paged[idx] != null)</span>
+<span class="nc" id="L312">                    executeEagerSelects(_mappings[idx], _paged[idx], start,</span>
+                        pos);
+<span class="nc" id="L314">                start = pos;</span>
+<span class="nc" id="L315">                idx = _idxs[pos];</span>
+            }
+        }
+<span class="nc bnc" id="L318" title="All 4 branches missed.">        if (start &lt; pos &amp;&amp; _paged[idx] != null) // cleanup remainder</span>
+<span class="nc" id="L319">            executeEagerSelects(_mappings[idx], _paged[idx], start, pos);</span>
+<span class="nc" id="L320">    }</span>
+
+    /**
+     * Load eager batch selects for the given mapping and its superclasses.
+     */
+    private void executeEagerSelects(ClassMapping mapping, BitSet paged,
+        int start, int end)
+        throws SQLException {
+        // base case
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if (mapping == null)</span>
+<span class="nc" id="L330">            return;</span>
+
+        // recurse on superclass
+<span class="nc" id="L333">        executeEagerSelects(mapping.getJoinablePCSuperclassMapping(), paged,</span>
+            start, end);
+
+        // figure out how many batch selects to do on this mapping
+<span class="nc" id="L337">        FieldMapping[] fms = mapping.getDefinedFieldMappings();</span>
+<span class="nc" id="L338">        int sels = 0;</span>
+<span class="nc bnc" id="L339" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++)</span>
+<span class="nc bnc" id="L340" title="All 2 branches missed.">            if (paged.get(fms[i].getIndex()))</span>
+<span class="nc" id="L341">                sels++;</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        if (sels == 0)</span>
+<span class="nc" id="L343">            return;</span>
+
+        // create where condition limiting instances to this page
+<span class="nc" id="L346">        JDBCStore store = getStore();</span>
+<span class="nc" id="L347">        Select sel = store.getSQLFactory().newSelect();</span>
+<span class="nc" id="L348">        DBDictionary dict = store.getDBDictionary();</span>
+<span class="nc" id="L349">        SQLBuffer buf = new SQLBuffer(dict);</span>
+<span class="nc" id="L350">        Column[] pks = mapping.getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L351" title="All 2 branches missed.">        if (pks.length == 1)</span>
+<span class="nc" id="L352">            createInContains(sel, dict, buf, mapping, pks, start, end);</span>
+        else
+<span class="nc" id="L354">            orContains(sel, buf, mapping, pks, start, end);</span>
+<span class="nc" id="L355">        sel.where(buf);</span>
+
+<span class="nc" id="L357">        StoreContext ctx = store.getContext();</span>
+<span class="nc" id="L358">        JDBCFetchConfiguration fetch = getFetchConfiguration();</span>
+        // do each batch select
+        Object res;
+<span class="nc" id="L361">        int esels = 0;</span>
+        SelectExecutor esel;
+        int unions;
+<span class="nc bnc" id="L364" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L365" title="All 2 branches missed.">            if (!paged.get(fms[i].getIndex()))</span>
+<span class="nc" id="L366">                continue;</span>
+
+<span class="nc" id="L368">            unions = fms[i].supportsSelect(sel, Select.EAGER_PARALLEL, null,</span>
+                store, fetch);
+<span class="nc bnc" id="L370" title="All 2 branches missed.">            if (unions == 0)</span>
+<span class="nc" id="L371">                continue;</span>
+
+            // we don't need to clone if this is the last select
+<span class="nc" id="L374">            esels++;</span>
+<span class="nc bnc" id="L375" title="All 4 branches missed.">            if (esels &lt; sels || unions &gt; 1)</span>
+<span class="nc" id="L376">                esel = sel.whereClone(unions);</span>
+            else
+<span class="nc" id="L378">                esel = sel;</span>
+
+            // get result
+<span class="nc" id="L381">            fms[i].selectEagerParallel(esel, null, store, fetch,</span>
+                EagerFetchModes.EAGER_PARALLEL);
+<span class="nc" id="L383">            res = esel.execute(store, fetch);</span>
+            try {
+                // and load result into paged instances
+<span class="nc bnc" id="L386" title="All 4 branches missed.">                for (int j = start; j &lt; end &amp;&amp; _page[j] != null; j++)</span>
+<span class="nc" id="L387">                    res = fms[i].loadEagerParallel(ctx.getStateManager</span>
+<span class="nc" id="L388">                        (_page[j]), store, fetch, res);</span>
+            } finally {
+<span class="nc bnc" id="L390" title="All 2 branches missed.">                if (res instanceof Closeable)</span>
+<span class="nc" id="L391">                    try { ((Closeable) res).close(); } catch (Exception e) {}</span>
+            }
+        }
+<span class="nc" id="L394">    }</span>
+
+    /**
+     *  Based on the DBDictionary, create the needed IN clauses.
+     */
+    private void createInContains(Select sel, DBDictionary dict, SQLBuffer buf,
+        ClassMapping mapping, Column[] pks, int start, int end) {
+<span class="nc" id="L401">        int inClauseLimit = dict.inClauseLimit;</span>
+<span class="nc bnc" id="L402" title="All 4 branches missed.">        if (inClauseLimit &lt;= 0 || end - start &lt;= inClauseLimit)</span>
+<span class="nc" id="L403">            inContains(sel, buf, mapping, pks, start, end);</span>
+        else {
+<span class="nc" id="L405">            buf.append(&quot;(&quot;);</span>
+<span class="nc bnc" id="L406" title="All 2 branches missed.">            for (int low = start, high; low &lt; end; low = high) {</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">                if (low &gt; start)</span>
+<span class="nc" id="L408">                    buf.append(&quot; OR &quot;);</span>
+<span class="nc" id="L409">                high = Math.min(low + inClauseLimit, end);</span>
+<span class="nc" id="L410">                inContains(sel, buf, mapping, pks, low, high);</span>
+            }
+<span class="nc" id="L412">            buf.append(&quot;)&quot;);</span>
+        }
+<span class="nc" id="L414">    }</span>
+
+    /**
+     * Create an IN clause limiting the results to the current page.
+     */
+    private void inContains(Select sel, SQLBuffer buf, ClassMapping mapping,
+        Column[] pks, int start, int end) {
+<span class="nc" id="L421">        buf.append(sel.getColumnAlias(pks[0])).append(&quot; IN (&quot;);</span>
+<span class="nc bnc" id="L422" title="All 4 branches missed.">        for (int i = start; i &lt; end &amp;&amp; _page[i] != null; i++) {</span>
+<span class="nc bnc" id="L423" title="All 2 branches missed.">            if (i &gt; start)</span>
+<span class="nc" id="L424">                buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L425">            buf.appendValue(mapping.toDataStoreValue(_page[i], pks,</span>
+<span class="nc" id="L426">                getStore()), pks[0]);</span>
+        }
+<span class="nc" id="L428">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L429">    }</span>
+
+    /**
+     * Create OR conditions limiting the results to the curent page.
+     */
+    private void orContains(Select sel, SQLBuffer buf, ClassMapping mapping,
+        Column[] pks, int start, int end) {
+<span class="nc" id="L436">        String[] aliases = new String[pks.length];</span>
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        for (int i = 0; i &lt; pks.length; i++)</span>
+<span class="nc" id="L438">            aliases[i] = sel.getColumnAlias(pks[i]);</span>
+
+        Object[] vals;
+<span class="nc" id="L441">        buf.append(&quot;(&quot;);</span>
+<span class="nc bnc" id="L442" title="All 4 branches missed.">        for (int i = start; i &lt; end &amp;&amp; _page[i] != null; i++) {</span>
+<span class="nc bnc" id="L443" title="All 2 branches missed.">            if (i &gt; start)</span>
+<span class="nc" id="L444">                buf.append(&quot; OR &quot;);</span>
+
+<span class="nc" id="L446">            vals = (Object[]) mapping.toDataStoreValue(_page[i], pks,</span>
+<span class="nc" id="L447">                getStore());</span>
+<span class="nc" id="L448">            buf.append(&quot;(&quot;);</span>
+<span class="nc bnc" id="L449" title="All 2 branches missed.">            for (int j = 0; j &lt; vals.length; j++) {</span>
+<span class="nc bnc" id="L450" title="All 2 branches missed.">                if (j &gt; 0)</span>
+<span class="nc" id="L451">                    buf.append(&quot; AND &quot;);</span>
+<span class="nc" id="L452">                buf.append(aliases[j]);</span>
+<span class="nc bnc" id="L453" title="All 2 branches missed.">                if (vals[j] == null)</span>
+<span class="nc" id="L454">                    buf.append(&quot; IS &quot;);</span>
+                else
+<span class="nc" id="L456">                    buf.append(&quot; = &quot;);</span>
+<span class="nc" id="L457">                buf.appendValue(vals[j], pks[j]);</span>
+            }
+<span class="nc" id="L459">            buf.append(&quot;)&quot;);</span>
+        }
+<span class="nc" id="L461">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L462">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

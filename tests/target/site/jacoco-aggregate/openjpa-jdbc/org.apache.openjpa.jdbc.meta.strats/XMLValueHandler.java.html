@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>XMLValueHandler.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">XMLValueHandler.java</span></div><h1>XMLValueHandler.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.io.Writer;
+
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.Unmarshaller;
+import javax.xml.transform.stream.StreamSource;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * Base class for xml value handlers.
+ *
+ * @author Catalina Wei
+ * @since 1.0
+ */
+<span class="nc" id="L46">public class XMLValueHandler</span>
+    extends AbstractValueHandler {
+    
+    private static final long serialVersionUID = 1L;
+    private static final String PROXY_SUFFIX = &quot;$proxy&quot;;
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Column[] map(ValueMapping vm, String name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L59">        DBDictionary dict = vm.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">        DBIdentifier colName = DBIdentifier.newColumn(name, dict != null ? dict.delimitAll() : false);</span>
+<span class="nc" id="L61">        return map(vm, colName, io, adapt);</span>
+    }
+
+    public Column[] map(ValueMapping vm, DBIdentifier name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L66">        Column col = new Column();</span>
+<span class="nc" id="L67">        col.setIdentifier(name);</span>
+<span class="nc" id="L68">        col.setJavaType(JavaTypes.STRING);</span>
+<span class="nc" id="L69">        col.setSize(-1);</span>
+<span class="nc" id="L70">        col.setTypeIdentifier(DBIdentifier.newColumnDefinition(vm.getMappingRepository().getDBDictionary()</span>
+            .xmlTypeName));
+<span class="nc" id="L72">        col.setXML(true);</span>
+<span class="nc" id="L73">        return new Column[]{ col };</span>
+    }
+
+    @Override
+    public Object toDataStoreValue(ValueMapping vm, Object val,
+        JDBCStore store) {
+        // check for null value.
+<span class="nc bnc" id="L80" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L81">            return null;</span>
+        try {
+<span class="nc" id="L83">            JAXBContext jc = JAXBContext.newInstance(</span>
+                // on update val is a proxy, that can not be marshalled.
+                // so we get original type if val is a proxy.
+<span class="nc bnc" id="L86" title="All 2 branches missed.">                (val.getClass().getName().endsWith(PROXY_SUFFIX))</span>
+<span class="nc" id="L87">                     ? val.getClass().getSuperclass()</span>
+<span class="nc" id="L88">                     : val.getClass());</span>
+<span class="nc" id="L89">            Marshaller m = jc.createMarshaller();</span>
+            // Some DBs, like MS SQL Server, require a different encoding than the JAXB default of UTF-8
+<span class="nc" id="L91">            m.setProperty(&quot;jaxb.encoding&quot;, store.getDBDictionary().getXMLTypeEncoding());</span>
+<span class="nc" id="L92">            Writer result = new StringWriter();</span>
+<span class="nc" id="L93">            m.marshal( val, result );</span>
+<span class="nc" id="L94">            return result.toString();</span>
+        }
+<span class="nc" id="L96">        catch (JAXBException je) {</span>
+<span class="nc" id="L97">            throw new InternalException(je);</span>
+        }
+    }
+
+    @Override
+    public Object toObjectValue(ValueMapping vm, Object val) {
+        // check for null value.
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L105">            return null;</span>
+        try {
+<span class="nc" id="L107">            String className  = vm.getDeclaredType().getName();</span>
+<span class="nc" id="L108">            int i = className.lastIndexOf('.');</span>
+<span class="nc" id="L109">            String packageName = className;</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">            if (i != -1) {</span>
+<span class="nc" id="L111">                packageName = className.substring(0, i);</span>
+            }
+<span class="nc" id="L113">            JAXBContext jc = JAXBContext.newInstance(packageName);</span>
+<span class="nc" id="L114">            Unmarshaller u = jc.createUnmarshaller();</span>
+<span class="nc" id="L115">            return u.unmarshal(new StreamSource(new StringReader</span>
+<span class="nc" id="L116">                    (val.toString())));</span>
+        }
+<span class="nc" id="L118">        catch (JAXBException je) {</span>
+<span class="nc" id="L119">            throw new InternalException(je);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

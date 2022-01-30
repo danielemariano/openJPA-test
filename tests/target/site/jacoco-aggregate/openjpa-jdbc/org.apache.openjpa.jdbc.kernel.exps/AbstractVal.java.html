@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AbstractVal.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">AbstractVal.java</span></div><h1>AbstractVal.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.kernel.exps.Path;
+import org.apache.openjpa.kernel.exps.Value;
+
+/**
+ * Abstract value for easy extension.
+ *
+ * @author Marc Prud'hommeaux
+ */
+<span class="nc" id="L32">abstract class AbstractVal</span>
+    implements Val {
+
+    
+    private static final long serialVersionUID = 1L;
+    protected static final String TRUE = &quot;1 = 1&quot;;
+    protected static final String FALSE = &quot;1 &lt;&gt; 1&quot;;
+<span class="nc" id="L39">    private String _alias = null;</span>
+
+    @Override
+    public boolean isVariable() {
+<span class="nc" id="L43">        return false;</span>
+    }
+
+    @Override
+    public boolean isAggregate() {
+<span class="nc" id="L48">        return false;</span>
+    }
+
+    @Override
+    public boolean isXPath() {
+<span class="nc" id="L53">        return false;</span>
+    }
+
+    @Override
+    public Object toDataStoreValue(Select sel, ExpContext ctx, ExpState state,
+        Object val) {
+<span class="nc" id="L59">        return val;</span>
+    }
+
+    @Override
+    public void appendIsEmpty(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L65">        sql.append(FALSE);</span>
+<span class="nc" id="L66">    }</span>
+
+    @Override
+    public void appendIsNotEmpty(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql){
+<span class="nc" id="L71">        sql.append(TRUE);</span>
+<span class="nc" id="L72">    }</span>
+
+    @Override
+    public void appendIsNull(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L77">        appendTo(sel, ctx, state, sql, 0);</span>
+<span class="nc" id="L78">        sql.append(&quot; IS &quot;).appendValue(null);</span>
+<span class="nc" id="L79">    }</span>
+
+    @Override
+    public void appendIsNotNull(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L84">        appendTo(sel, ctx, state, sql, 0);</span>
+<span class="nc" id="L85">        sql.append(&quot; IS NOT &quot;).appendValue(null);</span>
+<span class="nc" id="L86">    }</span>
+
+    @Override
+    public void appendIndex(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L91">        sql.append(&quot;1&quot;);</span>
+<span class="nc" id="L92">    }</span>
+
+    @Override
+    public void appendType(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L97">        sql.append(&quot;1&quot;);</span>
+<span class="nc" id="L98">    }</span>
+
+    @Override
+    public void appendSize(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L103">        sql.append(&quot;1&quot;);</span>
+<span class="nc" id="L104">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L108">        visitor.enter(this);</span>
+<span class="nc" id="L109">        visitor.exit(this);</span>
+<span class="nc" id="L110">    }</span>
+
+    @Override
+    public int getId() {
+<span class="nc" id="L114">        return Val.VAL;</span>
+    }
+
+    @Override
+    public String getAlias() {
+<span class="nc" id="L119">        return _alias;</span>
+    }
+
+    @Override
+    public void setAlias(String alias) {
+<span class="nc" id="L124">        _alias = alias;</span>
+<span class="nc" id="L125">    }</span>
+
+    @Override
+    public Value getSelectAs() {
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        return _alias != null ? this : null;</span>
+    }
+
+    @Override
+    public Path getPath() {
+<span class="nc" id="L134">        return null;</span>
+    }
+
+    @Override
+    public String getName() {
+<span class="nc" id="L139">        return null;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

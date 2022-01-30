@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>IngresDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">IngresDictionary.java</span></div><h1>IngresDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.exps.FilterValue;
+import org.apache.openjpa.jdbc.schema.Sequence;
+
+public class IngresDictionary extends DBDictionary {
+
+<span class="nc" id="L32">    public IngresDictionary() {</span>
+        // Schema Data
+<span class="nc" id="L34">        platform = &quot;Ingres&quot;;</span>
+<span class="nc" id="L35">        driverVendor = &quot;Ingres Corporation&quot;;</span>
+<span class="nc" id="L36">        maxColumnNameLength = 32;</span>
+<span class="nc" id="L37">        maxConstraintNameLength = 32;</span>
+<span class="nc" id="L38">        maxIndexNameLength = 32;</span>
+<span class="nc" id="L39">        maxTableNameLength = 32;</span>
+<span class="nc" id="L40">        supportsDeferredConstraints = false;</span>
+<span class="nc" id="L41">        schemaCase = DBDictionary.SCHEMA_CASE_LOWER;</span>
+<span class="nc" id="L42">        systemSchemas = &quot;$ingres&quot;;</span>
+<span class="nc" id="L43">        supportsDefaultDeleteAction = false;</span>
+<span class="nc" id="L44">        supportsDefaultUpdateAction = false;</span>
+
+        // SQL
+<span class="nc" id="L47">        validationSQL = &quot;SELECT DATE('now')&quot;;</span>
+<span class="nc" id="L48">        rangePosition = DBDictionary.RANGE_POST_SELECT;</span>
+<span class="nc" id="L49">        supportsLockingWithDistinctClause = false;</span>
+<span class="nc" id="L50">        supportsLockingWithInnerJoin = false;</span>
+<span class="nc" id="L51">        supportsLockingWithMultipleTables = false;</span>
+<span class="nc" id="L52">        supportsLockingWithOuterJoin = false;</span>
+<span class="nc" id="L53">        supportsSelectEndIndex = true;</span>
+<span class="nc" id="L54">        supportsMultipleNontransactionalResultSets = false;</span>
+<span class="nc" id="L55">        allowsAliasInBulkClause = false;</span>
+<span class="nc" id="L56">        requiresCastForMathFunctions = true;</span>
+<span class="nc" id="L57">        requiresAliasForSubselect = true;</span>
+
+        // Functions
+<span class="nc" id="L60">        stringLengthFunction = &quot;LENGTH({0})&quot;;</span>
+
+        // Types
+<span class="nc" id="L63">        binaryTypeName = &quot;BYTE&quot;;</span>
+<span class="nc" id="L64">        bitTypeName = &quot;TINYINT&quot;;</span>
+<span class="nc" id="L65">        blobTypeName = &quot;LONG BYTE&quot;;</span>
+<span class="nc" id="L66">        booleanTypeName = &quot;TINYINT&quot;;</span>
+<span class="nc" id="L67">        charTypeName = &quot;CHAR&quot;;</span>
+<span class="nc" id="L68">        clobTypeName = &quot;LONG NVARCHAR&quot;;</span>
+<span class="nc" id="L69">        javaObjectTypeName = &quot;LONG BYTE&quot;;</span>
+<span class="nc" id="L70">        numericTypeName = &quot;DECIMAL&quot;;</span>
+<span class="nc" id="L71">        doubleTypeName = &quot;FLOAT&quot;;</span>
+<span class="nc" id="L72">        longVarcharTypeName = &quot;LONG NVARCHAR&quot;;</span>
+<span class="nc" id="L73">        longVarbinaryTypeName = &quot;LONG BYTE&quot;;</span>
+<span class="nc" id="L74">        varbinaryTypeName = &quot;LONG BYTE&quot;;</span>
+<span class="nc" id="L75">        datePrecision = DBDictionary.NANO;</span>
+
+        // Schema Metadata
+<span class="nc" id="L78">        supportsNullTableForGetIndexInfo = true;</span>
+<span class="nc" id="L79">        supportsNullTableForGetPrimaryKeys = true;</span>
+<span class="nc" id="L80">        tableTypes = &quot;TABLE,VIEW,SYSTEM TABLE&quot;;</span>
+<span class="nc" id="L81">        requiresAutoCommitForMetaData = true;</span>
+
+        // Auto Increment
+<span class="nc" id="L84">        maxAutoAssignNameLength = 32;</span>
+<span class="nc" id="L85">        supportsAutoAssign = false;</span>
+<span class="nc" id="L86">        autoAssignClause = null;</span>
+<span class="nc" id="L87">        autoAssignTypeName = null;</span>
+<span class="nc" id="L88">        sequenceSQL = &quot;SELECT seq_name AS SEQUENCE_NAME, seq_owner AS SEQUENCE_SCHEMA FROM iisequences&quot;;</span>
+<span class="nc" id="L89">        sequenceNameSQL = &quot;seq_name = ?&quot;;</span>
+<span class="nc" id="L90">        sequenceSchemaSQL = &quot;seq_owner = ?&quot;;</span>
+<span class="nc" id="L91">        nextSequenceQuery = &quot;SELECT NEXT VALUE FOR {0}&quot;;</span>
+
+<span class="nc" id="L93">        systemTables =</span>
+            &quot;iiaccess, iialt_columns, iiattribute, iiaudit, iiaudittables, &quot;
+                + &quot;iicdbid_idx, iicolumns, iiconstraint_indexes, &quot;
+                + &quot;iiconstraints, iidatabase, iidatabase_info, iidb_comments, &quot;
+                + &quot;iidb_subcomments, iidbcapabilities, iidbconstants, &quot;
+                + &quot;iidbdepends, iidbid_idx, iidbms_comment, iidbpriv, &quot;
+                + &quot;iidbprivileges, iiddb_netcost, iiddb_nodecosts, iidefault, &quot;
+                + &quot;iidefaultidx, iidevices, iidistcol, iidistcols, &quot;
+                + &quot;iidistscheme, iidistschemes, iidistval, &quot;
+                + &quot;iievent, iievents, iiextend, iiextend_info, &quot;
+                + &quot;iiextended_relation, iifile_info, iigw06_attribute, &quot;
+                + &quot;iigw06_relation, iigw07_attribute, iigw07_index, &quot;
+                + &quot;iigw07_relation, iihistogram, iihistograms, iiindex, &quot;
+                + &quot;iiindex_columns, iiindexes, iiingres_tables, iiintegrities, &quot;
+                + &quot;iiintegrity, iiintegrityidx, iikey, iikey_columns, iikeys, &quot;
+                + &quot;iilocation_info, iilocations, iilog_help, iilpartitions, &quot;
+                + &quot;iimulti_locations, iiocolumns, iiotables, iipartname, &quot;
+                + &quot;iipermits, iiphysical_columns, iiphysical_tables, iipriv, &quot;
+                + &quot;iiprivlist, iiproc_access, iiproc_params, iiprocedure, &quot;
+                + &quot;iiprocedure_parameter, iiprocedures, iiprofile, iiprofiles, &quot;
+                + &quot;iiprotect, iiqrytext, iirange, iiref_constraints, &quot;
+                + &quot;iiregistrations, iirel_idx, iirelation, iirole, &quot;
+                + &quot;iirolegrant, iirolegrants, iiroles, iirule, iiruleidx, &quot;
+                + &quot;iiruleidx1, iirules, iischema, iischemaidx, iisecalarm, &quot;
+                + &quot;iisectype, iisecurity_alarms, iisecurity_state, &quot;
+                + &quot;iisecuritystate, iisequence, iisequences, &quot;
+                + &quot;iisession_privileges, iistar_cdbinfo, iistar_cdbs, &quot;
+                + &quot;iistatistics, iistats, iisynonym, iisynonyms, iitables, &quot;
+                + &quot;iitree, iiuser, iiusergroup, iiusers, iiviews, &quot;
+                + &quot;iixdbdepends, iixevent, iixpriv, iixprocedure, &quot;
+                + &quot;iixsynonym, ii_abfclasses, ii_abfdependencies, &quot;
+                + &quot;ii_abfobjects, ii_app_cntns_comp, ii_app_cntns_comp_index, &quot;
+                + &quot;ii_applications, ii_atttype, ii_client_dep_mod, &quot;
+                + &quot;ii_components, ii_databases, ii_dbd_acl, &quot;
+                + &quot;ii_dbd_identifiers, ii_dbd_locations, ii_dbd_rightslist, &quot;
+                + &quot;ii_dbd_table_char, ii_defaults, ii_dependencies, &quot;
+                + &quot;ii_dependencies_index, ii_dependencies_index2, &quot;
+                + &quot;ii_dict_modules, ii_domains, ii_encoded_forms, &quot;
+                + &quot;ii_encodings, ii_entities, ii_entities_index, ii_enttype, &quot;
+                + &quot;ii_fields, &quot; + &quot;ii_forms, ii_framevars, ii_gropts, &quot;
+                + &quot;ii_id, ii_incl_apps, ii_joindefs, ii_joinspecs, &quot;
+                + &quot;ii_key_info, ii_key_map, ii_limits, ii_locks, &quot;
+                + &quot;ii_longremarks, ii_menuargs, ii_objects, &quot;
+                + &quot;ii_objects_index, ii_qbfnames, ii_rcommands, &quot;
+                + &quot;ii_rel_cncts_ent, ii_reltype, ii_reports, &quot;
+                + &quot;ii_sequence_values, ii_sqlatts, ii_sqltables, &quot;
+                + &quot;ii_srcobj_encoded, ii_stored_bitmaps, ii_stored_strings, &quot;
+                + &quot;ii_trim, ii_vqjoins, ii_vqtabcols, ii_vqtables&quot;;
+<span class="nc" id="L141">        fixedSizeTypeNames =</span>
+            &quot;INTEGER,INTEGER1,INTEGER2,INTEGER4,INTEGER8,TINYINT,SMALLINT,&quot;
+                + &quot;BIGINT,FLOAT,FLOAT4,FLOAT8,REAL,DATE,INGRESDATE,ANSIDATE&quot;;
+<span class="nc" id="L144">        reservedWords =</span>
+            &quot;ABORT,BYREF,CALLPROC,COMMENT,COPY,DEFINE,DISABLE,DO,ELSEIF,&quot;
+                + &quot;ENABLE,ENDIF,ENDLOOP,ENDWHILE,EXCLUDING,IF,IMPORT,INDEX,&quot;
+                + &quot;INTEGRITY,MESSAGE,MODIFY,PERMIT,RAISE,REFERENCING,REGISTER,&quot;
+                + &quot;RELOCATE,REMOVE,REPEAT,RETURN,SAVE,SAVEPOINT,UNTIL,WHILE&quot;;
+
+        /* Don't allow &quot;tid&quot; as a column name; this is an internal column */
+<span class="nc" id="L151">        invalidColumnWordSet.add(&quot;tid&quot;);</span>
+<span class="nc" id="L152">    }</span>
+
+    /* (non-Javadoc)
+     * @see org.apache.openjpa.jdbc.sql.DBDictionary#connectedConfiguration(java.sql.Connection)
+     */
+    @Override
+    public void connectedConfiguration(Connection conn) throws SQLException {
+<span class="nc" id="L159">        super.connectedConfiguration(conn);</span>
+
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (isVersion9_2orLater(conn))</span>
+<span class="nc" id="L162">            supportsSelectStartIndex = true;</span>
+<span class="nc" id="L163">    }</span>
+
+    boolean isVersion9_2orLater(Connection conn) throws SQLException
+    {
+<span class="nc" id="L167">        DatabaseMetaData meta = conn.getMetaData();</span>
+
+<span class="nc" id="L169">        int dbMajorVersion = meta.getDatabaseMajorVersion();</span>
+<span class="nc" id="L170">        int dbMinorVersion = meta.getDatabaseMinorVersion();</span>
+
+<span class="nc bnc" id="L172" title="All 6 branches missed.">        if ((dbMajorVersion == 9 &amp;&amp; dbMinorVersion &gt;= 2) ||</span>
+                dbMajorVersion &gt; 9)
+<span class="nc" id="L174">            return true;</span>
+        else
+<span class="nc" id="L176">            return false;</span>
+    }
+
+    /**
+     * Implementation of appendSelectRange for Ingres - uses &quot;SELECT FIRST n&quot;
+     * syntax. Not implemented in superclass.
+     *
+     * @see org.apache.openjpa.jdbc.sql.DBDictionary#appendSelectRange(
+     *      org.apache.openjpa.jdbc.sql.SQLBuffer, long, long, boolean)
+     *
+     * @param buf
+     *            - SQL building buffer.
+     * @param start
+     *            - Ignored, not supported by Ingres. Throws an
+     * @param end
+     *            - The number of records to return.
+     * @param subselect
+     *            - Is the SQL query part of a subselect statement?
+     */
+    @Override
+    protected void appendSelectRange(SQLBuffer buf, long start, long end,
+        boolean subselect) {
+<span class="nc bnc" id="L198" title="All 4 branches missed.">        if (!supportsSelectStartIndex &amp;&amp; start &gt; 0)</span>
+<span class="nc" id="L199">            throw new IllegalArgumentException(</span>
+                &quot;Ingres does not support start indexes for Select Ranges&quot;);
+
+<span class="nc bnc" id="L202" title="All 6 branches missed.">        if (start &gt; 0 &amp;&amp; start != Long.MAX_VALUE &amp;&amp; !subselect)</span>
+<span class="nc" id="L203">            buf.append(&quot; OFFSET &quot;).append(Long.toString(start));</span>
+
+<span class="nc bnc" id="L205" title="All 6 branches missed.">        if (end &gt; 0 &amp;&amp; end != Long.MAX_VALUE &amp;&amp; !subselect)</span>
+<span class="nc" id="L206">            buf.append(&quot; FETCH NEXT &quot;).append(Long.toString(end)).append(&quot; ROWS ONLY&quot;);</span>
+<span class="nc" id="L207">    }</span>
+
+    /**
+     * Implementation of empty method in DBDictionary.  Returns SQL to find the sequences defined in the database.
+     */
+    @Override
+    protected String getSequencesSQL(String schemaName, String sequenceName) {
+<span class="nc" id="L214">        return getSequencesSQL(DBIdentifier.newSchema(schemaName), DBIdentifier.newSequence(sequenceName));</span>
+    }
+
+    @Override
+    protected String getSequencesSQL(DBIdentifier schemaName, DBIdentifier sequenceName) {
+<span class="nc" id="L219">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L220">        buf.append(sequenceSQL);</span>
+<span class="nc bnc" id="L221" title="All 4 branches missed.">        if (!DBIdentifier.isNull(schemaName) || !DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L222">            buf.append(&quot; WHERE &quot;);</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if (!DBIdentifier.isNull(schemaName)) {</span>
+<span class="nc" id="L224">            buf.append(sequenceSchemaSQL);</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">            if (sequenceName != null)</span>
+<span class="nc" id="L226">                buf.append(&quot; AND &quot;);</span>
+        }
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (!DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L229">            buf.append(sequenceNameSQL);</span>
+<span class="nc" id="L230">        return buf.toString();</span>
+    }
+
+    /**
+     * Overrides DBDictionary's newSequence method; trims the sequence name.
+     *
+     * @see org.apache.openjpa.jdbc.sql.DBDictionary#newSequence(ResultSet)
+     */
+    @Override
+    protected Sequence newSequence(ResultSet sequenceMeta) throws SQLException {
+<span class="nc" id="L240">        Sequence seq = super.newSequence(sequenceMeta);</span>
+<span class="nc" id="L241">        seq.setIdentifier(DBIdentifier.trim(seq.getIdentifier()));</span>
+<span class="nc" id="L242">        return seq;</span>
+    }
+
+    /**
+     * Invoke Ingres' IndexOf Function (Find the first index of a string in
+     * another string, starting at a given index).
+     *
+     * @see org.apache.openjpa.jdbc.sql.DBDictionary#indexOf(
+     *      org.apache.openjpa.jdbc.sql.SQLBuffer,
+     *      org.apache.openjpa.jdbc.kernel.exps.FilterValue,
+     *      org.apache.openjpa.jdbc.kernel.exps.FilterValue,
+     *      org.apache.openjpa.jdbc.kernel.exps.FilterValue)
+     *
+     * @param buf
+     *            - the SQL Buffer to write the indexOf invocation to
+     * @param str
+     *            - a query value representing the target string
+     * @param find
+     *            - a query value representing the search string
+     * @param start
+     *            - a query value representing the start index, or null to
+     *            start at the beginning
+     */
+    @Override
+    public void indexOf(SQLBuffer buf, FilterValue str, FilterValue find,
+        FilterValue start) {
+<span class="nc" id="L268">        buf.append(&quot;(POSITION((&quot;);</span>
+<span class="nc" id="L269">        find.appendTo(buf);</span>
+<span class="nc" id="L270">        buf.append(&quot;) IN (&quot;);</span>
+
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        if (start != null)</span>
+<span class="nc" id="L273">            substring(buf, str, start, null);</span>
+        else
+<span class="nc" id="L275">            str.appendTo(buf);</span>
+
+<span class="nc" id="L277">        buf.append(&quot;))&quot;);</span>
+
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        if (start != null) {</span>
+<span class="nc" id="L280">            buf.append(&quot; - 1 + &quot;);</span>
+<span class="nc" id="L281">            start.appendTo(buf);</span>
+        }
+<span class="nc" id="L283">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L284">    }</span>
+
+    /**
+     * @see org.apache.openjpa.jdbc.sql.DBDictionary#substring(
+     *  org.apache.openjpa.jdbc.sql.SQLBuffer,
+     *  org.apache.openjpa.jdbc.kernel.exps.FilterValue,
+     *  org.apache.openjpa.jdbc.kernel.exps.FilterValue,
+     *  org.apache.openjpa.jdbc.kernel.exps.FilterValue)
+     */
+    @Override
+    public void substring(SQLBuffer buf, FilterValue str, FilterValue start,
+        FilterValue length) {
+<span class="nc" id="L296">        buf.append(substringFunctionName).append(&quot;(&quot;);</span>
+<span class="nc" id="L297">        str.appendTo(buf);</span>
+<span class="nc" id="L298">        buf.append(&quot;, &quot;);</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        if (start.getValue() instanceof Number) {</span>
+<span class="nc" id="L300">            buf.append(Long.toString(toLong(start)));</span>
+        } else {
+<span class="nc" id="L302">            buf.append(&quot;(CAST ((&quot;);</span>
+<span class="nc" id="L303">            start.appendTo(buf);</span>
+<span class="nc" id="L304">            buf.append(&quot;) AS INTEGER))&quot;);</span>
+        }
+<span class="nc bnc" id="L306" title="All 2 branches missed.">        if (length != null) {</span>
+<span class="nc" id="L307">            buf.append(&quot;, &quot;);</span>
+<span class="nc bnc" id="L308" title="All 2 branches missed.">            if (length.getValue() instanceof Number) {</span>
+<span class="nc" id="L309">                buf.append(Long.toString(toLong(length)));</span>
+            } else {
+<span class="nc" id="L311">                buf.append(&quot;(CAST ((&quot;);</span>
+<span class="nc" id="L312">                length.appendTo(buf);</span>
+<span class="nc" id="L313">                buf.append(&quot;) AS INTEGER))&quot;);</span>
+            }
+        }
+<span class="nc" id="L316">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L317">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JDBCBrokerFactory.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">JDBCBrokerFactory.java</span></div><h1>JDBCBrokerFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import static org.apache.openjpa.conf.SchemaGenerationAction.CREATE;
+import static org.apache.openjpa.conf.SchemaGenerationAction.DROP;
+import static org.apache.openjpa.conf.SchemaGenerationAction.DROP_AND_CREATE;
+import static org.apache.openjpa.conf.SchemaGenerationSource.METADATA;
+import static org.apache.openjpa.conf.SchemaGenerationSource.METADATA_THEN_SCRIPT;
+import static org.apache.openjpa.conf.SchemaGenerationSource.SCRIPT;
+import static org.apache.openjpa.conf.SchemaGenerationSource.SCRIPT_THEN_METADATA;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_ADD;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_DROP;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_SCRIPT_CREATE;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_SCRIPT_DROP;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_SCRIPT_LOAD;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Map;
+
+import org.apache.openjpa.conf.SchemaGenerationSource;
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.meta.MappingRepository;
+import org.apache.openjpa.jdbc.meta.MappingTool;
+import org.apache.openjpa.kernel.AbstractBrokerFactory;
+import org.apache.openjpa.kernel.Bootstrap;
+import org.apache.openjpa.kernel.BrokerImpl;
+import org.apache.openjpa.kernel.StoreManager;
+import org.apache.openjpa.lib.conf.ConfigurationProvider;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * BrokerFactory type for use with the JDBC runtime.
+ *
+ * @author Abe White
+ * @author Marc Prud'hommeaux
+ */
+public class JDBCBrokerFactory extends AbstractBrokerFactory {
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L62">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L63">        (JDBCBrokerFactory.class);</span>
+
+<span class="nc" id="L65">    private boolean _synchronizedMappings = false;</span>
+
+    /**
+     * Factory method for constructing a factory from properties. Invoked from
+     * {@link Bootstrap#newBrokerFactory}.
+     */
+    public static JDBCBrokerFactory newInstance(ConfigurationProvider cp) {
+<span class="nc" id="L72">        JDBCConfigurationImpl conf = new JDBCConfigurationImpl();</span>
+<span class="nc" id="L73">        cp.setInto(conf);</span>
+<span class="nc" id="L74">        return new JDBCBrokerFactory(conf);</span>
+    }
+
+    /**
+     * Factory method for obtaining a possibly-pooled factory from properties.
+     * Invoked from {@link Bootstrap#getBrokerFactory}.
+     */
+    public static JDBCBrokerFactory getInstance(ConfigurationProvider cp, ClassLoader loader) {
+<span class="nc" id="L82">        Map&lt;String, Object&gt; props = cp.getProperties();</span>
+<span class="nc" id="L83">        Object key = toPoolKey(props);</span>
+<span class="nc" id="L84">        JDBCBrokerFactory factory = (JDBCBrokerFactory) getPooledFactoryForKey(key);</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (factory != null)</span>
+<span class="nc" id="L86">            return factory;</span>
+
+        // The creation of all BrokerFactories should be driven through Bootstrap.
+<span class="nc" id="L89">        factory = (JDBCBrokerFactory) Bootstrap.newBrokerFactory(cp, loader);</span>
+<span class="nc" id="L90">        pool(key, factory);</span>
+<span class="nc" id="L91">        return factory;</span>
+    }
+
+    /**
+     * Construct the factory with the given option settings; however, the
+     * factory construction methods are recommended.
+     */
+    public JDBCBrokerFactory(JDBCConfiguration conf) {
+<span class="nc" id="L99">        super(conf);</span>
+<span class="nc" id="L100">    }</span>
+
+    @Override
+    public Map&lt;String,Object&gt; getProperties() {
+        // add platform property
+<span class="nc" id="L105">        Map&lt;String,Object&gt; props = super.getProperties();</span>
+<span class="nc" id="L106">        String db = &quot;Unknown&quot;;</span>
+        try {
+<span class="nc" id="L108">            JDBCConfiguration conf = (JDBCConfiguration) getConfiguration();</span>
+<span class="nc" id="L109">            db = conf.getDBDictionaryInstance().platform;</span>
+<span class="nc" id="L110">        } catch (RuntimeException re) {</span>
+<span class="nc" id="L111">        }</span>
+<span class="nc" id="L112">        props.put(&quot;Platform&quot;, &quot;OpenJPA JDBC Edition: &quot; + db + &quot; Database&quot;);</span>
+
+<span class="nc" id="L114">        return props;</span>
+    }
+
+    @Override
+    public void postCreationCallback() {
+<span class="nc" id="L119">        super.postCreationCallback();</span>
+<span class="nc" id="L120">    }</span>
+
+    @Override
+    protected StoreManager newStoreManager() {
+<span class="nc" id="L124">        return new JDBCStoreManager();</span>
+    }
+
+    @Override
+    protected BrokerImpl newBrokerImpl(String user, String pass) {
+<span class="nc" id="L129">        BrokerImpl broker = super.newBrokerImpl(user, pass);</span>
+
+<span class="nc" id="L131">        lock();</span>
+        try {
+            // synchronize mappings; we wait until now to do this so that
+            // we can use the first broker user/pass for connection if no
+            // global login is given
+<span class="nc bnc" id="L136" title="All 2 branches missed.">            if (!_synchronizedMappings) {</span>
+<span class="nc" id="L137">                _synchronizedMappings = true;</span>
+<span class="nc" id="L138">                synchronizeMappings(broker.getClassLoader());</span>
+            }
+
+<span class="nc" id="L141">            return broker;</span>
+        } finally {
+<span class="nc" id="L143">            unlock();</span>
+        }
+    }
+
+    /**
+     * Synchronize the mappings of the classes listed in the configuration.
+     */
+    protected boolean synchronizeMappings(ClassLoader loader,
+        JDBCConfiguration conf) {
+<span class="nc" id="L152">        mapSchemaGenerationToSynchronizeMappings(conf);</span>
+<span class="nc" id="L153">        String action = conf.getSynchronizeMappings();</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        if (StringUtil.isEmpty(action))</span>
+<span class="nc" id="L155">            return false;</span>
+
+<span class="nc" id="L157">        MappingRepository repo = conf.getMappingRepositoryInstance();</span>
+<span class="nc" id="L158">        Collection&lt;Class&lt;?&gt;&gt; classes = repo.loadPersistentTypes(false, loader);</span>
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        if (classes.isEmpty())</span>
+<span class="nc" id="L160">            return false;</span>
+
+<span class="nc" id="L162">        String props = Configurations.getProperties(action);</span>
+<span class="nc" id="L163">        action = Configurations.getClassName(action);</span>
+<span class="nc" id="L164">        MappingTool tool = new MappingTool(conf, action, false, loader);</span>
+<span class="nc" id="L165">        Configurations.configureInstance(tool, conf, props,</span>
+            &quot;SynchronizeMappings&quot;);
+
+        // initialize the schema
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        for (Class&lt;?&gt; cls : classes) {</span>
+            try {
+<span class="nc" id="L171">                tool.run(cls);</span>
+<span class="nc" id="L172">            } catch (IllegalArgumentException iae) {</span>
+<span class="nc" id="L173">                throw new UserException(_loc.get(&quot;bad-synch-mappings&quot;,</span>
+<span class="nc" id="L174">                    action, Arrays.asList(MappingTool.ACTIONS)));</span>
+<span class="nc" id="L175">            }</span>
+<span class="nc" id="L176">        }</span>
+<span class="nc" id="L177">        tool.record();</span>
+<span class="nc" id="L178">        return true; // todo: check?</span>
+    }
+
+    protected boolean synchronizeMappings(ClassLoader loader) {
+<span class="nc" id="L182">        return synchronizeMappings(loader, (JDBCConfiguration) getConfiguration());</span>
+    }
+
+    private void mapSchemaGenerationToSynchronizeMappings(JDBCConfiguration conf) {
+<span class="nc" id="L186">        String actions = &quot;&quot;;</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        if (conf.getDatabaseAction() != null) {</span>
+<span class="nc" id="L188">            int databaseAction = conf.getDatabaseActionConstant();</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">            if (databaseAction == CREATE) {</span>
+<span class="nc" id="L190">                actions = generateSchemaCreation(conf);</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">            } else if (databaseAction == DROP) {</span>
+<span class="nc" id="L192">                actions = generateSchemaDrop(conf);</span>
+<span class="nc bnc" id="L193" title="All 2 branches missed.">            } else if (databaseAction == DROP_AND_CREATE) {</span>
+<span class="nc" id="L194">                actions = generateSchemaDropCreate(conf);</span>
+            }
+        }
+
+<span class="nc" id="L198">        String loadFile = conf.getLoadScriptSource();</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        if (loadFile != null) {</span>
+<span class="nc" id="L200">            actions += &quot;,&quot; + ACTION_SCRIPT_LOAD;</span>
+        }
+
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (actions.length() &gt; 0) {</span>
+<span class="nc" id="L204">            conf.setSynchronizeMappings(&quot;buildSchema(ForeignKeys=true,SchemaAction='&quot; + actions + &quot;')&quot;);</span>
+        }
+<span class="nc" id="L206">    }</span>
+
+    private String generateSchemaCreation(JDBCConfiguration conf) {
+<span class="nc bnc" id="L209" title="All 2 branches missed.">        if (conf.getCreateScriptTarget() != null) {</span>
+<span class="nc" id="L210">            return MappingTool.ACTION_ADD;</span>
+        } else {
+<span class="nc" id="L212">            int createSource = conf.getCreateSourceConstant();</span>
+<span class="nc bnc" id="L213" title="All 4 branches missed.">            if (createSource == SchemaGenerationSource.NONE &amp;&amp; conf.getCreateScriptSource() != null) {</span>
+<span class="nc" id="L214">                createSource = SCRIPT;</span>
+            } else {
+<span class="nc" id="L216">                createSource = METADATA;</span>
+            }
+<span class="nc" id="L218">            return mapGenerationStrategyActions(createSource, ACTION_ADD, ACTION_SCRIPT_CREATE);</span>
+        }
+    }
+
+    private String generateSchemaDrop(JDBCConfiguration conf) {
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if (conf.getDropScriptTarget() != null) {</span>
+<span class="nc" id="L224">            return MappingTool.ACTION_DROP;</span>
+        } else {
+<span class="nc" id="L226">            int dropSource = conf.getDropSourceConstant();</span>
+<span class="nc bnc" id="L227" title="All 4 branches missed.">            if (dropSource == SchemaGenerationSource.NONE &amp;&amp; conf.getDropScriptSource() != null) {</span>
+<span class="nc" id="L228">                dropSource = SCRIPT;</span>
+            } else {
+<span class="nc" id="L230">                dropSource = METADATA;</span>
+            }
+<span class="nc" id="L232">            return mapGenerationStrategyActions(dropSource, ACTION_DROP, ACTION_SCRIPT_DROP);</span>
+        }
+    }
+
+    private String generateSchemaDropCreate(JDBCConfiguration conf) {
+<span class="nc bnc" id="L237" title="All 4 branches missed.">        if (conf.getCreateScriptTarget() != null &amp;&amp; conf.getDropScriptTarget() != null) {</span>
+<span class="nc" id="L238">            return MappingTool.ACTION_ADD + &quot;,&quot; + MappingTool.ACTION_DROP;</span>
+        } else {
+<span class="nc" id="L240">            return mapGenerationStrategyActions(conf.getDropSourceConstant(), ACTION_DROP, ACTION_SCRIPT_DROP) + &quot;,&quot; +</span>
+<span class="nc" id="L241">                   mapGenerationStrategyActions(conf.getCreateSourceConstant(), ACTION_ADD, ACTION_SCRIPT_CREATE);</span>
+        }
+    }
+
+    private String mapGenerationStrategyActions(int source, String metadataAction, String scriptAction) {
+<span class="nc" id="L246">        String actions = &quot;&quot;;</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">        if (source == METADATA) {</span>
+<span class="nc" id="L248">            actions += metadataAction;</span>
+<span class="nc bnc" id="L249" title="All 2 branches missed.">        } else if (source == SCRIPT) {</span>
+<span class="nc" id="L250">            actions += scriptAction;</span>
+<span class="nc bnc" id="L251" title="All 2 branches missed.">        } else if (source == METADATA_THEN_SCRIPT) {</span>
+<span class="nc" id="L252">            actions += metadataAction + &quot;,&quot; + scriptAction;</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        } else if (source == SCRIPT_THEN_METADATA) {</span>
+<span class="nc" id="L254">            actions += scriptAction + &quot;,&quot; + metadataAction;</span>
+        } else {
+<span class="nc" id="L256">            actions += metadataAction;</span>
+        }
+<span class="nc" id="L258">        return actions;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

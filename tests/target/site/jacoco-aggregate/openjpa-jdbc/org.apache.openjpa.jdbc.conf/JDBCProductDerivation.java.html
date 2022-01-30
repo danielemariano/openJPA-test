@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JDBCProductDerivation.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.conf</a> &gt; <span class="el_source">JDBCProductDerivation.java</span></div><h1>JDBCProductDerivation.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.conf;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.openjpa.conf.BrokerFactoryValue;
+import org.apache.openjpa.conf.OpenJPAProductDerivation;
+import org.apache.openjpa.jdbc.kernel.JDBCBrokerFactory;
+import org.apache.openjpa.jdbc.sql.MariaDBDictionary;
+import org.apache.openjpa.jdbc.sql.MySQLDictionary;
+import org.apache.openjpa.jdbc.sql.OracleDictionary;
+import org.apache.openjpa.lib.conf.AbstractProductDerivation;
+import org.apache.openjpa.lib.conf.ConfigurationProvider;
+
+/**
+ * Sets JDBC as default store.
+ */
+<span class="nc" id="L38">public class JDBCProductDerivation extends AbstractProductDerivation</span>
+    implements OpenJPAProductDerivation {
+
+    public static final String PREFIX = &quot;openjpa.jdbc&quot;;
+
+    @Override
+    public void putBrokerFactoryAliases(Map&lt;String,String&gt; m) {
+<span class="nc" id="L45">        m.put(&quot;jdbc&quot;, JDBCBrokerFactory.class.getName());</span>
+<span class="nc" id="L46">    }</span>
+
+    @Override
+    public int getType() {
+<span class="nc" id="L50">        return TYPE_STORE;</span>
+    }
+
+    @Override
+    public boolean beforeConfigurationConstruct(ConfigurationProvider cp) {
+        // default to JDBC when no broker factory set
+<span class="nc bnc" id="L56" title="All 2 branches missed.">        if (BrokerFactoryValue.get(cp) == null) {</span>
+<span class="nc" id="L57">            BrokerFactoryValue.set(cp, &quot;jdbc&quot;);</span>
+<span class="nc" id="L58">            return true;</span>
+        }
+<span class="nc" id="L60">        return false;</span>
+    }
+
+    /**
+     * Hint keys correspond to some (not all) bean-style mutable property name in JDBCFetchConfiguration.
+     * The fully qualified key is prefixed with &lt;code&gt;openjpa.jdbc&lt;/code&gt;.
+     */
+<span class="nc" id="L67">    private static Set&lt;String&gt; _hints = new HashSet&lt;&gt;();</span>
+    static {
+<span class="nc" id="L69">        _hints.add(PREFIX + &quot;.EagerFetchMode&quot;);</span>
+<span class="nc" id="L70">        _hints.add(PREFIX + &quot;.FetchDirection&quot;);</span>
+<span class="nc" id="L71">        _hints.add(PREFIX + &quot;.TransactionIsolation&quot;);</span>
+<span class="nc" id="L72">        _hints.add(PREFIX + &quot;.JoinSyntax&quot;);</span>
+<span class="nc" id="L73">        _hints.add(PREFIX + &quot;.LRSSize&quot;);</span>
+<span class="nc" id="L74">        _hints.add(PREFIX + &quot;.ResultSetType&quot;);</span>
+<span class="nc" id="L75">        _hints.add(PREFIX + &quot;.SubclassFetchMode&quot;);</span>
+
+<span class="nc" id="L77">        _hints.add(MariaDBDictionary.SELECT_HINT);</span>
+<span class="nc" id="L78">        _hints.add(MySQLDictionary.SELECT_HINT);</span>
+<span class="nc" id="L79">        _hints.add(OracleDictionary.SELECT_HINT);</span>
+
+<span class="nc" id="L81">        _hints = Collections.unmodifiableSet(_hints);</span>
+<span class="nc" id="L82">    }</span>
+
+    @Override
+    public Set&lt;String&gt; getSupportedQueryHints() {
+<span class="nc" id="L86">        return _hints;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

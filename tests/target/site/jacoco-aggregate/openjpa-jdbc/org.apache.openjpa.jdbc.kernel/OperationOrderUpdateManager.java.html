@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>OperationOrderUpdateManager.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">OperationOrderUpdateManager.java</span></div><h1>OperationOrderUpdateManager.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.sql.PrimaryRow;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowImpl;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.RowManagerImpl;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+
+/**
+ * Update manager that writes SQL in object-level operation order.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L41">public class OperationOrderUpdateManager</span>
+    extends AbstractUpdateManager {
+
+    @Override
+    public boolean orderDirty() {
+<span class="nc" id="L46">        return true;</span>
+    }
+
+    @Override
+    protected RowManager newRowManager() {
+<span class="nc" id="L51">        return new RowManagerImpl(true);</span>
+    }
+
+    @Override
+    protected PreparedStatementManager newPreparedStatementManager
+        (JDBCStore store, Connection conn) {
+<span class="nc" id="L57">        return new PreparedStatementManagerImpl(store, conn);</span>
+    }
+
+    @Override
+    protected Collection flush(RowManager rowMgr,
+        PreparedStatementManager psMgr, Collection exceps) {
+<span class="nc" id="L63">        RowManagerImpl rmimpl = (RowManagerImpl) rowMgr;</span>
+
+        // first take care of all secondary table deletes and 'all row' deletes
+        // (which are probably secondary table deletes), since no foreign
+        // keys ever rely on secondary table pks
+<span class="nc" id="L68">        flush(rmimpl.getAllRowDeletes(), psMgr);</span>
+<span class="nc" id="L69">        flush(rmimpl.getSecondaryDeletes(), psMgr);</span>
+
+        // now do any 'all row' updates, which typically null keys
+<span class="nc" id="L72">        flush(rmimpl.getAllRowUpdates(), psMgr);</span>
+
+        // gather any updates we need to avoid fk constraints on deletes
+<span class="nc" id="L75">        Collection constraintUpdates = null;</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        for (Iterator itr = rmimpl.getDeletes().iterator(); itr.hasNext();) {</span>
+            try {
+<span class="nc" id="L78">                constraintUpdates = analyzeDeleteConstraints(rmimpl,</span>
+<span class="nc" id="L79">                    (PrimaryRow) itr.next(), constraintUpdates);</span>
+<span class="nc" id="L80">            } catch (SQLException se) {</span>
+<span class="nc" id="L81">                exceps = addException(exceps, SQLExceptions.getStore</span>
+<span class="nc" id="L82">                    (se, dict));</span>
+<span class="nc" id="L83">            }</span>
+        }
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (constraintUpdates != null) {</span>
+<span class="nc" id="L86">            flush(constraintUpdates, psMgr);</span>
+<span class="nc" id="L87">            constraintUpdates.clear();</span>
+        }
+
+        // flush primary rows in order
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        for (Iterator itr = rmimpl.getOrdered().iterator(); itr.hasNext();) {</span>
+            try {
+<span class="nc" id="L93">                constraintUpdates = flushPrimaryRow(rmimpl, (PrimaryRow)</span>
+<span class="nc" id="L94">                    itr.next(), psMgr, constraintUpdates);</span>
+<span class="nc" id="L95">            } catch (SQLException se) {</span>
+<span class="nc" id="L96">                exceps = addException(exceps, SQLExceptions.getStore</span>
+<span class="nc" id="L97">                    (se, dict));</span>
+<span class="nc" id="L98">            }</span>
+        }
+<span class="nc bnc" id="L100" title="All 2 branches missed.">        if (constraintUpdates != null)</span>
+<span class="nc" id="L101">            flush(constraintUpdates, psMgr);</span>
+
+        // take care of all secondary table inserts and updates last, since
+        // they may rely on previous inserts or updates, but nothing relies
+        // on them
+<span class="nc" id="L106">        flush(rmimpl.getSecondaryUpdates(), psMgr);</span>
+
+        // flush any left over prepared statements
+<span class="nc" id="L109">        psMgr.flush();</span>
+<span class="nc" id="L110">        return exceps;</span>
+    }
+
+    /**
+     * Analyze the delete constraints on the given row, gathering necessary
+     * updates to null fks before deleting.
+     */
+    private Collection analyzeDeleteConstraints(RowManagerImpl rowMgr,
+        PrimaryRow row, Collection updates)
+        throws SQLException {
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        if (!row.isValid())</span>
+<span class="nc" id="L121">            return updates;</span>
+
+<span class="nc" id="L123">        ForeignKey[] fks = row.getTable().getForeignKeys();</span>
+        OpenJPAStateManager sm;
+        PrimaryRow rel;
+        RowImpl update;
+<span class="nc bnc" id="L127" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++) {</span>
+            // when deleting ref fks we set the where value instead
+<span class="nc" id="L129">            sm = row.getForeignKeySet(fks[i]);</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">            if (sm == null)</span>
+<span class="nc" id="L131">                sm = row.getForeignKeyWhere(fks[i]);</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">            if (sm == null)</span>
+<span class="nc" id="L133">                continue;</span>
+
+            // only need an update if we have an fk to a row that's being
+            // deleted before we are
+<span class="nc" id="L137">            rel = (PrimaryRow) rowMgr.getRow(fks[i].getPrimaryKeyTable(),</span>
+                Row.ACTION_DELETE, sm, false);
+<span class="nc bnc" id="L139" title="All 4 branches missed.">            if (rel == null || !rel.isValid()</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">                || rel.getIndex() &gt;= row.getIndex())</span>
+<span class="nc" id="L141">                continue;</span>
+
+            // create an update to null the offending fk before deleting.  use
+            // a primary row to be sure to copy delayed-flush pks/fks
+<span class="nc" id="L145">            update = new PrimaryRow(row.getTable(), Row.ACTION_UPDATE, null);</span>
+<span class="nc" id="L146">            row.copyInto(update, true);</span>
+<span class="nc" id="L147">            update.setForeignKey(fks[i], row.getForeignKeyIO(fks[i]), null);</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">            if (updates == null)</span>
+<span class="nc" id="L149">                updates = new ArrayList();</span>
+<span class="nc" id="L150">            updates.add(update);</span>
+        }
+<span class="nc" id="L152">        return updates;</span>
+    }
+
+    /**
+     * Flush the given row, creating deferred updates for dependencies.
+     */
+    private Collection flushPrimaryRow(RowManagerImpl rowMgr, PrimaryRow row,
+        PreparedStatementManager psMgr, Collection updates)
+        throws SQLException {
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (!row.isValid())</span>
+<span class="nc" id="L162">            return updates;</span>
+
+        // already analyzed deletes
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        if (row.getAction() == Row.ACTION_DELETE) {</span>
+<span class="nc" id="L166">            psMgr.flush(row);</span>
+<span class="nc" id="L167">            return updates;</span>
+        }
+
+<span class="nc" id="L170">        ForeignKey[] fks = row.getTable().getForeignKeys();</span>
+        OpenJPAStateManager sm;
+        PrimaryRow rel;
+        PrimaryRow update;
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++) {</span>
+<span class="nc" id="L175">            sm = row.getForeignKeySet(fks[i]);</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">            if (sm == null)</span>
+<span class="nc" id="L177">                continue;</span>
+
+            // only need an update if we have an fk to a row that's being
+            // inserted after we are; if row is dependent on itself and no
+            // fk, must be an auto-inc because otherwise we wouldn't have
+            // recorded it
+<span class="nc" id="L183">            rel = (PrimaryRow) rowMgr.getRow(fks[i].getPrimaryKeyTable(),</span>
+                Row.ACTION_INSERT, sm, false);
+<span class="nc bnc" id="L185" title="All 4 branches missed.">            if (rel == null || !rel.isValid()</span>
+<span class="nc bnc" id="L186" title="All 4 branches missed.">                || rel.getIndex() &lt; row.getIndex()</span>
+<span class="nc bnc" id="L187" title="All 4 branches missed.">                || (rel == row &amp;&amp; !fks[i].isDeferred() &amp;&amp; !fks[i].isLogical()))</span>
+<span class="nc" id="L188">                continue;</span>
+
+            // don't insert or update with the given fk; create a deferred
+            // update for after the rel row has been inserted; use a primary row
+            // to prevent setting values until after flush to get auto-inc
+<span class="nc" id="L193">            update = new PrimaryRow(row.getTable(), Row.ACTION_UPDATE, null);</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">            if (row.getAction() == Row.ACTION_INSERT)</span>
+<span class="nc" id="L195">                update.wherePrimaryKey(row.getPrimaryKey());</span>
+            else
+<span class="nc" id="L197">                row.copyInto(update, true);</span>
+<span class="nc" id="L198">            update.setForeignKey(fks[i], row.getForeignKeyIO(fks[i]), sm);</span>
+<span class="nc" id="L199">            row.clearForeignKey(fks[i]);</span>
+
+<span class="nc bnc" id="L201" title="All 2 branches missed.">            if (updates == null)</span>
+<span class="nc" id="L202">                updates = new ArrayList();</span>
+<span class="nc" id="L203">            updates.add(update);</span>
+        }
+
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        if (row.isValid()) // if update, maybe no longer needed</span>
+<span class="nc" id="L207">            psMgr.flush(row);</span>
+<span class="nc" id="L208">        return updates;</span>
+    }
+
+    /**
+     * Flush the given collection of secondary rows.
+     */
+    protected void flush(Collection rows, PreparedStatementManager psMgr) {
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        if (rows.isEmpty())</span>
+<span class="nc" id="L216">            return;</span>
+
+        RowImpl row;
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        for (Iterator itr = rows.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L220">            row = (RowImpl) itr.next();</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">            if (row.isValid())</span>
+<span class="nc" id="L222">                psMgr.flush(row);</span>
+        }
+<span class="nc" id="L224">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

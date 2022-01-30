@@ -1,0 +1,413 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FinderCacheImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">FinderCacheImpl.java</span></div><h1>FinderCacheImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SelectExecutor;
+import org.apache.openjpa.kernel.FetchConfiguration;
+import org.apache.openjpa.kernel.FinderCache;
+import org.apache.openjpa.kernel.FinderQuery;
+import org.apache.openjpa.kernel.QueryHints;
+import org.apache.openjpa.kernel.QueryStatistics;
+import org.apache.openjpa.lib.conf.Configuration;
+import org.apache.openjpa.lib.util.StringUtil;
+
+/**
+ * Implementation of FinderCache for JDBC.
+ *
+ * @author Pinaki Poddar
+ *
+ * @since 2.0.0
+ *
+ */
+public class FinderCacheImpl
+    implements FinderCache&lt;ClassMapping, SelectExecutor, Result&gt; {
+    private static final String PATTERN_SEPARATOR = &quot;\\;&quot;;
+    private static final String EXLUDED_BY_USER = &quot;Excluded by user&quot;;
+
+    private final Map&lt;ClassMapping, FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt;&gt; _delegate;
+    // Key: class name Value: Reason why excluded
+    private final Map&lt;String, String&gt; _uncachables;
+    private List&lt;String&gt; _exclusionPatterns;
+    private QueryStatistics&lt;ClassMapping&gt; _stats;
+<span class="nc" id="L60">    private ReentrantLock _lock = new ReentrantLock();</span>
+<span class="nc" id="L61">    private boolean _enableStats = false;</span>
+
+<span class="nc" id="L63">    public FinderCacheImpl() {</span>
+<span class="nc" id="L64">        _delegate = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L65">        _uncachables = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L66">        _stats = new QueryStatistics.None&lt;&gt;();</span>
+<span class="nc" id="L67">    }</span>
+
+    /**
+     * Get a map-oriented view of the cache.
+     *
+     * @return a map of the query string with class names as key.
+     */
+    @Override
+    public Map&lt;String, String&gt; getMapView() {
+<span class="nc" id="L76">        lock();</span>
+        try {
+<span class="nc" id="L78">            Map&lt;String, String&gt; view = new TreeMap&lt;&gt;();</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">            for (ClassMapping mapping : _delegate.keySet()) {</span>
+<span class="nc" id="L80">                view.put(mapping.getDescribedType().getName(),</span>
+<span class="nc" id="L81">                    _delegate.get(mapping).getQueryString());</span>
+<span class="nc" id="L82">            }</span>
+<span class="nc" id="L83">            return view;</span>
+        } finally {
+<span class="nc" id="L85">            unlock();</span>
+        }
+    }
+
+    /**
+     * Gets basic statistics of execution and hit count of finder queries.
+     */
+    @Override
+    public QueryStatistics&lt;ClassMapping&gt; getStatistics() {
+<span class="nc" id="L94">        return _stats;</span>
+    }
+
+    /**
+     * Gets the finder query for the given mapping. The get operation can be
+     * controlled by FetchConfiguration hints.
+     * {@link QueryHints#HINT_IGNORE_FINDER HINT_IGNORE_FINDER} will ignore
+     * any cached finder that may exist in this cache and will return null.
+     * {@link QueryHints#HINT_INVALIDATE_FINDER HINT_INVALIDATE_FINDER} will
+     * invalidate any cached finder that may exist in this cache and will return
+     * null.
+     *
+     */
+    @Override
+    public FinderQuery&lt;ClassMapping,SelectExecutor,Result&gt;
+        get(ClassMapping mapping, FetchConfiguration fetch) {
+<span class="nc bnc" id="L110" title="All 2 branches missed.">        if (fetch.getReadLockLevel() != 0) {</span>
+<span class="nc" id="L111">            return null;</span>
+        }
+
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (!fetch.isFetchConfigurationSQLCacheAdmissible()) {</span>
+<span class="nc" id="L115">            return null;</span>
+        }
+
+<span class="nc" id="L118">        boolean ignore = isHinted(fetch, QueryHints.HINT_IGNORE_FINDER);</span>
+<span class="nc" id="L119">        boolean invalidate = isHinted(fetch, QueryHints.HINT_INVALIDATE_FINDER);</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        if (invalidate) {</span>
+<span class="nc" id="L121">            invalidate(mapping);</span>
+        }
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (ignore) {</span>
+<span class="nc" id="L124">            return null;</span>
+        }
+<span class="nc" id="L126">        FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt; result = _delegate.get(mapping);</span>
+<span class="nc" id="L127">        _stats.recordExecution(mapping);</span>
+<span class="nc" id="L128">        return result;</span>
+    }
+
+    /**
+     * Cache a Finder Query for the given mapping and select. The put operation
+     * can be controlled by FetchConfiguration hints.
+     * If no entry exists for the given mapping then an attempt is made to
+     * create a new FinderQuery. The attempt, however, may not be successful
+     * because all Selects can not be cached.
+     * @see FinderQueryImpl#newFinder(ClassMapping, Select).
+     *
+     * If a entry for the given mapping exists then the value of
+     * {@link QueryHints#HINT_RECACHE_FINDER HINT_RECACHE_FINDER} hint
+     * determines whether the existing entry is returned or a new FinderQuery
+     * with the given argument overwrites the existing one.
+     *
+     * @param mapping the class for which the finder is to be cached
+     * @param select the finder query
+     * @param fetch may contain hints to control cache operation
+     */
+    @Override
+    public FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt; cache
+       (ClassMapping mapping, SelectExecutor select, FetchConfiguration fetch) {
+<span class="nc" id="L151">        lock();</span>
+        try {
+<span class="nc bnc" id="L153" title="All 2 branches missed.">            if (fetch.getReadLockLevel() != 0) {</span>
+<span class="nc" id="L154">                return null;</span>
+            }
+
+<span class="nc bnc" id="L157" title="All 2 branches missed.">            if (!fetch.isFetchConfigurationSQLCacheAdmissible()) {</span>
+<span class="nc" id="L158">                return null;</span>
+            }
+
+<span class="nc" id="L161">            boolean recache = isHinted(fetch, QueryHints.HINT_RECACHE_FINDER);</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            if (isExcluded(mapping)) {</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">                return recache ? put(mapping, select) : null;</span>
+            }
+<span class="nc bnc" id="L165" title="All 2 branches missed.">            if (_delegate.containsKey(mapping)) {</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">                return recache ? put(mapping, select) : _delegate.get(mapping);</span>
+            }
+<span class="nc" id="L168">            return put(mapping, select);</span>
+        } finally {
+<span class="nc" id="L170">            unlock();</span>
+        }
+    }
+
+    /**
+     * Creates and puts a FinderQuery in the internal map indexed by the
+     * given ClassMapping.
+     * If a new FinderQuery can not be created for the given Select (because
+     * some Select are not cached), then the mapping is marked invalid.
+     *
+    */
+    private FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt; put(ClassMapping mapping, SelectExecutor select) {
+<span class="nc" id="L182">        FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt; finder = FinderQueryImpl.newFinder(mapping, select);</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">        if (finder != null) {</span>
+<span class="nc" id="L184">            _delegate.put(mapping, finder);</span>
+        } else {
+<span class="nc" id="L186">            invalidate(mapping);</span>
+        }
+<span class="nc" id="L188">        return finder;</span>
+    }
+
+    /**
+     * Affirms if the given mapping is excluded from being cached.
+     */
+    @Override
+    public boolean isExcluded(ClassMapping mapping) {
+<span class="nc bnc" id="L196" title="All 4 branches missed.">        return mapping != null &amp;&amp; isExcluded(mapping.getDescribedType().getName());</span>
+    }
+
+    /**
+     * Searches the exclusion patterns to find out if the given string matches
+     * any element.
+     */
+    private boolean isExcluded(String target) {
+<span class="nc bnc" id="L204" title="All 4 branches missed.">        if (_exclusionPatterns != null &amp;&amp; _exclusionPatterns.contains(target))</span>
+<span class="nc" id="L205">            return true;</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        return getMatchedExclusionPattern(target) != null;</span>
+    }
+
+    /**
+     * Adds a pattern for exclusion. Any cached finder whose class name
+     * matches the given pattern will be marked invalidated as a side-effect.
+     */
+    @Override
+    public void addExclusionPattern(String pattern) {
+<span class="nc" id="L215">        lock();</span>
+        try {
+<span class="nc bnc" id="L217" title="All 2 branches missed.">            if (_exclusionPatterns == null)</span>
+<span class="nc" id="L218">                _exclusionPatterns = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L219">            _exclusionPatterns.add(pattern);</span>
+<span class="nc" id="L220">            Collection&lt;ClassMapping&gt; invalidMappings = getMatchedKeys(pattern,</span>
+<span class="nc" id="L221">                    _delegate.keySet());</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">            for (ClassMapping invalidMapping : invalidMappings)</span>
+<span class="nc" id="L223">                markUncachable(invalidMapping, pattern);</span>
+        } finally {
+<span class="nc" id="L225">            unlock();</span>
+        }
+<span class="nc" id="L227">    }</span>
+    /**
+     * Removes a pattern for exclusion. Any query identifier marked as not
+     * cachable due to the given pattern will now be removed from the list of
+     * uncachables as a side-effect.
+     */
+    @Override
+    public void removeExclusionPattern(String pattern) {
+<span class="nc" id="L235">        lock();</span>
+        try {
+<span class="nc bnc" id="L237" title="All 2 branches missed.">            if (_exclusionPatterns == null)</span>
+<span class="nc" id="L238">                return;</span>
+<span class="nc" id="L239">            _exclusionPatterns.remove(pattern);</span>
+<span class="nc" id="L240">            Collection&lt;String&gt; reborns = getMatchedKeys(pattern,</span>
+<span class="nc" id="L241">                _uncachables.keySet());</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">            for (String rebornKey : reborns)</span>
+<span class="nc" id="L243">                _uncachables.remove(rebornKey);</span>
+        } finally {
+<span class="nc" id="L245">            unlock();</span>
+        }
+<span class="nc" id="L247">    }</span>
+
+    /**
+     * Gets the pattern that matches the given identifier.
+     */
+    private String getMatchedExclusionPattern(String id) {
+<span class="nc bnc" id="L253" title="All 4 branches missed.">        if (_exclusionPatterns == null || _exclusionPatterns.isEmpty())</span>
+<span class="nc" id="L254">            return null;</span>
+<span class="nc bnc" id="L255" title="All 2 branches missed.">        for (String pattern : _exclusionPatterns)</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">            if (matches(pattern, id))</span>
+<span class="nc" id="L257">                return pattern;</span>
+<span class="nc" id="L258">        return null;</span>
+    }
+
+    /**
+     * Gets the elements of the given set that match the given pattern.
+     */
+    private Collection&lt;ClassMapping&gt; getMatchedKeys(String pattern, Set&lt;ClassMapping&gt; set) {
+<span class="nc" id="L265">        List&lt;ClassMapping&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        for (ClassMapping entry : set) {</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">            if (matches(pattern, entry)) {</span>
+<span class="nc" id="L268">                result.add(entry);</span>
+            }
+<span class="nc" id="L270">        }</span>
+<span class="nc" id="L271">        return result;</span>
+    }
+
+    /**
+     * Gets the elements of the given list which match the given pattern.
+     */
+    private Collection&lt;String&gt; getMatchedKeys(String pattern, Collection&lt;String&gt; coll) {
+<span class="nc" id="L278">        List&lt;String&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        for (String key : coll) {</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">            if (matches(pattern, key)) {</span>
+<span class="nc" id="L281">                result.add(key);</span>
+            }
+<span class="nc" id="L283">        }</span>
+<span class="nc" id="L284">        return result;</span>
+    }
+
+    boolean matches(String pattern, ClassMapping mapping) {
+<span class="nc" id="L288">        return matches(pattern, mapping.getDescribedType().getName());</span>
+    }
+
+    boolean matches(String pattern, String target) {
+<span class="nc bnc" id="L292" title="All 4 branches missed.">        return target != null &amp;&amp; (target.equals(pattern)</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">          || target.matches(pattern));</span>
+    }
+
+    @Override
+    public boolean invalidate(ClassMapping mapping) {
+<span class="nc" id="L298">        lock();</span>
+        try {
+<span class="nc bnc" id="L300" title="All 2 branches missed.">            return _delegate.remove(mapping) != null;</span>
+        } finally {
+<span class="nc" id="L302">            unlock();</span>
+        }
+    }
+
+    @Override
+    public FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt; markUncachable(ClassMapping mapping) {
+<span class="nc" id="L308">        return markUncachable(mapping.getDescribedType().getName());</span>
+    }
+
+    public FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt; markUncachable(String id) {
+<span class="nc" id="L312">        return markUncachable(id, EXLUDED_BY_USER);</span>
+    }
+
+    private FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt; markUncachable(String cls, String reason) {
+<span class="nc" id="L316">        lock();</span>
+        try {
+<span class="nc bnc" id="L318" title="All 2 branches missed.">            boolean excludedByUser = _uncachables.get(cls) == EXLUDED_BY_USER;</span>
+<span class="nc bnc" id="L319" title="All 2 branches missed.">            if (!excludedByUser)</span>
+<span class="nc" id="L320">                _uncachables.put(cls, reason);</span>
+<span class="nc" id="L321">            return _delegate.remove(searchMappingByName(cls));</span>
+        } finally {
+<span class="nc" id="L323">            unlock();</span>
+        }
+    }
+
+    private FinderQuery&lt;ClassMapping, SelectExecutor, Result&gt; markUncachable(ClassMapping mapping, String reason) {
+<span class="nc" id="L328">        lock();</span>
+        try {
+<span class="nc" id="L330">            String cls = mapping.getDescribedType().getName();</span>
+<span class="nc bnc" id="L331" title="All 2 branches missed.">            boolean excludedByUser = _uncachables.get(cls) == EXLUDED_BY_USER;</span>
+<span class="nc bnc" id="L332" title="All 2 branches missed.">            if (!excludedByUser)</span>
+<span class="nc" id="L333">                _uncachables.put(cls, reason);</span>
+<span class="nc" id="L334">            return _delegate.remove(mapping);</span>
+        } finally {
+<span class="nc" id="L336">            unlock();</span>
+        }
+    }
+
+    ClassMapping searchMappingByName(String cls) {
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        for (ClassMapping mapping : _delegate.keySet())</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">            if (matches(cls, mapping))</span>
+<span class="nc" id="L343">                return mapping;</span>
+<span class="nc" id="L344">        return null;</span>
+    }
+
+
+    public void setExcludes(String excludes) {
+<span class="nc" id="L349">        lock();</span>
+        try {
+<span class="nc bnc" id="L351" title="All 2 branches missed.">            if (StringUtil.isEmpty(excludes))</span>
+<span class="nc" id="L352">                return;</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            if (_exclusionPatterns == null)</span>
+<span class="nc" id="L354">                _exclusionPatterns = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L355">            String[] patterns = excludes.split(PATTERN_SEPARATOR);</span>
+<span class="nc bnc" id="L356" title="All 2 branches missed.">            for (String pattern : patterns)</span>
+<span class="nc" id="L357">                addExclusionPattern(pattern);</span>
+        } finally {
+<span class="nc" id="L359">            unlock();</span>
+        }
+<span class="nc" id="L361">    }</span>
+
+    @Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public List&lt;String&gt; getExcludes() {
+<span class="nc bnc" id="L366" title="All 2 branches missed.">        return (List&lt;String&gt;)_exclusionPatterns == null</span>
+<span class="nc" id="L367">            ? Collections.EMPTY_LIST</span>
+<span class="nc" id="L368">            : Collections.unmodifiableList(_exclusionPatterns);</span>
+    }
+
+    boolean isHinted(FetchConfiguration fetch, String hint) {
+<span class="nc bnc" id="L372" title="All 2 branches missed.">        if (fetch == null)</span>
+<span class="nc" id="L373">            return false;</span>
+<span class="nc" id="L374">        Object result = fetch.getHint(hint);</span>
+<span class="nc bnc" id="L375" title="All 4 branches missed.">        return result != null &amp;&amp; &quot;true&quot;.equalsIgnoreCase(result.toString());</span>
+    }
+
+    void lock() {
+<span class="nc bnc" id="L379" title="All 2 branches missed.">        if (_lock != null)</span>
+<span class="nc" id="L380">            _lock.lock();</span>
+<span class="nc" id="L381">    }</span>
+
+    void unlock() {
+<span class="nc bnc" id="L384" title="All 4 branches missed.">        if (_lock != null &amp;&amp; _lock.isLocked())</span>
+<span class="nc" id="L385">            _lock.unlock();</span>
+<span class="nc" id="L386">    }</span>
+
+    public void setEnableStats(boolean b) {
+<span class="nc" id="L389">        _enableStats = b;</span>
+<span class="nc bnc" id="L390" title="All 2 branches missed.">        if (_enableStats) {</span>
+<span class="nc" id="L391">            _stats = new QueryStatistics.Default&lt;&gt;();</span>
+        }
+<span class="nc" id="L393">    }</span>
+
+    public boolean getEnableStats() {
+<span class="nc" id="L396">        return _enableStats;</span>
+    }
+    // ----------------------------------------------------
+    //  Configuration contract
+    // ----------------------------------------------------
+    @Override
+    public void startConfiguration() {
+<span class="nc" id="L403">    }</span>
+
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc" id="L407">    }</span>
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L411">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

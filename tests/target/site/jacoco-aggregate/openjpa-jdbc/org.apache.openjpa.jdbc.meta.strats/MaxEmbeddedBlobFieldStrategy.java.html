@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MaxEmbeddedBlobFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">MaxEmbeddedBlobFieldStrategy.java</span></div><h1>MaxEmbeddedBlobFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.Blob;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Mapping for serialized fields on a dictionary that has a maximum embedded
+ * BLOB size.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+<span class="nc" id="L41">public class MaxEmbeddedBlobFieldStrategy</span>
+    extends MaxEmbeddedLobFieldStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L47">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L48">        (MaxEmbeddedBlobFieldStrategy.class);</span>
+
+<span class="nc" id="L50">    private int _maxSize = 0;</span>
+
+    @Override
+    protected int getExpectedJavaType() {
+<span class="nc" id="L54">        return JavaTypes.OBJECT;</span>
+    }
+
+    @Override
+    protected void update(OpenJPAStateManager sm, Row row)
+        throws SQLException {
+<span class="nc" id="L60">        byte[] b = (byte[]) sm.getImplData(field.getIndex());</span>
+<span class="nc bnc" id="L61" title="All 6 branches missed.">        if (b == null || (b.length &gt; _maxSize &amp;&amp; !field.getColumns()[0].isNotNull()))</span>
+<span class="nc" id="L62">            row.setNull(field.getColumns()[0], true);</span>
+        else {
+<span class="nc" id="L64">            sm.setImplData(field.getIndex(), null);</span>
+<span class="nc" id="L65">            DBDictionary.SerializedData dat =</span>
+                new DBDictionary.SerializedData(b);
+<span class="nc" id="L67">            row.setObject(field.getColumns()[0], dat);</span>
+        }
+<span class="nc" id="L69">    }</span>
+
+    @Override
+    protected Boolean isCustom(OpenJPAStateManager sm, JDBCStore store) {
+        // have we already stored our serialized data?
+<span class="nc" id="L74">        byte[] b = (byte[]) sm.getImplData(field.getIndex());</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if (b == null) {</span>
+<span class="nc" id="L76">            Object o = sm.fetch(field.getIndex());</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">            if (o == null)</span>
+<span class="nc" id="L78">                return Boolean.FALSE;</span>
+
+            // serialize field value
+<span class="nc" id="L81">            DBDictionary dict = field.getMappingRepository().getDBDictionary();</span>
+            try {
+<span class="nc" id="L83">                b = dict.serialize(o, store);</span>
+<span class="nc" id="L84">            } catch (SQLException se) {</span>
+<span class="nc" id="L85">                throw SQLExceptions.getStore(se, dict);</span>
+<span class="nc" id="L86">            }</span>
+
+            // set in impl data so that we don't have to re-serialize on store
+<span class="nc" id="L89">            sm.setImplData(field.getIndex(), b);</span>
+        }
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        return (b.length &gt; _maxSize) ? null : Boolean.FALSE;</span>
+    }
+
+    @Override
+    protected void putData(OpenJPAStateManager sm, ResultSet rs,
+        DBDictionary dict)
+        throws SQLException {
+<span class="nc" id="L98">        byte[] b = (byte[]) sm.setImplData(field.getIndex(), null);</span>
+<span class="nc" id="L99">        Blob blob = rs.getBlob(1);</span>
+<span class="nc" id="L100">        dict.putBytes(blob, b);</span>
+<span class="nc" id="L101">    }</span>
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if (!field.isSerialized())</span>
+<span class="nc" id="L106">            throw new MetaDataException(_loc.get(&quot;not-serialized&quot;, field));</span>
+<span class="nc" id="L107">        super.map(adapt);</span>
+<span class="nc" id="L108">    }</span>
+
+    @Override
+    public void initialize() {
+<span class="nc" id="L112">        DBDictionary dict = field.getMappingRepository().getDBDictionary();</span>
+<span class="nc" id="L113">        _maxSize = dict.maxEmbeddedBlobSize;</span>
+<span class="nc" id="L114">        field.setUsesImplData(Boolean.TRUE);</span>
+<span class="nc" id="L115">    }</span>
+
+    @Override
+    protected Object getValue(OpenJPAStateManager sm) {
+<span class="nc" id="L119">        byte[] b = (byte[]) sm.getImplData(field.getIndex());</span>
+<span class="nc bnc" id="L120" title="All 6 branches missed.">        if (b == null || (b.length &gt; _maxSize &amp;&amp; !field.getColumns()[0].isNotNull()))</span>
+<span class="nc" id="L121">            return null;</span>
+<span class="nc" id="L122">        sm.setImplData(field.getIndex(), null);</span>
+<span class="nc" id="L123">        DBDictionary.SerializedData dat = new DBDictionary.SerializedData(b);</span>
+<span class="nc" id="L124">        return dat;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

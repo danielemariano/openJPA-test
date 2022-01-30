@@ -1,0 +1,1283 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DB2Dictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">DB2Dictionary.java</span></div><h1>DB2Dictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.Reader;
+import java.lang.reflect.Method;
+import java.sql.Blob;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.Locale;
+import java.util.StringTokenizer;
+
+import javax.sql.DataSource;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.kernel.exps.FilterValue;
+import org.apache.openjpa.jdbc.kernel.exps.Lit;
+import org.apache.openjpa.jdbc.kernel.exps.Param;
+import org.apache.openjpa.jdbc.kernel.exps.Val;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.MixedLockLevels;
+import org.apache.openjpa.kernel.exps.Literal;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.OpenJPAException;
+import org.apache.openjpa.util.StoreException;
+import org.apache.openjpa.util.UnsupportedException;
+import org.apache.openjpa.util.UserException;
+
+
+/**
+ * Dictionary for IBM DB2 database.
+ */
+public class DB2Dictionary
+    extends AbstractDB2Dictionary {
+<span class="nc" id="L68">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L69">        (DB2Dictionary.class);</span>
+
+    public static final String VENDOR_IBM = &quot;ibm&quot;;
+<span class="nc" id="L72">    public String optimizeClause = &quot;optimize for&quot;;</span>
+<span class="nc" id="L73">    public String rowClause = &quot;row&quot;;</span>
+<span class="nc" id="L74">    protected int db2ServerType = 0;</span>
+    public static final int db2ISeriesV5R3OrEarlier = 1;
+    public static final int db2UDBV81OrEarlier = 2;
+    public static final int db2ZOSV8xOrLater = 3;
+    public static final int db2UDBV82OrLater = 4;
+    public static final int db2ISeriesV5R4OrLater = 5;
+    protected static final String forUpdate = &quot;FOR UPDATE&quot;;
+    protected static final String withURClause = &quot;WITH UR&quot;;
+    protected static final String withCSClause = &quot;WITH CS&quot;;
+    protected static final String withRSClause = &quot;WITH RS&quot;;
+    protected static final String withRRClause = &quot;WITH RR&quot;;
+    protected static final String useKeepShareLockClause     = &quot;USE AND KEEP SHARE LOCKS&quot;;
+    protected static final String useKeepUpdateLockClause    = &quot;USE AND KEEP UPDATE LOCKS&quot;;
+    protected static final String useKeepExclusiveLockClause = &quot;USE AND KEEP EXCLUSIVE LOCKS&quot;;
+    protected static final String forReadOnlyClause = &quot;FOR READ ONLY&quot;;
+    protected static final String defaultSequenceSQL
+        = &quot;SELECT SEQSCHEMA AS SEQUENCE_SCHEMA, SEQNAME AS SEQUENCE_NAME FROM SYSCAT.SEQUENCES&quot;;
+    static final String SYSDUMMY = &quot;SYSIBM.SYSDUMMY1&quot;;
+
+
+<span class="nc" id="L94">    private int defaultBatchLimit = 100;</span>
+<span class="nc" id="L95">    public boolean appendExtendedExceptionText = true;</span>
+
+    /**
+     * Affirms whether this dictionary uses {@code ROWNUM} feature.
+     * {@code ROWNUM} feature is used to construct {@code SQL SELECT} query
+     * that uses an offset or limits the number of resultant rows.
+     * &lt;br&gt;
+     * By default, this flag is set to {@code false}.
+     */
+<span class="nc" id="L104">    public boolean supportsRowNum = false;</span>
+
+<span class="nc" id="L106">    public DB2Dictionary() {</span>
+<span class="nc" id="L107">        platform = &quot;DB2&quot;;</span>
+<span class="nc" id="L108">        validationSQL = &quot;SELECT DISTINCT(CURRENT TIMESTAMP) FROM SYSIBM.SYSTABLES&quot;;</span>
+<span class="nc" id="L109">        supportsSelectEndIndex = true;</span>
+
+<span class="nc" id="L111">        nextSequenceQuery = &quot;VALUES NEXTVAL FOR {0}&quot;;</span>
+
+<span class="nc" id="L113">        sequenceSQL = defaultSequenceSQL;</span>
+<span class="nc" id="L114">        sequenceSchemaSQL = &quot;SEQSCHEMA = ?&quot;;</span>
+<span class="nc" id="L115">        sequenceNameSQL = &quot;SEQNAME = ?&quot;;</span>
+<span class="nc" id="L116">        characterColumnSize = 254;</span>
+
+<span class="nc" id="L118">        binaryTypeName = &quot;BLOB(1M)&quot;;</span>
+<span class="nc" id="L119">        longVarbinaryTypeName = &quot;BLOB(1M)&quot;;</span>
+<span class="nc" id="L120">        varbinaryTypeName = &quot;BLOB(1M)&quot;;</span>
+<span class="nc" id="L121">        clobTypeName = &quot;CLOB(1M)&quot;;</span>
+<span class="nc" id="L122">        longVarcharTypeName = &quot;LONG VARCHAR&quot;;</span>
+<span class="nc" id="L123">        datePrecision = MICRO;</span>
+<span class="nc" id="L124">        storeCharsAsNumbers = false;</span>
+
+<span class="nc" id="L126">        fixedSizeTypeNameSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;LONG VARCHAR FOR BIT DATA&quot;, &quot;LONG VARCHAR&quot;, &quot;LONG VARGRAPHIC&quot;,
+        }));
+<span class="nc" id="L129">        systemSchemas = &quot;SYSCAT,SYSIBM,SYSSTAT,SYSIBMADM,SYSTOOLS&quot;;</span>
+<span class="nc" id="L130">        maxConstraintNameLength = 18;</span>
+<span class="nc" id="L131">        maxIndexNameLength = 128;</span>
+<span class="nc" id="L132">        maxColumnNameLength = 30;</span>
+<span class="nc" id="L133">        supportsDeferredConstraints = false;</span>
+<span class="nc" id="L134">        supportsDefaultDeleteAction = false;</span>
+<span class="nc" id="L135">        supportsAlterTableWithDropColumn = false;</span>
+<span class="nc" id="L136">        supportsLockingWithOrderClause = true;</span>
+<span class="nc" id="L137">        supportsNullUniqueColumn = false;</span>
+
+<span class="nc" id="L139">        supportsNullTableForGetColumns = false;</span>
+<span class="nc" id="L140">        requiresCastForMathFunctions = true;</span>
+<span class="nc" id="L141">        requiresCastForComparisons = true;</span>
+
+<span class="nc" id="L143">        reservedWordSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;AFTER&quot;, &quot;ALIAS&quot;, &quot;ALLOW&quot;, &quot;APPLICATION&quot;, &quot;ASSOCIATE&quot;, &quot;ASUTIME&quot;,
+            &quot;AUDIT&quot;, &quot;AUX&quot;, &quot;AUXILIARY&quot;, &quot;BEFORE&quot;, &quot;BINARY&quot;, &quot;BUFFERPOOL&quot;,
+            &quot;CACHE&quot;, &quot;CALL&quot;, &quot;CALLED&quot;, &quot;CAPTURE&quot;, &quot;CARDINALITY&quot;, &quot;CCSID&quot;,
+            &quot;CLUSTER&quot;, &quot;COLLECTION&quot;, &quot;COLLID&quot;, &quot;COMMENT&quot;, &quot;CONCAT&quot;,
+            &quot;CONDITION&quot;, &quot;CONTAINS&quot;, &quot;COUNT_BIG&quot;, &quot;CURRENT_LC_CTYPE&quot;,
+            &quot;CURRENT_PATH&quot;, &quot;CURRENT_SERVER&quot;, &quot;CURRENT_TIMEZONE&quot;, &quot;CYCLE&quot;,
+            &quot;DATABASE&quot;, &quot;DAYS&quot;, &quot;DB2GENERAL&quot;, &quot;DB2GENRL&quot;, &quot;DB2SQL&quot;,
+            &quot;DBINFO&quot;, &quot;DEFAULTS&quot;, &quot;DEFINITION&quot;, &quot;DETERMINISTIC&quot;, &quot;DISALLOW&quot;,
+            &quot;DO&quot;, &quot;DSNHATTR&quot;, &quot;DSSIZE&quot;, &quot;DYNAMIC&quot;, &quot;EACH&quot;, &quot;EDITPROC&quot;, &quot;ELSEIF&quot;,
+            &quot;ENCODING&quot;, &quot;END-EXEC1&quot;, &quot;ERASE&quot;, &quot;EXCLUDING&quot;, &quot;EXIT&quot;, &quot;FENCED&quot;,
+            &quot;FIELDPROC&quot;, &quot;FILE&quot;, &quot;FINAL&quot;, &quot;FREE&quot;, &quot;FUNCTION&quot;, &quot;GENERAL&quot;,
+            &quot;GENERATED&quot;, &quot;GRAPHIC&quot;, &quot;HANDLER&quot;, &quot;HOLD&quot;, &quot;HOURS&quot;, &quot;IF&quot;,
+            &quot;INCLUDING&quot;, &quot;INCREMENT&quot;, &quot;INDEX&quot;, &quot;INHERIT&quot;, &quot;INOUT&quot;, &quot;INTEGRITY&quot;,
+            &quot;ISOBID&quot;, &quot;ITERATE&quot;, &quot;JAR&quot;, &quot;JAVA&quot;, &quot;LABEL&quot;, &quot;LC_CTYPE&quot;, &quot;LEAVE&quot;,
+            &quot;LINKTYPE&quot;, &quot;LOCALE&quot;, &quot;LOCATOR&quot;, &quot;LOCATORS&quot;, &quot;LOCK&quot;, &quot;LOCKMAX&quot;,
+            &quot;LOCKSIZE&quot;, &quot;LONG&quot;, &quot;LOOP&quot;, &quot;MAXVALUE&quot;, &quot;MICROSECOND&quot;,
+            &quot;MICROSECONDS&quot;, &quot;MINUTES&quot;, &quot;MINVALUE&quot;, &quot;MODE&quot;, &quot;MODIFIES&quot;, &quot;MONTHS&quot;,
+            &quot;NEW&quot;, &quot;NEW_TABLE&quot;, &quot;NOCACHE&quot;, &quot;NOCYCLE&quot;, &quot;NODENAME&quot;, &quot;NODENUMBER&quot;,
+            &quot;NOMAXVALUE&quot;, &quot;NOMINVALUE&quot;, &quot;NOORDER&quot;, &quot;NULLS&quot;, &quot;NUMPARTS&quot;, &quot;OBID&quot;,
+            &quot;OLD&quot;, &quot;OLD_TABLE&quot;, &quot;OPTIMIZATION&quot;, &quot;OPTIMIZE&quot;, &quot;OUT&quot;, &quot;OVERRIDING&quot;,
+            &quot;PACKAGE&quot;, &quot;PARAMETER&quot;, &quot;PART&quot;, &quot;PARTITION&quot;, &quot;PATH&quot;, &quot;PIECESIZE&quot;,
+            &quot;PLAN&quot;, &quot;PRIQTY&quot;, &quot;PROGRAM&quot;, &quot;PSID&quot;, &quot;QUERYNO&quot;, &quot;READS&quot;, &quot;RECOVERY&quot;,
+            &quot;REFERENCING&quot;, &quot;RELEASE&quot;, &quot;RENAME&quot;, &quot;REPEAT&quot;, &quot;RESET&quot;, &quot;RESIGNAL&quot;,
+            &quot;RESTART&quot;, &quot;RESULT&quot;, &quot;RESULT_SET_LOCATOR&quot;, &quot;RETURN&quot;, &quot;RETURNS&quot;,
+            &quot;ROUTINE&quot;, &quot;ROW&quot;, &quot;RRN&quot;, &quot;RUN&quot;, &quot;SAVEPOINT&quot;, &quot;SCRATCHPAD&quot;,
+            &quot;SECONDS&quot;, &quot;SECQTY&quot;, &quot;SECURITY&quot;, &quot;SENSITIVE&quot;, &quot;SIGNAL&quot;, &quot;SIMPLE&quot;,
+            &quot;SOURCE&quot;, &quot;SPECIFIC&quot;, &quot;SQLID&quot;, &quot;STANDARD&quot;, &quot;START&quot;, &quot;STATIC&quot;,
+            &quot;STAY&quot;, &quot;STOGROUP&quot;, &quot;STORES&quot;, &quot;STYLE&quot;, &quot;SUBPAGES&quot;, &quot;SYNONYM&quot;,
+            &quot;SYSFUN&quot;, &quot;SYSIBM&quot;, &quot;SYSPROC&quot;, &quot;SYSTEM&quot;, &quot;TABLESPACE&quot;, &quot;TRIGGER&quot;,
+            &quot;UNDO&quot;, &quot;UNTIL&quot;, &quot;VALIDPROC&quot;, &quot;VARIABLE&quot;, &quot;VARIANT&quot;, &quot;VCAT&quot;,
+            &quot;VOLUMES&quot;, &quot;WHILE&quot;, &quot;WLM&quot;, &quot;YEARS&quot;,
+        }));
+
+        // reservedWordSet subset that CANNOT be used as valid column names
+        // (i.e., without surrounding them with double-quotes)
+<span class="nc" id="L179">        invalidColumnWordSet.addAll(Arrays.asList(new String[] {</span>
+            &quot;CONSTRAINT&quot;, &quot;END-EXEC&quot;, &quot;END-EXEC1&quot;,
+        }));
+
+
+<span class="nc" id="L184">        super.setBatchLimit(defaultBatchLimit);</span>
+
+<span class="nc" id="L186">        selectWordSet.add(&quot;WITH&quot;);</span>
+<span class="nc" id="L187">    }</span>
+
+    @Override
+    public boolean supportsRandomAccessResultSet(Select sel,
+        boolean forUpdate) {
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        return !forUpdate</span>
+<span class="nc bnc" id="L193" title="All 2 branches missed.">            &amp;&amp; super.supportsRandomAccessResultSet(sel, forUpdate);</span>
+    }
+
+    @Override
+    protected void appendSelectRange(SQLBuffer buf, long start, long end,
+        boolean subselect) {
+        // appends the literal range string, since DB2 is unable to handle
+        // a bound parameter for it
+        // do not generate FETCH FIRST clause for subselect
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        if (!subselect)</span>
+<span class="nc" id="L203">            buf.append(&quot; FETCH FIRST &quot;).append(Long.toString(end)).</span>
+<span class="nc" id="L204">                append(&quot; ROWS ONLY&quot;);</span>
+<span class="nc" id="L205">    }</span>
+
+    @Override
+    protected void appendSelect(SQLBuffer selectSQL, Object alias, Select sel,
+        int idx) {
+        // if this is a literal value, add a cast...
+<span class="nc" id="L211">        Object val = sel.getSelects().get(idx);</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        boolean toCast = (val instanceof Lit) &amp;&amp;</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">            ((Lit)val).getParseType() != Literal.TYPE_DATE &amp;&amp;</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">            ((Lit)val).getParseType() != Literal.TYPE_TIME &amp;&amp;</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">            ((Lit)val).getParseType() != Literal.TYPE_TIMESTAMP;</span>
+
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (toCast)</span>
+<span class="nc" id="L218">            selectSQL.append(&quot;CAST(&quot;);</span>
+
+        // ... and add the select per super's behavior...
+<span class="nc" id="L221">        super.appendSelect(selectSQL, alias, sel, idx);</span>
+
+        // ... and finish the cast
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        if (toCast) {</span>
+<span class="nc" id="L225">            Class&lt;?&gt; c = ((Lit) val).getType();</span>
+<span class="nc" id="L226">            int javaTypeCode = JavaTypes.getTypeCode(c);</span>
+<span class="nc" id="L227">            int jdbcTypeCode = getJDBCType(javaTypeCode, false);</span>
+<span class="nc" id="L228">            String typeName = getTypeName(jdbcTypeCode);</span>
+<span class="nc" id="L229">            selectSQL.append(&quot; AS &quot; + typeName);</span>
+
+            // if the literal is a string, use the default char col size
+            // in the cast statement.
+<span class="nc bnc" id="L233" title="All 2 branches missed.">            if (String.class.equals(c))</span>
+<span class="nc" id="L234">                selectSQL.append(&quot;(&quot; + getCastStringColumnSize(val) + &quot;)&quot;);</span>
+
+<span class="nc" id="L236">            selectSQL.append(&quot;)&quot;);</span>
+        }
+<span class="nc" id="L238">    }</span>
+
+    @Override
+    protected String getSequencesSQL(String schemaName, String sequenceName) {
+<span class="nc" id="L242">        return getSequencesSQL(DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L243">            DBIdentifier.newSequence(sequenceName));</span>
+    }
+
+    @Override
+    protected String getSequencesSQL(DBIdentifier schemaName, DBIdentifier sequenceName) {
+<span class="nc" id="L248">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L249">        buf.append(sequenceSQL);</span>
+<span class="nc bnc" id="L250" title="All 4 branches missed.">        if (!DBIdentifier.isNull(schemaName) || !DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L251">            buf.append(&quot; WHERE &quot;);</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">        if (!DBIdentifier.isNull(schemaName)) {</span>
+<span class="nc" id="L253">            buf.append(sequenceSchemaSQL);</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">            if (!DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L255">                buf.append(&quot; AND &quot;);</span>
+        }
+<span class="nc bnc" id="L257" title="All 2 branches missed.">        if (!DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L258">            buf.append(sequenceNameSQL);</span>
+<span class="nc" id="L259">        return buf.toString();</span>
+    }
+
+    @Override
+    public Connection decorate(Connection conn)
+        throws SQLException {
+        // some versions of the DB2 driver seem to default to
+        // READ_UNCOMMITTED, which will prevent locking from working
+        // (multiple SELECT ... FOR UPDATE statements are allowed on
+        // the same instance); if we have not overridden the
+        // transaction isolation in the configuration, default to
+        // TRANSACTION_READ_COMMITTED
+<span class="nc" id="L271">        conn = super.decorate(conn);</span>
+
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        if (conf.getTransactionIsolationConstant() == -1 &amp;&amp;</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">                conn.getTransactionIsolation() &lt;</span>
+                Connection.TRANSACTION_READ_COMMITTED)
+<span class="nc" id="L276">            conn.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);</span>
+
+<span class="nc" id="L278">        return conn;</span>
+    }
+
+    @Override
+    public void connectedConfiguration(Connection conn) throws SQLException {
+<span class="nc" id="L283">        super.connectedConfiguration(conn);</span>
+
+<span class="nc" id="L285">        DatabaseMetaData metaData = conn.getMetaData();</span>
+
+<span class="nc" id="L287">        String driverName = metaData.getDriverName();</span>
+<span class="nc bnc" id="L288" title="All 4 branches missed.">        if (driverName != null &amp;&amp; driverName.startsWith(&quot;IBM DB2&quot;))</span>
+<span class="nc" id="L289">            driverVendor = VENDOR_IBM;</span>
+        else
+<span class="nc" id="L291">            driverVendor = VENDOR_OTHER;</span>
+
+
+        // Determine the type of DB2 database
+        // First check for AS/400
+<span class="nc" id="L296">        getProductVersionMajorMinorForISeries();</span>
+
+<span class="nc bnc" id="L298" title="All 2 branches missed.">        if (versionLaterThan(0)) {</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">            if (isDB2ISeriesV5R3OrEarlier())</span>
+<span class="nc" id="L300">                db2ServerType = db2ISeriesV5R3OrEarlier;</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">            else if (isDB2ISeriesV5R4OrLater())</span>
+<span class="nc" id="L302">                db2ServerType = db2ISeriesV5R4OrLater;</span>
+        }
+
+<span class="nc bnc" id="L305" title="All 2 branches missed.">        if (db2ServerType == 0) {</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">            if (isJDBC3) {</span>
+<span class="nc" id="L307">                setMajorVersion(metaData.getDatabaseMajorVersion());</span>
+<span class="nc" id="L308">                setMinorVersion(metaData.getDatabaseMinorVersion());</span>
+            }
+            else
+<span class="nc" id="L311">                getProductVersionMajorMinor();</span>
+
+            // Determine the type of DB2 database for ZOS &amp; UDB
+<span class="nc bnc" id="L314" title="All 2 branches missed.">            if (isDB2UDBV81OrEarlier())</span>
+<span class="nc" id="L315">                db2ServerType = db2UDBV81OrEarlier;</span>
+<span class="nc bnc" id="L316" title="All 2 branches missed.">            else if (isDB2ZOSV8xOrLater())</span>
+<span class="nc" id="L317">                db2ServerType = db2ZOSV8xOrLater;</span>
+<span class="nc bnc" id="L318" title="All 2 branches missed.">            else if (isDB2UDBV82OrLater())</span>
+<span class="nc" id="L319">                db2ServerType = db2UDBV82OrLater;</span>
+        }
+
+        // verify that database product is supported
+<span class="nc bnc" id="L323" title="All 4 branches missed.">        if (db2ServerType == 0 || getMajorVersion() &lt; 0)</span>
+<span class="nc" id="L324">            throw new UnsupportedException(_loc.get(&quot;db-not-supported&quot;,</span>
+                new Object[] {databaseProductName, databaseProductVersion }));
+<span class="nc bnc" id="L326" title="All 2 branches missed.">        if (versionEqualOrLaterThan(9, 2)) {</span>
+<span class="nc" id="L327">            supportsLockingWithMultipleTables = true;</span>
+<span class="nc" id="L328">            supportsLockingWithInnerJoin = true;</span>
+<span class="nc" id="L329">            supportsLockingWithOuterJoin = true;</span>
+<span class="nc" id="L330">            forUpdateClause = &quot;WITH RR USE AND KEEP UPDATE LOCKS&quot;;</span>
+
+<span class="nc" id="L332">            supportsXMLColumn = versionEqualOrLaterThan(9, 0);</span>
+
+        }
+
+        // platform specific settings
+<span class="nc bnc" id="L337" title="All 4 branches missed.">        switch (db2ServerType) {</span>
+        case db2UDBV82OrLater:
+<span class="nc" id="L339">            lastGeneratedKeyQuery = &quot;SELECT IDENTITY_VAL_LOCAL() FROM &quot; + SYSDUMMY;</span>
+<span class="nc" id="L340">            break;</span>
+        case  db2ZOSV8xOrLater:
+            // DB2 Z/OS
+<span class="nc" id="L343">            characterColumnSize = 255;</span>
+<span class="nc" id="L344">            lastGeneratedKeyQuery = &quot;SELECT IDENTITY_VAL_LOCAL() FROM &quot; + SYSDUMMY;</span>
+<span class="nc" id="L345">            nextSequenceQuery = &quot;SELECT NEXTVAL FOR {0} FROM &quot; + SYSDUMMY;</span>
+            // allow users to set a non default sequenceSQL.
+<span class="nc bnc" id="L347" title="All 2 branches missed.">            if (defaultSequenceSQL.equals(sequenceSQL)){</span>
+<span class="nc" id="L348">	            sequenceSQL = &quot;SELECT SCHEMA AS SEQUENCE_SCHEMA, &quot;</span>
+	                + &quot;NAME AS SEQUENCE_NAME FROM SYSIBM.SYSSEQUENCES&quot;;
+
+<span class="nc bnc" id="L351" title="All 2 branches missed.">                if (log.isTraceEnabled())</span>
+<span class="nc" id="L352">                    log.trace(_loc.get(&quot;sequencesql-override&quot;, new Object[] {defaultSequenceSQL, sequenceSQL}));</span>
+            }
+<span class="nc" id="L354">            sequenceSchemaSQL = &quot;SCHEMA = ?&quot;;</span>
+<span class="nc" id="L355">            sequenceNameSQL = &quot;NAME = ?&quot;;</span>
+<span class="nc bnc" id="L356" title="All 2 branches missed.">            if (getMajorVersion() == 8) {</span>
+                // DB2 Z/OS Version 8: no bigint support, hence map Java
+                // long to decimal
+<span class="nc" id="L359">                bigintTypeName = &quot;DECIMAL(31,0)&quot;;</span>
+            }
+            break;
+        case db2ISeriesV5R3OrEarlier:
+        case db2ISeriesV5R4OrLater:
+<span class="nc" id="L364">            lastGeneratedKeyQuery = &quot;SELECT IDENTITY_VAL_LOCAL() FROM &quot; + SYSDUMMY;</span>
+<span class="nc" id="L365">            nextSequenceQuery = &quot;SELECT NEXTVAL FOR {0} FROM &quot; + SYSDUMMY;</span>
+<span class="nc" id="L366">            validationSQL = &quot;SELECT DISTINCT(CURRENT TIMESTAMP) FROM &quot;</span>
+                + &quot;QSYS2.SYSTABLES&quot;;
+            // allow users to set a non default sequenceSQL.
+<span class="nc bnc" id="L369" title="All 2 branches missed.">            if (defaultSequenceSQL.equals(sequenceSQL)){</span>
+<span class="nc" id="L370">	            sequenceSQL = &quot;SELECT SEQUENCE_SCHEMA, &quot;</span>
+	                + &quot;SEQUENCE_NAME FROM QSYS2.SYSSEQUENCES&quot;;
+
+<span class="nc bnc" id="L373" title="All 2 branches missed.">                if (log.isTraceEnabled())</span>
+<span class="nc" id="L374">                    log.trace(_loc.get(&quot;sequencesql-override&quot;, new Object[] {defaultSequenceSQL, sequenceSQL}));</span>
+            }
+<span class="nc" id="L376">            sequenceSchemaSQL = &quot;SEQUENCE_SCHEMA = ?&quot;;</span>
+<span class="nc" id="L377">            sequenceNameSQL = &quot;SEQUENCE_NAME = ?&quot;;</span>
+            // V5R4 and earlier systems do not support retrieval of generated keys
+<span class="nc bnc" id="L379" title="All 2 branches missed.">            if (isDB2ISeriesV5R4OrEarlier()) {</span>
+<span class="nc" id="L380">            	supportsGetGeneratedKeys = false;</span>
+            }
+
+            break;
+        }
+<span class="nc" id="L385">    }</span>
+
+
+    @Override
+    public boolean supportsIsolationForUpdate() {
+<span class="nc" id="L390">        return true;</span>
+    }
+
+    /**
+     * Get the update clause for the query based on the
+     * isolationLevel hints if it is for update.
+     * It also handles the UR hint when it is not for update.
+     */
+    @Override
+    protected String getForUpdateClause(JDBCFetchConfiguration fetch,
+        boolean isForUpdate, Select sel) {
+        int isolationLevel;
+        // For db2UDBV81OrEarlier and db2ISeriesV5R3OrEarlier:
+        // &quot;optimize for&quot; clause appears before &quot;for update&quot; clause.
+<span class="nc" id="L404">        StringBuilder forUpdateString = new StringBuilder(getOptimizeClause(sel));</span>
+        // Determine the isolationLevel; the fetch
+        // configuration data overrides the persistence.xml value
+<span class="nc bnc" id="L407" title="All 4 branches missed.">        if (fetch != null &amp;&amp; fetch.getIsolation() != -1)</span>
+<span class="nc" id="L408">            isolationLevel = fetch.getIsolation();</span>
+        else
+<span class="nc" id="L410">            isolationLevel = conf.getTransactionIsolationConstant();</span>
+
+<span class="nc bnc" id="L412" title="All 4 branches missed.">        if (fetch != null &amp;&amp; fetch.getReadLockLevel() &gt;=</span>
+            MixedLockLevels.LOCK_PESSIMISTIC_WRITE)
+<span class="nc" id="L414">            isolationLevel = Connection.TRANSACTION_SERIALIZABLE;</span>
+
+<span class="nc bnc" id="L416" title="All 2 branches missed.">        if (isForUpdate) {</span>
+<span class="nc bnc" id="L417" title="All 4 branches missed.">            switch (db2ServerType) {</span>
+            case db2ISeriesV5R3OrEarlier:
+            case db2UDBV81OrEarlier:
+<span class="nc bnc" id="L420" title="All 2 branches missed.">                if (isolationLevel == Connection.TRANSACTION_SERIALIZABLE)</span>
+<span class="nc" id="L421">                    forUpdateString.append(&quot; &quot;).append(forUpdateClause);</span>
+                else
+<span class="nc" id="L423">                    forUpdateString.append(&quot; &quot;).append(forUpdate).append(&quot; &quot;)</span>
+<span class="nc" id="L424">                        .append(withRSClause);</span>
+<span class="nc" id="L425">                break;</span>
+            case db2ZOSV8xOrLater:
+            case db2UDBV82OrLater:
+<span class="nc bnc" id="L428" title="All 2 branches missed.">                if (isolationLevel == Connection.TRANSACTION_SERIALIZABLE) {</span>
+<span class="nc" id="L429">                    forUpdateString.append(&quot; &quot;).append(forReadOnlyClause)</span>
+<span class="nc" id="L430">                        .append(&quot; &quot;).append(withRRClause).append(&quot; &quot;).append(</span>
+                            useKeepUpdateLockClause);
+                } else {
+<span class="nc" id="L433">                    forUpdateString.append(&quot; &quot;).append(forReadOnlyClause)</span>
+<span class="nc" id="L434">                        .append(&quot; &quot;).append(withRSClause).append(&quot; &quot;).append(</span>
+                            useKeepUpdateLockClause);
+                }
+<span class="nc" id="L437">                break;</span>
+            case db2ISeriesV5R4OrLater:
+<span class="nc bnc" id="L439" title="All 2 branches missed.">                if (isolationLevel == Connection.TRANSACTION_SERIALIZABLE) {</span>
+<span class="nc" id="L440">                    forUpdateString.append(&quot; &quot;).append(forReadOnlyClause)</span>
+<span class="nc" id="L441">                        .append(&quot; &quot;).append(withRRClause).append(&quot; &quot;).append(</span>
+                            useKeepExclusiveLockClause);
+                } else {
+<span class="nc" id="L444">                    forUpdateString.append(&quot; &quot;).append(forReadOnlyClause)</span>
+<span class="nc" id="L445">                        .append(&quot; &quot;).append(withRSClause).append(&quot; &quot;).append(</span>
+                            useKeepExclusiveLockClause);
+                }
+<span class="nc" id="L448">                break;</span>
+            }
+        } else {
+<span class="nc bnc" id="L451" title="All 6 branches missed.">        	if ( fetch != null &amp;&amp; fetch.getIsolation() == Connection.TRANSACTION_READ_UNCOMMITTED</span>
+<span class="nc bnc" id="L452" title="All 2 branches missed.">        			&amp;&amp; sel != null &amp;&amp; sel.getParent() == null) { // i.e. not a subquery</span>
+<span class="nc" id="L453">	            forUpdateString.append(&quot; &quot;).append(forReadOnlyClause)</span>
+<span class="nc" id="L454">	            .append(&quot; &quot;).append(withURClause);</span>
+	    	}
+        }
+
+<span class="nc" id="L458">        return forUpdateString.toString();</span>
+    }
+
+    public boolean isDB2UDBV82OrLater() {
+<span class="nc bnc" id="L462" title="All 2 branches missed.">        return (databaseProductVersion.indexOf(&quot;SQL&quot;) != -1</span>
+<span class="nc bnc" id="L463" title="All 2 branches missed.">             || databaseProductName.indexOf(&quot;DB2/&quot;) != -1)</span>
+<span class="nc bnc" id="L464" title="All 2 branches missed.">             &amp;&amp; versionEqualOrLaterThan(8, 2);</span>
+    }
+
+    public boolean isDB2ZOSV8xOrLater() {
+<span class="nc bnc" id="L468" title="All 2 branches missed.">       return (databaseProductVersion.indexOf(&quot;DSN&quot;) != -1</span>
+<span class="nc bnc" id="L469" title="All 2 branches missed.">            || databaseProductName.indexOf(&quot;DB2/&quot;) == -1)</span>
+<span class="nc bnc" id="L470" title="All 2 branches missed.">            &amp;&amp; versionLaterThan(7);</span>
+    }
+
+    public boolean isDB2ISeriesV5R3OrEarlier() {
+<span class="nc bnc" id="L474" title="All 2 branches missed.">       return databaseProductName.indexOf(&quot;AS&quot;) != -1</span>
+<span class="nc bnc" id="L475" title="All 2 branches missed.">           &amp;&amp; versionEqualOrEarlierThan(5, 3);</span>
+    }
+
+    public boolean isDB2ISeriesV5R4OrLater() {
+<span class="nc bnc" id="L479" title="All 2 branches missed.">       return databaseProductName.indexOf(&quot;AS&quot;) != -1</span>
+<span class="nc bnc" id="L480" title="All 2 branches missed.">           &amp;&amp; versionEqualOrLaterThan(5, 4);</span>
+    }
+
+    public boolean isDB2ISeriesV5R4OrEarlier() {
+<span class="nc bnc" id="L484" title="All 2 branches missed.">        return databaseProductName.indexOf(&quot;AS&quot;) != -1</span>
+<span class="nc bnc" id="L485" title="All 2 branches missed.">            &amp;&amp; versionEqualOrEarlierThan(5, 4);</span>
+     }
+
+    public boolean isDB2UDBV81OrEarlier() {
+<span class="nc bnc" id="L489" title="All 2 branches missed.">        return (databaseProductVersion.indexOf(&quot;SQL&quot;) != -1</span>
+<span class="nc bnc" id="L490" title="All 2 branches missed.">            || databaseProductName.indexOf(&quot;DB2/&quot;) != -1)</span>
+<span class="nc bnc" id="L491" title="All 2 branches missed.">            &amp;&amp; versionEqualOrEarlierThan(8,1);</span>
+    }
+
+    /** Get the version Major/Minor for the ISeries
+     */
+    private void getProductVersionMajorMinorForISeries() {
+        // ISeries    DBProdName                 DB2 UDB for AS/400
+        //   (Toolbox)DBProdVersion              05.04.0000 V5R4m0
+        // ISeries                               DB2 UDB for AS/400
+        //   (Native)                            V5R4M0
+        // new jcc    DBProdVersion              QSQ05040 or QSQ06010
+<span class="nc bnc" id="L502" title="All 2 branches missed.">        if (databaseProductName.indexOf(&quot;AS&quot;) != -1) {</span>
+            // default to V5R4
+<span class="nc" id="L504">            setMajorVersion(5);</span>
+<span class="nc" id="L505">            setMinorVersion(4);</span>
+<span class="nc" id="L506">            int index = databaseProductVersion.indexOf('V');</span>
+<span class="nc bnc" id="L507" title="All 2 branches missed.">            if (index != -1) {</span>
+<span class="nc" id="L508">                String s = databaseProductVersion.substring(index);</span>
+<span class="nc" id="L509">                s = s.toUpperCase(Locale.ENGLISH);</span>
+
+<span class="nc" id="L511">                StringTokenizer stringtokenizer = new StringTokenizer(s, &quot;VRM&quot;</span>
+                    , false);
+<span class="nc bnc" id="L513" title="All 2 branches missed.">                if (stringtokenizer.countTokens() == 3) {</span>
+<span class="nc" id="L514">                    String s1 = stringtokenizer.nextToken();</span>
+<span class="nc" id="L515">                    setMajorVersion(Integer.parseInt(s1));</span>
+<span class="nc" id="L516">                    String s2 =  stringtokenizer.nextToken();</span>
+<span class="nc" id="L517">                    setMinorVersion(Integer.parseInt(s2));</span>
+                }
+<span class="nc" id="L519">            } else {</span>
+<span class="nc" id="L520">                index = databaseProductVersion.indexOf('0');</span>
+<span class="nc bnc" id="L521" title="All 2 branches missed.">                if (index != -1) {</span>
+<span class="nc" id="L522">                    String s = databaseProductVersion.substring(index);</span>
+<span class="nc" id="L523">                    s = s.toUpperCase(Locale.ENGLISH);</span>
+
+<span class="nc" id="L525">                    StringTokenizer stringtokenizer = new StringTokenizer(s, &quot;0&quot;</span>
+                        , false);
+<span class="nc bnc" id="L527" title="All 2 branches missed.">                    if (stringtokenizer.countTokens() == 2) {</span>
+<span class="nc" id="L528">                        String s1 = stringtokenizer.nextToken();</span>
+<span class="nc" id="L529">                        setMajorVersion(Integer.parseInt(s1));</span>
+<span class="nc" id="L530">                        String s2 =  stringtokenizer.nextToken();</span>
+<span class="nc" id="L531">                        setMinorVersion(Integer.parseInt(s2));</span>
+                    }
+                }
+            }
+        }
+<span class="nc" id="L536">    }</span>
+
+    private void getProductVersionMajorMinor() {
+        // In case JDBC driver version is lower than 3
+        // use following info to determine Major and Minor
+        //                        CLI    vs      JCC
+        // ZDBV8 DBProdName       DB2            DB2
+        //       DBProdVersion    08.01.0005     DSN08015
+        // ZDBV9                  DB2            DB2
+        //                        09.01.0005     DSN09015
+        // WinV9                  DB2/NT         DB2/NT
+        //                        09.01.0000     SQL09010
+        // SolarisV9                             DB2/SUN64
+        //                                       SQL0901
+        // Linux                  DB2/LINUX      DB2/LINUX
+        //                        09.01.0000     SQL0901
+<span class="nc bnc" id="L552" title="All 2 branches missed.">        if (databaseProductVersion.indexOf(&quot;09&quot;) != -1) {</span>
+<span class="nc" id="L553">            setMajorVersion(9);</span>
+<span class="nc bnc" id="L554" title="All 2 branches missed.">            if (databaseProductVersion.indexOf(&quot;01&quot;) != -1) {</span>
+<span class="nc" id="L555">                setMinorVersion(1);</span>
+            }
+<span class="nc bnc" id="L557" title="All 2 branches missed.">        } else if (databaseProductVersion.indexOf(&quot;08&quot;) != -1) {</span>
+<span class="nc" id="L558">        	setMajorVersion(8);</span>
+<span class="nc" id="L559">        	setMinorVersion(2);</span>
+<span class="nc bnc" id="L560" title="All 2 branches missed.">            if (databaseProductVersion.indexOf(&quot;01&quot;) != -1) {</span>
+<span class="nc" id="L561">            	setMinorVersion(1);</span>
+            }
+        }
+<span class="nc" id="L564">    }</span>
+
+    protected String getOptimizeClause(Select sel) {
+<span class="nc bnc" id="L567" title="All 4 branches missed.">        if (sel != null &amp;&amp; sel.getExpectedResultCount() &gt; 0) {</span>
+<span class="nc" id="L568">            StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L569">            buf.append(&quot; &quot;).append(optimizeClause).append(&quot; &quot;)</span>
+<span class="nc" id="L570">                .append(String.valueOf(sel.getExpectedResultCount()))</span>
+<span class="nc" id="L571">                .append(&quot; &quot;).append(rowClause);</span>
+<span class="nc" id="L572">            return buf.toString();</span>
+        }
+
+<span class="nc" id="L575">        return &quot;&quot;;</span>
+    }
+
+    @Override
+    public OpenJPAException newStoreException(String msg, SQLException[] causes, Object failed) {
+<span class="nc bnc" id="L580" title="All 6 branches missed.">        if (appendExtendedExceptionText == true &amp;&amp; causes != null &amp;&amp; causes.length &gt; 0) {</span>
+<span class="nc" id="L581">            msg = appendExtendedExceptionMsg(msg, causes[0]);</span>
+        }
+<span class="nc" id="L583">        return super.newStoreException(msg, causes, failed);</span>
+    }
+
+    /**
+     *  Append exception information from SQLCA to the existing
+     *  exception message
+     */
+    private String appendExtendedExceptionMsg(String msg, SQLException sqle){
+<span class="nc" id="L591">       final String GETSQLCA =&quot;getSqlca&quot;;</span>
+       try {
+<span class="nc" id="L593">            Method sqlcaM2 = sqle.getNextException().getClass()</span>
+<span class="nc" id="L594">                             .getMethod(GETSQLCA,null);</span>
+<span class="nc" id="L595">            Object sqlca = sqlcaM2.invoke(sqle.getNextException(),</span>
+                                          new Object[] {});
+<span class="nc" id="L597">            Method  getSqlErrpMethd = sqlca.getClass().</span>
+<span class="nc" id="L598">            getMethod(&quot;getSqlErrp&quot;, null);</span>
+<span class="nc" id="L599">            Method  getSqlWarnMethd = sqlca.getClass().</span>
+<span class="nc" id="L600">            getMethod(&quot;getSqlWarn&quot;, null);</span>
+<span class="nc" id="L601">            Method  getSqlErrdMethd = sqlca.getClass().</span>
+<span class="nc" id="L602">            getMethod(&quot;getSqlErrd&quot;, null);</span>
+<span class="nc" id="L603">            StringBuilder errdStr = new StringBuilder();</span>
+
+<span class="nc" id="L605">            int[] errds = (int[]) getSqlErrdMethd.invoke(sqlca, new Object[]{});</span>
+<span class="nc bnc" id="L606" title="All 2 branches missed.">            for (int i = 0; i &lt; errds.length; i++)</span>
+<span class="nc bnc" id="L607" title="All 2 branches missed.">                errdStr.append(errdStr.length() &gt; 0 ? &quot;, &quot; : &quot;&quot;).</span>
+<span class="nc" id="L608">                    append(errds[i]);</span>
+<span class="nc" id="L609">            StringBuilder exceptionMsg = new StringBuilder();</span>
+<span class="nc" id="L610">            exceptionMsg.append(&quot;SQLCA OUTPUT&quot;);</span>
+<span class="nc" id="L611">            exceptionMsg.append(&quot;[Errp=&quot;);</span>
+<span class="nc" id="L612">            exceptionMsg.append(getSqlErrpMethd.invoke(sqlca, new Object[]{}));</span>
+<span class="nc" id="L613">            exceptionMsg.append(&quot;, Errd=&quot;);</span>
+<span class="nc" id="L614">            exceptionMsg.append(errdStr);</span>
+
+<span class="nc" id="L616">            String Warn = new String((char[]) getSqlWarnMethd.</span>
+<span class="nc" id="L617">                    invoke(sqlca, new Object[]{}));</span>
+<span class="nc bnc" id="L618" title="All 2 branches missed.">            if (Warn.trim().length() != 0) {</span>
+<span class="nc" id="L619">                exceptionMsg.append(&quot;, Warn=&quot;);</span>
+<span class="nc" id="L620">                exceptionMsg.append(Warn);</span>
+<span class="nc" id="L621">                exceptionMsg.append(&quot;]&quot;);</span>
+            } else {
+<span class="nc" id="L623">                exceptionMsg.append(&quot;]&quot;);</span>
+            }
+<span class="nc" id="L625">            msg = msg.concat(exceptionMsg.toString());</span>
+
+            // for batched execution failures, SQLExceptions are nested
+<span class="nc" id="L628">            SQLException sqle2 = sqle.getNextException();</span>
+<span class="nc bnc" id="L629" title="All 2 branches missed.">            while (sqle2 != null) {</span>
+<span class="nc" id="L630">                msg = msg.concat(&quot;\n&quot; + sqle2.getMessage());</span>
+<span class="nc" id="L631">                sqle2 = sqle2.getNextException();</span>
+            }
+
+<span class="nc" id="L634">            return msg;</span>
+<span class="nc" id="L635">        } catch (Throwable t) {</span>
+<span class="nc" id="L636">            return sqle.getMessage();</span>
+        }
+    }
+
+    public int getDb2ServerType() {
+<span class="nc" id="L641">        return db2ServerType;</span>
+    }
+
+    @Override
+    protected void appendLength(SQLBuffer buf, int type) {
+<span class="nc bnc" id="L646" title="All 2 branches missed.">        if (type == Types.VARCHAR)</span>
+<span class="nc" id="L647">            buf.append(&quot;(&quot;).append(Integer.toString(characterColumnSize)).</span>
+<span class="nc" id="L648">                append(&quot;)&quot;);</span>
+<span class="nc" id="L649">    }</span>
+
+    /**
+     * If this dictionary supports XML type,
+     * use this method to append xml predicate.
+     *
+     * @param buf the SQL buffer to write the comparison
+     * @param op the comparison operation to perform
+     * @param lhs the left hand side of the comparison
+     * @param rhs the right hand side of the comparison
+     * @param lhsxml indicates whether the left operand maps to xml
+     * @param rhsxml indicates whether the right operand maps to xml
+     */
+    @Override
+    public void appendXmlComparison(SQLBuffer buf, String op, FilterValue lhs,
+        FilterValue rhs, boolean lhsxml, boolean rhsxml) {
+<span class="nc" id="L665">        super.appendXmlComparison(buf, op, lhs, rhs, lhsxml, rhsxml);</span>
+<span class="nc bnc" id="L666" title="All 4 branches missed.">        if (lhsxml &amp;&amp; rhsxml)</span>
+<span class="nc" id="L667">            appendXmlComparison2(buf, op, lhs, rhs);</span>
+<span class="nc bnc" id="L668" title="All 2 branches missed.">        else if (lhsxml)</span>
+<span class="nc" id="L669">            appendXmlComparison1(buf, op, lhs, rhs);</span>
+        else
+<span class="nc" id="L671">            appendXmlComparison1(buf, op, rhs, lhs);</span>
+<span class="nc" id="L672">    }</span>
+
+    /**
+     * Append an xml comparison predicate.
+     *
+     * @param buf the SQL buffer to write the comparison
+     * @param op the comparison operation to perform
+     * @param lhs the left hand side of the comparison (maps to xml column)
+     * @param rhs the right hand side of the comparison
+     */
+    private void appendXmlComparison1(SQLBuffer buf, String op,
+            FilterValue lhs, FilterValue rhs) {
+<span class="nc" id="L684">        boolean castrhs = false;</span>
+<span class="nc" id="L685">        Class&lt;?&gt; rc = Filters.wrap(rhs.getType());</span>
+<span class="nc" id="L686">        int type = 0;</span>
+<span class="nc bnc" id="L687" title="All 2 branches missed.">        if (rhs.isConstant()) {</span>
+<span class="nc" id="L688">            type = getJDBCType(JavaTypes.getTypeCode(rc), false);</span>
+<span class="nc" id="L689">            castrhs = true;</span>
+        }
+
+<span class="nc" id="L692">        appendXmlExists(buf, lhs);</span>
+
+<span class="nc" id="L694">        buf.append(&quot; &quot;).append(op).append(&quot; &quot;);</span>
+
+<span class="nc" id="L696">        buf.append(&quot;$&quot;);</span>
+<span class="nc bnc" id="L697" title="All 2 branches missed.">        if (castrhs)</span>
+<span class="nc" id="L698">            buf.append(&quot;Parm&quot;);</span>
+        else
+<span class="nc" id="L700">            rhs.appendTo(buf);</span>
+
+<span class="nc" id="L702">        buf.append(&quot;]' PASSING &quot;);</span>
+<span class="nc" id="L703">        appendXmlVar(buf, lhs);</span>
+<span class="nc" id="L704">        buf.append(&quot;, &quot;);</span>
+
+<span class="nc bnc" id="L706" title="All 2 branches missed.">        if (castrhs)</span>
+<span class="nc" id="L707">            appendCast(buf, rhs, type);</span>
+        else
+<span class="nc" id="L709">            rhs.appendTo(buf);</span>
+
+<span class="nc" id="L711">        buf.append(&quot; AS \&quot;&quot;);</span>
+<span class="nc bnc" id="L712" title="All 2 branches missed.">        if (castrhs)</span>
+<span class="nc" id="L713">            buf.append(&quot;Parm&quot;);</span>
+        else
+<span class="nc" id="L715">            rhs.appendTo(buf);</span>
+<span class="nc" id="L716">        buf.append(&quot;\&quot;)&quot;);</span>
+<span class="nc" id="L717">    }</span>
+
+    /**
+     * Append an xml comparison predicate. (both operands map to xml column)
+     *
+     * @param buf the SQL buffer to write the comparison
+     * @param op the comparison operation to perform
+     * @param lhs the left hand side of the comparison (maps to xml column)
+     * @param rhs the right hand side of the comparison (maps to xml column)
+     */
+    private void appendXmlComparison2(SQLBuffer buf, String op,
+            FilterValue lhs, FilterValue rhs) {
+<span class="nc" id="L729">        appendXmlExists(buf, lhs);</span>
+
+<span class="nc" id="L731">        buf.append(&quot; &quot;).append(op).append(&quot; &quot;);</span>
+
+<span class="nc" id="L733">        buf.append(&quot;$&quot;).append(rhs.getColumnAlias(</span>
+<span class="nc" id="L734">            rhs.getFieldMapping().getColumns()[0])).</span>
+<span class="nc" id="L735">            append(&quot;/*/&quot;);</span>
+<span class="nc" id="L736">        rhs.appendTo(buf);</span>
+
+<span class="nc" id="L738">        buf.append(&quot;]' PASSING &quot;);</span>
+<span class="nc" id="L739">        appendXmlVar(buf, lhs);</span>
+<span class="nc" id="L740">        buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L741">        appendXmlVar(buf, rhs);</span>
+<span class="nc" id="L742">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L743">    }</span>
+
+    private void appendXmlVar(SQLBuffer buf, FilterValue val) {
+<span class="nc" id="L746">        buf.append(val.getColumnAlias(</span>
+<span class="nc" id="L747">            val.getFieldMapping().getColumns()[0])).</span>
+<span class="nc" id="L748">            append(&quot; AS &quot;).</span>
+<span class="nc" id="L749">            append(&quot;\&quot;&quot;).append(val.getColumnAlias(</span>
+<span class="nc" id="L750">            val.getFieldMapping().getColumns()[0])).</span>
+<span class="nc" id="L751">            append(&quot;\&quot;&quot;);</span>
+<span class="nc" id="L752">    }</span>
+
+    private void appendXmlExists(SQLBuffer buf, FilterValue val) {
+<span class="nc" id="L755">        buf.append(&quot;XMLEXISTS('&quot;);</span>
+<span class="nc" id="L756">        buf.append(&quot;$&quot;).append(val.getColumnAlias(</span>
+<span class="nc" id="L757">            val.getFieldMapping().getColumns()[0])).</span>
+<span class="nc" id="L758">            append(&quot;/*[&quot;);</span>
+<span class="nc" id="L759">        val.appendTo(buf);</span>
+<span class="nc" id="L760">    }</span>
+
+    /**
+     * add CAST for a scalar function where operand is a param
+     *
+     * @param func original string
+     * @param target substring to look for
+     * @param asString
+     * @return updated string (func)
+     */
+    private String addCastAsString(String func, String target,
+            String asString) {
+<span class="nc" id="L772">        String fstring = func;</span>
+<span class="nc bnc" id="L773" title="All 2 branches missed.">        if (func.indexOf(target) != -1) {</span>
+<span class="nc" id="L774">            fstring = StringUtil.replace(func, target, &quot;CAST(&quot; + target + asString + &quot;)&quot;);</span>
+        }
+<span class="nc" id="L776">        return fstring;</span>
+    }
+
+    /**
+     * add CAST for a function operator where operand is a param
+     *
+     * @param func function name
+     * @param val type
+     * @return updated string (func)
+     */
+    @Override
+    public String addCastAsType(String func, Val val) {
+<span class="nc" id="L788">        String fstring = null;</span>
+<span class="nc" id="L789">        String type = getTypeName(getJDBCType(JavaTypes.getTypeCode(val</span>
+<span class="nc" id="L790">            .getType()), false));</span>
+<span class="nc bnc" id="L791" title="All 2 branches missed.">        if (String.class.equals(val.getType()))</span>
+<span class="nc" id="L792">            type = type + &quot;(&quot; + getCastStringColumnSize(val) + &quot;)&quot;;</span>
+<span class="nc" id="L793">        fstring = &quot;CAST(? AS &quot; + type + &quot;)&quot;;</span>
+<span class="nc" id="L794">        return fstring;</span>
+    }
+
+    /**
+     * Return the batch limit. If the batchLimit is -1, change it to 100 for
+     * best performance
+     */
+    @Override
+    public int getBatchLimit() {
+<span class="nc" id="L803">        int limit = super.getBatchLimit();</span>
+<span class="nc bnc" id="L804" title="All 2 branches missed.">        if (limit == UNLIMITED) {</span>
+<span class="nc" id="L805">            limit = defaultBatchLimit;</span>
+<span class="nc bnc" id="L806" title="All 2 branches missed.">            if (log.isTraceEnabled())</span>
+<span class="nc" id="L807">                log.trace(_loc.get(&quot;batch_unlimit&quot;, String.valueOf(limit)));</span>
+        }
+<span class="nc" id="L809">        return limit;</span>
+    }
+
+    /**
+     * Return the correct CAST function syntax
+     *
+     * @param val operand of cast
+     * @param func original string
+     * @return a String with the correct CAST function syntax
+     */
+    @Override
+    public String getCastFunction(Val val, String func) {
+<span class="nc bnc" id="L821" title="All 4 branches missed.">        if (val instanceof Lit || val instanceof Param) {</span>
+<span class="nc bnc" id="L822" title="All 2 branches missed.">            if (func.indexOf(&quot;VARCHAR&quot;) == -1) {</span>
+<span class="nc" id="L823">                func = addCastAsString(func, &quot;{0}&quot;, &quot; AS VARCHAR(&quot; + varcharCastLength + &quot;)&quot;);</span>
+            }
+        }
+<span class="nc" id="L826">        return func;</span>
+    }
+
+    /**
+     * Return the correct CAST function syntax
+     *
+     * @param val operand of cast
+     * @param func original string
+     * @param col database column
+     * @return a String with the correct CAST function syntax
+     */
+    @Override
+    public String getCastFunction(Val val, String func, Column col) {
+<span class="nc" id="L839">        boolean doCast = false;</span>
+<span class="nc bnc" id="L840" title="All 4 branches missed.">        if (val instanceof Lit || val instanceof Param) {</span>
+<span class="nc" id="L841">            doCast = true;</span>
+        }
+        // cast anything not already a VARCHAR to VARCHAR
+<span class="nc bnc" id="L844" title="All 2 branches missed.">        if (col.getType() != Types.VARCHAR) {</span>
+<span class="nc" id="L845">            doCast = true;</span>
+        }
+<span class="nc bnc" id="L847" title="All 2 branches missed.">        if (doCast == true) {</span>
+<span class="nc bnc" id="L848" title="All 2 branches missed.">            if (func.indexOf(&quot;VARCHAR&quot;) == -1) {</span>
+<span class="nc" id="L849">                func = addCastAsString(func, &quot;{0}&quot;, &quot; AS VARCHAR(&quot; + varcharCastLength + &quot;)&quot;);</span>
+            }
+        }
+<span class="nc" id="L852">        return func;</span>
+    }
+
+    @Override
+    public void indexOf(SQLBuffer buf, FilterValue str, FilterValue find,
+            FilterValue start) {
+<span class="nc bnc" id="L858" title="All 2 branches missed.">        if (find.getValue() != null) { // non constants</span>
+<span class="nc" id="L859">            buf.append(&quot;LOCATE(CAST((&quot;);</span>
+<span class="nc" id="L860">            find.appendTo(buf);</span>
+<span class="nc" id="L861">            buf.append(&quot;) AS VARCHAR(1000)), &quot;);</span>
+        } else {
+            // this is a constant
+<span class="nc" id="L864">            buf.append(&quot;LOCATE(&quot;);</span>
+<span class="nc" id="L865">            find.appendTo(buf);</span>
+<span class="nc" id="L866">            buf.append(&quot;, &quot;);</span>
+        }
+<span class="nc bnc" id="L868" title="All 2 branches missed.">        if (str.getValue() != null) {</span>
+<span class="nc" id="L869">            buf.append(&quot;CAST((&quot;);</span>
+<span class="nc" id="L870">            str.appendTo(buf);</span>
+<span class="nc" id="L871">            buf.append(&quot;) AS VARCHAR(1000))&quot;);</span>
+        } else {
+<span class="nc" id="L873">            str.appendTo(buf);</span>
+        }
+<span class="nc bnc" id="L875" title="All 2 branches missed.">        if (start != null) {</span>
+<span class="nc bnc" id="L876" title="All 2 branches missed.">            if (start.getValue() != null) {</span>
+<span class="nc" id="L877">                buf.append(&quot;, CAST((&quot;);</span>
+<span class="nc" id="L878">                start.appendTo(buf);</span>
+<span class="nc" id="L879">                buf.append(&quot;) AS INTEGER)&quot;);</span>
+            } else {
+<span class="nc" id="L881">                buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L882">                start.appendTo(buf);</span>
+            }
+        }
+<span class="nc" id="L885">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L886">    }</span>
+
+    /**
+     * Cast the specified value to the specified type.
+     *
+     * @param buf the buffer to append the cast to
+     * @param val the value to cast
+     * @param type the type of the case, e.g. {@link Types#NUMERIC}
+     */
+    public void appendCast(SQLBuffer buf, FilterValue val, int type) {
+
+        // Convert the cast function: &quot;CAST({0} AS {1})&quot;
+<span class="nc" id="L898">        int firstParam = castFunction.indexOf(&quot;{0}&quot;);</span>
+<span class="nc" id="L899">        String pre = castFunction.substring(0, firstParam); // &quot;CAST(&quot;</span>
+<span class="nc" id="L900">        String mid = castFunction.substring(firstParam + 3);</span>
+<span class="nc" id="L901">        int secondParam = mid.indexOf(&quot;{1}&quot;);</span>
+        String post;
+<span class="nc bnc" id="L903" title="All 2 branches missed.">        if (secondParam &gt; -1) {</span>
+<span class="nc" id="L904">            post = mid.substring(secondParam + 3); // &quot;)&quot;</span>
+<span class="nc" id="L905">            mid = mid.substring(0, secondParam); // &quot; AS &quot;</span>
+        } else
+<span class="nc" id="L907">            post = &quot;&quot;;</span>
+
+        // No need to add CAST if the value is a constant
+<span class="nc bnc" id="L910" title="All 4 branches missed.">        if (val instanceof Lit || val instanceof Param) {</span>
+<span class="nc" id="L911">            buf.append(pre);</span>
+<span class="nc" id="L912">            val.appendTo(buf);</span>
+<span class="nc" id="L913">            buf.append(mid);</span>
+<span class="nc" id="L914">            buf.append(getTypeName(type));</span>
+<span class="nc" id="L915">            appendLength(buf, type);</span>
+<span class="nc" id="L916">            buf.append(post);</span>
+        } else {
+<span class="nc" id="L918">            val.appendTo(buf);</span>
+<span class="nc" id="L919">            String sqlString = buf.getSQL(false);</span>
+<span class="nc bnc" id="L920" title="All 2 branches missed.">            if (sqlString.endsWith(&quot;?&quot;)) {</span>
+                // case &quot;(?&quot; - convert to &quot;CAST(? AS type&quot;
+<span class="nc" id="L922">                String typeName = getTypeName(type);</span>
+<span class="nc bnc" id="L923" title="All 2 branches missed.">                if (String.class.equals(val.getType()))</span>
+<span class="nc" id="L924">                    typeName = typeName + &quot;(&quot; + getCastStringColumnSize(val) + &quot;)&quot;;</span>
+<span class="nc" id="L925">                String str = &quot;CAST(? AS &quot; + typeName + &quot;)&quot;;</span>
+<span class="nc" id="L926">                buf.replaceSqlString(sqlString.length() - 1,</span>
+<span class="nc" id="L927">                        sqlString.length(), str);</span>
+            }
+        }
+<span class="nc" id="L930">    }</span>
+
+    /**
+     * Create an index if necessary for some database tables
+     */
+    @Override
+    public void createIndexIfNecessary(Schema schema, String table,
+        Column pkColumn) {
+<span class="nc" id="L938">        createIndexIfNecessary(schema, DBIdentifier.newTable(table),</span>
+            pkColumn);
+<span class="nc" id="L940">    }</span>
+
+    @Override
+    public void createIndexIfNecessary(Schema schema, DBIdentifier table,
+            Column pkColumn) {
+<span class="nc bnc" id="L945" title="All 2 branches missed.">        if (db2ServerType == db2ZOSV8xOrLater) {</span>
+            // build the index for the sequence tables
+            // the index name will be the fully qualified table name + _IDX
+<span class="nc" id="L948">            Table tab = schema.getTable(table);</span>
+<span class="nc" id="L949">            DBIdentifier fullIdxId = tab.getFullIdentifier().clone();</span>
+<span class="nc" id="L950">            DBIdentifier unQualifiedName = DBIdentifier.append(fullIdxId.getUnqualifiedName(), &quot;IDX&quot;);</span>
+<span class="nc" id="L951">            fullIdxId.setName(getValidIndexName(unQualifiedName, tab));</span>
+<span class="nc" id="L952">            Index idx = tab.addIndex(fullIdxId);</span>
+<span class="nc" id="L953">            idx.setUnique(true);</span>
+<span class="nc" id="L954">            idx.addColumn(pkColumn);</span>
+        }
+<span class="nc" id="L956">    }</span>
+
+    @Override
+    public boolean isFatalException(int subtype, SQLException ex) {
+<span class="nc" id="L960">        String errorState = ex.getSQLState();</span>
+<span class="nc" id="L961">        int errorCode = ex.getErrorCode();</span>
+<span class="nc bnc" id="L962" title="All 4 branches missed.">        if (errorCode == -952 &amp;&amp; &quot;57014&quot;.equals(errorState))</span>
+<span class="nc" id="L963">            return false;</span>
+        /*
+         * Check if this Exception was generated by a lock timeout expiration.
+         * The following criteria are used to determine this:
+         *
+         * DB2 LUW Infocenter: SQLSTATE=57033 with reason code &quot;80&quot; indicates
+         * the statement failed due to timeout. DB2 for z/OS Stored Procedures:
+         * Through the CALL and Beyond, page 188: An ErrorCode of -913 with
+         * SQLERR 00C9008E means a timeout has occurred.
+         */
+<span class="nc bnc" id="L973" title="All 4 branches missed.">        if (subtype == StoreException.LOCK &amp;&amp; &quot;57033&quot;.equals(errorState)</span>
+<span class="nc bnc" id="L974" title="All 4 branches missed.">            &amp;&amp; ((ex.getMessage().indexOf(&quot;80&quot;) != -1)</span>
+<span class="nc bnc" id="L975" title="All 2 branches missed.">                || (errorCode == -913 &amp;&amp; ex.getMessage().contains(&quot;00C9008E&quot;)))) {</span>
+<span class="nc" id="L976">            return false;</span>
+        }
+<span class="nc bnc" id="L978" title="All 8 branches missed.">        if ((subtype == StoreException.QUERY &amp;&amp; &quot;57014&quot;.equals(errorState) &amp;&amp;</span>
+            (errorCode == -952 || errorCode == -905))) {
+<span class="nc" id="L980">            return false;</span>
+        }
+<span class="nc" id="L982">        return super.isFatalException(subtype, ex);</span>
+    }
+
+    @Override
+    protected void setDelimitedCase(DatabaseMetaData metaData) {
+<span class="nc" id="L987">        delimitedCase = SCHEMA_CASE_PRESERVE;</span>
+<span class="nc" id="L988">    }</span>
+
+    /**
+     * The Type 2 JDBC Driver may throw an SQLException when provided a non-
+     * zero timeout if we're connected to Z/OS. The SQLException should be
+     * logged but not thrown.
+     */
+    @Override
+    public void setQueryTimeout(PreparedStatement stmnt, int timeout)
+        throws SQLException {
+<span class="nc bnc" id="L998" title="All 2 branches missed.">        if (db2ServerType == db2ZOSV8xOrLater) {</span>
+            try {
+<span class="nc" id="L1000">                super.setQueryTimeout(stmnt, timeout);</span>
+            }
+<span class="nc" id="L1002">            catch (SQLException e) {</span>
+<span class="nc bnc" id="L1003" title="All 2 branches missed.">                if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L1004">                    log.trace(_loc.get(&quot;error-setting-query-timeout&quot;, timeout,</span>
+<span class="nc" id="L1005">                        e.getMessage()), e);</span>
+                }
+<span class="nc" id="L1007">            }</span>
+        }
+        else {
+<span class="nc" id="L1010">            super.setQueryTimeout(stmnt, timeout);</span>
+        }
+<span class="nc" id="L1012">    }</span>
+
+    /**
+     * Set the given value as a parameter to the statement.
+     */
+    @Override
+    public void setBytes(PreparedStatement stmnt, int idx, byte[] val,
+        Column col)
+        throws SQLException {
+        // for DB2, if the column was defined as CHAR for BIT DATA, then
+        // we want to use the setBytes in stead of the setBinaryStream
+<span class="nc bnc" id="L1023" title="All 2 branches missed.">        if (useSetBytesForBlobs</span>
+<span class="nc bnc" id="L1024" title="All 2 branches missed.">                || (!DBIdentifier.isNull(col.getTypeIdentifier()) &amp;&amp;</span>
+<span class="nc bnc" id="L1025" title="All 2 branches missed.">                col.getTypeIdentifier().getName().contains(&quot;BIT DATA&quot;))) {</span>
+<span class="nc" id="L1026">            stmnt.setBytes(idx, val);</span>
+        } else {
+<span class="nc" id="L1028">            setBinaryStream(stmnt, idx, new ByteArrayInputStream(val), val.length, col);</span>
+        }
+<span class="nc" id="L1030">    }</span>
+
+    /**
+     * Convert the specified column of the SQL ResultSet to the proper
+     * java type.
+     */
+    @Override
+    public byte[] getBytes(ResultSet rs, int column)
+        throws SQLException {
+<span class="nc bnc" id="L1039" title="All 2 branches missed.">        if (useGetBytesForBlobs) {</span>
+<span class="nc" id="L1040">            return rs.getBytes(column);</span>
+        }
+<span class="nc bnc" id="L1042" title="All 2 branches missed.">        if (useGetObjectForBlobs) {</span>
+<span class="nc" id="L1043">            return (byte[]) rs.getObject(column);</span>
+        }
+
+<span class="nc" id="L1046">        int type = rs.getMetaData().getColumnType(column);</span>
+<span class="nc bnc" id="L1047" title="All 2 branches missed.">        switch (type) {</span>
+            case Types.BLOB:
+<span class="nc" id="L1049">                Blob blob = getBlob(rs, column);</span>
+<span class="nc bnc" id="L1050" title="All 2 branches missed.">                if (blob == null) {</span>
+<span class="nc" id="L1051">                    return null;</span>
+                }
+
+<span class="nc" id="L1054">                int length = (int) blob.length();</span>
+<span class="nc bnc" id="L1055" title="All 2 branches missed.">                if (length == 0) {</span>
+<span class="nc" id="L1056">                    return null;</span>
+                }
+<span class="nc" id="L1058">                return blob.getBytes(1, length);</span>
+            case Types.BINARY:
+            default:
+<span class="nc" id="L1061">                return rs.getBytes(column);</span>
+        }
+    }
+
+    private int getCastStringColumnSize(Object val) {
+<span class="nc" id="L1066">        int colSize = characterColumnSize;</span>
+<span class="nc bnc" id="L1067" title="All 2 branches missed.">        if (val instanceof Lit) {</span>
+<span class="nc" id="L1068">            String literal = (String) ((Lit) val).getValue();</span>
+<span class="nc bnc" id="L1069" title="All 2 branches missed.">            if (literal != null) {</span>
+<span class="nc" id="L1070">                int literalLen = literal.length();</span>
+<span class="nc bnc" id="L1071" title="All 2 branches missed.">                if (literalLen &gt; characterColumnSize) {</span>
+<span class="nc" id="L1072">                    colSize = literalLen;</span>
+                }
+            }
+        }
+<span class="nc" id="L1076">        return colSize;</span>
+    }
+
+    @Override
+    public void insertBlobForStreamingLoad(Row row, Column col,
+            JDBCStore store, Object ob, Select sel) throws SQLException {
+<span class="nc bnc" id="L1082" title="All 2 branches missed.">        if (ob != null) {</span>
+<span class="nc" id="L1083">            row.setBinaryStream(col, (InputStream)ob, -1);</span>
+        } else {
+<span class="nc" id="L1085">            row.setNull(col);</span>
+        }
+<span class="nc" id="L1087">    }</span>
+
+    @Override
+    public void insertClobForStreamingLoad(Row row, Column col, Object ob)
+    throws SQLException {
+<span class="nc bnc" id="L1092" title="All 2 branches missed.">        if (ob != null) {</span>
+<span class="nc" id="L1093">            row.setCharacterStream(col, (Reader)ob, -1);</span>
+        } else {
+<span class="nc" id="L1095">            row.setNull(col);</span>
+        }
+<span class="nc" id="L1097">    }</span>
+
+    @Override
+    public void updateBlob(Select sel, JDBCStore store, InputStream is)
+        throws SQLException {
+        //NO-OP
+<span class="nc" id="L1103">    }</span>
+
+    @Override
+    public void updateClob(Select sel, JDBCStore store, Reader reader)
+        throws SQLException {
+        //NO-OP
+<span class="nc" id="L1109">    }</span>
+
+    /**
+     * Set the given date value as a parameter to the statement.
+     */
+    @Override
+    public void setDate(PreparedStatement stmnt, int idx, Date val, Column col)
+        throws SQLException {
+        // When column metadata is not available, DB2 on z/OS does not like the value produced
+        // by the default dictionary - java.util.Date is converted to java.sql.Timestamp.
+<span class="nc bnc" id="L1119" title="All 2 branches missed.">        if (db2ServerType == db2ZOSV8xOrLater) {</span>
+<span class="nc bnc" id="L1120" title="All 6 branches missed.">            if (col == null &amp;&amp; val != null &amp;&amp; &quot;java.util.Date&quot;.equals(val.getClass().getName())) {</span>
+<span class="nc" id="L1121">                setDate(stmnt, idx, new java.sql.Date(val.getTime()), null, col);</span>
+<span class="nc" id="L1122">                return;</span>
+            }
+        }
+<span class="nc" id="L1125">        super.setDate(stmnt, idx, val, col);</span>
+<span class="nc" id="L1126">    }</span>
+
+    public int getDB2MajorVersion() {
+<span class="nc" id="L1129">        return getMajorVersion();</span>
+    }
+
+    public int getDB2MinorVersion() {
+<span class="nc" id="L1133">        return getMinorVersion();</span>
+    }
+
+    @Override
+    public String getDefaultSchemaName()  {
+<span class="nc bnc" id="L1138" title="All 2 branches missed.">        if (defaultSchemaName == null) {</span>
+<span class="nc" id="L1139">            Connection conn = null;</span>
+<span class="nc" id="L1140">            Statement stmnt = null;</span>
+<span class="nc" id="L1141">            ResultSet rs = null;</span>
+            try {
+<span class="nc" id="L1143">                String str = &quot;SELECT CURRENT SCHEMA FROM &quot; + SYSDUMMY;</span>
+<span class="nc" id="L1144">                conn = getConnection();</span>
+<span class="nc bnc" id="L1145" title="All 2 branches missed.">                if (conn != null) {</span>
+<span class="nc" id="L1146">                    stmnt = conn.createStatement();</span>
+<span class="nc" id="L1147">                    rs = stmnt.executeQuery(str);</span>
+<span class="nc bnc" id="L1148" title="All 2 branches missed.">                    if (rs.next()) {</span>
+<span class="nc" id="L1149">                        String currSchema = rs.getString(1);</span>
+<span class="nc bnc" id="L1150" title="All 2 branches missed.">                        if (currSchema != null) {</span>
+<span class="nc" id="L1151">                            setDefaultSchemaName(currSchema.trim());</span>
+                        }
+<span class="nc" id="L1153">                    }</span>
+                } else {
+<span class="nc bnc" id="L1155" title="All 2 branches missed.">                    if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L1156">                        log.trace(_loc.get(&quot;can_not_get_current_schema&quot;, &quot;Unable to obtain a datasource&quot;));</span>
+                    }
+                }
+<span class="nc" id="L1159">            } catch (SQLException e) {</span>
+<span class="nc bnc" id="L1160" title="All 2 branches missed.">                if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L1161">                    log.trace(_loc.get(&quot;can_not_get_current_schema&quot;, e.getMessage()));</span>
+                }
+            } finally {
+<span class="nc bnc" id="L1164" title="All 2 branches missed.">                if (rs != null) {</span>
+                    try {
+<span class="nc" id="L1166">                        rs.close();</span>
+<span class="nc" id="L1167">                    } catch (SQLException se) {</span>
+                        // ignore
+<span class="nc" id="L1169">                    }</span>
+                }
+<span class="nc bnc" id="L1171" title="All 2 branches missed.">                if (stmnt != null) {</span>
+                    try {
+<span class="nc" id="L1173">                        stmnt.close();</span>
+<span class="nc" id="L1174">                    } catch (SQLException se) {</span>
+                        // ignore
+<span class="nc" id="L1176">                    }</span>
+                }
+<span class="nc bnc" id="L1178" title="All 2 branches missed.">                if (conn != null) {</span>
+                    try {
+<span class="nc" id="L1180">                        conn.close();</span>
+                    }
+<span class="nc" id="L1182">                    catch(SQLException se) {</span>
+                        // ignore
+<span class="nc" id="L1184">                    }</span>
+                }
+            }
+        }
+<span class="nc" id="L1188">        return defaultSchemaName;</span>
+    }
+
+    /**
+     * Obtain a connection from the configuration. Tries to use the jta-data-source first but falls back on the
+     * non-jta-data-source if no jta-data-source has been defined.
+     *
+     * In practice this method is only called by getDefaultSchemaName which in turn is only used by the schema tool.
+     *
+     * @throws SQLException If neither datasource is available.
+     * @return A connection which may be used to obtain the default schema name.
+     */
+    private Connection getConnection() throws SQLException {
+<span class="nc" id="L1201">    	DataSource  ds = null;</span>
+    	try {
+            // try to obtain a connection from the primary datasource
+<span class="nc" id="L1204">            ds = conf.getDataSource(null);</span>
+<span class="nc" id="L1205">    	} catch (UserException uex) {</span>
+<span class="nc" id="L1206">    	}</span>
+<span class="nc bnc" id="L1207" title="All 2 branches missed.">    	if (ds==null) {</span>
+        	try {
+                // use datasource 2 if available
+<span class="nc" id="L1210">                ds = conf.getDataSource2(null);</span>
+<span class="nc" id="L1211">        	} catch (UserException uex2) {</span>
+<span class="nc" id="L1212">        	}</span>
+        }
+<span class="nc bnc" id="L1214" title="All 2 branches missed.">        if (ds != null) {</span>
+<span class="nc" id="L1215">            return ds.getConnection();</span>
+        }
+<span class="nc" id="L1217">        return null;</span>
+    }
+
+    @Override
+    protected SQLBuffer toSelect(SQLBuffer select, JDBCFetchConfiguration fetch,
+        SQLBuffer tables, SQLBuffer where, SQLBuffer group,
+        SQLBuffer having, SQLBuffer order,
+        boolean distinct, boolean forUpdate, long start, long end,
+        Select sel) {
+<span class="nc bnc" id="L1226" title="All 2 branches missed.">    	if (!supportsRowNum) {</span>
+<span class="nc" id="L1227">    		return super.toSelect(select, fetch, tables, where, group, having, order,</span>
+    		        distinct, forUpdate, start, end, sel);
+    	}
+        // if no range, use standard select
+<span class="nc bnc" id="L1231" title="All 2 branches missed.">        if (!isUsingRange(start, end)) {</span>
+<span class="nc" id="L1232">            return super.toSelect(select, fetch, tables, where, group, having,</span>
+                order, distinct, forUpdate, 0, Long.MAX_VALUE, sel);
+        }
+
+        // if no skip, ordering, or distinct can use rownum directly
+<span class="nc" id="L1237">        SQLBuffer buf = new SQLBuffer(this);</span>
+<span class="nc bnc" id="L1238" title="All 2 branches missed.">        if (!requiresSubselectForRange(start, end, distinct, order)) {</span>
+<span class="nc bnc" id="L1239" title="All 4 branches missed.">            if (where != null &amp;&amp; !where.isEmpty())</span>
+<span class="nc" id="L1240">                buf.append(where).append(&quot; AND &quot;);</span>
+<span class="nc" id="L1241">            buf.append(&quot;ROWNUM &lt;= &quot;).appendValue(end);</span>
+<span class="nc" id="L1242">            return super.toSelect(select, fetch, tables, buf, group, having,</span>
+                order, distinct, forUpdate, 0, Long.MAX_VALUE, sel);
+        }
+
+        // if there is ordering, skip, or distinct we have to use subselects
+<span class="nc" id="L1247">        SQLBuffer newsel = super.toSelect(select, fetch, tables, where,</span>
+            group, having, order, distinct, forUpdate, 0, Long.MAX_VALUE,
+            sel);
+
+        // if no skip, can use single nested subselect
+<span class="nc bnc" id="L1252" title="All 2 branches missed.">        if (!isUsingOffset(start)) {</span>
+<span class="nc" id="L1253">            buf.append(getSelectOperation(fetch) + &quot; * FROM (&quot;);</span>
+<span class="nc" id="L1254">            buf.append(newsel);</span>
+<span class="nc" id="L1255">            buf.append(&quot;) WHERE ROWNUM &lt;= &quot;).appendValue(end);</span>
+<span class="nc" id="L1256">            return buf;</span>
+        }
+
+        // with a skip, we have to use a double-nested subselect to put
+        // where conditions on the rownum
+<span class="nc" id="L1261">        buf.append(getSelectOperation(fetch))</span>
+<span class="nc" id="L1262">           .append(&quot; * FROM (SELECT r.*, ROWNUM RNUM FROM (&quot;);</span>
+<span class="nc" id="L1263">        buf.append(newsel);</span>
+<span class="nc" id="L1264">        buf.append(&quot;) r&quot;);</span>
+<span class="nc bnc" id="L1265" title="All 2 branches missed.">        if (isUsingLimit(end))</span>
+<span class="nc" id="L1266">            buf.append(&quot; WHERE ROWNUM &lt;= &quot;).appendValue(end);</span>
+<span class="nc" id="L1267">        buf.append(&quot;) WHERE RNUM &gt; &quot;).appendValue(start);</span>
+<span class="nc" id="L1268">        return buf;</span>
+    }
+
+    /**
+     * Return true if the select with the given parameters needs a
+     * subselect to apply a range.
+     */
+    private boolean requiresSubselectForRange(long start, long end, boolean distinct, SQLBuffer order) {
+<span class="nc bnc" id="L1276" title="All 2 branches missed.">    	if (!isUsingRange(start, end))</span>
+<span class="nc" id="L1277">    		return false;</span>
+<span class="nc bnc" id="L1278" title="All 6 branches missed.">        return isUsingOffset(start) || distinct || isUsingOrderBy(order);</span>
+    }
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

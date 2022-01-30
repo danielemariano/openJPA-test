@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EmpressDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">EmpressDictionary.java</span></div><h1>EmpressDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Locale;
+
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Table;
+
+/**
+ * Dictionary for Empress using ODBC server combined with their
+ * type 2 driver. This dictionary may issues with other
+ * driver/topology configurations.
+ *  Empress does not allow multiple connections to read rows
+ * read in a transaction, effectively forcing pessimistic transactions
+ * regardless of the Optimistic setting. To allow users to use
+ * optimistic transactions in a multi-connection evironment, you
+ * must set the AllowConcurrentRead setting to true in addition
+ * to standard options.
+ *  Empress has the following additional limitations:
+ * &lt;ul&gt;
+ * &lt;li&gt;Foreign keys are quite limited in Empress and it is recommended
+ * that these be created by hand.&lt;/li&gt;
+ * &lt;li&gt;Batching can be unreliable. Using BatchLimit=0 is strongly
+ * recommended.&lt;/li&gt;
+ * &lt;li&gt;Using AllowConcurrentRead should be accompanied by
+ * SimulateLocking=true&lt;/li&gt;
+ * &lt;li&gt;Connections should be rolled back on return to ensure locks
+ * are released (see OpenJPA default DataSource documentation.&lt;/li&gt;
+ * &lt;li&gt;Certain outer joins requiring parameters in a subselect is not
+ * supported by Empress and may under certain configurations cause
+ * size () calls on query results and LRS fields to throw an exception.&lt;/li&gt;
+ * &lt;li&gt;Certain aggregate functions are not supported.&lt;/li&gt;
+ * &lt;/ul&gt;
+ */
+public class EmpressDictionary
+    extends DBDictionary {
+
+    /**
+     * This setting inserts &quot;BYPASS&quot; after every &quot;SELECT&quot;. This
+     * allows for multiple transactional reads of the same row
+     * from different connections at the expense of loss of
+     * pessimistic locking. Defaults to false.
+     */
+<span class="nc" id="L65">    public boolean allowConcurrentRead = false;</span>
+
+<span class="nc" id="L67">    public EmpressDictionary() {</span>
+<span class="nc" id="L68">        platform = &quot;Empress&quot;;</span>
+
+<span class="nc" id="L70">        validationSQL = &quot;SELECT DISTINCT today FROM sys_tables&quot;;</span>
+<span class="nc" id="L71">        joinSyntax = SYNTAX_TRADITIONAL;</span>
+<span class="nc" id="L72">        toUpperCaseFunction = &quot;TOUPPER({0})&quot;;</span>
+<span class="nc" id="L73">        toLowerCaseFunction = &quot;TOLOWER({0})&quot;;</span>
+
+<span class="nc" id="L75">        supportsDeferredConstraints = false;</span>
+<span class="nc" id="L76">        requiresAliasForSubselect = true;</span>
+<span class="nc" id="L77">        maxTableNameLength = 28;</span>
+<span class="nc" id="L78">        maxColumnNameLength = 28;</span>
+<span class="nc" id="L79">        maxIndexNameLength = 28;</span>
+<span class="nc" id="L80">        maxConstraintNameLength = 28;</span>
+<span class="nc" id="L81">        schemaCase = SCHEMA_CASE_PRESERVE;</span>
+
+<span class="nc" id="L83">        useGetBytesForBlobs = true;</span>
+<span class="nc" id="L84">        useSetBytesForBlobs = true;</span>
+<span class="nc" id="L85">        useGetStringForClobs = true;</span>
+<span class="nc" id="L86">        useSetStringForClobs = true;</span>
+
+<span class="nc" id="L88">        clobTypeName = &quot;TEXT&quot;;</span>
+<span class="nc" id="L89">        blobTypeName = &quot;BULK&quot;;</span>
+<span class="nc" id="L90">        realTypeName = &quot;FLOAT(8)&quot;;</span>
+<span class="nc" id="L91">        bigintTypeName = &quot;DECIMAL(38)&quot;;</span>
+<span class="nc" id="L92">        timestampTypeName = &quot;DATE&quot;;</span>
+<span class="nc" id="L93">        varcharTypeName = &quot;CHARACTER&quot;;</span>
+<span class="nc" id="L94">        tinyintTypeName = &quot;DOUBLE PRECISION&quot;;</span>
+<span class="nc" id="L95">        doubleTypeName = &quot;SMALLINT&quot;;</span>
+<span class="nc" id="L96">        bitTypeName = &quot;SMALLINT&quot;;</span>
+
+<span class="nc" id="L98">        fixedSizeTypeNameSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;TEXT&quot;, &quot;BULK&quot;, &quot;LONGFLOAT&quot;, &quot;INTEGER64&quot;, &quot;SHORTINTEGER&quot;,
+            &quot;LONGINTEGER&quot;,
+        }));
+<span class="nc" id="L102">    }</span>
+
+    @Override
+    public boolean isSystemIndex(String name, Table table) {
+<span class="nc" id="L106">        return name.toUpperCase(Locale.ENGLISH).startsWith(&quot;SYS_&quot;);</span>
+    }
+
+    @Override
+    public SQLBuffer toSelect(SQLBuffer selects, JDBCFetchConfiguration fetch,
+        SQLBuffer from, SQLBuffer where, SQLBuffer group,
+        SQLBuffer having, SQLBuffer order,
+        boolean distinct, boolean forUpdate, long startIdx, long endIdx) {
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (!allowConcurrentRead)</span>
+<span class="nc" id="L115">            return super.toSelect(selects, fetch, from, where, group,</span>
+                having, order, distinct, forUpdate, startIdx, endIdx);
+
+        // override to allow a &quot;BYPASS&quot; to be inserted post-&quot;select&quot;
+        // depending on allowConcurrentRead setting
+<span class="nc" id="L120">        SQLBuffer buf = new SQLBuffer(this);</span>
+<span class="nc" id="L121">        buf.append(&quot;SELECT BYPASS &quot;);</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        if (distinct)</span>
+<span class="nc" id="L123">            buf.append(&quot;DISTINCT &quot;);</span>
+<span class="nc" id="L124">        buf.append(selects).append(&quot; FROM &quot;).append(from);</span>
+
+<span class="nc bnc" id="L126" title="All 4 branches missed.">        if (where != null &amp;&amp; !where.isEmpty())</span>
+<span class="nc" id="L127">            buf.append(&quot; WHERE &quot;).append(where);</span>
+<span class="nc bnc" id="L128" title="All 4 branches missed.">        if (group != null &amp;&amp; !group.isEmpty())</span>
+<span class="nc" id="L129">            buf.append(&quot; GROUP BY &quot;).append(group);</span>
+<span class="nc bnc" id="L130" title="All 4 branches missed.">        if (having != null &amp;&amp; !having.isEmpty())</span>
+<span class="nc" id="L131">            buf.append(&quot; HAVING &quot;).append(having);</span>
+<span class="nc bnc" id="L132" title="All 4 branches missed.">        if (order != null &amp;&amp; !order.isEmpty())</span>
+<span class="nc" id="L133">            buf.append(&quot; ORDER BY &quot;).append(order);</span>
+<span class="nc" id="L134">        return buf;</span>
+    }
+
+    @Override
+    public String[] getDropColumnSQL(Column column) {
+        // empress wants dropped columns in the form: ALTER TABLE foo
+        // DELETE columnToDrop
+<span class="nc" id="L141">        return new String[]{ &quot;ALTER TABLE &quot;</span>
+<span class="nc" id="L142">            + getFullName(column.getTable(), false) + &quot; DELETE &quot; +</span>
+<span class="nc" id="L143">            getColumnDBName(column) };</span>
+    }
+
+    @Override
+    public void setFloat(PreparedStatement stmnt, int idx, float val,
+        Column col)
+        throws SQLException {
+        // empress seems to allow INFINITY to be stored, but not retrieved,
+        // which can prove to be difficult to handle
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        if (val == Float.POSITIVE_INFINITY) {</span>
+<span class="nc" id="L153">            val = Float.MAX_VALUE;</span>
+<span class="nc" id="L154">            storageWarning(new Float(Float.POSITIVE_INFINITY),</span>
+                new Float(val));
+<span class="nc bnc" id="L156" title="All 2 branches missed.">        } else if (val == Float.NEGATIVE_INFINITY) {</span>
+<span class="nc" id="L157">            val = Float.MIN_VALUE + 1;</span>
+<span class="nc" id="L158">            storageWarning(new Float(Float.NEGATIVE_INFINITY),</span>
+                new Float(val));
+        }
+<span class="nc" id="L161">        super.setFloat(stmnt, idx, val, col);</span>
+<span class="nc" id="L162">    }</span>
+
+    @Override
+    public void setDouble(PreparedStatement stmnt, int idx, double val,
+        Column col)
+        throws SQLException {
+        // empress seems to allow INFINITY to be stored, but not retrieved,
+        // which can prove to be difficult to handle
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        if (val == Double.POSITIVE_INFINITY) {</span>
+<span class="nc" id="L171">            val = Double.MAX_VALUE;</span>
+<span class="nc" id="L172">            storageWarning(new Double(Double.POSITIVE_INFINITY),</span>
+                new Double(val));
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        } else if (val == Double.NEGATIVE_INFINITY) {</span>
+<span class="nc" id="L175">            val = Double.MIN_VALUE + 1;</span>
+<span class="nc" id="L176">            storageWarning(new Double(Double.NEGATIVE_INFINITY),</span>
+                new Double(val));
+        }
+<span class="nc" id="L179">        super.setDouble(stmnt, idx, val, col);</span>
+<span class="nc" id="L180">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

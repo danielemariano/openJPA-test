@@ -1,0 +1,1624 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MappingRepository.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">MappingRepository.java</span></div><h1>MappingRepository.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.lang.reflect.Modifier;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.sql.Types;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.meta.strats.BlobValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.ByteArrayValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.CharArrayStreamValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.CharArrayValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.ClassNameDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.ClobValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.ElementEmbedValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.EmbedFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.EmbeddedClassStrategy;
+import org.apache.openjpa.jdbc.meta.strats.FlatClassStrategy;
+import org.apache.openjpa.jdbc.meta.strats.FullClassStrategy;
+import org.apache.openjpa.jdbc.meta.strats.HandlerCollectionTableFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.HandlerFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.HandlerHandlerMapTableFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.HandlerRelationMapTableFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.ImmutableValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.LobFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.MaxEmbeddedBlobFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.MaxEmbeddedByteArrayFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.MaxEmbeddedCharArrayFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.MaxEmbeddedClobFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.MultiColumnVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.
+        NanoPrecisionTimestampVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.NoneClassStrategy;
+import org.apache.openjpa.jdbc.meta.strats.NoneDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.NoneFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.NoneVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.NumberVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.ObjectIdClassStrategy;
+import org.apache.openjpa.jdbc.meta.strats.ObjectIdValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.PrimitiveFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.
+        RelationCollectionInverseKeyFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.RelationCollectionTableFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.RelationFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.RelationHandlerMapTableFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.RelationMapInverseKeyFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.RelationMapTableFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.
+        RelationRelationMapTableFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.StateComparisonVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.StringFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.SubclassJoinDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.SuperclassDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.SuperclassVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.TimestampVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.UntypedPCValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.ValueMapDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.VerticalClassStrategy;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.JoinSyntaxes;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.MetaDataRepository;
+import org.apache.openjpa.meta.Order;
+import org.apache.openjpa.meta.SequenceMetaData;
+import org.apache.openjpa.meta.ValueMetaData;
+import org.apache.openjpa.util.MetaDataException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Repository of object/relational mapping information.
+ *
+ * @author Abe White
+ */
+public class MappingRepository extends MetaDataRepository {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L112">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L113">        (MappingRepository.class);</span>
+
+<span class="nc" id="L115">    private transient DBDictionary _dict = null;</span>
+<span class="nc" id="L116">    private transient MappingDefaults _defaults = null;</span>
+
+    // object-&gt;queryresultmapping
+<span class="nc" id="L119">    private Map&lt;Object, QueryResultMapping&gt; _results = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L120">    private SchemaGroup _schema = null;</span>
+<span class="nc" id="L121">    private StrategyInstaller _installer = null;</span>
+
+    /**
+     * Default constructor.  Configure via
+     * {@link org.apache.openjpa.lib.conf.Configurable}.
+     */
+<span class="nc" id="L127">    public MappingRepository() {</span>
+<span class="nc" id="L128">        setValidate(VALIDATE_MAPPING, true);</span>
+<span class="nc" id="L129">    }</span>
+
+    /**
+     * Convenient access to dictionary for mappings.
+     */
+    public DBDictionary getDBDictionary() {
+<span class="nc" id="L135">        return _dict;</span>
+    }
+
+    /**
+     * Mapping defaults.
+     */
+    public MappingDefaults getMappingDefaults() {
+<span class="nc" id="L142">        return _defaults;</span>
+    }
+
+    /**
+     * Mapping default.
+     */
+    public void setMappingDefaults(MappingDefaults defaults) {
+<span class="nc" id="L149">        _defaults = defaults;</span>
+<span class="nc" id="L150">    }</span>
+
+    /**
+     * Representation of the database schema.
+     */
+    public SchemaGroup getSchemaGroup() {
+<span class="nc bnc" id="L156" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L157">            synchronized (this) {</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">                if (_schema == null)</span>
+<span class="nc" id="L159">                    _schema = ((JDBCConfiguration) getConfiguration()).getSchemaFactoryInstance().readSchema();</span>
+<span class="nc" id="L160">                return _schema;</span>
+            }
+        } else {
+<span class="nc bnc" id="L163" title="All 2 branches missed.">            if (_schema == null)</span>
+<span class="nc" id="L164">                _schema = ((JDBCConfiguration) getConfiguration()).getSchemaFactoryInstance().readSchema();</span>
+<span class="nc" id="L165">            return _schema;</span>
+        }
+    }
+
+    /**
+     * Representation of the database schema.
+     */
+    public void setSchemaGroup(SchemaGroup schema) {
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L174">            synchronized (this) {</span>
+<span class="nc" id="L175">                _schema = schema;</span>
+<span class="nc" id="L176">            }</span>
+        } else {
+<span class="nc" id="L178">            _schema = schema;</span>
+        }
+<span class="nc" id="L180">    }</span>
+
+    /**
+     * Installs mapping strategies on components.
+     */
+    public StrategyInstaller getStrategyInstaller() {
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L187">            synchronized (this) {</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">                if (_installer == null)</span>
+<span class="nc" id="L189">                    _installer = new RuntimeStrategyInstaller(this);</span>
+<span class="nc" id="L190">                return _installer;</span>
+            }
+        } else {
+<span class="nc bnc" id="L193" title="All 2 branches missed.">            if (_installer == null)</span>
+<span class="nc" id="L194">                _installer = new RuntimeStrategyInstaller(this);</span>
+<span class="nc" id="L195">            return _installer;</span>
+        }
+    }
+
+    /**
+     * Installs mapping strategies on components.
+     */
+    public void setStrategyInstaller(StrategyInstaller installer) {
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L204">            synchronized (this) {</span>
+<span class="nc" id="L205">                _installer = installer;</span>
+<span class="nc" id="L206">            }</span>
+        } else {
+<span class="nc" id="L208">            _installer = installer;</span>
+        }
+<span class="nc" id="L210">    }</span>
+
+    /**
+     * Return the query result mapping for the given name.
+     */
+    public QueryResultMapping getQueryResultMapping(Class&lt;?&gt; cls, String name, ClassLoader loader, boolean mustExist) {
+        QueryResultMapping res;
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L218">            synchronized (this) {</span>
+<span class="nc" id="L219">                res = getQueryResultMappingInternal(cls, name, loader);</span>
+<span class="nc" id="L220">            }</span>
+        } else {
+<span class="nc" id="L222">            res = getQueryResultMappingInternal(cls, name, loader);</span>
+        }
+<span class="nc bnc" id="L224" title="All 4 branches missed.">        if (res == null &amp;&amp; mustExist)</span>
+<span class="nc" id="L225">            throw new MetaDataException(_loc.get(&quot;no-query-res&quot;, cls, name));</span>
+<span class="nc" id="L226">        return res;</span>
+    }
+
+    /**
+     * Returned the query result mapping with the given name.
+     */
+    private QueryResultMapping getQueryResultMappingInternal(Class&lt;?&gt; cls, String name, ClassLoader envLoader) {
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L234">            return null;</span>
+
+        // check cache
+<span class="nc" id="L237">        Object key = getQueryResultKey(cls, name);</span>
+<span class="nc" id="L238">        QueryResultMapping res = _results.get(key);</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">        if (res != null)</span>
+<span class="nc" id="L240">            return res;</span>
+
+        // get metadata for class, which will find results in metadata file
+<span class="nc bnc" id="L243" title="All 4 branches missed.">        if (cls != null &amp;&amp; getMetaData(cls, envLoader, false) != null) {</span>
+<span class="nc" id="L244">            res = _results.get(key);</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">            if (res != null)</span>
+<span class="nc" id="L246">                return res;</span>
+        }
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if ((getSourceMode() &amp; MODE_QUERY) == 0)</span>
+<span class="nc" id="L249">            return null;</span>
+
+<span class="nc bnc" id="L251" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L252">            cls = getMetaDataFactory()</span>
+<span class="nc" id="L253">                    .getResultSetMappingScope(name, envLoader);</span>
+        // not in cache; load
+<span class="nc" id="L255">        getMetaDataFactory().load(cls, MODE_META | MODE_MAPPING, envLoader);</span>
+<span class="nc" id="L256">        return _results.get(key);</span>
+    }
+
+    /**
+     * Return all cached query result mappings.
+     */
+    public QueryResultMapping[] getQueryResultMappings() {
+<span class="nc bnc" id="L263" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L264">            synchronized (this) {</span>
+<span class="nc" id="L265">                Collection values = _results.values();</span>
+<span class="nc" id="L266">                return (QueryResultMapping[]) values.toArray(new QueryResultMapping[values.size()]);</span>
+            }
+        } else {
+<span class="nc" id="L269">            Collection values = _results.values();</span>
+<span class="nc" id="L270">            return (QueryResultMapping[]) values.toArray(new QueryResultMapping[values.size()]);</span>
+        }
+    }
+
+    /**
+     * Return the cached query result mapping with the given name, or null if
+     * none.
+     */
+    public QueryResultMapping getCachedQueryResultMapping(Class cls, String name) {
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L280">            synchronized (this) {</span>
+<span class="nc" id="L281">                return (QueryResultMapping) _results.get(getQueryResultKey(cls, name));</span>
+            }
+        } else {
+<span class="nc" id="L284">            return (QueryResultMapping) _results.get(getQueryResultKey(cls, name));</span>
+        }
+    }
+
+    /**
+     * Add a query result mapping.
+     */
+    public QueryResultMapping addQueryResultMapping(Class cls, String name) {
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L293">            synchronized (this) {</span>
+<span class="nc" id="L294">                return addQueryResultMappingInternal(cls, name);</span>
+            }
+        } else {
+<span class="nc" id="L297">            return addQueryResultMappingInternal(cls, name);</span>
+        }
+    }
+
+    private QueryResultMapping addQueryResultMappingInternal(Class cls, String name) {
+<span class="nc" id="L302">        QueryResultMapping res = new QueryResultMapping(name, this);</span>
+<span class="nc" id="L303">        res.setDefiningType(cls);</span>
+<span class="nc" id="L304">        _results.put(getQueryResultKey(res), res);</span>
+<span class="nc" id="L305">        return res;</span>
+    }
+
+    /**
+     * Remove a query result mapping.
+     */
+    public boolean removeQueryResultMapping(QueryResultMapping res) {
+<span class="nc bnc" id="L312" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L313">            synchronized (this) {</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">                return _results.remove(getQueryResultKey(res)) != null;</span>
+            }
+        } else {
+<span class="nc bnc" id="L317" title="All 2 branches missed.">            return _results.remove(getQueryResultKey(res)) != null;</span>
+        }
+    }
+
+    /**
+     * Remove a query result mapping.
+     */
+    public boolean removeQueryResultMapping(Class cls, String name) {
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L326">            synchronized (this) {</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">                if (name == null)</span>
+<span class="nc" id="L328">                    return false;</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">                return _results.remove(getQueryResultKey(cls, name)) != null;</span>
+            }
+        } else {
+<span class="nc bnc" id="L332" title="All 2 branches missed.">            if (name == null)</span>
+<span class="nc" id="L333">                return false;</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">            return _results.remove(getQueryResultKey(cls, name)) != null;</span>
+        }
+    }
+
+    /**
+     * Return a unique key for the given mapping.
+     */
+    private static Object getQueryResultKey(QueryResultMapping res) {
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        if (res == null)</span>
+<span class="nc" id="L343">            return null;</span>
+<span class="nc" id="L344">        return getQueryResultKey(res.getDefiningType(), res.getName());</span>
+    }
+
+    /**
+     * Return a unique key for the given class / name. The class argument
+     * can be null.
+     */
+    private static Object getQueryResultKey(Class&lt;?&gt; cls, String name) {
+<span class="nc" id="L352">        return getQueryKey(cls, name);</span>
+    }
+
+    public ClassMapping getMapping(Class&lt;?&gt; cls, ClassLoader envLoader,
+        boolean mustExist) {
+<span class="nc" id="L357">        return (ClassMapping) super.getMetaData(cls, envLoader, mustExist);</span>
+    }
+
+    public ClassMapping[] getMappings() {
+<span class="nc" id="L361">        return (ClassMapping[]) super.getMetaDatas();</span>
+    }
+
+    public ClassMapping getMapping(Object oid, ClassLoader envLoader,
+        boolean mustExist) {
+<span class="nc" id="L366">        return (ClassMapping) super.getMetaData(oid, envLoader, mustExist);</span>
+    }
+
+    public ClassMapping[] getImplementorMappings(Class&lt;?&gt; cls,
+        ClassLoader envLoader, boolean mustExist) {
+<span class="nc" id="L371">        return (ClassMapping[]) super.getImplementorMetaDatas(cls, envLoader,</span>
+            mustExist);
+    }
+
+    @Override
+    public void clear() {
+<span class="nc bnc" id="L377" title="All 2 branches missed.">        if (_locking) {</span>
+<span class="nc" id="L378">            synchronized (this) {</span>
+<span class="nc" id="L379">                super.clear();</span>
+<span class="nc" id="L380">                _schema = null;</span>
+<span class="nc" id="L381">                _results.clear();</span>
+<span class="nc" id="L382">            }</span>
+        } else {
+<span class="nc" id="L384">            super.clear();</span>
+<span class="nc" id="L385">            _schema = null;</span>
+<span class="nc" id="L386">            _results.clear();</span>
+        }
+<span class="nc" id="L388">    }</span>
+
+    @Override
+    protected void prepareMapping(ClassMetaData meta) {
+        // make sure superclass resolved first; resolving superclass may have
+        // resolved this mapping
+<span class="nc" id="L394">        ClassMapping mapping = (ClassMapping) meta;</span>
+<span class="nc" id="L395">        ClassMapping sup = mapping.getPCSuperclassMapping();</span>
+<span class="nc bnc" id="L396" title="All 4 branches missed.">        if (sup != null &amp;&amp; (mapping.getResolve() &amp; MODE_MAPPING) != 0)</span>
+<span class="nc" id="L397">            return;</span>
+
+        // if this mapping is not for a managed interface, ensure that if
+        // we have an inheritance hierarchy there is a default strategy
+        // applied to the root class
+<span class="nc bnc" id="L402" title="All 2 branches missed.">        if (!mapping.getDescribedType().isInterface() &amp;&amp;</span>
+<span class="nc bnc" id="L403" title="All 2 branches missed.">            !mapping.isEmbeddedOnly()) {</span>
+            // if an inheritance strategy has not been set on this mapping
+            // determine if needs one and if so, set it
+<span class="nc bnc" id="L406" title="All 2 branches missed.">            if (!hasInheritanceStrategy(mapping)) {</span>
+<span class="nc" id="L407">                ClassMapping baseMapping = findBaseClassMapping(mapping);</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">                if (baseMapping != null)</span>
+<span class="nc" id="L409">                    setDefaultInheritanceStrategy(baseMapping);</span>
+            }
+        }
+
+        // define superclass fields after mapping class, so we can tell whether
+        // the class is mapped and needs to redefine abstract superclass fields
+<span class="nc" id="L415">        getStrategyInstaller().installStrategy(mapping);</span>
+<span class="nc bnc" id="L416" title="All 2 branches missed.">        mapping.defineSuperclassFields(mapping.getJoinablePCSuperclassMapping()</span>
+            == null);
+
+        // resolve everything that doesn't involve relations to allow relation
+        // mappings to use the others as joinables
+<span class="nc" id="L421">        mapping.resolveNonRelationMappings();</span>
+<span class="nc" id="L422">    }</span>
+
+    @Override
+    protected ClassMetaData newClassMetaData(Class&lt;?&gt; type) {
+<span class="nc" id="L426">        return new ClassMapping(type, this);</span>
+    }
+
+    @Override
+    protected ClassMetaData[] newClassMetaDataArray(int length) {
+<span class="nc" id="L431">        return new ClassMapping[length];</span>
+    }
+
+    @Override
+    protected FieldMetaData newFieldMetaData(String name, Class&lt;?&gt; type,
+        ClassMetaData owner) {
+<span class="nc" id="L437">        return new FieldMapping(name, type, (ClassMapping) owner);</span>
+    }
+
+    @Override
+    protected FieldMetaData[] newFieldMetaDataArray(int length) {
+<span class="nc" id="L442">        return new FieldMapping[length];</span>
+    }
+
+    @Override
+    protected ClassMetaData newEmbeddedClassMetaData(ValueMetaData owner) {
+<span class="nc" id="L447">        return new ClassMapping(owner);</span>
+    }
+
+    @Override
+    protected ValueMetaData newValueMetaData(FieldMetaData owner) {
+<span class="nc" id="L452">        return new ValueMappingImpl((FieldMapping) owner);</span>
+    }
+
+    @Override
+    protected SequenceMetaData newSequenceMetaData(String name) {
+<span class="nc" id="L457">        return new SequenceMapping(name, this);</span>
+    }
+
+    @Override
+    protected Order newValueOrder(FieldMetaData owner, boolean asc) {
+<span class="nc" id="L462">        return new JDBCValueOrder((FieldMapping) owner, asc);</span>
+    }
+
+    @Override
+    protected Order newRelatedFieldOrder(FieldMetaData owner,
+        FieldMetaData rel, boolean asc) {
+<span class="nc" id="L468">        return new JDBCRelatedFieldOrder((FieldMapping) owner,</span>
+            (FieldMapping) rel, asc);
+    }
+
+    @Override
+    protected Order[] newOrderArray(int size) {
+<span class="nc" id="L474">        return new JDBCOrder[size];</span>
+    }
+
+    /**
+     * Create version metadata for the given class.
+     */
+    protected Version newVersion(ClassMapping cls) {
+<span class="nc" id="L481">        return new Version(cls);</span>
+    }
+
+    /**
+     * Create discriminator metadata for the given class.
+     */
+    protected Discriminator newDiscriminator(ClassMapping cls) {
+<span class="nc" id="L488">        return new Discriminator(cls);</span>
+    }
+
+    /**
+     * Create raw mapping info for the given instance.
+     */
+    protected ClassMappingInfo newMappingInfo(ClassMapping cls) {
+<span class="nc" id="L495">        ClassMappingInfo info = new ClassMappingInfo();</span>
+<span class="nc" id="L496">        info.setClassName(cls.getDescribedType().getName());</span>
+<span class="nc" id="L497">        return info;</span>
+    }
+
+    /**
+     * Create raw mapping info for the given instance.
+     */
+    protected FieldMappingInfo newMappingInfo(FieldMapping fm) {
+<span class="nc" id="L504">        return new FieldMappingInfo();</span>
+    }
+
+    /**
+     * Create raw mapping info for the given instance.
+     */
+    protected ValueMappingInfo newMappingInfo(ValueMapping vm) {
+<span class="nc" id="L511">        return new ValueMappingInfo();</span>
+    }
+
+    /**
+     * Create raw mapping info for the given instance.
+     */
+    protected VersionMappingInfo newMappingInfo(Version version) {
+<span class="nc" id="L518">        return new VersionMappingInfo();</span>
+    }
+
+    /**
+     * Create raw mapping info for the given instance.
+     */
+    protected DiscriminatorMappingInfo newMappingInfo(Discriminator disc) {
+<span class="nc" id="L525">        return new DiscriminatorMappingInfo();</span>
+    }
+
+    /**
+     * Instantiate the given class' named strategy, or return null if no
+     * named strategy.
+     */
+    protected ClassStrategy namedStrategy(ClassMapping cls) {
+<span class="nc" id="L533">        String name = cls.getMappingInfo().getStrategy();</span>
+<span class="nc" id="L534">        return instantiateClassStrategy(name, cls);</span>
+    }
+
+    /**
+     * Return the strategy for the given name.
+     */
+    protected ClassStrategy instantiateClassStrategy(String name,
+        ClassMapping cls) {
+<span class="nc bnc" id="L542" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L543">            return null;</span>
+<span class="nc bnc" id="L544" title="All 2 branches missed.">        if (NoneClassStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L545">            return NoneClassStrategy.getInstance();</span>
+
+<span class="nc" id="L547">        String props = Configurations.getProperties(name);</span>
+<span class="nc" id="L548">        name = Configurations.getClassName(name);</span>
+<span class="nc" id="L549">        Class&lt;?&gt; strat = null;</span>
+
+        // base and vertical strategies use same alias; differentiate on join
+<span class="nc bnc" id="L552" title="All 2 branches missed.">        if (FullClassStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L553">            strat = FullClassStrategy.class;</span>
+<span class="nc bnc" id="L554" title="All 2 branches missed.">        else if (FlatClassStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L555">            strat = FlatClassStrategy.class;</span>
+<span class="nc bnc" id="L556" title="All 2 branches missed.">        else if (VerticalClassStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L557">            strat = VerticalClassStrategy.class;</span>
+        try {
+<span class="nc bnc" id="L559" title="All 2 branches missed.">            if (strat == null)</span>
+<span class="nc" id="L560">                strat = JavaTypes.classForName(name, cls,</span>
+<span class="nc" id="L561">                    AccessController.doPrivileged(</span>
+<span class="nc" id="L562">                        J2DoPrivHelper.getClassLoaderAction(</span>
+                            ClassStrategy.class)), false);
+<span class="nc" id="L564">            ClassStrategy strategy =</span>
+<span class="nc" id="L565">                (ClassStrategy) AccessController.doPrivileged(</span>
+<span class="nc" id="L566">                    J2DoPrivHelper.newInstanceAction(strat));</span>
+<span class="nc" id="L567">            Configurations.configureInstance(strategy, getConfiguration(),</span>
+                props);
+<span class="nc" id="L569">            return strategy;</span>
+<span class="nc" id="L570">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L571" title="All 2 branches missed.">            if (e instanceof PrivilegedActionException)</span>
+<span class="nc" id="L572">                e = ((PrivilegedActionException) e).getException();</span>
+<span class="nc" id="L573">            throw new MetaDataException(_loc.get(&quot;bad-cls-strategy&quot;,</span>
+                cls, name), e);
+        }
+    }
+
+    /**
+     * Instantiate the given field's named strategy, or return null if no
+     * named strategy.
+     */
+    protected FieldStrategy namedStrategy(FieldMapping field,
+        boolean installHandlers) {
+<span class="nc" id="L584">        String name = field.getMappingInfo().getStrategy();</span>
+<span class="nc bnc" id="L585" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L586">            return null;</span>
+
+<span class="nc bnc" id="L588" title="All 2 branches missed.">        if (NoneFieldStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L589">            return NoneFieldStrategy.getInstance();</span>
+
+<span class="nc" id="L591">        String props = Configurations.getProperties(name);</span>
+<span class="nc" id="L592">        name = Configurations.getClassName(name);</span>
+        try {
+<span class="nc" id="L594">            Class&lt;?&gt; c = JavaTypes.classForName(name, field,</span>
+<span class="nc" id="L595">                AccessController.doPrivileged(</span>
+<span class="nc" id="L596">                    J2DoPrivHelper.getClassLoaderAction(FieldStrategy.class)), false);</span>
+<span class="nc bnc" id="L597" title="All 2 branches missed.">            if (FieldStrategy.class.isAssignableFrom(c)) {</span>
+<span class="nc" id="L598">                FieldStrategy strat = (FieldStrategy)</span>
+<span class="nc" id="L599">                    AccessController.doPrivileged(</span>
+<span class="nc" id="L600">                        J2DoPrivHelper.newInstanceAction(c));</span>
+<span class="nc" id="L601">                Configurations.configureInstance(strat, getConfiguration(),</span>
+                    props);
+<span class="nc" id="L603">                return strat;</span>
+            }
+
+            // must be named handler
+<span class="nc bnc" id="L607" title="All 2 branches missed.">            if (installHandlers) {</span>
+<span class="nc" id="L608">                ValueHandler vh = (ValueHandler) AccessController.doPrivileged(</span>
+<span class="nc" id="L609">                    J2DoPrivHelper.newInstanceAction(c));</span>
+<span class="nc" id="L610">                Configurations.configureInstance(vh, getConfiguration(),</span>
+                    props);
+<span class="nc" id="L612">                field.setHandler(vh);</span>
+            }
+<span class="nc" id="L614">            return new HandlerFieldStrategy();</span>
+<span class="nc" id="L615">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L616" title="All 2 branches missed.">            if (e instanceof PrivilegedActionException)</span>
+<span class="nc" id="L617">                e = ((PrivilegedActionException) e).getException();</span>
+<span class="nc" id="L618">            throw new MetaDataException(_loc.get(&quot;bad-field-strategy&quot;,</span>
+                field, name), e);
+        }
+    }
+
+    /**
+     * Instantiate the given discriminator's named strategy, or return null
+     * if no named strategy.
+     */
+    protected DiscriminatorStrategy namedStrategy(Discriminator discrim) {
+<span class="nc" id="L628">        String name = discrim.getMappingInfo().getStrategy();</span>
+<span class="nc bnc" id="L629" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L630">            return null;</span>
+
+        // if there is a named strategy present, discard it if it matches
+        // the base strategy, so that we won't create an independent instance
+<span class="nc" id="L634">        ClassMapping cls = discrim.getClassMapping();</span>
+<span class="nc bnc" id="L635" title="All 2 branches missed.">        while (cls.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L636">            cls = cls.getJoinablePCSuperclassMapping();</span>
+<span class="nc" id="L637">        Discriminator base = cls.getDiscriminator();</span>
+<span class="nc bnc" id="L638" title="All 4 branches missed.">        if (base != discrim &amp;&amp; base.getStrategy() != null</span>
+<span class="nc bnc" id="L639" title="All 2 branches missed.">            &amp;&amp; name.equals(base.getStrategy().getAlias()))</span>
+<span class="nc" id="L640">            return null;</span>
+
+<span class="nc" id="L642">        return instantiateDiscriminatorStrategy(name, discrim);</span>
+    }
+
+    /**
+     * Instantiate the given discriminator strategy.
+     */
+    protected DiscriminatorStrategy instantiateDiscriminatorStrategy
+        (String name, Discriminator discrim) {
+<span class="nc bnc" id="L650" title="All 2 branches missed.">        if (NoneDiscriminatorStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L651">            return NoneDiscriminatorStrategy.getInstance();</span>
+
+<span class="nc" id="L653">        String props = Configurations.getProperties(name);</span>
+<span class="nc" id="L654">        name = Configurations.getClassName(name);</span>
+<span class="nc" id="L655">        Class&lt;?&gt; strat = null;</span>
+
+<span class="nc bnc" id="L657" title="All 2 branches missed.">        if (ClassNameDiscriminatorStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L658">            strat = ClassNameDiscriminatorStrategy.class;</span>
+<span class="nc bnc" id="L659" title="All 2 branches missed.">        else if (ValueMapDiscriminatorStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L660">            strat = ValueMapDiscriminatorStrategy.class;</span>
+<span class="nc bnc" id="L661" title="All 2 branches missed.">        else if (SubclassJoinDiscriminatorStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L662">            strat = SubclassJoinDiscriminatorStrategy.class;</span>
+
+        try {
+<span class="nc bnc" id="L665" title="All 2 branches missed.">            if (strat == null)</span>
+<span class="nc" id="L666">                strat = JavaTypes.classForName(name,</span>
+<span class="nc" id="L667">                    discrim.getClassMapping(),</span>
+<span class="nc" id="L668">                    AccessController.doPrivileged(</span>
+<span class="nc" id="L669">                        J2DoPrivHelper.getClassLoaderAction(</span>
+                            DiscriminatorStrategy.class)), false);
+<span class="nc" id="L671">            DiscriminatorStrategy strategy = (DiscriminatorStrategy)</span>
+<span class="nc" id="L672">                AccessController.doPrivileged(</span>
+<span class="nc" id="L673">                    J2DoPrivHelper.newInstanceAction(strat));</span>
+<span class="nc" id="L674">            Configurations.configureInstance(strategy, getConfiguration(),</span>
+                props);
+<span class="nc" id="L676">            return strategy;</span>
+<span class="nc" id="L677">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L678" title="All 2 branches missed.">            if (e instanceof PrivilegedActionException)</span>
+<span class="nc" id="L679">                e = ((PrivilegedActionException) e).getException();</span>
+<span class="nc" id="L680">            throw new MetaDataException(_loc.get(&quot;bad-discrim-strategy&quot;,</span>
+<span class="nc" id="L681">                discrim.getClassMapping(), name), e);</span>
+        }
+    }
+
+    /**
+     * Instantiate the given version's named strategy, or return null
+     * if no named strategy.
+     */
+    protected VersionStrategy namedStrategy(Version version) {
+<span class="nc" id="L690">        String name = version.getMappingInfo().getStrategy();</span>
+<span class="nc bnc" id="L691" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L692">            return null;</span>
+
+        // if there is a named strategy present, discard it if it matches
+        // the base strategy, so that we won't create an independent instance
+<span class="nc" id="L696">        ClassMapping cls = version.getClassMapping();</span>
+<span class="nc bnc" id="L697" title="All 2 branches missed.">        while (cls.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L698">            cls = cls.getJoinablePCSuperclassMapping();</span>
+<span class="nc" id="L699">        Version base = cls.getVersion();</span>
+<span class="nc bnc" id="L700" title="All 4 branches missed.">        if (base != version &amp;&amp; base.getStrategy() != null</span>
+<span class="nc bnc" id="L701" title="All 2 branches missed.">            &amp;&amp; name.equals(base.getStrategy().getAlias()))</span>
+<span class="nc" id="L702">            return null;</span>
+
+<span class="nc" id="L704">        return instantiateVersionStrategy(name, version);</span>
+    }
+
+    /**
+     * Instantiate the given version strategy.
+     */
+    protected VersionStrategy instantiateVersionStrategy(String name,
+        Version version) {
+<span class="nc bnc" id="L712" title="All 2 branches missed.">        if (NoneVersionStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L713">            return NoneVersionStrategy.getInstance();</span>
+
+<span class="nc" id="L715">        String props = Configurations.getProperties(name);</span>
+<span class="nc" id="L716">        name = Configurations.getClassName(name);</span>
+<span class="nc" id="L717">        Class&lt;?&gt; strat = null;</span>
+
+<span class="nc bnc" id="L719" title="All 2 branches missed.">        if (NumberVersionStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L720">            strat = NumberVersionStrategy.class;</span>
+<span class="nc bnc" id="L721" title="All 2 branches missed.">        else if (MultiColumnVersionStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L722">        	strat = MultiColumnVersionStrategy.class;</span>
+<span class="nc bnc" id="L723" title="All 2 branches missed.">        else if (TimestampVersionStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L724">            strat = TimestampVersionStrategy.class;</span>
+<span class="nc bnc" id="L725" title="All 2 branches missed.">        else if (NanoPrecisionTimestampVersionStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L726">            strat = NanoPrecisionTimestampVersionStrategy.class;</span>
+<span class="nc bnc" id="L727" title="All 2 branches missed.">        else if (StateComparisonVersionStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L728">            strat = StateComparisonVersionStrategy.class;</span>
+
+        try {
+<span class="nc bnc" id="L731" title="All 2 branches missed.">            if (strat == null)</span>
+<span class="nc" id="L732">                strat = JavaTypes.classForName(name,</span>
+<span class="nc" id="L733">                    version.getClassMapping(),</span>
+<span class="nc" id="L734">                    AccessController.doPrivileged(</span>
+<span class="nc" id="L735">                        J2DoPrivHelper.getClassLoaderAction(</span>
+                            VersionStrategy.class)), false);
+<span class="nc" id="L737">        } catch (Exception e) {</span>
+<span class="nc" id="L738">            throw new MetaDataException(_loc.get(&quot;bad-version-strategy&quot;,</span>
+<span class="nc" id="L739">                version.getClassMapping(), name), e);</span>
+<span class="nc" id="L740">        }</span>
+
+<span class="nc" id="L742">        return instantiateVersionStrategy(strat, version, props);</span>
+    }
+
+    /**
+     * Instantiate the given version strategy.
+     */
+    protected VersionStrategy instantiateVersionStrategy(Class&lt;?&gt; strat,
+        Version version, String props) {
+        try {
+<span class="nc" id="L751">            VersionStrategy strategy = (VersionStrategy)</span>
+<span class="nc" id="L752">                AccessController.doPrivileged(</span>
+<span class="nc" id="L753">                    J2DoPrivHelper.newInstanceAction(strat));</span>
+<span class="nc" id="L754">            Configurations.configureInstance(strategy, getConfiguration(),</span>
+                props);
+<span class="nc" id="L756">            return strategy;</span>
+<span class="nc" id="L757">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L758" title="All 2 branches missed.">            if (e instanceof PrivilegedActionException)</span>
+<span class="nc" id="L759">                e = ((PrivilegedActionException) e).getException();</span>
+<span class="nc" id="L760">            throw new MetaDataException(_loc.get(&quot;bad-version-strategy&quot;,</span>
+<span class="nc" id="L761">                version.getClassMapping(), strat + &quot;&quot;), e);</span>
+        }
+    }
+
+    /**
+     * Determine the default strategy to use for the given class. Does
+     * not take into account the current strategy, if any.
+     */
+    protected ClassStrategy defaultStrategy(ClassMapping cls) {
+<span class="nc" id="L770">        return defaultStrategy(cls, getStrategyInstaller().isAdapting());</span>
+    }
+
+    /**
+     * Determine the default strategy to use for the given class. Does
+     * not take into account the current strategy, if any.
+     */
+    protected ClassStrategy defaultStrategy(ClassMapping cls,
+        boolean adapting) {
+<span class="nc" id="L779">        ValueMapping embed = cls.getEmbeddingMapping();</span>
+<span class="nc bnc" id="L780" title="All 2 branches missed.">        if (embed != null) {</span>
+            // superclass of embedded class isn't mapped
+<span class="nc bnc" id="L782" title="All 2 branches missed.">            if (embed.getType() != cls.getDescribedType()</span>
+<span class="nc" id="L783">                || embed.getFieldMapping().getStrategy()</span>
+<span class="nc bnc" id="L784" title="All 2 branches missed.">                == NoneFieldStrategy.getInstance())</span>
+<span class="nc" id="L785">                return NoneClassStrategy.getInstance();</span>
+<span class="nc bnc" id="L786" title="All 2 branches missed.">            if (embed.getTypeCode() == JavaTypes.OID)</span>
+<span class="nc" id="L787">                return new ObjectIdClassStrategy();</span>
+<span class="nc" id="L788">            return new EmbeddedClassStrategy();</span>
+        }
+<span class="nc bnc" id="L790" title="All 2 branches missed.">        if (cls.isEmbeddedOnly())</span>
+<span class="nc" id="L791">            return NoneClassStrategy.getInstance();</span>
+
+<span class="nc" id="L793">        Object strat = _defaults.getStrategy(cls, adapting);</span>
+<span class="nc bnc" id="L794" title="All 2 branches missed.">        if (strat instanceof String)</span>
+<span class="nc" id="L795">            return instantiateClassStrategy((String) strat, cls);</span>
+<span class="nc bnc" id="L796" title="All 2 branches missed.">        if (strat != null)</span>
+<span class="nc" id="L797">            return (ClassStrategy) strat;</span>
+
+        // see if there is a declared hierarchy strategy
+<span class="nc" id="L800">        ClassStrategy hstrat = null;</span>
+<span class="nc bnc" id="L801" title="All 4 branches missed.">        for (ClassMapping base = cls; base != null &amp;&amp; hstrat == null;) {</span>
+<span class="nc" id="L802">            hstrat = instantiateClassStrategy(base.getMappingInfo().</span>
+<span class="nc" id="L803">                getHierarchyStrategy(), cls);</span>
+<span class="nc" id="L804">            base = base.getMappedPCSuperclassMapping();</span>
+        }
+
+        // the full strategy as applied to a hierarchy is a
+        // table-per-concrete-class strategy, so don't map abstract types
+<span class="nc bnc" id="L809" title="All 2 branches missed.">        if (hstrat instanceof FullClassStrategy</span>
+<span class="nc bnc" id="L810" title="All 2 branches missed.">            &amp;&amp; !cls.isManagedInterface()</span>
+<span class="nc bnc" id="L811" title="All 2 branches missed.">            &amp;&amp; Modifier.isAbstract(cls.getDescribedType().getModifiers()))</span>
+<span class="nc" id="L812">            return NoneClassStrategy.getInstance();</span>
+
+<span class="nc" id="L814">        ClassMapping sup = cls.getMappedPCSuperclassMapping();</span>
+<span class="nc bnc" id="L815" title="All 2 branches missed.">        if (sup == null)</span>
+<span class="nc" id="L816">            return new FullClassStrategy();</span>
+<span class="nc bnc" id="L817" title="All 2 branches missed.">        if (hstrat != null)</span>
+<span class="nc" id="L818">            return hstrat;</span>
+<span class="nc" id="L819">        return new FlatClassStrategy();</span>
+    }
+
+    /**
+     * Determine the default strategy to use for the given field. Does
+     * not take into account the named or current strategy, if any. If a
+     * non-null strategy is returned, this method may as a side effect install
+     * value handlers on the field's value mappings.
+     */
+    protected FieldStrategy defaultStrategy(FieldMapping field,
+        boolean installHandlers) {
+<span class="nc" id="L830">        return defaultStrategy(field, installHandlers,</span>
+<span class="nc" id="L831">            getStrategyInstaller().isAdapting());</span>
+    }
+
+    /**
+     * Determine the default strategy to use for the given field. Does
+     * not take into account the named or current strategy, if any. If a
+     * non-null strategy is returned, this method may as a side effect install
+     * value handlers on the field's value mappings.
+     */
+    protected FieldStrategy defaultStrategy(FieldMapping field,
+        boolean installHandlers, boolean adapting) {
+        // not persistent?
+<span class="nc bnc" id="L843" title="All 2 branches missed.">        if (field.getManagement() != FieldMetaData.MANAGE_PERSISTENT</span>
+<span class="nc bnc" id="L844" title="All 2 branches missed.">            || field.isVersion())</span>
+<span class="nc" id="L845">            return NoneFieldStrategy.getInstance();</span>
+<span class="nc" id="L846">        if (field.getDefiningMapping().getStrategy() ==</span>
+<span class="nc bnc" id="L847" title="All 2 branches missed.">            NoneClassStrategy.getInstance())</span>
+<span class="nc" id="L848">            return NoneFieldStrategy.getInstance();</span>
+
+        // check for named handler first
+<span class="nc" id="L851">        ValueHandler handler = namedHandler(field);</span>
+<span class="nc bnc" id="L852" title="All 2 branches missed.">        if (handler != null) {</span>
+<span class="nc bnc" id="L853" title="All 2 branches missed.">            if (installHandlers)</span>
+<span class="nc" id="L854">                field.setHandler(handler);</span>
+<span class="nc" id="L855">            return new HandlerFieldStrategy();</span>
+        }
+
+        // check for an explicitly mapped strategy
+<span class="nc" id="L859">        Object explicitStrat = mappedStrategy(field, field.getType(), adapting);</span>
+<span class="nc bnc" id="L860" title="All 2 branches missed.">        if (explicitStrat != null) {</span>
+<span class="nc bnc" id="L861" title="All 2 branches missed.">            if (explicitStrat instanceof FieldStrategy)</span>
+<span class="nc" id="L862">                return (FieldStrategy) explicitStrat;</span>
+<span class="nc bnc" id="L863" title="All 2 branches missed.">            if (explicitStrat != null) {</span>
+<span class="nc bnc" id="L864" title="All 2 branches missed.">                if (installHandlers)</span>
+<span class="nc" id="L865">                    field.setHandler((ValueHandler) explicitStrat);</span>
+<span class="nc" id="L866">                return new HandlerFieldStrategy();</span>
+            }
+        }
+
+<span class="nc bnc" id="L870" title="All 2 branches missed.">        if (field.isSerialized()) {</span>
+<span class="nc bnc" id="L871" title="All 2 branches missed.">            if (_dict.maxEmbeddedBlobSize != -1) {</span>
+<span class="nc" id="L872">                handler = defaultHandler(field, adapting);</span>
+<span class="nc bnc" id="L873" title="All 2 branches missed.">                if (handler != null) {</span>
+<span class="nc bnc" id="L874" title="All 2 branches missed.">                    if (installHandlers)</span>
+<span class="nc" id="L875">                        field.setHandler(handler);</span>
+                }
+<span class="nc" id="L877">                return new MaxEmbeddedBlobFieldStrategy();</span>
+            }
+        }
+
+        // check for known field strategies
+<span class="nc bnc" id="L882" title="All 4 branches missed.">        if (!field.isSerialized() &amp;&amp; (field.getType() == byte[].class</span>
+<span class="nc bnc" id="L883" title="All 2 branches missed.">            || field.getType() == Byte[].class)) {</span>
+<span class="nc bnc" id="L884" title="All 2 branches missed.">            if (_dict.maxEmbeddedBlobSize != -1) {</span>
+<span class="nc" id="L885">                handler = defaultHandler(field, adapting);</span>
+<span class="nc bnc" id="L886" title="All 2 branches missed.">                if (handler != null) {</span>
+<span class="nc bnc" id="L887" title="All 2 branches missed.">                    if (installHandlers)</span>
+<span class="nc" id="L888">                        field.setHandler(handler);</span>
+                }
+<span class="nc" id="L890">                return new MaxEmbeddedByteArrayFieldStrategy();</span>
+            }
+<span class="nc bnc" id="L892" title="All 2 branches missed.">        } else if (!field.isSerialized()</span>
+<span class="nc bnc" id="L893" title="All 2 branches missed.">            &amp;&amp; (field.getType() == char[].class</span>
+<span class="nc bnc" id="L894" title="All 2 branches missed.">            || field.getType() == Character[].class)) {</span>
+<span class="nc bnc" id="L895" title="All 4 branches missed.">            if (_dict.maxEmbeddedClobSize != -1 &amp;&amp; isClob(field, false)) {</span>
+<span class="nc" id="L896">                handler = defaultHandler(field, adapting);</span>
+<span class="nc bnc" id="L897" title="All 2 branches missed.">                if (handler != null) {</span>
+<span class="nc bnc" id="L898" title="All 2 branches missed.">                    if (installHandlers)</span>
+<span class="nc" id="L899">                        field.setHandler(handler);</span>
+                }
+<span class="nc" id="L901">                return new MaxEmbeddedCharArrayFieldStrategy();</span>
+            }
+<span class="nc bnc" id="L903" title="All 2 branches missed.">        } else if (!field.isSerialized()) {</span>
+<span class="nc" id="L904">            FieldStrategy strat = defaultTypeStrategy(field, installHandlers,</span>
+                adapting);
+<span class="nc bnc" id="L906" title="All 2 branches missed.">            if (strat != null) {</span>
+<span class="nc" id="L907">                handler = defaultHandler(field, adapting);</span>
+<span class="nc bnc" id="L908" title="All 2 branches missed.">                if (handler != null) {</span>
+<span class="nc bnc" id="L909" title="All 2 branches missed.">                    if (installHandlers)</span>
+<span class="nc" id="L910">                        field.setHandler(handler);</span>
+                }
+<span class="nc" id="L912">                return strat;</span>
+            }
+        }
+
+        // check for default handler
+<span class="nc" id="L917">        handler = defaultHandler(field, adapting);</span>
+<span class="nc bnc" id="L918" title="All 2 branches missed.">        if (handler != null) {</span>
+<span class="nc bnc" id="L919" title="All 2 branches missed.">            if (installHandlers)</span>
+<span class="nc" id="L920">                field.setHandler(handler);</span>
+<span class="nc" id="L921">            return new HandlerFieldStrategy();</span>
+        }
+
+        // default to blob
+<span class="nc bnc" id="L925" title="All 2 branches missed.">        if (installHandlers) {</span>
+<span class="nc bnc" id="L926" title="All 2 branches missed.">            if (getLog().isWarnEnabled())</span>
+<span class="nc" id="L927">                getLog().warn(_loc.get(&quot;no-field-strategy&quot;, field));</span>
+<span class="nc" id="L928">            field.setSerialized(true);</span>
+        }
+<span class="nc bnc" id="L930" title="All 2 branches missed.">        if (_dict.maxEmbeddedBlobSize == -1) {</span>
+<span class="nc bnc" id="L931" title="All 2 branches missed.">            if (installHandlers)</span>
+<span class="nc" id="L932">                field.setHandler(BlobValueHandler.getInstance());</span>
+<span class="nc" id="L933">            return new HandlerFieldStrategy();</span>
+        }
+<span class="nc" id="L935">        return new MaxEmbeddedBlobFieldStrategy();</span>
+    }
+
+    /**
+     * Return the built-in strategy for the field's type, or null if none.
+     */
+    protected FieldStrategy defaultTypeStrategy(FieldMapping field,
+        boolean installHandlers, boolean adapting) {
+<span class="nc bnc" id="L943" title="All 7 branches missed.">        switch (field.getTypeCode()) {</span>
+            case JavaTypes.BOOLEAN:
+            case JavaTypes.BYTE:
+            case JavaTypes.CHAR:
+            case JavaTypes.DOUBLE:
+            case JavaTypes.FLOAT:
+            case JavaTypes.INT:
+            case JavaTypes.LONG:
+            case JavaTypes.SHORT:
+<span class="nc" id="L952">                return new PrimitiveFieldStrategy();</span>
+            case JavaTypes.STRING:
+<span class="nc bnc" id="L954" title="All 2 branches missed.">                if (!isClob(field, false))</span>
+<span class="nc" id="L955">                    return new StringFieldStrategy();</span>
+<span class="nc bnc" id="L956" title="All 2 branches missed.">                if (_dict.maxEmbeddedClobSize != -1)</span>
+<span class="nc" id="L957">                    return new MaxEmbeddedClobFieldStrategy();</span>
+                break;
+            case JavaTypes.PC:
+<span class="nc bnc" id="L960" title="All 2 branches missed.">                if (field.isEmbeddedPC())</span>
+<span class="nc" id="L961">                    return new EmbedFieldStrategy();</span>
+<span class="nc bnc" id="L962" title="All 2 branches missed.">                if (field.getTypeMapping().isMapped()</span>
+<span class="nc bnc" id="L963" title="All 2 branches missed.">                    || !useUntypedPCHandler(field))</span>
+<span class="nc" id="L964">                    return new RelationFieldStrategy();</span>
+                break;
+            case JavaTypes.ARRAY:
+            case JavaTypes.COLLECTION:
+<span class="nc" id="L968">                ValueMapping elem = field.getElementMapping();</span>
+<span class="nc" id="L969">                ValueHandler ehandler = namedHandler(elem);</span>
+<span class="nc bnc" id="L970" title="All 2 branches missed.">                if (ehandler == null)</span>
+<span class="nc" id="L971">                    ehandler = defaultHandler(elem);</span>
+<span class="nc bnc" id="L972" title="All 2 branches missed.">                if (ehandler != null)</span>
+<span class="nc" id="L973">                    return handlerCollectionStrategy(field, ehandler,</span>
+                        installHandlers);
+<span class="nc bnc" id="L975" title="All 2 branches missed.">                if (elem.getTypeCode() == JavaTypes.PC</span>
+<span class="nc bnc" id="L976" title="All 4 branches missed.">                    &amp;&amp; !elem.isSerialized() &amp;&amp; !elem.isEmbeddedPC()) {</span>
+<span class="nc bnc" id="L977" title="All 2 branches missed.">                    if (useInverseKeyMapping(field))</span>
+<span class="nc" id="L978">                        return new RelationCollectionInverseKeyFieldStrategy();</span>
+<span class="nc" id="L979">                    return new RelationCollectionTableFieldStrategy();</span>
+                }
+                break;
+            case JavaTypes.MAP:
+<span class="nc" id="L983">                ValueMapping key = field.getKeyMapping();</span>
+<span class="nc" id="L984">                ValueHandler khandler = namedHandler(key);</span>
+<span class="nc bnc" id="L985" title="All 2 branches missed.">                if (khandler == null)</span>
+<span class="nc" id="L986">                    khandler = defaultHandler(key);</span>
+<span class="nc" id="L987">                ValueMapping val = field.getElementMapping();</span>
+<span class="nc" id="L988">                ValueHandler vhandler = namedHandler(val);</span>
+<span class="nc bnc" id="L989" title="All 2 branches missed.">                if (vhandler == null)</span>
+<span class="nc" id="L990">                    vhandler = defaultHandler(val);</span>
+<span class="nc bnc" id="L991" title="All 2 branches missed.">                boolean krel = khandler == null</span>
+<span class="nc bnc" id="L992" title="All 2 branches missed.">                    &amp;&amp; key.getTypeCode() == JavaTypes.PC</span>
+<span class="nc bnc" id="L993" title="All 4 branches missed.">                    &amp;&amp; !key.isSerialized() &amp;&amp; !key.isEmbeddedPC();</span>
+<span class="nc bnc" id="L994" title="All 2 branches missed.">                boolean vrel = vhandler == null</span>
+<span class="nc bnc" id="L995" title="All 2 branches missed.">                    &amp;&amp; val.getTypeCode() == JavaTypes.PC</span>
+<span class="nc bnc" id="L996" title="All 4 branches missed.">                    &amp;&amp; !val.isSerialized() &amp;&amp; !val.isEmbeddedPC();</span>
+<span class="nc bnc" id="L997" title="All 4 branches missed.">                if (vrel &amp;&amp; key.getValueMappedBy() != null) {</span>
+<span class="nc bnc" id="L998" title="All 2 branches missed.">                    if (useInverseKeyMapping(field))</span>
+<span class="nc" id="L999">                        return new RelationMapInverseKeyFieldStrategy();</span>
+<span class="nc" id="L1000">                    return new RelationMapTableFieldStrategy();</span>
+                }
+                //TODO: in JPA 2.0 if MapKeyClass type is not specified
+                // an exception is thrown. In OpenJpa 1.x, the map will
+                // be serialized to a blob (the null value returned by
+                // this method will lead to a strategy to serialize
+                // the map).
+<span class="nc bnc" id="L1007" title="All 4 branches missed.">                if (!krel &amp;&amp; khandler == null)</span>
+<span class="nc" id="L1008">                    break;</span>
+<span class="nc bnc" id="L1009" title="All 4 branches missed.">                if (!vrel &amp;&amp; vhandler == null)</span>
+<span class="nc" id="L1010">                    break;</span>
+<span class="nc" id="L1011">                return handlerMapStrategy(field, khandler, vhandler, krel,</span>
+                    vrel, installHandlers);
+            case JavaTypes.INPUT_STREAM:
+            case JavaTypes.INPUT_READER:
+<span class="nc" id="L1015">                return new LobFieldStrategy();</span>
+        }
+<span class="nc" id="L1017">        return null;</span>
+    }
+
+    /**
+     * Return the collection strategy for the given element handler, or null
+     * if none.
+     */
+    protected FieldStrategy handlerCollectionStrategy(FieldMapping field,
+        ValueHandler ehandler, boolean installHandlers) {
+        // TODO: JPA 2.0 should ignore this flag and not to serialize
+<span class="nc" id="L1027">        if (getConfiguration().getCompatibilityInstance()</span>
+<span class="nc bnc" id="L1028" title="All 2 branches missed.">            .getStoreMapCollectionInEntityAsBlob())</span>
+<span class="nc" id="L1029">            return null;</span>
+<span class="nc bnc" id="L1030" title="All 2 branches missed.">        if (installHandlers)</span>
+<span class="nc" id="L1031">            field.getElementMapping().setHandler(ehandler);</span>
+<span class="nc" id="L1032">        return new HandlerCollectionTableFieldStrategy();</span>
+    }
+
+    /**
+     * Return the map strategy for the given key and value handlers / relations,
+     * or null if none.
+     */
+    protected FieldStrategy handlerMapStrategy(FieldMapping field,
+        ValueHandler khandler, ValueHandler vhandler, boolean krel,
+        boolean vrel,  boolean installHandlers) {
+        // TODO: JPA 2.0 should ignore this flag and not to serialize
+<span class="nc" id="L1043">        if (getConfiguration().getCompatibilityInstance()</span>
+<span class="nc bnc" id="L1044" title="All 2 branches missed.">            .getStoreMapCollectionInEntityAsBlob())</span>
+<span class="nc" id="L1045">            return null;</span>
+<span class="nc bnc" id="L1046" title="All 2 branches missed.">        if (installHandlers) {</span>
+<span class="nc" id="L1047">            field.getKeyMapping().setHandler(khandler);</span>
+<span class="nc" id="L1048">            field.getElementMapping().setHandler(vhandler);</span>
+        }
+<span class="nc bnc" id="L1050" title="All 4 branches missed.">        if (!krel &amp;&amp; !vrel)</span>
+<span class="nc" id="L1051">            return new HandlerHandlerMapTableFieldStrategy();</span>
+<span class="nc bnc" id="L1052" title="All 4 branches missed.">        if (!krel &amp;&amp; vrel)</span>
+<span class="nc" id="L1053">            return new HandlerRelationMapTableFieldStrategy();</span>
+<span class="nc bnc" id="L1054" title="All 4 branches missed.">        if (krel &amp;&amp; !vrel)</span>
+<span class="nc" id="L1055">            return new RelationHandlerMapTableFieldStrategy();</span>
+<span class="nc" id="L1056">        return new RelationRelationMapTableFieldStrategy();</span>
+    }
+
+    /**
+     * Use hints in mapping data to figure out whether the given relation
+     * field should use an inverse foreign key or an association table mapping.
+     */
+    private boolean useInverseKeyMapping(FieldMapping field) {
+<span class="nc" id="L1064">        FieldMapping mapped = field.getMappedByMapping();</span>
+<span class="nc bnc" id="L1065" title="All 2 branches missed.">        if (mapped != null) {</span>
+            //bi-/M-1/JoinTable ==&gt; join table strategy
+<span class="nc bnc" id="L1067" title="All 2 branches missed.">            if (isBiMTo1JT(field))</span>
+<span class="nc" id="L1068">                return false;</span>
+<span class="nc bnc" id="L1069" title="All 4 branches missed.">            if (mapped.getTypeCode() == JavaTypes.PC || mapped.getTypeCode() == JavaTypes.PC_UNTYPED)</span>
+<span class="nc" id="L1070">                return true;</span>
+<span class="nc bnc" id="L1071" title="All 2 branches missed.">            if (mapped.getElement().getTypeCode() == JavaTypes.PC)</span>
+<span class="nc" id="L1072">                return false;</span>
+<span class="nc" id="L1073">            throw new MetaDataException(_loc.get(&quot;bad-mapped-by&quot;, field,</span>
+                mapped));
+        }
+
+        // without a mapped-by, we have to look for clues as to the mapping.
+        // we assume that anything with element foreign key columns but no join
+        // columns or table uses an inverse foreign key, and anything else uses
+        // an association table
+<span class="nc" id="L1081">        FieldMappingInfo info = field.getMappingInfo();</span>
+<span class="nc" id="L1082">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc bnc" id="L1083" title="All 4 branches missed.">        boolean useInverseKeyMapping = DBIdentifier.isNull(info.getTableIdentifier()) &amp;&amp; info.getColumns().isEmpty()</span>
+<span class="nc bnc" id="L1084" title="All 2 branches missed.">            &amp;&amp; !elem.getValueInfo().getColumns().isEmpty();</span>
+
+        // JPA 2.0: non-default mapping: uni-/1-M/JoinColumn ==&gt; foreign key strategy
+<span class="nc bnc" id="L1087" title="All 2 branches missed.">        if (isUni1ToMFK(field)) {</span>
+<span class="nc" id="L1088">            return true;</span>
+        }
+<span class="nc" id="L1090">        return useInverseKeyMapping;</span>
+    }
+
+    public boolean isNonDefaultMappingAllowed() {
+<span class="nc" id="L1094">        OpenJPAConfiguration conf = getConfiguration();</span>
+<span class="nc" id="L1095">        return getMetaDataFactory().getDefaults().isNonDefaultMappingAllowed(conf);</span>
+    }
+
+    public boolean isUniMTo1JT(FieldMapping field) {
+<span class="nc bnc" id="L1099" title="All 2 branches missed.">        if (isNonDefaultMappingAllowed() &amp;&amp;</span>
+<span class="nc bnc" id="L1100" title="All 2 branches missed.">            field.getAssociationType() == FieldMetaData.MANY_TO_ONE &amp;&amp;</span>
+<span class="nc bnc" id="L1101" title="All 2 branches missed.">            hasJoinTable(field) &amp;&amp;</span>
+<span class="nc bnc" id="L1102" title="All 2 branches missed.">            !isBidirectional(field))  {</span>
+<span class="nc" id="L1103">            List&lt;Column&gt; cols = field.getElementMapping().getValueInfo().getColumns();</span>
+<span class="nc bnc" id="L1104" title="All 4 branches missed.">            if (cols != null &amp;&amp; cols.size() &gt; 0) {</span>
+<span class="nc" id="L1105">                field.getValueMapping().getValueInfo().setColumns(cols);</span>
+            }
+<span class="nc" id="L1107">            return true;</span>
+        }
+<span class="nc" id="L1109">        return false;</span>
+    }
+
+    public boolean isUni1To1JT(FieldMapping field) {
+<span class="nc bnc" id="L1113" title="All 2 branches missed.">        if (isNonDefaultMappingAllowed() &amp;&amp;</span>
+<span class="nc bnc" id="L1114" title="All 2 branches missed.">            field.getAssociationType() == FieldMetaData.ONE_TO_ONE &amp;&amp;</span>
+<span class="nc bnc" id="L1115" title="All 2 branches missed.">            hasJoinTable(field) &amp;&amp;</span>
+<span class="nc bnc" id="L1116" title="All 2 branches missed.">            !isBidirectional(field)) {</span>
+<span class="nc" id="L1117">            List&lt;Column&gt; cols = field.getElementMapping().getValueInfo().getColumns();</span>
+<span class="nc bnc" id="L1118" title="All 4 branches missed.">            if (cols != null &amp;&amp; cols.size() &gt; 0) {</span>
+<span class="nc" id="L1119">                field.getValueMapping().getValueInfo().setColumns(cols);</span>
+            }
+<span class="nc" id="L1121">            return true;</span>
+        }
+<span class="nc" id="L1123">        return false;</span>
+    }
+
+    public boolean isBi1To1JT(FieldMapping field) {
+<span class="nc bnc" id="L1127" title="All 2 branches missed.">        if (isNonDefaultMappingAllowed() &amp;&amp;</span>
+<span class="nc bnc" id="L1128" title="All 2 branches missed.">            field.getAssociationType() == FieldMetaData.ONE_TO_ONE &amp;&amp;</span>
+<span class="nc bnc" id="L1129" title="All 2 branches missed.">            hasJoinTable(field) &amp;&amp;</span>
+<span class="nc bnc" id="L1130" title="All 2 branches missed.">            isBidirectional(field)) {</span>
+<span class="nc" id="L1131">            List&lt;Column&gt; cols = field.getElementMapping().getValueInfo().getColumns();</span>
+<span class="nc bnc" id="L1132" title="All 4 branches missed.">            if (cols != null &amp;&amp; cols.size() &gt; 0) {</span>
+<span class="nc" id="L1133">                field.getValueMapping().getValueInfo().setColumns(cols);</span>
+            }
+<span class="nc" id="L1135">            return true;</span>
+        }
+<span class="nc" id="L1137">        return false;</span>
+    }
+
+    public boolean isUni1ToMFK(FieldMapping field) {
+<span class="nc bnc" id="L1141" title="All 2 branches missed.">        if (isNonDefaultMappingAllowed() &amp;&amp;</span>
+<span class="nc bnc" id="L1142" title="All 2 branches missed.">            field.getAssociationType() == FieldMetaData.ONE_TO_MANY &amp;&amp;</span>
+<span class="nc bnc" id="L1143" title="All 2 branches missed.">            hasJoinColumn(field) &amp;&amp;</span>
+<span class="nc bnc" id="L1144" title="All 2 branches missed.">            !isBidirectional(field)) {</span>
+<span class="nc" id="L1145">            field.getElementMapping().getValueInfo().setColumns(field.getValueInfo().getColumns());</span>
+<span class="nc" id="L1146">            return true;</span>
+        }
+<span class="nc" id="L1148">        return false;</span>
+    }
+
+    public boolean isBiMTo1JT(FieldMapping field) {
+<span class="nc" id="L1152">        FieldMapping mapped = field.getMappedByMapping();</span>
+<span class="nc bnc" id="L1153" title="All 2 branches missed.">        if (isNonDefaultMappingAllowed()) {</span>
+<span class="nc bnc" id="L1154" title="All 2 branches missed.">            if (field.getAssociationType() == FieldMetaData.ONE_TO_MANY ) {</span>
+<span class="nc bnc" id="L1155" title="All 4 branches missed.">                if (mapped != null &amp;&amp; hasJoinTable(mapped))</span>
+<span class="nc" id="L1156">                    return true;</span>
+<span class="nc bnc" id="L1157" title="All 2 branches missed.">            } else if (field.getAssociationType() == FieldMetaData.MANY_TO_ONE) {</span>
+<span class="nc bnc" id="L1158" title="All 2 branches missed.">                if (getBi_1ToM_JoinTableField(field) != null)</span>
+<span class="nc" id="L1159">                    return true;</span>
+            }
+        }
+<span class="nc" id="L1162">        return false;</span>
+    }
+
+    // return the inverse field of bidirectional many to one
+    // relation using join table strategy
+    public FieldMapping getBi_1ToM_JoinTableField(FieldMapping field) {
+<span class="nc bnc" id="L1168" title="All 2 branches missed.">        if (isNonDefaultMappingAllowed()) {</span>
+<span class="nc bnc" id="L1169" title="All 2 branches missed.">            if (field.getAssociationType() == FieldMetaData.ONE_TO_MANY) {</span>
+<span class="nc" id="L1170">                FieldMapping mappedBy = field.getMappedByMapping();</span>
+<span class="nc bnc" id="L1171" title="All 4 branches missed.">                if (mappedBy != null &amp;&amp; hasJoinTable(mappedBy))</span>
+<span class="nc" id="L1172">                    return field;</span>
+<span class="nc bnc" id="L1173" title="All 2 branches missed.">            } else if (field.getAssociationType() == FieldMetaData.MANY_TO_ONE) {</span>
+<span class="nc bnc" id="L1174" title="All 2 branches missed.">                if (!hasJoinTable(field))</span>
+<span class="nc" id="L1175">                    return null;</span>
+<span class="nc" id="L1176">                ClassMapping inverse = field.getValueMapping().getTypeMapping();</span>
+<span class="nc" id="L1177">                FieldMapping[] fmds = inverse.getFieldMappings();</span>
+<span class="nc bnc" id="L1178" title="All 2 branches missed.">                for (int i = 0; i &lt; fmds.length; i++) {</span>
+<span class="nc bnc" id="L1179" title="All 2 branches missed.">                    if (field == fmds[i].getMappedByMapping())</span>
+<span class="nc" id="L1180">                        return fmds[i];</span>
+                }
+            }
+        }
+<span class="nc" id="L1184">        return null;</span>
+    }
+
+    // return the owning field of bidirectional one to many
+    // relation using join table strategy
+    public FieldMapping getBi_MTo1_JoinTableField(FieldMapping field) {
+<span class="nc bnc" id="L1190" title="All 2 branches missed.">        if (isNonDefaultMappingAllowed()) {</span>
+<span class="nc bnc" id="L1191" title="All 2 branches missed.">            if (field.getAssociationType() == FieldMetaData.MANY_TO_ONE) {</span>
+<span class="nc bnc" id="L1192" title="All 2 branches missed.">                if (!hasJoinTable(field))</span>
+<span class="nc" id="L1193">                    return null;</span>
+<span class="nc bnc" id="L1194" title="All 2 branches missed.">                if (isBidirectional(field))</span>
+<span class="nc" id="L1195">                    return field;</span>
+<span class="nc bnc" id="L1196" title="All 2 branches missed.">             } else if (field.getAssociationType() == FieldMetaData.ONE_TO_MANY) {</span>
+<span class="nc" id="L1197">                FieldMapping mappedBy = field.getMappedByMapping();</span>
+<span class="nc bnc" id="L1198" title="All 4 branches missed.">                if (mappedBy != null &amp;&amp; hasJoinTable(mappedBy))</span>
+<span class="nc" id="L1199">                    return mappedBy;</span>
+            }
+        }
+<span class="nc" id="L1202">        return null;</span>
+    }
+
+    public boolean hasJoinColumn(FieldMapping field) {
+<span class="nc bnc" id="L1206" title="All 2 branches missed.">        boolean hasJoinColumn = (field.getValueInfo().getColumns().size() &gt; 0 ? true : false);</span>
+<span class="nc" id="L1207">        return hasJoinColumn;</span>
+    }
+
+    public boolean hasJoinTable(FieldMapping field) {
+<span class="nc bnc" id="L1211" title="All 2 branches missed.">        boolean hasJoinTable = !DBIdentifier.isNull(field.getMappingInfo().getTableIdentifier()) ? true : false;</span>
+<span class="nc" id="L1212">        return hasJoinTable;</span>
+    }
+
+    public boolean isBidirectional(FieldMapping field) {
+<span class="nc bnc" id="L1216" title="All 2 branches missed.">        if (field.getMappedByMapping() != null) return true;</span>
+<span class="nc" id="L1217">        int assoType = field.getAssociationType();</span>
+<span class="nc bnc" id="L1218" title="All 4 branches missed.">        if (assoType == FieldMetaData.ONE_TO_ONE ||</span>
+            assoType == FieldMetaData.MANY_TO_ONE) {
+<span class="nc" id="L1220">            ClassMapping inverse = field.getValueMapping().getTypeMapping();</span>
+<span class="nc" id="L1221">            FieldMapping[] fmds = inverse.getFieldMappings();</span>
+<span class="nc bnc" id="L1222" title="All 2 branches missed.">            for (int i = 0; i &lt; fmds.length; i++) {</span>
+<span class="nc bnc" id="L1223" title="All 2 branches missed.">                if (field == fmds[i].getMappedByMapping())</span>
+<span class="nc" id="L1224">                    return true;</span>
+            }
+        }
+<span class="nc" id="L1227">        return false;</span>
+    }
+
+    /**
+     * Check the given value against mapped strategies.
+     */
+    private Object mappedStrategy(ValueMapping val, Class&lt;?&gt; type,
+        boolean adapting) {
+<span class="nc bnc" id="L1235" title="All 4 branches missed.">        if (type == null || type == Object.class)</span>
+<span class="nc" id="L1236">            return null;</span>
+
+<span class="nc" id="L1238">        Object strat = _defaults.getStrategy(val, type, adapting);</span>
+
+        // recurse on superclass so that, for example, a registered handler
+        // for java.lang.Enum will work on all enums
+<span class="nc bnc" id="L1242" title="All 2 branches missed.">        if (strat == null)</span>
+<span class="nc" id="L1243">            return mappedStrategy(val, type.getSuperclass(), adapting);</span>
+<span class="nc bnc" id="L1244" title="All 2 branches missed.">        if (!(strat instanceof String))</span>
+<span class="nc" id="L1245">            return strat;</span>
+
+<span class="nc" id="L1247">        String name = (String) strat;</span>
+<span class="nc bnc" id="L1248" title="All 2 branches missed.">        if (NoneFieldStrategy.ALIAS.equals(name))</span>
+<span class="nc" id="L1249">            return NoneFieldStrategy.getInstance();</span>
+
+<span class="nc" id="L1251">        String props = Configurations.getProperties(name);</span>
+<span class="nc" id="L1252">        name = Configurations.getClassName(name);</span>
+        try {
+<span class="nc" id="L1254">            Class&lt;?&gt; c = JavaTypes.classForName(name, val,</span>
+<span class="nc" id="L1255">                AccessController.doPrivileged(</span>
+<span class="nc" id="L1256">                    J2DoPrivHelper.getClassLoaderAction(FieldStrategy.class)),false);</span>
+<span class="nc" id="L1257">            Object o = AccessController.doPrivileged(</span>
+<span class="nc" id="L1258">                J2DoPrivHelper.newInstanceAction(c));</span>
+<span class="nc" id="L1259">            Configurations.configureInstance(o, getConfiguration(), props);</span>
+<span class="nc" id="L1260">            return o;</span>
+<span class="nc" id="L1261">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L1262" title="All 2 branches missed.">            if (e instanceof PrivilegedActionException)</span>
+<span class="nc" id="L1263">                e = ((PrivilegedActionException) e).getException();</span>
+<span class="nc" id="L1264">            throw new MetaDataException(_loc.get(&quot;bad-mapped-strategy&quot;,</span>
+                val, name), e);
+        }
+    }
+
+    /**
+     * Instantiate the given value's named handler, or return null if no
+     * named handler.
+     */
+    protected ValueHandler namedHandler(ValueMapping val) {
+<span class="nc" id="L1274">        String name = val.getValueInfo().getStrategy();</span>
+<span class="nc bnc" id="L1275" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L1276">            return null;</span>
+
+<span class="nc" id="L1278">        String props = Configurations.getProperties(name);</span>
+<span class="nc" id="L1279">        name = Configurations.getClassName(name);</span>
+        try {
+<span class="nc" id="L1281">            Class&lt;?&gt; c = JavaTypes.classForName(name, val,</span>
+<span class="nc" id="L1282">                AccessController.doPrivileged(</span>
+<span class="nc" id="L1283">                    J2DoPrivHelper.getClassLoaderAction(ValueHandler.class)),false);</span>
+<span class="nc bnc" id="L1284" title="All 2 branches missed.">            if (ValueHandler.class.isAssignableFrom(c)) {</span>
+<span class="nc" id="L1285">                ValueHandler vh = (ValueHandler) AccessController.doPrivileged(</span>
+<span class="nc" id="L1286">                    J2DoPrivHelper.newInstanceAction(c));</span>
+<span class="nc" id="L1287">                Configurations.configureInstance(vh, getConfiguration(),</span>
+                    props);
+<span class="nc" id="L1289">                return vh;</span>
+            }
+<span class="nc" id="L1291">            return null; // named field strategy</span>
+<span class="nc" id="L1292">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L1293" title="All 2 branches missed.">            if (e instanceof PrivilegedActionException)</span>
+<span class="nc" id="L1294">                e = ((PrivilegedActionException) e).getException();</span>
+<span class="nc" id="L1295">            throw new MetaDataException(_loc.get(&quot;bad-value-handler&quot;,</span>
+                val, name), e);
+        }
+    }
+
+    /**
+     * Determine the default handler to use for the given value. Does
+     * not take into account the named handler, if any.
+     */
+    protected ValueHandler defaultHandler(ValueMapping val) {
+<span class="nc" id="L1305">        return defaultHandler(val, getStrategyInstaller().isAdapting());</span>
+    }
+
+    /**
+     * Determine the default handler to use for the given value. Does
+     * not take into account the named handler, if any.
+     */
+    protected ValueHandler defaultHandler(ValueMapping val, boolean adapting) {
+<span class="nc bnc" id="L1313" title="All 2 branches missed.">        if (val.isSerialized()) {</span>
+<span class="nc bnc" id="L1314" title="All 2 branches missed.">            if (_dict.maxEmbeddedBlobSize != -1)</span>
+<span class="nc" id="L1315">                warnMaxEmbedded(val, _dict.maxEmbeddedBlobSize);</span>
+<span class="nc" id="L1316">            return BlobValueHandler.getInstance();</span>
+        }
+
+<span class="nc" id="L1319">        Object handler = mappedStrategy(val, val.getType(), adapting);</span>
+<span class="nc bnc" id="L1320" title="All 2 branches missed.">        if (handler instanceof ValueHandler)</span>
+<span class="nc" id="L1321">            return (ValueHandler) handler;</span>
+
+<span class="nc bnc" id="L1323" title="All 2 branches missed.">        if (val.getType() == byte[].class</span>
+<span class="nc bnc" id="L1324" title="All 2 branches missed.">            || val.getType() == Byte[].class) {</span>
+<span class="nc bnc" id="L1325" title="All 2 branches missed.">            if (_dict.maxEmbeddedBlobSize != -1)</span>
+<span class="nc" id="L1326">                warnMaxEmbedded(val, _dict.maxEmbeddedBlobSize);</span>
+<span class="nc" id="L1327">            return ByteArrayValueHandler.getInstance();</span>
+        }
+<span class="nc bnc" id="L1329" title="All 2 branches missed.">        if (val.getType() == char[].class</span>
+<span class="nc bnc" id="L1330" title="All 2 branches missed.">            || val.getType() == Character[].class) {</span>
+<span class="nc bnc" id="L1331" title="All 2 branches missed.">            if (isClob(val, true))</span>
+<span class="nc" id="L1332">                return CharArrayStreamValueHandler.getInstance();</span>
+<span class="nc" id="L1333">            return CharArrayValueHandler.getInstance();</span>
+        }
+
+<span class="nc bnc" id="L1336" title="All 6 branches missed.">        switch (val.getTypeCode()) {</span>
+            case JavaTypes.BOOLEAN:
+            case JavaTypes.BYTE:
+            case JavaTypes.CHAR:
+            case JavaTypes.DOUBLE:
+            case JavaTypes.FLOAT:
+            case JavaTypes.INT:
+            case JavaTypes.LONG:
+            case JavaTypes.SHORT:
+            case JavaTypes.BOOLEAN_OBJ:
+            case JavaTypes.BYTE_OBJ:
+            case JavaTypes.CHAR_OBJ:
+            case JavaTypes.DOUBLE_OBJ:
+            case JavaTypes.FLOAT_OBJ:
+            case JavaTypes.INT_OBJ:
+            case JavaTypes.LONG_OBJ:
+            case JavaTypes.SHORT_OBJ:
+            case JavaTypes.BIGINTEGER:
+            case JavaTypes.BIGDECIMAL:
+            case JavaTypes.NUMBER:
+            case JavaTypes.DATE:
+            case JavaTypes.CALENDAR:
+            case JavaTypes.LOCALE:
+            case JavaTypes.LOCAL_DATE:
+            case JavaTypes.LOCAL_TIME:
+            case JavaTypes.LOCAL_DATETIME:
+            case JavaTypes.OFFSET_TIME:
+            case JavaTypes.OFFSET_DATETIME:
+<span class="nc" id="L1364">                return ImmutableValueHandler.getInstance();</span>
+            case JavaTypes.STRING:
+<span class="nc bnc" id="L1366" title="All 2 branches missed.">                if (isClob(val, true))</span>
+<span class="nc" id="L1367">                    return ClobValueHandler.getInstance();</span>
+<span class="nc" id="L1368">                return ImmutableValueHandler.getInstance();</span>
+            case JavaTypes.PC:
+<span class="nc bnc" id="L1370" title="All 2 branches missed.">                if (!val.getTypeMapping().isMapped()</span>
+<span class="nc bnc" id="L1371" title="All 2 branches missed.">                    &amp;&amp; useUntypedPCHandler(val))</span>
+<span class="nc" id="L1372">                    return UntypedPCValueHandler.getInstance();</span>
+                break;
+            case JavaTypes.PC_UNTYPED:
+<span class="nc" id="L1375">                return UntypedPCValueHandler.getInstance();</span>
+            case JavaTypes.OID:
+<span class="nc" id="L1377">                return new ObjectIdValueHandler();</span>
+        }
+<span class="nc" id="L1379">        if (!getConfiguration().getCompatibilityInstance()</span>
+<span class="nc bnc" id="L1380" title="All 2 branches missed.">            .getStoreMapCollectionInEntityAsBlob()</span>
+<span class="nc bnc" id="L1381" title="All 2 branches missed.">            &amp;&amp; val.isEmbeddedPC())</span>
+<span class="nc" id="L1382">            return new ElementEmbedValueHandler();</span>
+<span class="nc" id="L1383">        return null;</span>
+    }
+
+    /**
+     * Return true if we should use the generic untyped PC handler for the
+     * given unmapped relation.
+     */
+    private boolean useUntypedPCHandler(ValueMapping val) {
+<span class="nc" id="L1391">        ClassMapping rel = val.getTypeMapping();</span>
+<span class="nc bnc" id="L1392" title="All 2 branches missed.">        return rel.getIdentityType() == ClassMetaData.ID_UNKNOWN</span>
+<span class="nc bnc" id="L1393" title="All 2 branches missed.">            || (rel.getIdentityType() == ClassMetaData.ID_APPLICATION</span>
+<span class="nc bnc" id="L1394" title="All 2 branches missed.">            &amp;&amp; (rel.getPrimaryKeyFields().length == 0</span>
+<span class="nc bnc" id="L1395" title="All 2 branches missed.">            || (!rel.isOpenJPAIdentity() &amp;&amp; Modifier.isAbstract</span>
+<span class="nc bnc" id="L1396" title="All 2 branches missed.">            (rel.getObjectIdType().getModifiers()))));</span>
+    }
+
+    /**
+     * Checks for hints as to whether the given column is a CLOB.
+     */
+    private boolean isClob(ValueMapping val, boolean warn) {
+<span class="nc" id="L1403">        List&lt;Column&gt; cols = val.getValueInfo().getColumns();</span>
+<span class="nc bnc" id="L1404" title="All 2 branches missed.">        if (cols.size() != 1)</span>
+<span class="nc" id="L1405">            return false;</span>
+
+<span class="nc" id="L1407">        Column col = (Column) cols.get(0);</span>
+<span class="nc bnc" id="L1408" title="All 4 branches missed.">        if (col.getSize() != -1 &amp;&amp; col.getType() != Types.CLOB)</span>
+<span class="nc" id="L1409">            return false;</span>
+
+<span class="nc bnc" id="L1411" title="All 2 branches missed.">        if (_dict.getPreferredType(Types.CLOB) != Types.CLOB)</span>
+<span class="nc" id="L1412">            return false;</span>
+
+<span class="nc bnc" id="L1414" title="All 4 branches missed.">        if (warn &amp;&amp; _dict.maxEmbeddedClobSize != -1)</span>
+<span class="nc" id="L1415">            warnMaxEmbedded(val, _dict.maxEmbeddedClobSize);</span>
+<span class="nc" id="L1416">        return true;</span>
+    }
+
+    /**
+     * Warn that the given value is being mapped to a handler that will not
+     * be able to store large lobs.
+     */
+    private void warnMaxEmbedded(ValueMapping val, int size) {
+<span class="nc bnc" id="L1424" title="All 2 branches missed.">        if (getLog().isWarnEnabled())</span>
+<span class="nc" id="L1425">            getLog().warn(_loc.get(&quot;max-embed-lob&quot;, val,</span>
+<span class="nc" id="L1426">                String.valueOf(size)));</span>
+<span class="nc" id="L1427">    }</span>
+
+    /**
+     * Determine the default strategy to use for the given discriminator.
+     * Does not take into account the current strategy, if any.
+     */
+    protected DiscriminatorStrategy defaultStrategy(Discriminator discrim) {
+<span class="nc" id="L1434">        return defaultStrategy(discrim, getStrategyInstaller().isAdapting());</span>
+    }
+
+    /**
+     * Determine the default strategy to use for the given discriminator.
+     * Does not take into account the current strategy, if any.
+     */
+    protected DiscriminatorStrategy defaultStrategy(Discriminator discrim,
+        boolean adapting) {
+<span class="nc" id="L1443">        ClassMapping cls = discrim.getClassMapping();</span>
+<span class="nc bnc" id="L1444" title="All 2 branches missed.">        if (cls.getEmbeddingMetaData() != null)</span>
+<span class="nc" id="L1445">            return NoneDiscriminatorStrategy.getInstance();</span>
+<span class="nc bnc" id="L1446" title="All 2 branches missed.">        if (cls.getJoinablePCSuperclassMapping() == null</span>
+<span class="nc bnc" id="L1447" title="All 2 branches missed.">            &amp;&amp; (cls.getStrategy() == NoneClassStrategy.getInstance()</span>
+<span class="nc bnc" id="L1448" title="All 2 branches missed.">            || Modifier.isFinal(discrim.getClassMapping().getDescribedType().</span>
+<span class="nc" id="L1449">            getModifiers())))</span>
+<span class="nc" id="L1450">            return NoneDiscriminatorStrategy.getInstance();</span>
+
+<span class="nc" id="L1452">        Object strat = _defaults.getStrategy(discrim, adapting);</span>
+<span class="nc bnc" id="L1453" title="All 2 branches missed.">        if (strat instanceof String)</span>
+<span class="nc" id="L1454">            return instantiateDiscriminatorStrategy((String) strat, discrim);</span>
+<span class="nc bnc" id="L1455" title="All 2 branches missed.">        if (strat != null)</span>
+<span class="nc" id="L1456">            return (DiscriminatorStrategy) strat;</span>
+
+<span class="nc bnc" id="L1458" title="All 2 branches missed.">        if (cls.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L1459">            return new SuperclassDiscriminatorStrategy();</span>
+<span class="nc bnc" id="L1460" title="All 2 branches missed.">        if (discrim.getMappingInfo().getValue() != null)</span>
+<span class="nc" id="L1461">            return new ValueMapDiscriminatorStrategy();</span>
+<span class="nc bnc" id="L1462" title="All 2 branches missed.">        if (cls.getMappedPCSuperclassMapping() != null)</span>
+<span class="nc" id="L1463">            return NoneDiscriminatorStrategy.getInstance();</span>
+<span class="nc bnc" id="L1464" title="All 4 branches missed.">        if (adapting || _defaults.defaultMissingInfo())</span>
+<span class="nc" id="L1465">            return new ClassNameDiscriminatorStrategy();</span>
+<span class="nc" id="L1466">        DBDictionary dict = ((JDBCConfiguration) getConfiguration()).</span>
+<span class="nc" id="L1467">            getDBDictionaryInstance();</span>
+<span class="nc bnc" id="L1468" title="All 2 branches missed.">        if (dict.joinSyntax == JoinSyntaxes.SYNTAX_TRADITIONAL)</span>
+<span class="nc" id="L1469">            return NoneDiscriminatorStrategy.getInstance();</span>
+<span class="nc" id="L1470">        return new SubclassJoinDiscriminatorStrategy();</span>
+    }
+
+    /**
+     * Determine the default strategy to use for the given version.
+     * Does not take into account the current strategy, if any.
+     */
+    protected VersionStrategy defaultStrategy(Version version) {
+<span class="nc" id="L1478">        return defaultStrategy(version, getStrategyInstaller().isAdapting());</span>
+    }
+
+    /**
+     * Determine the default strategy to use for the given version.
+     * Does not take into account the current strategy, if any.
+     */
+    protected VersionStrategy defaultStrategy(Version version,
+        boolean adapting) {
+<span class="nc" id="L1487">        ClassMapping cls = version.getClassMapping();</span>
+<span class="nc bnc" id="L1488" title="All 2 branches missed.">        if (cls.getEmbeddingMetaData() != null)</span>
+<span class="nc" id="L1489">            return NoneVersionStrategy.getInstance();</span>
+<span class="nc bnc" id="L1490" title="All 2 branches missed.">        if (cls.getJoinablePCSuperclassMapping() == null</span>
+<span class="nc bnc" id="L1491" title="All 2 branches missed.">            &amp;&amp; cls.getStrategy() == NoneClassStrategy.getInstance())</span>
+<span class="nc" id="L1492">            return NoneVersionStrategy.getInstance();</span>
+
+<span class="nc" id="L1494">        Object strat = _defaults.getStrategy(version, adapting);</span>
+<span class="nc bnc" id="L1495" title="All 2 branches missed.">        if (strat instanceof String)</span>
+<span class="nc" id="L1496">            return instantiateVersionStrategy((String) strat, version);</span>
+<span class="nc bnc" id="L1497" title="All 2 branches missed.">        if (strat != null)</span>
+<span class="nc" id="L1498">            return (VersionStrategy) strat;</span>
+
+<span class="nc bnc" id="L1500" title="All 2 branches missed.">        if (cls.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L1501">            return new SuperclassVersionStrategy();</span>
+
+<span class="nc" id="L1503">        FieldMapping vfield = version.getClassMapping().</span>
+<span class="nc" id="L1504">            getVersionFieldMapping();</span>
+<span class="nc bnc" id="L1505" title="All 2 branches missed.">        if (vfield != null)</span>
+<span class="nc" id="L1506">            return defaultStrategy(version, vfield);</span>
+<span class="nc bnc" id="L1507" title="All 4 branches missed.">        if (adapting || _defaults.defaultMissingInfo())</span>
+<span class="nc" id="L1508">            return new NumberVersionStrategy();</span>
+<span class="nc" id="L1509">        return NoneVersionStrategy.getInstance();</span>
+    }
+
+    /**
+     * Return the default version strategy, given a version field.
+     */
+    protected VersionStrategy defaultStrategy(Version vers,
+        FieldMapping vfield) {
+<span class="nc bnc" id="L1517" title="All 3 branches missed.">        switch (vfield.getTypeCode()) {</span>
+            case JavaTypes.DATE:
+            case JavaTypes.CALENDAR:
+<span class="nc" id="L1520">                return new NanoPrecisionTimestampVersionStrategy();</span>
+            case JavaTypes.BYTE:
+            case JavaTypes.INT:
+            case JavaTypes.LONG:
+            case JavaTypes.SHORT:
+            case JavaTypes.BYTE_OBJ:
+            case JavaTypes.INT_OBJ:
+            case JavaTypes.LONG_OBJ:
+            case JavaTypes.SHORT_OBJ:
+            case JavaTypes.NUMBER:
+<span class="nc" id="L1530">                return new NumberVersionStrategy();</span>
+            default:
+<span class="nc" id="L1532">                throw new UserException(_loc.get(&quot;version-type-unsupported&quot;, vfield, vfield.getDeclaredType()));</span>
+        }
+    }
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L1538">        super.endConfiguration();</span>
+
+<span class="nc" id="L1540">        JDBCConfiguration conf = (JDBCConfiguration) getConfiguration();</span>
+<span class="nc" id="L1541">        _dict = conf.getDBDictionaryInstance();</span>
+<span class="nc bnc" id="L1542" title="All 2 branches missed.">        if (_defaults == null)</span>
+<span class="nc" id="L1543">            _defaults = conf.getMappingDefaultsInstance();</span>
+<span class="nc bnc" id="L1544" title="All 4 branches missed.">        if (_schema != null &amp;&amp; _schema instanceof Configurable) {</span>
+<span class="nc" id="L1545">            ((Configurable) _schema).setConfiguration(conf);</span>
+<span class="nc" id="L1546">            ((Configurable) _schema).startConfiguration();</span>
+<span class="nc" id="L1547">            ((Configurable) _schema).endConfiguration();</span>
+        }
+<span class="nc" id="L1549">    }</span>
+
+    /**
+     * Finds the base class mapping for the specified mapping.  Loads all
+     * persistent types if necessary, since all persistent subclasses of this
+     * mapping may not have been resolved before this method is called.
+     */
+    protected ClassMapping findBaseClassMapping(ClassMapping mapping) {
+<span class="nc" id="L1557">        ClassMapping baseMapping = null;</span>
+<span class="nc" id="L1558">        ClassMapping sup = mapping.getPCSuperclassMapping();</span>
+<span class="nc bnc" id="L1559" title="All 2 branches missed.">        if (sup == null) {</span>
+            // no superclass metadata was provided.  check to see if this class
+            // has any persistent subclasses.
+<span class="nc bnc" id="L1562" title="All 2 branches missed.">            if (mapping.getPCSubclasses().length &gt; 0)</span>
+<span class="nc" id="L1563">                baseMapping = mapping;</span>
+            else {
+                // persistent subclasses may not have been resolved yet.
+                // run through the persistent types to see if any of them
+                // or their superclass is a subclass of this class.
+<span class="nc" id="L1568">                Collection&lt;Class&lt;?&gt;&gt; classes = loadPersistentTypes(false,</span>
+<span class="nc" id="L1569">                        mapping.getEnvClassLoader());</span>
+                Class&lt;?&gt; cls;
+<span class="nc bnc" id="L1571" title="All 2 branches missed.">                for (Iterator&lt;Class&lt;?&gt;&gt; itr = classes.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L1572">                    cls = itr.next();</span>
+<span class="nc" id="L1573">                    Class&lt;?&gt; supcl = cls.getSuperclass();</span>
+<span class="nc bnc" id="L1574" title="All 2 branches missed.">                    while (supcl != null &amp;&amp;</span>
+<span class="nc bnc" id="L1575" title="All 2 branches missed.">                           !supcl.getClass().equals(java.lang.Object.class)) {</span>
+<span class="nc bnc" id="L1576" title="All 2 branches missed.">                        if (!supcl.isInterface() &amp;&amp;</span>
+<span class="nc bnc" id="L1577" title="All 2 branches missed.">                            supcl.equals(mapping.getDescribedType())) {</span>
+<span class="nc" id="L1578">                            baseMapping = mapping;</span>
+<span class="nc" id="L1579">                            break;</span>
+                        }
+<span class="nc" id="L1581">                        supcl = supcl.getSuperclass();</span>
+                    }
+<span class="nc bnc" id="L1583" title="All 2 branches missed.">                    if (baseMapping != null) break;</span>
+<span class="nc" id="L1584">                }</span>
+<span class="nc" id="L1585">            }</span>
+<span class="nc bnc" id="L1586" title="All 2 branches missed.">        } else if (!sup.getDescribedType().isInterface()) {</span>
+            // if the superclass is not a managed interface, find the root
+            // superclass and get its mapping info
+<span class="nc" id="L1589">            ClassMapping supcm = sup;</span>
+<span class="nc bnc" id="L1590" title="All 2 branches missed.">            while (supcm != null &amp;&amp;</span>
+<span class="nc bnc" id="L1591" title="All 2 branches missed.">                    !supcm.getDescribedType().isInterface() &amp;&amp;</span>
+<span class="nc bnc" id="L1592" title="All 2 branches missed.">                    !supcm.isEmbeddedOnly()) {</span>
+<span class="nc" id="L1593">                ClassMapping supcm2 = supcm.getPCSuperclassMapping();</span>
+<span class="nc bnc" id="L1594" title="All 2 branches missed.">                if (supcm2 == null)</span>
+<span class="nc" id="L1595">                    baseMapping = supcm;</span>
+<span class="nc" id="L1596">                supcm = supcm2;</span>
+<span class="nc" id="L1597">            }</span>
+        }
+<span class="nc" id="L1599">        return baseMapping;</span>
+    }
+
+    /**
+     * If an inheritance strategy has not been set on this mapping, set it
+     * to the default (flat).  This method should be called before strategies
+     * are created for the specified mapping.
+     */
+    protected void setDefaultInheritanceStrategy(ClassMapping mapping) {
+<span class="nc" id="L1608">        ClassMappingInfo info = mapping.getMappingInfo();</span>
+<span class="nc bnc" id="L1609" title="All 4 branches missed.">        if (info != null &amp;&amp; info.getHierarchyStrategy() == null)</span>
+<span class="nc" id="L1610">            info.setHierarchyStrategy(FlatClassStrategy.ALIAS);</span>
+<span class="nc" id="L1611">    }</span>
+
+    /**
+     * Determines whether an inhertance strategy has been set on the
+     * specified mapping.
+     */
+    protected boolean hasInheritanceStrategy(ClassMapping mapping) {
+<span class="nc" id="L1618">        ClassMappingInfo info = mapping.getMappingInfo();</span>
+<span class="nc bnc" id="L1619" title="All 4 branches missed.">        if (info != null &amp;&amp; info.getHierarchyStrategy() != null)</span>
+<span class="nc" id="L1620">            return true;</span>
+<span class="nc" id="L1621">        return false;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

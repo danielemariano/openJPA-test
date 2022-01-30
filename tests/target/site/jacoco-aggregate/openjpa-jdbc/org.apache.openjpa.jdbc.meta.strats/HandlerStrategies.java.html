@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>HandlerStrategies.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">HandlerStrategies.java</span></div><h1>HandlerStrategies.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.RelationId;
+import org.apache.openjpa.jdbc.meta.ValueHandler;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.meta.ValueMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.InvalidStateException;
+
+/**
+ * Utility methods for strategies using value handlers.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+<span class="nc" id="L47">public class HandlerStrategies {</span>
+
+<span class="nc" id="L49">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L50">        (HandlerStrategies.class);</span>
+
+    /**
+     * Map the given value.
+     */
+    public static Column[] map(ValueMapping vm, String name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L57">        ValueMappingInfo vinfo = vm.getValueInfo();</span>
+<span class="nc" id="L58">        vinfo.assertNoJoin(vm, true);</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        vinfo.assertNoForeignKey(vm, !adapt);</span>
+
+<span class="nc" id="L61">        DBDictionary dict = vm.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        DBIdentifier colName = DBIdentifier.newColumn(name, dict != null ? dict.delimitAll() : false);</span>
+<span class="nc" id="L63">        Column[] cols = vm.getHandler().map(vm, colName.getName(), io, adapt);</span>
+<span class="nc bnc" id="L64" title="All 4 branches missed.">        if (cols.length &gt; 0 &amp;&amp; cols[0].getTable() == null) {</span>
+<span class="nc" id="L65">            cols = vinfo.getColumns(vm, colName, cols,</span>
+<span class="nc" id="L66">                vm.getFieldMapping().getTable(), adapt);</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">            if (vinfo.isImplicitRelation()) {</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">                for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L69">                    cols[i].setImplicitRelation(true);</span>
+                }
+            }
+<span class="nc" id="L72">            ColumnIO mappedIO = vinfo.getColumnIO();</span>
+<span class="nc" id="L73">            vm.setColumns(cols);</span>
+<span class="nc" id="L74">            vm.setColumnIO(mappedIO);</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">            if (mappedIO != null) {</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">                for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L77">                    io.setInsertable(i, mappedIO.isInsertable(i, false));</span>
+<span class="nc" id="L78">                    io.setNullInsertable(i, mappedIO.isInsertable(i, true));</span>
+<span class="nc" id="L79">                    io.setUpdatable(i, mappedIO.isUpdatable(i, false));</span>
+<span class="nc" id="L80">                    io.setNullUpdatable(i, mappedIO.isUpdatable(i, true));</span>
+                }
+            }
+        }
+<span class="nc" id="L84">        vm.mapConstraints(colName, adapt);</span>
+<span class="nc" id="L85">        return cols;</span>
+    }
+
+    /**
+     * Set the given value into the given row.
+     * Return false if the given value can not be set, for example, due to
+     * null constraints on the columns.
+     */
+    public static boolean set(ValueMapping vm, Object val, JDBCStore store,
+        Row row, Column[] cols, ColumnIO io, boolean nullNone)
+        throws SQLException {
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        if (!canSetAny(row, io, cols))</span>
+<span class="nc" id="L97">            return false;</span>
+
+<span class="nc" id="L99">        ValueHandler handler = vm.getHandler();</span>
+<span class="nc" id="L100">        val = handler.toDataStoreValue(vm, val, store);</span>
+<span class="nc" id="L101">        boolean isSet = false;</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if (val == null) {</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">                if (canSet(row, io, i, true)) {</span>
+<span class="nc" id="L105">                    isSet = true;</span>
+<span class="nc" id="L106">                    set(row, cols[i], null, handler, nullNone);</span>
+                }
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        } else if (cols.length == 1) {</span>
+<span class="nc bnc" id="L109" title="All 4 branches missed.">            if (canSet(row, io, 0, val == null)) {</span>
+<span class="nc" id="L110">                isSet = true;</span>
+<span class="nc" id="L111">                set(row, cols[0], val, handler, nullNone);</span>
+            }
+        } else {
+<span class="nc" id="L114">            Object[] vals = (Object[]) val;</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">            for (int i = 0; i &lt; vals.length; i++)</span>
+<span class="nc bnc" id="L116" title="All 4 branches missed.">                if (canSet(row, io, i, vals[i] == null)) {</span>
+<span class="nc" id="L117">                    isSet = true;</span>
+<span class="nc" id="L118">                    set(row, cols[i], vals[i], handler, nullNone);</span>
+                }
+        }
+<span class="nc" id="L121">        return isSet;</span>
+    }
+
+    /**
+     * Return true if the given column index is settable.
+     */
+    private static boolean canSet(Row row, ColumnIO io, int i,
+        boolean nullValue) {
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (row.getAction() == Row.ACTION_INSERT)</span>
+<span class="nc" id="L130">        	return io.isInsertable(i, nullValue);</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if (row.getAction() == Row.ACTION_UPDATE)</span>
+<span class="nc" id="L132">        	return io.isUpdatable(i, nullValue);</span>
+<span class="nc" id="L133">        return true;</span>
+    }
+
+    /**
+     * Return true if the any column up to the given index is settable.
+     */
+    private static boolean canSetAny(Row row, ColumnIO io, Column[] cols) {
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        if (row.getAction() == Row.ACTION_INSERT)</span>
+<span class="nc" id="L141">            return io.isAnyInsertable(cols, false);</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        if (row.getAction() == Row.ACTION_UPDATE)</span>
+<span class="nc" id="L143">            return io.isAnyUpdatable(cols, false);</span>
+<span class="nc" id="L144">        return true;</span>
+    }
+
+    /**
+     * Set a value into a row, taking care not to override column defaults
+     * with nulls unless the user wants us to.
+     */
+    private static void set(Row row, Column col, Object val,
+        ValueHandler handler, boolean nullNone)
+        throws SQLException {
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L155">            row.setNull(col, nullNone);</span>
+<span class="nc bnc" id="L156" title="All 4 branches missed.">        else if (col.isRelationId() &amp;&amp; handler instanceof RelationId)</span>
+<span class="nc" id="L157">            row.setRelationId(col, (OpenJPAStateManager) val,</span>
+                (RelationId) handler);
+        else
+<span class="nc" id="L160">            row.setObject(col, val);</span>
+<span class="nc" id="L161">    }</span>
+
+    /**
+     * Add where conditions to the given row.
+     */
+    public static void where(ValueMapping vm, Object val, JDBCStore store,
+        Row row, Column[] cols)
+        throws SQLException {
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (cols.length == 0)</span>
+<span class="nc" id="L170">            return;</span>
+
+<span class="nc" id="L172">        val = toDataStoreValue(vm, val, cols, store);</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L175">                row.whereNull(cols[i]);</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        else if (cols.length == 1)</span>
+<span class="nc" id="L177">            where(row, cols[0], val);</span>
+        else {
+<span class="nc" id="L179">            Object[] vals = (Object[]) val;</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">            for (int i = 0; i &lt; vals.length; i++)</span>
+<span class="nc" id="L181">                where(row, cols[i], vals[i]);</span>
+        }
+<span class="nc" id="L183">    }</span>
+
+    /**
+     * Set a where condition on the given row.
+     */
+    private static void where(Row row, Column col, Object val)
+        throws SQLException {
+<span class="nc bnc" id="L190" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L191">            row.whereNull(col);</span>
+        else
+<span class="nc" id="L193">            row.whereObject(col, val);</span>
+<span class="nc" id="L194">    }</span>
+
+    /**
+     * Load the Object value from the given result.
+     */
+    public static Object loadObject(ValueMapping vm, OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch, Result res,
+        Joins joins, Column[] cols, boolean objectValueRequiresLoad)
+        throws SQLException {
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (cols.length == 0)</span>
+<span class="nc" id="L204">            throw new InvalidStateException(_loc.get(&quot;cant-project-owned&quot;,</span>
+                vm));
+
+<span class="nc" id="L207">        Object val = loadDataStore(vm, res, joins, cols);</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">        if (objectValueRequiresLoad)</span>
+<span class="nc" id="L209">            return vm.getHandler().toObjectValue(vm, val, sm, store, fetch);</span>
+<span class="nc" id="L210">        return vm.getHandler().toObjectValue(vm, val);</span>
+    }
+
+    /**
+     * Load the datastore value from the given result. This method does
+     * &lt;b&gt;not&lt;/b&gt; process the loaded value through
+     * {@link ValueHandler#toObjectValue}.
+     */
+    public static Object loadDataStore(ValueMapping vm, Result res,
+        Joins joins, Column[] cols)
+        throws SQLException {
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if (cols.length == 0)</span>
+<span class="nc" id="L222">            return null;</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if (cols.length == 1)</span>
+<span class="nc" id="L224">            return res.getObject(cols[0], vm.getHandler().</span>
+<span class="nc" id="L225">                getResultArgument(vm), joins);</span>
+
+<span class="nc" id="L227">        Object[] vals = new Object[cols.length];</span>
+<span class="nc" id="L228">        Object[] args = (Object[]) vm.getHandler().getResultArgument(vm);</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">            vals[i] = res.getObject(cols[i], (args == null) ? null : args[i],</span>
+                joins);
+<span class="nc" id="L232">        return vals;</span>
+    }
+
+    /**
+     * Convert the given object to its datastore value(s). Relation ids are
+     * converted to their final values immediately.
+     */
+    public static Object toDataStoreValue(ValueMapping vm, Object val,
+        Column[] cols, JDBCStore store) {
+<span class="nc" id="L241">        ValueHandler handler = vm.getHandler();</span>
+<span class="nc" id="L242">        val = handler.toDataStoreValue(vm, val, store);</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        if (val == null) {</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">            if (cols.length &gt; 1)</span>
+<span class="nc" id="L245">                return new Object[cols.length];</span>
+<span class="nc" id="L246">            return null;</span>
+        }
+
+        // relation ids are returned as state managers; resolve the final
+        // datastore value immediately
+        Object[] vals;
+<span class="nc bnc" id="L252" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">            if (!cols[i].isRelationId())</span>
+<span class="nc" id="L254">                continue;</span>
+<span class="nc bnc" id="L255" title="All 2 branches missed.">            if (!(handler instanceof RelationId))</span>
+<span class="nc" id="L256">                break;</span>
+<span class="nc bnc" id="L257" title="All 2 branches missed.">            if (cols.length == 1) {</span>
+<span class="nc" id="L258">                val = ((RelationId) handler).toRelationDataStoreValue</span>
+<span class="nc" id="L259">                    ((OpenJPAStateManager) val, cols[i]);</span>
+            } else {
+<span class="nc" id="L261">                vals = (Object[]) val;</span>
+<span class="nc" id="L262">                vals[i] = ((RelationId) handler).toRelationDataStoreValue</span>
+<span class="nc" id="L263">                    ((OpenJPAStateManager) vals[i], cols[i]);</span>
+            }
+        }
+<span class="nc" id="L266">        return val;</span>
+    }
+
+    /**
+     * Throw the proper exception if the given handler-controlled value
+     * represents an unjoinable relation.
+     */
+    public static void assertJoinable(ValueMapping vm) {
+<span class="nc" id="L274">        ClassMapping rel = vm.getTypeMapping();</span>
+<span class="nc bnc" id="L275" title="All 4 branches missed.">        if (rel != null &amp;&amp; (rel.getTable() == null</span>
+<span class="nc bnc" id="L276" title="All 2 branches missed.">            || !rel.getTable().equals(vm.getFieldMapping().getTable())))</span>
+<span class="nc" id="L277">            throw RelationStrategies.unjoinable(vm);</span>
+<span class="nc" id="L278">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>UnaryOp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">UnaryOp.java</span></div><h1>UnaryOp.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * Value produced by a unary operation on a value.
+ *
+ * @author Abe White
+ */
+abstract class UnaryOp
+    extends AbstractVal {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final Val _val;
+<span class="nc" id="L42">    private ClassMetaData _meta = null;</span>
+<span class="nc" id="L43">    private Class _cast = null;</span>
+<span class="nc" id="L44">    private boolean _noParen = false;</span>
+
+    /**
+     * Constructor. Provide the value to operate on.
+     */
+<span class="nc" id="L49">    public UnaryOp(Val val) {</span>
+<span class="nc" id="L50">        _val = val;</span>
+<span class="nc" id="L51">    }</span>
+
+<span class="nc" id="L53">    public UnaryOp(Val val, boolean noParen) {</span>
+<span class="nc" id="L54">        _val = val;</span>
+<span class="nc" id="L55">        _noParen = noParen;</span>
+<span class="nc" id="L56">    }</span>
+
+    public Val getValue() {
+<span class="nc" id="L59">        return _val;</span>
+    }
+
+    @Override
+    public ClassMetaData getMetaData() {
+<span class="nc" id="L64">        return _meta;</span>
+    }
+
+    @Override
+    public void setMetaData(ClassMetaData meta) {
+<span class="nc" id="L69">        _meta = meta;</span>
+<span class="nc" id="L70">    }</span>
+
+    @Override
+    public Class getType() {
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        if (_cast != null)</span>
+<span class="nc" id="L75">            return _cast;</span>
+<span class="nc" id="L76">        return getType(_val.getType());</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L81">        _cast = type;</span>
+<span class="nc" id="L82">    }</span>
+
+    public boolean getNoParen() {
+<span class="nc" id="L85">        return _noParen;</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L90">        return initializeValue(sel, ctx, flags);</span>
+    }
+
+    protected ExpState initializeValue(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L94">        return _val.initialize(sel, ctx, flags);</span>
+    }
+
+    @Override
+    public void select(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L100">        sel.select(newSQLBuffer(sel, ctx, state), this);</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">        if (isAggregate())</span>
+<span class="nc" id="L102">            sel.setAggregate(true);</span>
+<span class="nc" id="L103">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L108">        _val.selectColumns(sel, ctx, state, true);</span>
+<span class="nc" id="L109">    }</span>
+
+    @Override
+    public void groupBy(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L113">        sel.groupBy(newSQLBuffer(sel, ctx, state));</span>
+<span class="nc" id="L114">    }</span>
+
+    @Override
+    public void orderBy(Select sel, ExpContext ctx, ExpState state,
+        boolean asc) {
+<span class="nc" id="L119">        sel.orderBy(newSQLBuffer(sel, ctx, state), asc, false, getSelectAs());</span>
+<span class="nc" id="L120">    }</span>
+
+    private SQLBuffer newSQLBuffer(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L123">        calculateValue(sel, ctx, state, null, null);</span>
+<span class="nc" id="L124">        SQLBuffer buf = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L125">        appendTo(sel, ctx, state, buf, 0);</span>
+<span class="nc" id="L126">        return buf;</span>
+    }
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res)
+        throws SQLException {
+<span class="nc" id="L132">        Object value = res.getObject(this, JavaSQLTypes.JDBC_DEFAULT, null);</span>
+<span class="nc" id="L133">        Class&lt;?&gt; type = getType();</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (value == null) {</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">            if (nullableValue(ctx, state)) {  // OPENJPA-1794</span>
+<span class="nc" id="L136">                return null;</span>
+            }
+<span class="nc bnc" id="L138" title="All 4 branches missed.">            else if (type.isPrimitive() || Number.class.isAssignableFrom(type)) {</span>
+<span class="nc" id="L139">                value = Filters.getDefaultForNull(Filters.wrap(type));</span>
+            }
+        }
+<span class="nc" id="L142">        return Filters.convert(value, type);</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L148">        _val.calculateValue(sel, ctx, state, null, null);</span>
+<span class="nc" id="L149">    }</span>
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L153">        return 1;</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L159">        sql.append(getOperator());</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        sql.append(_noParen ? &quot; &quot; : &quot;(&quot;);</span>
+<span class="nc" id="L161">        _val.appendTo(sel, ctx, state, sql, 0);</span>
+
+        // OPENJPA-2149: If _val (Val) is an 'Arg', we need to get the Val[]
+        // from it, and the single element it contains because the
+        // 'addCastForParam' method gets the 'type' from the Val it receives.
+        // In the case where _val is an Arg, when addCastForParam gets the
+        // type, it will be getting the type of the Val (an Object) rather
+        // the type of the Arg.
+<span class="nc" id="L169">        sql.addCastForParam(getOperator(),</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            (_val instanceof Args) ? (((Args) _val).getVals())[0]</span>
+<span class="nc" id="L171">                                   : _val);</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (!_noParen)</span>
+<span class="nc" id="L173">            sql.append(&quot;)&quot;);</span>
+<span class="nc" id="L174">    }</span>
+
+    /**
+     * Return the type of this value based on the argument type. Returns
+     * the argument type by default.
+     */
+    protected Class getType(Class c) {
+<span class="nc" id="L181">        return c;</span>
+    }
+
+    /**
+     * Return the name of this operator.
+     */
+    protected abstract String getOperator();
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L191">        visitor.enter(this);</span>
+<span class="nc" id="L192">        _val.acceptVisit(visitor);</span>
+<span class="nc" id="L193">        visitor.exit(this);</span>
+<span class="nc" id="L194">    }</span>
+
+    // OPENJPA-1794
+    protected boolean nullableValue(ExpContext ctx, ExpState state) {
+<span class="nc" id="L198">        return false;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

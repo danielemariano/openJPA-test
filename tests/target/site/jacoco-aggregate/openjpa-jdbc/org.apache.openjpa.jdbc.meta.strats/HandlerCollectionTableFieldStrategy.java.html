@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>HandlerCollectionTableFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">HandlerCollectionTableFieldStrategy.java</span></div><h1>HandlerCollectionTableFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.FieldMappingInfo;
+import org.apache.openjpa.jdbc.meta.ValueHandler;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.StateManagerImpl;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.ChangeTracker;
+import org.apache.openjpa.util.MetaDataException;
+import org.apache.openjpa.util.Proxies;
+import org.apache.openjpa.util.Proxy;
+
+/**
+ * &lt;p&gt;Mapping for a collection of values in a separate table controlled by a
+ * {@link ValueHandler}.&lt;/p&gt;
+ *
+ * @author Abe White
+ * @since 0.4.0, 1.1.0
+ */
+<span class="nc" id="L61">public class HandlerCollectionTableFieldStrategy</span>
+    extends StoreCollectionFieldStrategy
+    implements LRSCollectionFieldStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L68">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L69">        (HandlerCollectionTableFieldStrategy.class);</span>
+
+<span class="nc" id="L71">    private Column[] _cols = null;</span>
+<span class="nc" id="L72">    private ColumnIO _io = null;</span>
+<span class="nc" id="L73">    private boolean _load = false;</span>
+<span class="nc" id="L74">    private boolean _lob = false;</span>
+<span class="nc" id="L75">    private boolean _embed = false;</span>
+
+    @Override
+    public FieldMapping getFieldMapping() {
+<span class="nc" id="L79">        return field;</span>
+    }
+
+    @Override
+    public ClassMapping[] getIndependentElementMappings(boolean traverse) {
+<span class="nc" id="L84">        return ClassMapping.EMPTY_MAPPINGS;</span>
+    }
+
+    @Override
+    public Column[] getElementColumns(ClassMapping elem) {
+<span class="nc" id="L89">        return _cols;</span>
+    }
+
+    @Override
+    public ForeignKey getJoinForeignKey(ClassMapping elem) {
+<span class="nc" id="L94">        return field.getJoinForeignKey();</span>
+    }
+
+    @Override
+    public void selectElement(Select sel, ClassMapping elem, JDBCStore store,
+        JDBCFetchConfiguration fetch, int eagerMode, Joins joins) {
+<span class="nc" id="L100">        sel.select(_cols, joins);</span>
+<span class="nc" id="L101">    }</span>
+
+    @Override
+    public Object loadElement(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L107">        return HandlerStrategies.loadObject(field.getElementMapping(),</span>
+            sm, store, fetch, res, joins, _cols, _load);
+    }
+
+    @Override
+    protected Joins join(Joins joins, ClassMapping elem) {
+<span class="nc" id="L113">        return join(joins, false);</span>
+    }
+
+    @Override
+    public Joins joinElementRelation(Joins joins, ClassMapping elem) {
+<span class="nc" id="L118">        return joinRelation(joins, false, false);</span>
+    }
+
+    @Override
+    protected Proxy newLRSProxy() {
+<span class="nc" id="L123">        return new LRSProxyCollection(this);</span>
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc bnc" id="L128" title="All 2 branches missed.">        if (field.getTypeCode() != JavaTypes.COLLECTION</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">            &amp;&amp; field.getTypeCode() != JavaTypes.ARRAY)</span>
+<span class="nc" id="L130">            throw new MetaDataException(_loc.get(&quot;not-coll&quot;, field));</span>
+
+<span class="nc" id="L132">        assertNotMappedBy();</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        field.getValueInfo().assertNoSchemaComponents(field, !adapt);</span>
+<span class="nc" id="L134">        field.getKeyMapping().getValueInfo().assertNoSchemaComponents</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">            (field.getKey(), !adapt);</span>
+
+<span class="nc" id="L137">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (elem.getHandler() == null)</span>
+<span class="nc" id="L139">            throw new MetaDataException(_loc.get(&quot;no-handler&quot;, elem));</span>
+
+<span class="nc" id="L141">        field.mapJoin(adapt, true);</span>
+<span class="nc" id="L142">        _io = new ColumnIO();</span>
+<span class="nc" id="L143">        _cols = HandlerStrategies.map(elem, &quot;element&quot;, _io, adapt);</span>
+
+<span class="nc" id="L145">        FieldMappingInfo finfo = field.getMappingInfo();</span>
+<span class="nc" id="L146">        Column orderCol = finfo.getOrderColumn(field, field.getTable(), adapt);</span>
+<span class="nc" id="L147">        field.setOrderColumn(orderCol);</span>
+<span class="nc" id="L148">        field.setOrderColumnIO(finfo.getColumnIO());</span>
+<span class="nc" id="L149">        field.mapPrimaryKey(adapt);</span>
+<span class="nc" id="L150">    }</span>
+
+    @Override
+    public void initialize() {
+<span class="nc bnc" id="L154" title="All 4 branches missed.">        for (int i = 0; !_lob &amp;&amp; i &lt; _cols.length; i++)</span>
+<span class="nc" id="L155">            _lob = _cols[i].isLob();</span>
+
+<span class="nc" id="L157">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        _embed = elem.getEmbeddedMetaData() != null;</span>
+<span class="nc" id="L159">        _load = elem.getHandler().objectValueRequiresLoad(elem);</span>
+<span class="nc" id="L160">    }</span>
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L165">        insert(sm, store, rm, sm.fetchObject(field.getIndex()));</span>
+<span class="nc" id="L166">    }</span>
+
+    private void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm,
+        Object vals)
+        throws SQLException {
+        Collection coll;
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (field.getTypeCode() == JavaTypes.ARRAY)</span>
+<span class="nc" id="L173">            coll = JavaTypes.toList(vals, field.getElement().getType(),</span>
+                false);
+        else
+<span class="nc" id="L176">            coll = (Collection) vals;</span>
+<span class="nc bnc" id="L177" title="All 4 branches missed.">        if (coll == null || coll.isEmpty())</span>
+<span class="nc" id="L178">            return;</span>
+
+<span class="nc" id="L180">        Row row = rm.getSecondaryRow(field.getTable(), Row.ACTION_INSERT);</span>
+<span class="nc" id="L181">        row.setForeignKey(field.getJoinForeignKey(), field.getJoinColumnIO(),</span>
+            sm);
+
+<span class="nc" id="L184">        StoreContext ctx = sm.getContext();</span>
+<span class="nc" id="L185">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc" id="L186">        Column order = field.getOrderColumn();</span>
+<span class="nc" id="L187">        boolean setOrder = field.getOrderColumnIO().isInsertable(order, false);</span>
+<span class="nc" id="L188">        int idx = 0;</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        for (Iterator itr = coll.iterator(); itr.hasNext(); idx++) {</span>
+<span class="nc" id="L190">            Object val = itr.next();</span>
+<span class="nc" id="L191">            HandlerStrategies.set(elem, val, store, row, _cols,</span>
+                _io, true);
+<span class="nc" id="L193">            StateManagerImpl esm = (StateManagerImpl)ctx.getStateManager(val);</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">            if (esm != null) {</span>
+<span class="nc" id="L195">                boolean isEmbedded = esm.isEmbedded();</span>
+<span class="nc" id="L196">                Collection rels = new ArrayList();</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">                if (isEmbedded) {</span>
+<span class="nc" id="L198">                    getRelations(esm, rels, ctx);</span>
+<span class="nc" id="L199">                    Map&lt;ClassMapping,Integer&gt; targets = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">                    for (Object rel : rels) {</span>
+<span class="nc" id="L201">                        StateManagerImpl relSm = (StateManagerImpl)rel;</span>
+<span class="nc" id="L202">                        ClassMapping cm =(ClassMapping) relSm.getMetaData();</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">                        if(!targets.containsKey(cm)){</span>
+<span class="nc" id="L204">                            targets.put(cm, 0);</span>
+                        }
+<span class="nc" id="L206">                        Integer n = targets.get(cm);</span>
+<span class="nc" id="L207">                        elem.setForeignKey(row, (StateManagerImpl)rel, n);</span>
+<span class="nc" id="L208">                        n++;</span>
+<span class="nc" id="L209">                        targets.put(cm, n);</span>
+<span class="nc" id="L210">                    }</span>
+                }
+            }
+<span class="nc bnc" id="L213" title="All 2 branches missed.">            if (setOrder)</span>
+<span class="nc" id="L214">                row.setInt(order, idx);</span>
+<span class="nc" id="L215">            rm.flushSecondaryRow(row);</span>
+        }
+<span class="nc" id="L217">    }</span>
+
+    private void getRelations(StateManagerImpl sm, Collection rels,
+        StoreContext ctx) {
+<span class="nc" id="L221">        FieldMetaData[] fields = sm.getMetaData().getFields();</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc" id="L223">            Object obj = sm.fetch(i);</span>
+<span class="nc" id="L224">            StateManagerImpl esm = (StateManagerImpl)ctx.getStateManager(obj);</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">            if (esm != null) {</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">                if (!esm.isEmbedded())</span>
+<span class="nc" id="L227">                    rels.add(esm);</span>
+                else
+<span class="nc" id="L229">                    getRelations(esm, rels, ctx);</span>
+            }
+        }
+<span class="nc" id="L232">    }</span>
+
+    @Override
+    public void update(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L237">        Object obj = sm.fetchObject(field.getIndex());</span>
+<span class="nc" id="L238">        ChangeTracker ct = null;</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">        if (obj instanceof Proxy) {</span>
+<span class="nc" id="L240">            Proxy proxy = (Proxy) obj;</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">            if (Proxies.isOwner(proxy, sm, field.getIndex()))</span>
+<span class="nc" id="L242">                ct = proxy.getChangeTracker();</span>
+        }
+
+<span class="nc" id="L245">        Column order = field.getOrderColumn();</span>
+
+        // if no fine-grained change tracking or if an item was removed
+        // from an ordered collection, delete and reinsert
+<span class="nc bnc" id="L249" title="All 6 branches missed.">        if (ct == null || !ct.isTracking() ||</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">            (order != null &amp;&amp; !ct.getRemoved().isEmpty())) {</span>
+<span class="nc" id="L251">            delete(sm, store, rm);</span>
+<span class="nc" id="L252">            insert(sm, store, rm, obj);</span>
+<span class="nc" id="L253">            return;</span>
+        }
+
+        // delete the removes
+<span class="nc" id="L257">        ValueMapping elem = field.getElementMapping();</span>
+<span class="nc" id="L258">        Collection rem = ct.getRemoved();</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (!rem.isEmpty()) {</span>
+<span class="nc" id="L260">            Row delRow = rm.getSecondaryRow(field.getTable(),</span>
+                Row.ACTION_DELETE);
+<span class="nc" id="L262">            delRow.whereForeignKey(field.getJoinForeignKey(), sm);</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">            for (Iterator itr = rem.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L264">                HandlerStrategies.where(elem, itr.next(), store, delRow,</span>
+                    _cols);
+<span class="nc" id="L266">                rm.flushSecondaryRow(delRow);</span>
+            }
+        }
+
+        // insert the adds
+<span class="nc" id="L271">        Collection add = ct.getAdded();</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        if (!add.isEmpty()) {</span>
+<span class="nc" id="L273">            Row addRow = rm.getSecondaryRow(field.getTable(),</span>
+                Row.ACTION_INSERT);
+<span class="nc" id="L275">            addRow.setForeignKey(field.getJoinForeignKey(),</span>
+<span class="nc" id="L276">                field.getJoinColumnIO(), sm);</span>
+
+<span class="nc" id="L278">            int seq = ct.getNextSequence();</span>
+<span class="nc" id="L279">            boolean setOrder = field.getOrderColumnIO().isInsertable(order,</span>
+                false);
+<span class="nc bnc" id="L281" title="All 2 branches missed.">            for (Iterator itr = add.iterator(); itr.hasNext(); seq++) {</span>
+<span class="nc" id="L282">                HandlerStrategies.set(elem, itr.next(), store, addRow, _cols,</span>
+                    _io, true);
+<span class="nc bnc" id="L284" title="All 2 branches missed.">                if (setOrder)</span>
+<span class="nc" id="L285">                    addRow.setInt(order, seq);</span>
+<span class="nc" id="L286">                rm.flushSecondaryRow(addRow);</span>
+            }
+<span class="nc bnc" id="L288" title="All 2 branches missed.">            if (order != null)</span>
+<span class="nc" id="L289">                ct.setNextSequence(seq);</span>
+        }
+<span class="nc" id="L291">    }</span>
+
+    @Override
+    public void delete(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L296">        Row row = rm.getAllRows(field.getTable(), Row.ACTION_DELETE);</span>
+<span class="nc" id="L297">        row.whereForeignKey(field.getJoinForeignKey(), sm);</span>
+<span class="nc" id="L298">        rm.flushAllRows(row);</span>
+<span class="nc" id="L299">    }</span>
+
+    @Override
+    public int supportsSelect(Select sel, int type, OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch) {
+        // can't do any combined select with lobs, since they don't allow
+        // select distinct.  cant select eager parallel on embedded, because
+        // during parallel result processing the owning sm won't be available
+        // for each elem
+<span class="nc bnc" id="L308" title="All 6 branches missed.">        if (_lob || (_embed &amp;&amp; type == Select.EAGER_PARALLEL))</span>
+<span class="nc" id="L309">            return 0;</span>
+<span class="nc" id="L310">        return super.supportsSelect(sel, type, sm, store, fetch);</span>
+    }
+
+    @Override
+    public Object toDataStoreValue(Object val, JDBCStore store) {
+<span class="nc" id="L315">        return HandlerStrategies.toDataStoreValue(field.getElementMapping(),</span>
+            val, _cols, store);
+    }
+
+    @Override
+    public Joins join(Joins joins, boolean forceOuter) {
+<span class="nc" id="L321">        return field.join(joins, forceOuter, true);</span>
+    }
+
+    @Override
+    public Joins joinRelation(Joins joins, boolean forceOuter,
+        boolean traverse) {
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        if (traverse)</span>
+<span class="nc" id="L328">            HandlerStrategies.assertJoinable(field.getElementMapping());</span>
+<span class="nc" id="L329">        return joins;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

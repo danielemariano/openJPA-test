@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Lit.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">Lit.java</span></div><h1>Lit.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import org.apache.openjpa.jdbc.sql.Raw;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.QueryHints;
+import org.apache.openjpa.kernel.exps.Literal;
+
+/**
+ * A literal value in a filter.
+ *
+ * @author Abe White
+ */
+public class Lit
+    extends Const
+    implements Literal {
+
+    
+    private static final long serialVersionUID = 1L;
+    private Object _val;
+    private int _ptype;
+    private boolean _isRaw;
+    private Object _rawVal;
+
+    /**
+     * Constructor. Supply literal value.
+     */
+<span class="nc" id="L47">    public Lit(Object val, int ptype) {</span>
+<span class="nc" id="L48">        _val = val;</span>
+<span class="nc" id="L49">        _ptype = ptype;</span>
+<span class="nc bnc" id="L50" title="All 6 branches missed.">        if (_ptype == Literal.TYPE_DATE || _ptype == Literal.TYPE_TIME ||</span>
+            _ptype == Literal.TYPE_TIMESTAMP)
+<span class="nc" id="L52">            _isRaw = true;</span>
+<span class="nc" id="L53">    }</span>
+
+    @Override
+    public Class getType() {
+<span class="nc bnc" id="L57" title="All 4 branches missed.">        if (_isRaw &amp;&amp; _rawVal != null)</span>
+<span class="nc" id="L58">            return Raw.class;</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        return (_val == null) ? Object.class : _val.getClass();</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L64">        _val = Filters.convert(_val, type);</span>
+<span class="nc" id="L65">    }</span>
+
+    @Override
+    public int getParseType() {
+<span class="nc" id="L69">        return _ptype;</span>
+    }
+
+    @Override
+    public Object getValue() {
+<span class="nc" id="L74">        return _val;</span>
+    }
+
+    @Override
+    public void setValue(Object val) {
+<span class="nc" id="L79">        _val = val;</span>
+<span class="nc" id="L80">    }</span>
+
+    @Override
+    public Object getValue(Object[] params) {
+<span class="nc" id="L84">        return getValue();</span>
+    }
+
+    public boolean isRaw() {
+<span class="nc" id="L88">        return _isRaw;</span>
+    }
+
+    public void setRaw(boolean isRaw) {
+<span class="nc" id="L92">        _isRaw = isRaw;</span>
+<span class="nc" id="L93">    }</span>
+
+    public Object getRawValue() {
+<span class="nc" id="L96">        return _rawVal;</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L101">        return new LitExpState();</span>
+    }
+
+    /**
+     * Expression state.
+     */
+    private static class LitExpState
+        extends ConstExpState {
+
+        public Object sqlValue;
+        public int otherLength;
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L117">        super.calculateValue(sel, ctx, state, other, otherState);</span>
+<span class="nc" id="L118">        LitExpState lstate = (LitExpState) state;</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        if (other != null) {</span>
+<span class="nc" id="L120">            lstate.sqlValue = other.toDataStoreValue(sel, ctx, otherState,_val);</span>
+<span class="nc" id="L121">            lstate.otherLength = other.length(sel, ctx, otherState);</span>
+        } else
+<span class="nc" id="L123">            lstate.sqlValue = _val;</span>
+<span class="nc" id="L124">    }</span>
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L129">        LitExpState lstate = (LitExpState) state;</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        if (lstate.otherLength &gt; 1) {</span>
+<span class="nc" id="L131">            sql.appendValue(((Object[]) lstate.sqlValue)[index], lstate.getColumn(index));</span>
+            // OPENJPA-2631:  Return so as not to go into sql.appendValue a second time below.
+<span class="nc" id="L133">            return;</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        } else if (_isRaw) {</span>
+<span class="nc" id="L135">            int parseType = getParseType();</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">            if (parseType == Literal.TYPE_ENUM) {</span>
+<span class="nc" id="L137">                StringBuilder value = new StringBuilder();</span>
+<span class="nc" id="L138">                boolean isOrdinal = false;</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">                if (lstate.sqlValue instanceof Integer)</span>
+<span class="nc" id="L140">                    isOrdinal = true;</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">                if (!isOrdinal)</span>
+<span class="nc" id="L142">                    value.append(&quot;'&quot;);</span>
+<span class="nc" id="L143">                value.append(lstate.sqlValue);</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">                if (!isOrdinal)</span>
+<span class="nc" id="L145">                    value.append(&quot;'&quot;);</span>
+<span class="nc" id="L146">                lstate.sqlValue = new Raw(value.toString());</span>
+<span class="nc" id="L147">                _rawVal = lstate.sqlValue;</span>
+<span class="nc bnc" id="L148" title="All 6 branches missed.">            } else if (parseType == Literal.TYPE_DATE || parseType == Literal.TYPE_TIME ||</span>
+                parseType == Literal.TYPE_TIMESTAMP) {
+<span class="nc" id="L150">                lstate.sqlValue = new Raw(_val.toString());</span>
+<span class="nc" id="L151">                _rawVal = lstate.sqlValue;</span>
+            } else {
+<span class="nc bnc" id="L153" title="All 2 branches missed.">                lstate.sqlValue = new Raw(_val instanceof String ? &quot;'&quot;+_val+&quot;'&quot; : _val.toString());</span>
+<span class="nc" id="L154">                _rawVal = lstate.sqlValue;</span>
+            }
+        }
+<span class="nc" id="L157">        Object useLiteral = ctx.fetch.getHint(QueryHints.HINT_USE_LITERAL_IN_SQL);</span>
+//        useLiteral = true;
+<span class="nc bnc" id="L159" title="All 4 branches missed.">        boolean useParamToken = useLiteral != null ? !(Boolean)useLiteral : true;</span>
+<span class="nc" id="L160">        sql.appendValue(lstate.sqlValue, lstate.getColumn(index), null, useParamToken);</span>
+<span class="nc" id="L161">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

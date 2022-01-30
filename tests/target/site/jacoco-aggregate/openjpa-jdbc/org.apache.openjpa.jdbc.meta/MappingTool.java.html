@@ -1,0 +1,1232 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MappingTool.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">MappingTool.java</span></div><h1>MappingTool.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.Writer;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.kernel.JDBCSeq;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.DynamicSchemaFactory;
+import org.apache.openjpa.jdbc.schema.LazySchemaFactory;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.SchemaGenerator;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.SchemaSerializer;
+import org.apache.openjpa.jdbc.schema.SchemaTool;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.XMLSchemaSerializer;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.kernel.Seq;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.meta.ClassArgParser;
+import org.apache.openjpa.lib.meta.MetaDataSerializer;
+import org.apache.openjpa.lib.meta.SourceTracker;
+import org.apache.openjpa.lib.util.Files;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Options;
+import org.apache.openjpa.lib.util.Services;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.MetaDataFactory;
+import org.apache.openjpa.meta.MetaDataModes;
+import org.apache.openjpa.meta.MetaDataRepository;
+import org.apache.openjpa.meta.QueryMetaData;
+import org.apache.openjpa.meta.SequenceMetaData;
+import org.apache.openjpa.meta.ValueStrategies;
+import org.apache.openjpa.util.GeneralException;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Tool for manipulating class mappings and associated schema.
+ *
+ * @author Abe White
+ */
+public class MappingTool
+    implements MetaDataModes {
+
+    public static final String SCHEMA_ACTION_NONE = &quot;none&quot;;
+
+    public static final String ACTION_ADD = &quot;add&quot;;
+    public static final String ACTION_REFRESH = &quot;refresh&quot;;
+    public static final String ACTION_BUILD_SCHEMA = &quot;buildSchema&quot;;
+    public static final String ACTION_DROP = &quot;drop&quot;;
+    public static final String ACTION_DROP_SCHEMA = &quot;dropSchema&quot;;
+    public static final String ACTION_VALIDATE = &quot;validate&quot;;
+    public static final String ACTION_EXPORT = &quot;export&quot;;
+    public static final String ACTION_IMPORT = &quot;import&quot;;
+    public static final String ACTION_SCRIPT_CREATE = &quot;scriptCreate&quot;;
+    public static final String ACTION_SCRIPT_DROP = &quot;scriptDrop&quot;;
+    public static final String ACTION_SCRIPT_LOAD = &quot;scriptLoad&quot;;
+
+<span class="nc" id="L97">    public static final String[] ACTIONS = new String[]{</span>
+        ACTION_ADD,
+        ACTION_REFRESH,
+        ACTION_BUILD_SCHEMA,
+        ACTION_DROP,
+        ACTION_DROP_SCHEMA,
+        ACTION_VALIDATE,
+        ACTION_EXPORT,
+        ACTION_IMPORT,
+        ACTION_SCRIPT_CREATE,
+        ACTION_SCRIPT_DROP,
+        ACTION_SCRIPT_LOAD,
+    };
+
+<span class="nc" id="L111">    private static final Localizer _loc = Localizer.forPackage(MappingTool.class);</span>
+
+    private final JDBCConfiguration _conf;
+    private final Log _log;
+    private final String _action;
+    private final boolean _meta;
+    private final int _mode;
+    private final ClassLoader _loader;
+    private final DBDictionary _dict;
+
+<span class="nc" id="L121">    private MappingRepository _repos = null;</span>
+<span class="nc" id="L122">    private SchemaGroup _schema = null;</span>
+<span class="nc" id="L123">    private SchemaTool _schemaTool = null;</span>
+<span class="nc" id="L124">    private String _schemaActions = SchemaTool.ACTION_ADD;</span>
+<span class="nc" id="L125">    private boolean _readSchema = false;</span>
+<span class="nc" id="L126">    private boolean _pks = false;</span>
+<span class="nc" id="L127">    private boolean _fks = false;</span>
+<span class="nc" id="L128">    private boolean _indexes = false;</span>
+<span class="nc" id="L129">    private boolean _seqs = true;</span>
+<span class="nc" id="L130">    private boolean _dropUnused = true;</span>
+<span class="nc" id="L131">    private boolean _ignoreErrors = false;</span>
+<span class="nc" id="L132">    private boolean _rollbackBeforeDDL = false;</span>
+<span class="nc" id="L133">    private File _file = null;</span>
+<span class="nc" id="L134">    private Writer _mappingWriter = null;</span>
+<span class="nc" id="L135">    private Writer _schemaWriter = null;</span>
+
+    // buffer metadatas to be dropped
+<span class="nc" id="L138">    private Set&lt;Class&lt;?&gt;&gt; _dropCls = null;</span>
+<span class="nc" id="L139">    private Set&lt;ClassMapping&gt; _dropMap = null;</span>
+<span class="nc" id="L140">    private boolean _flush = false;</span>
+<span class="nc" id="L141">    private boolean _flushSchema = false;</span>
+
+    /**
+     * Constructor. Supply configuration and action.
+     */
+    public MappingTool(JDBCConfiguration conf, String action, boolean meta) {
+<span class="nc" id="L147">        this(conf, action, meta, null);</span>
+<span class="nc" id="L148">    }</span>
+
+    /**
+     * Constructor. Supply configuration and action.
+     */
+<span class="nc" id="L153">    public MappingTool(JDBCConfiguration conf, String action, boolean meta, ClassLoader loader) {</span>
+<span class="nc" id="L154">        _conf = conf;</span>
+<span class="nc" id="L155">        _log = conf.getLog(OpenJPAConfiguration.LOG_METADATA);</span>
+<span class="nc" id="L156">        _meta = meta;</span>
+
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        if (action == null)</span>
+<span class="nc" id="L159">            _action = ACTION_REFRESH;</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        else if (!Arrays.asList(ACTIONS).contains(action))</span>
+<span class="nc" id="L161">            throw new IllegalArgumentException(&quot;action == &quot; + action);</span>
+        else
+<span class="nc" id="L163">            _action = action;</span>
+
+<span class="nc bnc" id="L165" title="All 4 branches missed.">        if (meta &amp;&amp; ACTION_ADD.equals(_action))</span>
+<span class="nc" id="L166">            _mode = MODE_META;</span>
+<span class="nc bnc" id="L167" title="All 4 branches missed.">        else if (meta &amp;&amp; ACTION_DROP.equals(_action))</span>
+<span class="nc" id="L168">            _mode = MODE_META | MODE_MAPPING | MODE_QUERY;</span>
+        else
+<span class="nc" id="L170">            _mode = MODE_MAPPING;</span>
+
+<span class="nc" id="L172">        _loader = loader;</span>
+
+<span class="nc" id="L174">        _dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L175">    }</span>
+
+    /**
+     * The action supplied on construction.
+     */
+    public String getAction() {
+<span class="nc" id="L181">        return _action;</span>
+    }
+
+    /**
+     * Whether the action works on metadata as well as mappings.
+     */
+    public boolean isMetaDataAction() {
+<span class="nc" id="L188">        return _meta;</span>
+    }
+
+    /**
+     * The schema modification policy, or &lt;code&gt;none&lt;/code&gt;. See the
+     * ACTION constants in {@link SchemaTool}. May be a comma-separated
+     * list of values. Defaults to {@link SchemaTool#ACTION_ADD}.
+     */
+    public String getSchemaAction() {
+<span class="nc" id="L197">        return _schemaActions;</span>
+    }
+
+    /**
+     * The schema modification policy, or &lt;code&gt;none&lt;/code&gt;. See the
+     * ACTION constants in {@link SchemaTool}. May be a comma-separated
+     * list of values. Defaults to {@link SchemaTool#ACTION_ADD}.
+     */
+    public void setSchemaAction(String schemaAction) {
+<span class="nc" id="L206">        _schemaActions = schemaAction;</span>
+<span class="nc" id="L207">    }</span>
+
+    /**
+     * Set to true to read the entire schema before mapping.
+     * Leaving this option false saves time, but is dangerous when adding
+     * new mappings, because without full knowledge of the existing schema the
+     * mapping tool might create tables or indexes that conflict with
+     * existing components.
+     */
+    public boolean getReadSchema() {
+<span class="nc" id="L217">        return _readSchema;</span>
+    }
+
+    /**
+     * Set to true to read the entire schema before mapping.
+     * Leaving this option false saves time, but is dangerous when adding
+     * new mappings, because without full knowledge of the existing schema the
+     * mapping tool might create tables or indexes that conflict with
+     * existing components.
+     */
+    public void setReadSchema(boolean readSchema) {
+<span class="nc" id="L228">        _readSchema = readSchema;</span>
+<span class="nc" id="L229">    }</span>
+
+    /**
+     * Whether to manipulate sequences. Defaults to true.
+     */
+    public boolean getSequences() {
+<span class="nc" id="L235">        return _seqs;</span>
+    }
+
+    /**
+     * Whether to manipulate sequences. Defaults to true.
+     */
+    public void setSequences(boolean seqs) {
+<span class="nc" id="L242">        _seqs = seqs;</span>
+<span class="nc" id="L243">    }</span>
+
+    /**
+     * Whether indexes on existing tables should be manipulated.
+     * Defaults to false.
+     */
+    public boolean getIndexes() {
+<span class="nc" id="L250">        return _indexes;</span>
+    }
+
+    /**
+     * Whether indexes on existing tables should be manipulated.
+     * Defaults to false.
+     */
+    public void setIndexes(boolean indexes) {
+<span class="nc" id="L258">        _indexes = indexes;</span>
+<span class="nc" id="L259">    }</span>
+
+    /**
+     * Whether foreign keys on existing tables should be manipulated.
+     * Defaults to false.
+     */
+    public boolean getForeignKeys() {
+<span class="nc" id="L266">        return _fks;</span>
+    }
+
+    /**
+     * Whether foreign keys on existing tables should be manipulated.
+     * Defaults to false.
+     */
+    public void setForeignKeys(boolean fks) {
+<span class="nc" id="L274">        _fks = fks;</span>
+<span class="nc" id="L275">    }</span>
+
+    /**
+     * Whether primary keys on existing tables should be manipulated.
+     * Defaults to false.
+     */
+    public boolean getPrimaryKeys() {
+<span class="nc" id="L282">        return _pks;</span>
+    }
+
+    /**
+     * Whether primary keys on existing tables should be manipulated.
+     * Defaults to false.
+     */
+    public void setPrimaryKeys(boolean pks) {
+<span class="nc" id="L290">        _pks = pks;</span>
+<span class="nc" id="L291">    }</span>
+
+    /**
+     * Whether schema components that are unused by any mapping will be
+     * dropped from this tool's {@link SchemaGroup}, and, depending on
+     * the schema action, from the database. Defaults to true.
+     */
+    public boolean getDropUnusedComponents() {
+<span class="nc" id="L299">        return _dropUnused;</span>
+    }
+
+    /**
+     * Whether schema components that are unused by any mapping will be
+     * dropped from this tool's {@link SchemaGroup}, and, depending on
+     * the schema action, from the database. Defaults to true.
+     */
+    public void setDropUnusedComponents(boolean dropUnused) {
+<span class="nc" id="L308">        _dropUnused = dropUnused;</span>
+<span class="nc" id="L309">    }</span>
+
+    /**
+     * Whether and SQL errors should cause a failure or just issue a warning.
+     */
+    public void setIgnoreErrors(boolean ignoreErrors) {
+<span class="nc" id="L315">        _ignoreErrors = ignoreErrors;</span>
+<span class="nc" id="L316">    }</span>
+
+    /**
+     * Whether and SQL errors should cause a failure or just issue a warning.
+     */
+    public boolean getIgnoreErrors() {
+<span class="nc" id="L322">        return _ignoreErrors;</span>
+    }
+
+    /**
+     * If true, rollback will be performed before each DDL statement is executed. Defaults to true.
+     */
+    public boolean getRollbackBeforeDDL() {
+<span class="nc" id="L329">        return _rollbackBeforeDDL;</span>
+    }
+
+    /**
+     * If true, rollback will be performed before each DDL statement is executed. Defaults to true.
+     */
+    public void setRollbackBeforeDDL(boolean rollbackBeforeDDL) {
+<span class="nc" id="L336">        _rollbackBeforeDDL = rollbackBeforeDDL;</span>
+<span class="nc" id="L337">    }</span>
+
+    /**
+     * Return the schema tool to use for schema modification.
+     */
+    private SchemaTool newSchemaTool(String action) {
+<span class="nc bnc" id="L343" title="All 2 branches missed.">        if (SCHEMA_ACTION_NONE.equals(action))</span>
+<span class="nc" id="L344">            action = null;</span>
+<span class="nc" id="L345">        SchemaTool tool = new SchemaTool(_conf, action);</span>
+<span class="nc" id="L346">        tool.setIgnoreErrors(getIgnoreErrors());</span>
+<span class="nc" id="L347">        tool.setPrimaryKeys(getPrimaryKeys());</span>
+<span class="nc" id="L348">        tool.setForeignKeys(getForeignKeys());</span>
+<span class="nc" id="L349">        tool.setIndexes(getIndexes());</span>
+<span class="nc" id="L350">        tool.setSequences(getSequences());</span>
+<span class="nc" id="L351">        tool.setRollbackBeforeDDL(getRollbackBeforeDDL());</span>
+<span class="nc" id="L352">        return tool;</span>
+    }
+
+    /**
+     * Set the schema tool to use for schema modification.
+     */
+    public void setSchemaTool(SchemaTool tool) {
+<span class="nc" id="L359">        _schemaTool = tool;</span>
+<span class="nc" id="L360">    }</span>
+
+    /**
+     * The stream to export the planned schema to as an XML document.
+     * If non-null, then the database schema will not be altered.
+     */
+    public Writer getSchemaWriter() {
+<span class="nc" id="L367">        return _schemaWriter;</span>
+    }
+
+    /**
+     * The stream to export the planned schema to as an XML document.
+     * If non-null, then the database schema will not be altered.
+     */
+    public void setSchemaWriter(Writer schemaWriter) {
+<span class="nc" id="L375">        _schemaWriter = schemaWriter;</span>
+<span class="nc" id="L376">    }</span>
+
+    /**
+     * The stream to export the planned mappings to as an XML document.
+     * If non-null, then the mapping repository will not be altered.
+     */
+    public Writer getMappingWriter() {
+<span class="nc" id="L383">        return _mappingWriter;</span>
+    }
+
+    /**
+     * The stream to export the planned mappings to as an XML document.
+     * If non-null, then the mapping repository will not be altered.
+     */
+    public void setMappingWriter(Writer mappingWriter) {
+<span class="nc" id="L391">        _mappingWriter = mappingWriter;</span>
+<span class="nc" id="L392">    }</span>
+
+    /**
+     * If adding metadata, the metadata file to add to.
+     */
+    public File getMetaDataFile() {
+<span class="nc" id="L398">        return _file;</span>
+    }
+
+    /**
+     * If adding metadata, the metadata file to add to.
+     */
+    public void setMetaDataFile(File file) {
+<span class="nc" id="L405">        _file = file;</span>
+<span class="nc" id="L406">    }</span>
+
+    /**
+     * Return the repository to use to access mapping information.
+     * Defaults to a new {@link MappingRepository}.
+     */
+    public MappingRepository getRepository() {
+<span class="nc bnc" id="L413" title="All 2 branches missed.">        if (_repos == null) {</span>
+<span class="nc" id="L414">            _repos = _conf.newMappingRepositoryInstance();</span>
+<span class="nc" id="L415">            _repos.setSchemaGroup(getSchemaGroup());</span>
+<span class="nc" id="L416">            _repos.setValidate(MetaDataRepository.VALIDATE_UNENHANCED, false);</span>
+        }
+<span class="nc" id="L418">        return _repos;</span>
+    }
+
+    /**
+     * Set the repository to use to access mapping information.
+     */
+    public void setRepository(MappingRepository repos) {
+<span class="nc" id="L425">        _repos = repos;</span>
+<span class="nc" id="L426">    }</span>
+
+    /**
+     * Return the schema group to use in mapping. If none has been set, the
+     * schema will be generated from the database.
+     */
+    public SchemaGroup getSchemaGroup() {
+<span class="nc bnc" id="L433" title="All 2 branches missed.">        if (_schema == null) {</span>
+<span class="nc bnc" id="L434" title="All 2 branches missed.">            if (_action.indexOf(ACTION_BUILD_SCHEMA) != -1) {</span>
+<span class="nc" id="L435">                DynamicSchemaFactory factory = new DynamicSchemaFactory();</span>
+<span class="nc" id="L436">                factory.setConfiguration(_conf);</span>
+<span class="nc" id="L437">                _schema = factory;</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">            } else if (_readSchema</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">                || contains(_schemaActions,SchemaTool.ACTION_RETAIN)</span>
+<span class="nc bnc" id="L440" title="All 2 branches missed.">                || contains(_schemaActions,SchemaTool.ACTION_REFRESH)) {</span>
+<span class="nc" id="L441">                _schema = (SchemaGroup) newSchemaTool(null).getDBSchemaGroup().</span>
+<span class="nc" id="L442">                    clone();</span>
+            } else {
+                // with this we'll just read tables as different mappings
+                // look for them
+<span class="nc" id="L446">                LazySchemaFactory factory = new LazySchemaFactory();</span>
+<span class="nc" id="L447">                factory.setConfiguration(_conf);</span>
+<span class="nc" id="L448">                factory.setPrimaryKeys(getPrimaryKeys());</span>
+<span class="nc" id="L449">                factory.setForeignKeys(getForeignKeys());</span>
+<span class="nc" id="L450">                factory.setIndexes(getIndexes());</span>
+<span class="nc" id="L451">                _schema = factory;</span>
+            }
+
+<span class="nc bnc" id="L454" title="All 2 branches missed.">            if (_schema.getSchemas().length == 0)</span>
+<span class="nc" id="L455">                _schema.addSchema();</span>
+        }
+<span class="nc" id="L457">        return _schema;</span>
+    }
+
+    /**
+     * Set the schema to use in mapping.
+     */
+    public void setSchemaGroup(SchemaGroup schema) {
+<span class="nc" id="L464">        _schema = schema;</span>
+<span class="nc" id="L465">    }</span>
+
+    /**
+     * Reset the internal repository. This is called automatically after
+     * every {@link #record}.
+     */
+    public void clear() {
+<span class="nc" id="L472">        _repos = null;</span>
+<span class="nc" id="L473">        _schema = null;</span>
+<span class="nc" id="L474">        _schemaTool = null;</span>
+<span class="nc" id="L475">        _flush = false;</span>
+<span class="nc" id="L476">        _flushSchema = false;</span>
+<span class="nc bnc" id="L477" title="All 2 branches missed.">        if (_dropCls != null)</span>
+<span class="nc" id="L478">            _dropCls.clear();</span>
+<span class="nc bnc" id="L479" title="All 2 branches missed.">        if (_dropMap != null)</span>
+<span class="nc" id="L480">            _dropMap.clear();</span>
+<span class="nc" id="L481">    }</span>
+
+    /**
+     * Records the changes that have been made to both the mappings and the
+     * associated schema, and clears the tool for further use. This also
+     * involves clearing the internal mapping repository.
+     */
+    public void record() {
+<span class="nc" id="L489">        record(null);</span>
+<span class="nc" id="L490">    }</span>
+
+    public void record(MappingTool.Flags flags) {
+<span class="nc" id="L493">        MappingRepository repos = getRepository();</span>
+<span class="nc" id="L494">        MetaDataFactory io = repos.getMetaDataFactory();</span>
+        ClassMapping[] mappings;
+
+<span class="nc bnc" id="L497" title="All 2 branches missed.">        if (!ACTION_DROP.equals(_action))</span>
+<span class="nc" id="L498">            mappings = repos.getMappings();</span>
+<span class="nc bnc" id="L499" title="All 2 branches missed.">        else if (_dropMap != null)</span>
+<span class="nc" id="L500">            mappings = (ClassMapping[]) _dropMap.toArray</span>
+<span class="nc" id="L501">                (new ClassMapping[_dropMap.size()]);</span>
+        else
+<span class="nc" id="L503">            mappings = new ClassMapping[0];</span>
+
+        try {
+<span class="nc bnc" id="L506" title="All 4 branches missed.">            if (_dropCls != null &amp;&amp; !_dropCls.isEmpty()) {</span>
+<span class="nc" id="L507">                Class&lt;?&gt;[] cls = (Class[]) _dropCls.toArray</span>
+<span class="nc" id="L508">                    (new Class[_dropCls.size()]);</span>
+<span class="nc bnc" id="L509" title="All 2 branches missed.">                if (!io.drop(cls, _mode, null))</span>
+<span class="nc" id="L510">                    _log.warn(_loc.get(&quot;bad-drop&quot;, _dropCls));</span>
+            }
+
+<span class="nc bnc" id="L513" title="All 2 branches missed.">            if (_flushSchema) {</span>
+                // drop portions of the known schema that no mapping uses, and
+                // add sequences used for value generation
+<span class="nc bnc" id="L516" title="All 2 branches missed.">                if (_dropUnused)</span>
+<span class="nc" id="L517">                    dropUnusedSchemaComponents(mappings);</span>
+<span class="nc" id="L518">                addSequenceComponents(mappings);</span>
+
+                // now run the schematool as long as we're doing some schema
+                // action and the user doesn't just want an xml output
+<span class="nc" id="L522">                String[] schemaActions = _schemaActions.split(&quot;,&quot;);</span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">                for (int i = 0; i &lt; schemaActions.length; i++) {</span>
+<span class="nc bnc" id="L524" title="All 6 branches missed.">                    if (!SCHEMA_ACTION_NONE.equals(schemaActions[i])</span>
+                        &amp;&amp; (_schemaWriter == null || (_schemaTool != null
+<span class="nc bnc" id="L526" title="All 2 branches missed.">                            &amp;&amp; _schemaTool.getWriter() != null))) {</span>
+
+                        SchemaTool tool;
+<span class="nc bnc" id="L529" title="All 2 branches missed.">                        if (schemaActions[i].equals(ACTION_SCRIPT_CREATE) ||</span>
+<span class="nc bnc" id="L530" title="All 2 branches missed.">                            schemaActions[i].equals(ACTION_SCRIPT_DROP) ||</span>
+<span class="nc bnc" id="L531" title="All 2 branches missed.">                            schemaActions[i].equals(ACTION_SCRIPT_LOAD)) {</span>
+<span class="nc" id="L532">                            tool = newSchemaTool(SchemaTool.ACTION_EXECUTE_SCRIPT);</span>
+                        } else {
+<span class="nc" id="L534">                            tool = newSchemaTool(schemaActions[i]);</span>
+                        }
+
+<span class="nc bnc" id="L537" title="All 4 branches missed.">                        if (schemaActions[i].equals(ACTION_ADD) &amp;&amp; _conf.getCreateScriptTarget() != null) {</span>
+<span class="nc" id="L538">                            tool.setWriter(new PrintWriter(_conf.getCreateScriptTarget()));</span>
+<span class="nc" id="L539">                            tool.setIndexes(true);</span>
+<span class="nc" id="L540">                            tool.setForeignKeys(true);</span>
+<span class="nc" id="L541">                            tool.setSequences(true);</span>
+                        }
+
+<span class="nc bnc" id="L544" title="All 4 branches missed.">                        if (schemaActions[i].equals(ACTION_DROP) &amp;&amp; _conf.getDropScriptTarget() != null) {</span>
+<span class="nc" id="L545">                            tool.setWriter(new PrintWriter(_conf.getDropScriptTarget()));</span>
+                        }
+
+                        // configure the tool with additional settings
+<span class="nc bnc" id="L549" title="All 2 branches missed.">                        if (flags != null) {</span>
+<span class="nc" id="L550">                            tool.setDropTables(flags.dropTables);</span>
+<span class="nc" id="L551">                            tool.setRollbackBeforeDDL(flags.rollbackBeforeDDL);</span>
+<span class="nc" id="L552">                            tool.setDropSequences(flags.dropSequences);</span>
+<span class="nc" id="L553">                            tool.setWriter(flags.sqlWriter);</span>
+<span class="nc" id="L554">                            tool.setOpenJPATables(flags.openjpaTables);</span>
+<span class="nc" id="L555">                            tool.setSQLTerminator(flags.sqlTerminator);</span>
+                        }
+
+<span class="nc bnc" id="L558" title="All 4 branches missed.">                        switch (schemaActions[i]) {</span>
+                            case ACTION_SCRIPT_CREATE:
+<span class="nc" id="L560">                                tool.setScriptToExecute(_conf.getCreateScriptSource());</span>
+<span class="nc" id="L561">                                break;</span>
+                            case ACTION_SCRIPT_DROP:
+<span class="nc" id="L563">                                tool.setScriptToExecute(_conf.getDropScriptSource());</span>
+<span class="nc" id="L564">                                break;</span>
+                            case ACTION_SCRIPT_LOAD:
+<span class="nc" id="L566">                                tool.setScriptToExecute(_conf.getLoadScriptSource());</span>
+                                break;
+                        }
+
+<span class="nc" id="L570">                        tool.setSchemaGroup(getSchemaGroup());</span>
+<span class="nc" id="L571">                        tool.run();</span>
+<span class="nc" id="L572">                        tool.record();</span>
+<span class="nc" id="L573">                        tool.clear();</span>
+                    }
+                }
+
+                // xml output of schema?
+<span class="nc bnc" id="L578" title="All 2 branches missed.">                if (_schemaWriter != null) {</span>
+                    // serialize the planned schema to the stream
+<span class="nc" id="L580">                    SchemaSerializer ser = new XMLSchemaSerializer(_conf);</span>
+<span class="nc" id="L581">                    ser.addAll(getSchemaGroup());</span>
+<span class="nc" id="L582">                    ser.serialize(_schemaWriter, MetaDataSerializer.PRETTY);</span>
+<span class="nc" id="L583">                    _schemaWriter.flush();</span>
+                }
+            }
+<span class="nc bnc" id="L586" title="All 2 branches missed.">            if (!_flush)</span>
+<span class="nc" id="L587">                return;</span>
+
+<span class="nc" id="L589">            QueryMetaData[] queries = repos.getQueryMetaDatas();</span>
+<span class="nc" id="L590">            SequenceMetaData[] seqs = repos.getSequenceMetaDatas();</span>
+<span class="nc" id="L591">            Map&lt;File, String&gt; output = null;</span>
+
+            // if we're outputting to stream, set all metas to same file so
+            // they get placed in single string
+<span class="nc bnc" id="L595" title="All 2 branches missed.">            if (_mappingWriter != null) {</span>
+<span class="nc" id="L596">                output = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L597">                File tmp = new File(&quot;openjpatmp&quot;);</span>
+<span class="nc bnc" id="L598" title="All 2 branches missed.">                for (int i = 0; i &lt; mappings.length; i++) {</span>
+<span class="nc" id="L599">                    mappings[i].setSource(tmp, SourceTracker.SRC_OTHER, &quot;openjpatmp&quot;);</span>
+                }
+<span class="nc bnc" id="L601" title="All 2 branches missed.">                for (int i = 0; i &lt; queries.length; i++) {</span>
+<span class="nc" id="L602">                    queries[i].setSource(tmp, queries[i].getSourceScope(), SourceTracker.SRC_OTHER, &quot;openjpatmp&quot;);</span>
+                }
+<span class="nc bnc" id="L604" title="All 2 branches missed.">                for (int i = 0; i &lt; seqs.length; i++)</span>
+<span class="nc" id="L605">                    seqs[i].setSource(tmp, seqs[i].getSourceScope(),</span>
+                        SourceTracker.SRC_OTHER);
+            }
+
+            // store
+<span class="nc bnc" id="L610" title="All 2 branches missed.">            if (!io.store(mappings, queries, seqs, _mode, output))</span>
+<span class="nc" id="L611">                throw new MetaDataException(_loc.get(&quot;bad-store&quot;));</span>
+
+            // write to stream
+<span class="nc bnc" id="L614" title="All 2 branches missed.">            if (_mappingWriter != null) {</span>
+<span class="nc" id="L615">                PrintWriter out = new PrintWriter(_mappingWriter);</span>
+<span class="nc" id="L616">                for (Iterator&lt;String&gt; itr = output.values().iterator();</span>
+<span class="nc bnc" id="L617" title="All 2 branches missed.">                    itr.hasNext();)</span>
+<span class="nc" id="L618">                    out.println(itr.next());</span>
+<span class="nc" id="L619">                out.flush();</span>
+            }
+        }
+<span class="nc" id="L622">        catch (RuntimeException re) {</span>
+<span class="nc" id="L623">            throw re;</span>
+<span class="nc" id="L624">        } catch (Exception e) {</span>
+<span class="nc" id="L625">            throw new GeneralException(e);</span>
+        } finally {
+<span class="nc" id="L627">            clear();</span>
+        }
+<span class="nc" id="L629">    }</span>
+
+    /**
+     * Drops schema components that appear to be unused from the local
+     * copy of the schema group.
+     */
+    private void dropUnusedSchemaComponents(ClassMapping[] mappings) {
+        FieldMapping[] fields;
+<span class="nc bnc" id="L637" title="All 2 branches missed.">        for (int i = 0; i &lt; mappings.length; i++) {</span>
+<span class="nc" id="L638">            mappings[i].refSchemaComponents();</span>
+<span class="nc" id="L639">            mappings[i].getDiscriminator().refSchemaComponents();</span>
+<span class="nc" id="L640">            mappings[i].getVersion().refSchemaComponents();</span>
+<span class="nc" id="L641">            fields = mappings[i].getDefinedFieldMappings();</span>
+<span class="nc bnc" id="L642" title="All 2 branches missed.">            for (int j = 0; j &lt; fields.length; j++)</span>
+<span class="nc" id="L643">                fields[j].refSchemaComponents();</span>
+        }
+
+        // also allow the dbdictionary to ref any schema components that
+        // it adds apart from mappings
+<span class="nc" id="L648">        SchemaGroup group = getSchemaGroup();</span>
+<span class="nc" id="L649">        Schema[] schemas = group.getSchemas();</span>
+        Table[] tables;
+<span class="nc bnc" id="L651" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L652">            tables = schemas[i].getTables();</span>
+<span class="nc bnc" id="L653" title="All 2 branches missed.">            for (int j = 0; j &lt; tables.length; j++)</span>
+<span class="nc" id="L654">                _dict.refSchemaComponents(tables[j]);</span>
+        }
+
+<span class="nc" id="L657">        group.removeUnusedComponents();</span>
+<span class="nc" id="L658">    }</span>
+
+    /**
+     * Add tables used by sequences to the given schema.
+     */
+    private void addSequenceComponents(ClassMapping[] mappings) {
+<span class="nc" id="L664">        SchemaGroup group = getSchemaGroup();</span>
+<span class="nc bnc" id="L665" title="All 2 branches missed.">        for (int i = 0; i &lt; mappings.length; i++)</span>
+<span class="nc" id="L666">            addSequenceComponents(mappings[i], group);</span>
+<span class="nc" id="L667">    }</span>
+
+    /**
+     * Add tables used by sequences to the given schema.
+     */
+    private void addSequenceComponents(ClassMapping mapping,
+        SchemaGroup group) {
+<span class="nc" id="L674">        SequenceMetaData smd = mapping.getIdentitySequenceMetaData();</span>
+<span class="nc" id="L675">        Seq seq = null;</span>
+<span class="nc bnc" id="L676" title="All 2 branches missed.">        if (smd != null)</span>
+<span class="nc" id="L677">            seq = smd.getInstance(null);</span>
+<span class="nc bnc" id="L678" title="All 2 branches missed.">        else if (mapping.getIdentityStrategy() == ValueStrategies.NATIVE</span>
+<span class="nc bnc" id="L679" title="All 2 branches missed.">            || (mapping.getIdentityStrategy() == ValueStrategies.NONE</span>
+<span class="nc bnc" id="L680" title="All 2 branches missed.">            &amp;&amp; mapping.getIdentityType() == ClassMetaData.ID_DATASTORE))</span>
+<span class="nc" id="L681">            seq = _conf.getSequenceInstance();</span>
+
+<span class="nc bnc" id="L683" title="All 2 branches missed.">        if (seq instanceof JDBCSeq)</span>
+<span class="nc" id="L684">            ((JDBCSeq) seq).addSchema(mapping, group);</span>
+
+        FieldMapping[] fmds;
+<span class="nc bnc" id="L687" title="All 2 branches missed.">        if (mapping.getEmbeddingMetaData() == null)</span>
+<span class="nc" id="L688">            fmds = mapping.getDefinedFieldMappings();</span>
+        else
+<span class="nc" id="L690">            fmds = mapping.getFieldMappings();</span>
+<span class="nc bnc" id="L691" title="All 2 branches missed.">        for (int i = 0; i &lt; fmds.length; i++) {</span>
+<span class="nc" id="L692">            smd = fmds[i].getValueSequenceMetaData();</span>
+<span class="nc bnc" id="L693" title="All 2 branches missed.">            if (smd != null) {</span>
+<span class="nc" id="L694">                seq = smd.getInstance(_loader);</span>
+<span class="nc bnc" id="L695" title="All 2 branches missed.">                if (seq instanceof JDBCSeq)</span>
+<span class="nc" id="L696">                    ((JDBCSeq) seq).addSchema(mapping, group);</span>
+<span class="nc bnc" id="L697" title="All 2 branches missed.">            } else if (fmds[i].getEmbeddedMapping() != null)</span>
+<span class="nc" id="L698">                addSequenceComponents(fmds[i].getEmbeddedMapping(), group);</span>
+        }
+<span class="nc" id="L700">    }</span>
+
+    ///////////
+    // Actions
+    ///////////
+
+    /**
+     * Run the configured action on the given instance.
+     */
+    public void run(Class&lt;?&gt; cls) {
+<span class="nc bnc" id="L710" title="All 2 branches missed.">        if (ACTION_ADD.equals(_action)) {</span>
+<span class="nc bnc" id="L711" title="All 2 branches missed.">            if (_meta)</span>
+<span class="nc" id="L712">                addMeta(cls);</span>
+            else
+<span class="nc" id="L714">                add(cls);</span>
+<span class="nc bnc" id="L715" title="All 2 branches missed.">        } else if (ACTION_REFRESH.equals(_action))</span>
+<span class="nc" id="L716">            refresh(cls);</span>
+<span class="nc bnc" id="L717" title="All 2 branches missed.">        else if (ACTION_BUILD_SCHEMA.equals(_action))</span>
+<span class="nc" id="L718">            buildSchema(cls);</span>
+<span class="nc bnc" id="L719" title="All 2 branches missed.">        else if (ACTION_DROP.equals(_action))</span>
+<span class="nc" id="L720">            drop(cls);</span>
+<span class="nc bnc" id="L721" title="All 2 branches missed.">        else if (ACTION_VALIDATE.equals(_action))</span>
+<span class="nc" id="L722">            validate(cls);</span>
+<span class="nc" id="L723">    }</span>
+
+    /**
+     * Add the mapping for the given instance.
+     */
+    private void add(Class&lt;?&gt; cls) {
+<span class="nc bnc" id="L729" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L730">            return;</span>
+
+<span class="nc" id="L732">        MappingRepository repos = getRepository();</span>
+<span class="nc" id="L733">        repos.setStrategyInstaller(new MappingStrategyInstaller(repos));</span>
+<span class="nc bnc" id="L734" title="All 2 branches missed.">        if (getMapping(repos, cls, true) != null) {</span>
+<span class="nc" id="L735">            _flush = true;</span>
+<span class="nc" id="L736">            _flushSchema = true;</span>
+        }
+<span class="nc" id="L738">    }</span>
+
+    /**
+     * Return the mapping for the given type, or null if the type is
+     * persistence-aware.
+     */
+    private static ClassMapping getMapping(MappingRepository repos, Class&lt;?&gt; cls,
+        boolean validate) {
+        // this will parse all possible metadata rsrcs looking for cls, so
+        // will detect if p-aware
+<span class="nc" id="L748">        ClassMapping mapping = repos.getMapping(cls, null, false);</span>
+<span class="nc bnc" id="L749" title="All 2 branches missed.">        if (mapping != null)</span>
+<span class="nc" id="L750">            return mapping;</span>
+<span class="nc bnc" id="L751" title="All 6 branches missed.">        if (!validate || cls.isInterface() || repos.skipMetadata(cls)</span>
+<span class="nc bnc" id="L752" title="All 2 branches missed.">            || repos.getPersistenceAware(cls) != null)</span>
+<span class="nc" id="L753">            return null;</span>
+<span class="nc" id="L754">        throw new MetaDataException(_loc.get(&quot;no-meta&quot;, cls, cls.getClassLoader()));</span>
+    }
+
+    /**
+     * Create a metadata for the given instance.
+     */
+    private void addMeta(Class&lt;?&gt; cls) {
+<span class="nc bnc" id="L761" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L762">            return;</span>
+
+<span class="nc" id="L764">        _flush = true;</span>
+<span class="nc" id="L765">        MappingRepository repos = getRepository();</span>
+<span class="nc" id="L766">        repos.setResolve(MODE_MAPPING, false);</span>
+<span class="nc" id="L767">        MetaDataFactory factory = repos.getMetaDataFactory();</span>
+<span class="nc" id="L768">        factory.getDefaults().setIgnoreNonPersistent(false);</span>
+<span class="nc" id="L769">        factory.setStoreMode(MetaDataFactory.STORE_VERBOSE);</span>
+
+<span class="nc" id="L771">        ClassMetaData meta = repos.addMetaData(cls);</span>
+<span class="nc" id="L772">        FieldMetaData[] fmds = meta.getDeclaredFields();</span>
+<span class="nc bnc" id="L773" title="All 2 branches missed.">        for (int i = 0; i &lt; fmds.length; i++) {</span>
+<span class="nc bnc" id="L774" title="All 2 branches missed.">            if (fmds[i].getDeclaredTypeCode() == JavaTypes.OBJECT</span>
+<span class="nc bnc" id="L775" title="All 2 branches missed.">                &amp;&amp; fmds[i].getDeclaredType() != Object.class)</span>
+<span class="nc" id="L776">                fmds[i].setDeclaredTypeCode(JavaTypes.PC);</span>
+        }
+<span class="nc bnc" id="L778" title="All 2 branches missed.">        meta.setSource(_file, meta.getSourceType(), _file == null ? &quot;&quot;: _file.getPath() );</span>
+<span class="nc" id="L779">        meta.setResolve(MODE_META, true);</span>
+<span class="nc" id="L780">    }</span>
+
+    /**
+     * Refresh or add the mapping for the given instance.
+     */
+    private void refresh(Class&lt;?&gt; cls) {
+<span class="nc bnc" id="L786" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L787">            return;</span>
+
+<span class="nc" id="L789">        MappingRepository repos = getRepository();</span>
+<span class="nc" id="L790">        repos.setStrategyInstaller(new RefreshStrategyInstaller(repos));</span>
+<span class="nc bnc" id="L791" title="All 2 branches missed.">        if (getMapping(repos, cls, true) != null) {</span>
+<span class="nc" id="L792">            _flush = true;</span>
+<span class="nc" id="L793">            _flushSchema = true;</span>
+        }
+<span class="nc" id="L795">    }</span>
+
+    /**
+     * Validate the mappings for the given class and its fields.
+     */
+    private void validate(Class&lt;?&gt; cls) {
+<span class="nc bnc" id="L801" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L802">            return;</span>
+
+<span class="nc" id="L804">        MappingRepository repos = getRepository();</span>
+<span class="nc" id="L805">        repos.setStrategyInstaller(new RuntimeStrategyInstaller(repos));</span>
+<span class="nc bnc" id="L806" title="All 2 branches missed.">        if (getMapping(repos, cls, true) != null)</span>
+<span class="nc bnc" id="L807" title="All 2 branches missed.">            _flushSchema = !contains(_schemaActions,SCHEMA_ACTION_NONE)</span>
+<span class="nc bnc" id="L808" title="All 2 branches missed.">                &amp;&amp; !contains(_schemaActions,SchemaTool.ACTION_ADD);</span>
+<span class="nc" id="L809">    }</span>
+
+    /**
+     * Create the schema using the mapping for the given instance.
+     */
+    private void buildSchema(Class&lt;?&gt; cls) {
+<span class="nc bnc" id="L815" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L816">            return;</span>
+
+<span class="nc" id="L818">        MappingRepository repos = getRepository();</span>
+<span class="nc" id="L819">        repos.setStrategyInstaller(new RuntimeStrategyInstaller(repos));</span>
+<span class="nc bnc" id="L820" title="All 2 branches missed.">        if (getMapping(repos, cls, true) == null)</span>
+<span class="nc" id="L821">            return;</span>
+
+        // set any logical pks to non-logical so they get flushed
+<span class="nc" id="L824">        _flushSchema = true;</span>
+<span class="nc" id="L825">        Schema[] schemas = _schema.getSchemas();</span>
+        Table[] tables;
+        Column[] cols;
+<span class="nc bnc" id="L828" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L829">            tables = schemas[i].getTables();</span>
+<span class="nc bnc" id="L830" title="All 2 branches missed.">            for (int j = 0; j &lt; tables.length; j++) {</span>
+<span class="nc bnc" id="L831" title="All 2 branches missed.">                if (tables[j].getPrimaryKey() == null)</span>
+<span class="nc" id="L832">                    continue;</span>
+
+<span class="nc" id="L834">                tables[j].getPrimaryKey().setLogical(false);</span>
+<span class="nc" id="L835">                cols = tables[j].getPrimaryKey().getColumns();</span>
+<span class="nc bnc" id="L836" title="All 2 branches missed.">                for (int k = 0; k &lt; cols.length; k++)</span>
+<span class="nc" id="L837">                    cols[k].setNotNull(true);</span>
+            }
+        }
+<span class="nc" id="L840">    }</span>
+
+    /**
+     * Drop mapping for given class.
+     */
+    private void drop(Class&lt;?&gt; cls) {
+<span class="nc bnc" id="L846" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L847">            return;</span>
+
+<span class="nc bnc" id="L849" title="All 2 branches missed.">        if (_dropCls == null)</span>
+<span class="nc" id="L850">            _dropCls = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L851">        _dropCls.add(cls);</span>
+<span class="nc bnc" id="L852" title="All 2 branches missed.">        if (!contains(_schemaActions,SchemaTool.ACTION_DROP))</span>
+<span class="nc" id="L853">            return;</span>
+
+<span class="nc" id="L855">        MappingRepository repos = getRepository();</span>
+<span class="nc" id="L856">        repos.setStrategyInstaller(new RuntimeStrategyInstaller(repos));</span>
+<span class="nc" id="L857">        ClassMapping mapping = null;</span>
+        try {
+<span class="nc" id="L859">            mapping = repos.getMapping(cls, null, false);</span>
+<span class="nc" id="L860">        } catch (Exception e) {</span>
+<span class="nc" id="L861">        }</span>
+
+<span class="nc bnc" id="L863" title="All 2 branches missed.">        if (mapping != null) {</span>
+<span class="nc" id="L864">            _flushSchema = true;</span>
+<span class="nc bnc" id="L865" title="All 2 branches missed.">            if (_dropMap == null)</span>
+<span class="nc" id="L866">                _dropMap = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L867">            _dropMap.add(mapping);</span>
+        } else
+<span class="nc" id="L869">            _log.warn(_loc.get(&quot;no-drop-meta&quot;, cls));</span>
+<span class="nc" id="L870">    }</span>
+
+    ////////
+    // Main
+    ////////
+
+    /**
+     * Usage: java org.apache.openjpa.jdbc.meta.MappingTool [option]*
+     * [-action/-a &amp;lt;refresh | add | buildSchema | drop | validate | import
+     * | export&amp;gt;] &amp;lt;class name | .java file | .class file | .jdo file&amp;gt;*
+     * Where the following options are recognized.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;-properties/-p &amp;lt;properties file or resource&amp;gt;&lt;/i&gt;: The
+     * path or resource name of a OpenJPA properties file containing
+     * information as outlined in {@link OpenJPAConfiguration}. Optional.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-&amp;lt;property name&amp;gt; &amp;lt;property value&amp;gt;&lt;/i&gt;: All bean
+     * properties of the OpenJPA {@link JDBCConfiguration} can be set by
+     * using their	names and supplying a value. For example:
+     * &lt;code&gt;-licenseKey adslfja83r3lkadf&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-file/-f &amp;lt;stdout | output file or resource&amp;gt;&lt;/i&gt;: Use
+     * this option to write the planned mappings to an XML document rather
+     * than store them in the repository. This option also specifies the
+     * metadata file to write to if using the &lt;code&gt;add&lt;/code&gt; action with
+     * the &lt;code&gt;-meta true&lt;/code&gt; flag, or the file to dump to if using
+     * the &lt;code&gt;export&lt;/code&gt; action.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-schemaAction/-sa &amp;lt;schema action | none&amp;gt;&lt;/i&gt;: The
+     * {@link SchemaTool} defines the actions possible. The actions will
+     * apply to all schema components used by the mappings involved.
+     * Unless you are running the mapping tool on all of your persistent
+     * types at once, be careful running schema actions that can drop data.
+     * It is possible to accidentally drop schema components that are
+     * used by classes you aren't currently running the tool over. The
+     * action defaults to &lt;code&gt;add&lt;/code&gt;.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-schemaFile/-sf &amp;lt;stdout | output file or resource&amp;gt;&lt;/i&gt;: Use
+     * this option to write the planned schema to an XML document rather
+     * than modify the data store.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-sqlFile/-sql &amp;lt;stdout | output file or resource&amp;gt;&lt;/i&gt;: Use
+     * this option to write the planned schema changes as a SQL
+     * script rather than modifying the data store.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-sqlEncode/-se &amp;lt;encoding&amp;gt;&lt;/i&gt;: Use
+     * this option with the &lt;code&gt;-sqlFile&lt;/code&gt; flag to write the SQL script
+     * in a different Java character set encoding than the default JVM locale,
+     * such as &lt;code&gt;UTF-8&lt;/code&gt;.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-dropTables/-dt &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Corresponds to the
+     * same-named option in the {@link SchemaTool}.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-dropSequences/-dsq &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Corresponds
+     * to the same-named option in the {@link SchemaTool}.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-openjpaTables/-kt &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Corresponds to
+     * the same-named option in the {@link SchemaTool}.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-ignoreErrors/-i &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Corresponds to the
+     * same-named option in the {@link SchemaTool}.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-readSchema/-rs &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set this to true
+     * to read the entire existing schema (even when false the parts of
+     * the schema used by classes the tool is run on will still be read).
+     * Turning on schema reading can ensure that no naming conflicts will
+     * occur, but it can take a long time.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-primaryKeys/-pk &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Whether primary
+     * keys on existing tables are manipulated. Defaults to false.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-foreignKeys/-fk &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Whether foreign
+     * keys on existing tables are manipulated. Defaults to false.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-indexes/-ix &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Whether indexes on
+     * existing tables are manipulated. Defaults to false.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-sequences/-sq &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Whether sequences
+     * are manipulated. Defaults to true.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-schemas/-s &amp;lt;schema and table names&amp;gt;&lt;/i&gt;: A list of schemas
+     * and/or tables to read. Corresponds to the
+     * same-named option in the {@link SchemaGenerator}. This option
+     * is ignored if &lt;code&gt;readSchema&lt;/code&gt; is false.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-meta/-m &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Whether the given action
+     * applies to metadata as well as mappings.&lt;/li&gt;
+     * &lt;/ul&gt;
+     *  The various actions are as follows.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;refresh&lt;/i&gt;: Bring the mapping information up-to-date
+     * with the class definitions. OpenJPA will attempt to use any provided
+     * mapping information, and fill in missing information. If the
+     * provided information conflicts with the class definition, the
+     * conflicting information will be discarded and the class/field will
+     * be re-mapped to new columns/tables. This is the default action.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;add&lt;/i&gt;: If used with the &lt;code&gt;-meta&lt;/code&gt; option, adds new
+     * default metadata for the given class(es). Otherwise, brings the
+     * mapping information up-to-date with the class
+     * definitions. OpenJPA will attempt to use any provided mapping
+     * information, and fill in missing information. OpenJPA will fail if
+     * the provided information conflicts with the class definition.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;buildSchema&lt;/i&gt;: Create the schema matching the existing
+     * mappings for the given class(es). Any invalid mapping information
+     * will cause an exception.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;drop&lt;/i&gt;: Delete mappings for the given classes. If used with
+     * the &lt;code&gt;-meta&lt;/code&gt; option, also deletes metadata.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;validate&lt;/i&gt;: Validate the given mappings. The mapping
+     * repository and schema will not be affected.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;import&lt;/i&gt;: Import mappings from an XML document and store
+     * them as the current system mappings.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;export&lt;/i&gt;: Dump the current mappings for the given classes to
+     * an XML document specified by the &lt;code&gt;file&lt;/code&gt; option.&lt;/li&gt;
+     * If used with the &lt;code&gt;-meta&lt;/code&gt; option, the metadata will be
+     * included in the export.
+     * &lt;/ul&gt;
+     *  Each class supplied as an argument must have valid metadata. If
+     * no class arguments are given, the tool runs on all metadata files in
+     * the CLASSPATH.
+     *  Examples:
+     * &lt;ul&gt;
+     * &lt;li&gt;Refresh the mappings for given package, without dropping any
+     * schema components:&lt;br /&gt;
+     * &lt;code&gt;java org.apache.openjpa.jdbc.meta.MappingTool
+     *      mypackage.jdo&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;Refresh the mappings for all persistent classes in the classpath,
+     * dropping any unused columns and even tables:&lt;br /&gt;
+     * &lt;code&gt;java org.apache.openjpa.jdbc.meta.MappingTool -sa refresh
+     * -dt true&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;Make sure the mappings you've created by hand match the object
+     * model and schema:&lt;br /&gt;
+     * &lt;code&gt;java org.apache.openjpa.jbdc.meta.MappingTool
+     * -a validate Person.java&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;Remove the recorded mapping for a given class:&lt;br /&gt;
+     * &lt;code&gt;java org.apache.openjpa.jbdc.meta.MappingTool
+     * -a drop Person.java&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;Record the current mappings in an XML file:&lt;br /&gt;
+     * &lt;code&gt;java org.apache.openjpa.jdbc.meta.MappingTool
+     * -f mypackage.orm -a export mypackage.jdo&lt;/code&gt;&lt;/li&gt;
+     * &lt;/ul&gt;
+     */
+    public static void main(String[] arguments)
+        throws IOException, SQLException {
+<span class="nc" id="L996">        Options opts = new Options();</span>
+<span class="nc" id="L997">        final String[] args = opts.setFromCmdLine(arguments);</span>
+<span class="nc" id="L998">        boolean ret = Configurations.runAgainstAllAnchors(opts,</span>
+<span class="nc" id="L999">            new Configurations.Runnable() {</span>
+            @Override
+            public boolean run(Options opts) throws IOException, SQLException {
+<span class="nc" id="L1002">                JDBCConfiguration conf = new JDBCConfigurationImpl();</span>
+                try {
+<span class="nc" id="L1004">                    return MappingTool.run(conf, args, opts, null);</span>
+                } finally {
+<span class="nc" id="L1006">                    conf.close();</span>
+                }
+            }
+        });
+<span class="nc bnc" id="L1010" title="All 2 branches missed.">        if (!ret) {</span>
+            // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L1012">            System.err.println(_loc.get(&quot;tool-usage&quot;));</span>
+            // STOP - ALLOW PRINT STATEMENTS
+        }
+<span class="nc" id="L1015">    }</span>
+
+    /**
+     * Run the tool. Returns false if invalid options are given.
+     *
+     * @see #main
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        Options opts, ClassLoader loader)
+        throws IOException, SQLException {
+        // flags
+<span class="nc" id="L1026">        Flags flags = new Flags();</span>
+<span class="nc" id="L1027">        flags.action = opts.removeProperty(&quot;action&quot;, &quot;a&quot;, flags.action);</span>
+<span class="nc" id="L1028">        flags.schemaAction = opts.removeProperty(&quot;schemaAction&quot;, &quot;sa&quot;,</span>
+            flags.schemaAction);
+<span class="nc" id="L1030">        flags.dropTables = opts.removeBooleanProperty</span>
+<span class="nc" id="L1031">            (&quot;dropTables&quot;, &quot;dt&quot;, flags.dropTables);</span>
+<span class="nc" id="L1032">        flags.rollbackBeforeDDL = opts.removeBooleanProperty</span>
+<span class="nc" id="L1033">            (&quot;rollbackBeforeDDL&quot;, &quot;rbddl&quot;, flags.rollbackBeforeDDL);</span>
+<span class="nc" id="L1034">        flags.openjpaTables = opts.removeBooleanProperty</span>
+<span class="nc" id="L1035">            (&quot;openjpaTables&quot;, &quot;ot&quot;, flags.openjpaTables);</span>
+<span class="nc" id="L1036">        flags.dropSequences = opts.removeBooleanProperty</span>
+<span class="nc" id="L1037">            (&quot;dropSequences&quot;, &quot;dsq&quot;, flags.dropSequences);</span>
+<span class="nc" id="L1038">        flags.readSchema = opts.removeBooleanProperty</span>
+<span class="nc" id="L1039">            (&quot;readSchema&quot;, &quot;rs&quot;, flags.readSchema);</span>
+<span class="nc" id="L1040">        flags.primaryKeys = opts.removeBooleanProperty</span>
+<span class="nc" id="L1041">            (&quot;primaryKeys&quot;, &quot;pk&quot;, flags.primaryKeys);</span>
+<span class="nc" id="L1042">        flags.indexes = opts.removeBooleanProperty(&quot;indexes&quot;, &quot;ix&quot;,</span>
+            flags.indexes);
+<span class="nc" id="L1044">        flags.foreignKeys = opts.removeBooleanProperty(&quot;foreignKeys&quot;, &quot;fk&quot;,</span>
+            flags.foreignKeys);
+<span class="nc" id="L1046">        flags.sequences = opts.removeBooleanProperty(&quot;sequences&quot;, &quot;sq&quot;,</span>
+            flags.sequences);
+<span class="nc" id="L1048">        flags.ignoreErrors = opts.removeBooleanProperty</span>
+<span class="nc" id="L1049">            (&quot;ignoreErrors&quot;, &quot;i&quot;, flags.ignoreErrors);</span>
+<span class="nc" id="L1050">        flags.meta = opts.removeBooleanProperty(&quot;meta&quot;, &quot;m&quot;, flags.meta);</span>
+<span class="nc" id="L1051">        String fileName = opts.removeProperty(&quot;file&quot;, &quot;f&quot;, null);</span>
+<span class="nc" id="L1052">        String schemaFileName = opts.removeProperty(&quot;schemaFile&quot;, &quot;sf&quot;, null);</span>
+<span class="nc" id="L1053">        String sqlFileName = opts.removeProperty(&quot;sqlFile&quot;, &quot;sql&quot;, null);</span>
+<span class="nc" id="L1054">        String sqlEncoding = opts.removeProperty(&quot;sqlEncode&quot;, &quot;se&quot;, null);</span>
+<span class="nc" id="L1055">        String sqlTerminator = opts.removeProperty(&quot;sqlTerminator&quot;, &quot;st&quot;, &quot;;&quot;);</span>
+<span class="nc" id="L1056">        String schemas = opts.removeProperty(&quot;s&quot;);</span>
+<span class="nc bnc" id="L1057" title="All 2 branches missed.">        if (schemas != null)</span>
+<span class="nc" id="L1058">            opts.setProperty(&quot;schemas&quot;, schemas);</span>
+
+<span class="nc" id="L1060">        Configurations.populateConfiguration(conf, opts);</span>
+<span class="nc bnc" id="L1061" title="All 4 branches missed.">        if (flags.meta &amp;&amp; ACTION_ADD.equals(flags.action))</span>
+<span class="nc" id="L1062">            flags.metaDataFile = Files.getFile(fileName, loader);</span>
+        else
+<span class="nc" id="L1064">            flags.mappingWriter = Files.getWriter(fileName, loader);</span>
+<span class="nc" id="L1065">        flags.schemaWriter = Files.getWriter(schemaFileName, loader);</span>
+<span class="nc bnc" id="L1066" title="All 2 branches missed.">        if (sqlEncoding != null)</span>
+<span class="nc" id="L1067">            flags.sqlWriter = Files.getWriter(sqlFileName, loader, sqlEncoding);</span>
+        else
+<span class="nc" id="L1069">            flags.sqlWriter = Files.getWriter(sqlFileName, loader);</span>
+<span class="nc" id="L1070">        flags.sqlTerminator = sqlTerminator;</span>
+<span class="nc" id="L1071">        return run(conf, args, flags, loader);</span>
+    }
+
+    /**
+     * Run the tool. Return false if an invalid option was given.
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        Flags flags, ClassLoader loader)
+        throws IOException, SQLException {
+        // default action based on whether the mapping defaults fills in
+        // missing info
+<span class="nc bnc" id="L1082" title="All 2 branches missed.">        if (flags.action == null) {</span>
+<span class="nc bnc" id="L1083" title="All 2 branches missed.">            if (conf.getMappingDefaultsInstance().defaultMissingInfo())</span>
+<span class="nc" id="L1084">                flags.action = ACTION_BUILD_SCHEMA;</span>
+            else
+<span class="nc" id="L1086">                flags.action = ACTION_REFRESH;</span>
+        }
+
+        // collect the classes to act on
+<span class="nc" id="L1090">        Log log = conf.getLog(OpenJPAConfiguration.LOG_TOOL);</span>
+<span class="nc" id="L1091">        Collection&lt;Class&lt;?&gt;&gt; classes = null;</span>
+<span class="nc bnc" id="L1092" title="All 2 branches missed.">        if (args.length == 0) {</span>
+<span class="nc bnc" id="L1093" title="All 2 branches missed.">            if (ACTION_IMPORT.equals(flags.action))</span>
+<span class="nc" id="L1094">                return false;</span>
+<span class="nc" id="L1095">            log.info(_loc.get(&quot;running-all-classes&quot;));</span>
+<span class="nc" id="L1096">            classes = conf.getMappingRepositoryInstance().</span>
+<span class="nc" id="L1097">                loadPersistentTypes(true, loader);</span>
+        } else {
+<span class="nc" id="L1099">            classes = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L1100">            ClassArgParser classParser = conf.getMetaDataRepositoryInstance().</span>
+<span class="nc" id="L1101">                getMetaDataFactory().newClassArgParser();</span>
+<span class="nc" id="L1102">            classParser.setClassLoader(loader);</span>
+            Class&lt;?&gt;[] parsed;
+<span class="nc bnc" id="L1104" title="All 2 branches missed.">            for (int i = 0; i &lt; args.length; i++) {</span>
+<span class="nc" id="L1105">                parsed = classParser.parseTypes(args[i]);</span>
+<span class="nc" id="L1106">                classes.addAll(Arrays.asList(parsed));</span>
+            }
+        }
+
+<span class="nc" id="L1110">        Class&lt;?&gt;[] act = (Class[]) classes.toArray(new Class[classes.size()]);</span>
+<span class="nc bnc" id="L1111" title="All 2 branches missed.">        if (ACTION_EXPORT.equals(flags.action)) {</span>
+            // run exports until the first export succeeds
+<span class="nc" id="L1113">            ImportExport[] instances = newImportExports();</span>
+<span class="nc bnc" id="L1114" title="All 2 branches missed.">            for (int i = 0; i &lt; instances.length; i++) {</span>
+<span class="nc bnc" id="L1115" title="All 2 branches missed.">                if (instances[i].exportMappings(conf, act, flags.meta, log,</span>
+                    flags.mappingWriter))
+<span class="nc" id="L1117">                    return true;</span>
+            }
+<span class="nc" id="L1119">            return false;</span>
+        }
+<span class="nc bnc" id="L1121" title="All 2 branches missed.">        if (ACTION_IMPORT.equals(flags.action)) {</span>
+            // run exports until the first export succeeds
+<span class="nc" id="L1123">            ImportExport[] instances = newImportExports();</span>
+<span class="nc bnc" id="L1124" title="All 2 branches missed.">            for (int i = 0; i &lt; instances.length; i++) {</span>
+<span class="nc bnc" id="L1125" title="All 2 branches missed.">                if (instances[i].importMappings(conf, act, args, flags.meta,</span>
+                    log, loader))
+<span class="nc" id="L1127">                    return true;</span>
+            }
+<span class="nc" id="L1129">            return false;</span>
+        }
+
+        MappingTool tool;
+        try {
+<span class="nc" id="L1134">            tool = new MappingTool(conf, flags.action, flags.meta, loader);</span>
+<span class="nc" id="L1135">        } catch (IllegalArgumentException iae) {</span>
+<span class="nc" id="L1136">            return false;</span>
+<span class="nc" id="L1137">        }</span>
+
+        // setup the tool
+<span class="nc" id="L1140">        tool.setIgnoreErrors(flags.ignoreErrors);</span>
+<span class="nc" id="L1141">        tool.setMetaDataFile(flags.metaDataFile);</span>
+<span class="nc" id="L1142">        tool.setMappingWriter(flags.mappingWriter);</span>
+<span class="nc" id="L1143">        tool.setSchemaAction(flags.schemaAction);</span>
+<span class="nc" id="L1144">        tool.setSchemaWriter(flags.schemaWriter);</span>
+<span class="nc bnc" id="L1145" title="All 2 branches missed.">        tool.setReadSchema(flags.readSchema</span>
+<span class="nc bnc" id="L1146" title="All 2 branches missed.">            &amp;&amp; !ACTION_VALIDATE.equals(flags.action));</span>
+<span class="nc" id="L1147">        tool.setPrimaryKeys(flags.primaryKeys);</span>
+<span class="nc" id="L1148">        tool.setForeignKeys(flags.foreignKeys);</span>
+<span class="nc" id="L1149">        tool.setIndexes(flags.indexes);</span>
+<span class="nc bnc" id="L1150" title="All 4 branches missed.">        tool.setSequences(flags.sequences || flags.dropSequences);</span>
+<span class="nc" id="L1151">        tool.setRollbackBeforeDDL(flags.rollbackBeforeDDL);</span>
+
+        // and run the action
+<span class="nc bnc" id="L1154" title="All 2 branches missed.">        for (int i = 0; i &lt; act.length; i++) {</span>
+<span class="nc" id="L1155">            log.info(_loc.get(&quot;tool-running&quot;, act[i], flags.action));</span>
+<span class="nc bnc" id="L1156" title="All 4 branches missed.">            if (i == 0 &amp;&amp; flags.readSchema)</span>
+<span class="nc" id="L1157">                log.info(_loc.get(&quot;tool-time&quot;));</span>
+<span class="nc" id="L1158">            tool.run(act[i]);</span>
+        }
+<span class="nc" id="L1160">        log.info(_loc.get(&quot;tool-record&quot;));</span>
+<span class="nc" id="L1161">        tool.record(flags);</span>
+<span class="nc" id="L1162">        return true;</span>
+    }
+
+    /**
+     * Create an {@link ImportExport} instance.
+     */
+    private static ImportExport[] newImportExports() {
+        try {
+<span class="nc" id="L1170">            Class&lt;?&gt;[] types = Services.getImplementorClasses(ImportExport.class);</span>
+<span class="nc" id="L1171">            ImportExport[] instances = new ImportExport[types.length];</span>
+<span class="nc bnc" id="L1172" title="All 2 branches missed.">            for (int i = 0; i &lt; types.length; i++)</span>
+<span class="nc" id="L1173">                instances[i] = (ImportExport) AccessController.doPrivileged(</span>
+<span class="nc" id="L1174">                    J2DoPrivHelper.newInstanceAction(types[i]));</span>
+<span class="nc" id="L1175">            return instances;</span>
+<span class="nc" id="L1176">        } catch (Throwable t) {</span>
+<span class="nc bnc" id="L1177" title="All 2 branches missed.">            if (t instanceof PrivilegedActionException)</span>
+<span class="nc" id="L1178">                t = ((PrivilegedActionException) t).getException();</span>
+<span class="nc" id="L1179">            throw new InternalException(_loc.get(&quot;importexport-instantiate&quot;),t);</span>
+        }
+    }
+
+    private static boolean contains(String list, String key) {
+<span class="nc bnc" id="L1184" title="All 4 branches missed.">    	return (list == null) ? false : list.indexOf(key) != -1;</span>
+    }
+
+    /**
+     * Run flags.
+     */
+<span class="nc" id="L1190">    public static class Flags {</span>
+
+<span class="nc" id="L1192">        public String action = null;</span>
+<span class="nc" id="L1193">        public boolean meta = false;</span>
+<span class="nc" id="L1194">        public String schemaAction = SchemaTool.ACTION_ADD;</span>
+<span class="nc" id="L1195">        public File metaDataFile = null;</span>
+<span class="nc" id="L1196">        public Writer mappingWriter = null;</span>
+<span class="nc" id="L1197">        public Writer schemaWriter = null;</span>
+<span class="nc" id="L1198">        public Writer sqlWriter = null;</span>
+<span class="nc" id="L1199">        public boolean ignoreErrors = false;</span>
+<span class="nc" id="L1200">        public boolean readSchema = false;</span>
+<span class="nc" id="L1201">        public boolean dropTables = false;</span>
+<span class="nc" id="L1202">        public boolean rollbackBeforeDDL = false;</span>
+<span class="nc" id="L1203">        public boolean openjpaTables = false;</span>
+<span class="nc" id="L1204">        public boolean dropSequences = false;</span>
+<span class="nc" id="L1205">        public boolean sequences = true;</span>
+<span class="nc" id="L1206">        public boolean primaryKeys = false;</span>
+<span class="nc" id="L1207">        public boolean foreignKeys = false;</span>
+<span class="nc" id="L1208">        public boolean indexes = false;</span>
+<span class="nc" id="L1209">        public String  sqlTerminator = &quot;;&quot;;</span>
+    }
+
+    /**
+     * Helper used to import and export mapping data.
+     */
+    public interface ImportExport {
+
+        /**
+         * Import mappings for the given classes based on the given arguments.
+         */
+        boolean importMappings(JDBCConfiguration conf, Class&lt;?&gt;[] act,
+            String[] args, boolean meta, Log log, ClassLoader loader)
+            throws IOException;
+
+        /**
+         * Export mappings for the given classes based on the given arguments.
+         */
+        boolean exportMappings(JDBCConfiguration conf, Class&lt;?&gt;[] act,
+            boolean meta, Log log, Writer writer)
+            throws IOException;
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

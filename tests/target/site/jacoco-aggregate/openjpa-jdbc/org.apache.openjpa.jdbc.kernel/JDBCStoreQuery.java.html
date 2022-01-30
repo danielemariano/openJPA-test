@@ -1,0 +1,1136 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JDBCStoreQuery.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">JDBCStoreQuery.java</span></div><h1>JDBCStoreQuery.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.openjpa.event.LifecycleEventManager;
+import org.apache.openjpa.jdbc.kernel.exps.ExpContext;
+import org.apache.openjpa.jdbc.kernel.exps.GetColumn;
+import org.apache.openjpa.jdbc.kernel.exps.JDBCExpressionFactory;
+import org.apache.openjpa.jdbc.kernel.exps.JDBCStringContains;
+import org.apache.openjpa.jdbc.kernel.exps.JDBCWildcardMatch;
+import org.apache.openjpa.jdbc.kernel.exps.PCPath;
+import org.apache.openjpa.jdbc.kernel.exps.QueryExpressionsState;
+import org.apache.openjpa.jdbc.kernel.exps.SQLEmbed;
+import org.apache.openjpa.jdbc.kernel.exps.SQLExpression;
+import org.apache.openjpa.jdbc.kernel.exps.SQLValue;
+import org.apache.openjpa.jdbc.kernel.exps.Val;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Discriminator;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.strats.NoneDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.VerticalClassStrategy;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.PostgresDictionary;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.jdbc.sql.SelectImpl;
+import org.apache.openjpa.jdbc.sql.Union;
+import org.apache.openjpa.kernel.ExpressionStoreQuery;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.OrderingMergedResultObjectProvider;
+import org.apache.openjpa.kernel.QueryHints;
+import org.apache.openjpa.kernel.exps.Constant;
+import org.apache.openjpa.kernel.exps.Context;
+import org.apache.openjpa.kernel.exps.ExpressionFactory;
+import org.apache.openjpa.kernel.exps.ExpressionParser;
+import org.apache.openjpa.kernel.exps.FilterListener;
+import org.apache.openjpa.kernel.exps.Literal;
+import org.apache.openjpa.kernel.exps.QueryExpressions;
+import org.apache.openjpa.kernel.exps.StringContains;
+import org.apache.openjpa.kernel.exps.WildcardMatch;
+import org.apache.openjpa.lib.rop.MergedResultObjectProvider;
+import org.apache.openjpa.lib.rop.RangeResultObjectProvider;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.ValueMetaData;
+import org.apache.openjpa.util.UnsupportedException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * JDBC query implementation.
+ *
+ * @author Abe White
+ */
+public class JDBCStoreQuery
+    extends ExpressionStoreQuery {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L93">    private static final Table INVALID = new Table();</span>
+
+    // add all standard filter and aggregate listeners to these maps
+<span class="nc" id="L96">    private static final Map _listeners = new HashMap();</span>
+
+    static {
+        // deprecated extensions
+<span class="nc" id="L100">        _listeners.put(StringContains.TAG, new JDBCStringContains());</span>
+<span class="nc" id="L101">        _listeners.put(WildcardMatch.TAG, new JDBCWildcardMatch());</span>
+<span class="nc" id="L102">        _listeners.put(SQLExpression.TAG, new SQLExpression());</span>
+<span class="nc" id="L103">        _listeners.put(SQLValue.TAG, new SQLValue());</span>
+
+        // jdbc-specific extensions
+<span class="nc" id="L106">        _listeners.put(GetColumn.TAG, new GetColumn());</span>
+<span class="nc" id="L107">        _listeners.put(SQLEmbed.TAG, new SQLEmbed());</span>
+    }
+
+    private final transient JDBCStore _store;
+<span class="nc" id="L111">    private static ThreadLocalContext localContext = new ThreadLocalContext();</span>
+
+    /**
+     * Constructor. Supply store manager.
+     */
+    public JDBCStoreQuery(JDBCStore store, ExpressionParser parser) {
+<span class="nc" id="L117">        super(parser);</span>
+<span class="nc" id="L118">        _store = store;</span>
+<span class="nc" id="L119">    }</span>
+
+    /**
+     * Return the store.
+     */
+    public JDBCStore getStore() {
+<span class="nc" id="L125">        return _store;</span>
+    }
+
+    @Override
+    public FilterListener getFilterListener(String tag) {
+<span class="nc" id="L130">        return (FilterListener) _listeners.get(tag);</span>
+    }
+
+    @Override
+    public Object newCompilationKey() {
+<span class="nc" id="L135">        JDBCFetchConfiguration fetch = (JDBCFetchConfiguration) ctx</span>
+<span class="nc" id="L136">            .getFetchConfiguration();</span>
+<span class="nc" id="L137">        return fetch.getJoinSyntax();</span>
+    }
+
+    @Override
+    public boolean supportsDataStoreExecution() {
+<span class="nc" id="L142">        return true;</span>
+    }
+
+    @Override
+    protected ClassMetaData[] getIndependentExpressionCandidates(
+        ClassMetaData meta, boolean subclasses) {
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        if (!subclasses)</span>
+<span class="nc" id="L149">            return new ClassMapping[] { (ClassMapping) meta };</span>
+<span class="nc" id="L150">        return ((ClassMapping) meta).getIndependentAssignableMappings();</span>
+    }
+
+    @Override
+    protected ExpressionFactory getExpressionFactory(ClassMetaData meta) {
+<span class="nc" id="L155">        JDBCExpressionFactory factory = new JDBCExpressionFactory((ClassMapping) meta);</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">        if (_store.getDBDictionary() instanceof PostgresDictionary)</span>
+<span class="nc" id="L157">            factory.setBooleanLiteralAsNumeric(false);</span>
+<span class="nc" id="L158">        return factory;</span>
+    }
+
+    @Override
+    protected ResultObjectProvider executeQuery(Executor ex,
+        ClassMetaData base, ClassMetaData[] metas, boolean subclasses,
+        ExpressionFactory[] facts, QueryExpressions[] exps, Object[] params,
+        Range range) {
+<span class="nc" id="L166">        Context[] ctxs = new Context[exps.length];</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">        for (int i = 0; i &lt; exps.length; i++)</span>
+<span class="nc" id="L168">            ctxs[i] = exps[i].ctx();</span>
+<span class="nc" id="L169">        localContext.set(clone(ctxs, null));</span>
+<span class="nc bnc" id="L170" title="All 4 branches missed.">        if (metas.length &gt; 1 &amp;&amp; exps[0].isAggregate())</span>
+<span class="nc" id="L171">            throw new UserException(Localizer.forPackage(JDBCStoreQuery.class).</span>
+<span class="nc" id="L172">                get(&quot;mult-mapping-aggregate&quot;, Arrays.asList(metas)));</span>
+
+<span class="nc" id="L174">        ClassMapping[] mappings = (ClassMapping[]) metas;</span>
+<span class="nc" id="L175">        JDBCFetchConfiguration fetch = (JDBCFetchConfiguration)</span>
+<span class="nc" id="L176">            ctx.getFetchConfiguration();</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">        if (exps[0].fetchPaths != null) {</span>
+<span class="nc" id="L178">            fetch.addFields(Arrays.asList(exps[0].fetchPaths));</span>
+<span class="nc" id="L179">            fetch.addJoins(Arrays.asList(exps[0].fetchPaths));</span>
+        }
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (exps[0].fetchInnerPaths != null)</span>
+<span class="nc" id="L182">            fetch.addFetchInnerJoins(Arrays.asList(exps[0].fetchInnerPaths));</span>
+
+<span class="nc" id="L184">        int eager = calculateEagerMode(exps[0], range.start, range.end);</span>
+<span class="nc" id="L185">        int subclassMode = fetch.getSubclassFetchMode((ClassMapping) base);</span>
+<span class="nc" id="L186">        DBDictionary dict = _store.getDBDictionary();</span>
+<span class="nc bnc" id="L187" title="All 4 branches missed.">        long start = (mappings.length == 1 &amp;&amp; dict.supportsSelectStartIndex)</span>
+<span class="nc" id="L188">            ? range.start : 0L;</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        long end = (dict.supportsSelectEndIndex) ? range.end : Long.MAX_VALUE;</span>
+
+<span class="nc" id="L191">        QueryExpressionsState[] states = new QueryExpressionsState[exps.length];</span>
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        for (int i = 0; i &lt; states.length; i++) {</span>
+<span class="nc" id="L193">            states[i] = new QueryExpressionsState();</span>
+<span class="nc" id="L194">            exps[i].state = states[i];</span>
+        }
+<span class="nc" id="L196">        ExpContext ctx = new ExpContext(_store, params, fetch);</span>
+
+        // add selects with populate WHERE conditions to list
+<span class="nc" id="L199">        List sels = new ArrayList(mappings.length);</span>
+<span class="nc" id="L200">        List selMappings = new ArrayList(mappings.length);</span>
+<span class="nc" id="L201">        BitSet subclassBits = new BitSet();</span>
+<span class="nc" id="L202">        BitSet nextBits = new BitSet();</span>
+<span class="nc bnc" id="L203" title="All 8 branches missed.">        boolean unionable = createWhereSelects(sels, mappings, selMappings,</span>
+            subclasses, subclassBits, nextBits, facts, exps, states, ctx,
+            subclassMode)
+            &amp;&amp; subclassMode == EagerFetchModes.EAGER_JOIN
+            &amp;&amp; start == 0
+            &amp;&amp; end == Long.MAX_VALUE;
+
+        // we might want to use lrs settings if we can't use the range
+<span class="nc bnc" id="L211" title="All 2 branches missed.">        if (sels.size() &gt; 1)</span>
+<span class="nc" id="L212">            start = 0L;</span>
+<span class="nc bnc" id="L213" title="All 8 branches missed.">        boolean lrs = range.lrs || (fetch.getFetchBatchSize() &gt;= 0</span>
+            &amp;&amp; (start != range.start || end != range.end));
+
+<span class="nc" id="L216">        ResultObjectProvider[] rops = null;</span>
+<span class="nc" id="L217">        ResultObjectProvider rop = null;</span>
+<span class="nc bnc" id="L218" title="All 2 branches missed.">        if (unionable) {</span>
+<span class="nc" id="L219">            Union union = _store.getSQLFactory().newUnion(</span>
+<span class="nc" id="L220">                (Select[]) sels.toArray(new Select[sels.size()]));</span>
+<span class="nc" id="L221">            BitSet[] paged = populateUnion(union, mappings, subclasses, facts,</span>
+                exps, states, ctx, lrs, eager, start, end);
+<span class="nc" id="L223">            union.setLRS(lrs);</span>
+<span class="nc" id="L224">            rop = executeUnion(union, mappings, exps, states, ctx, paged);</span>
+<span class="nc" id="L225">        } else {</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">            if (sels.size() &gt; 1)</span>
+<span class="nc" id="L227">                rops = new ResultObjectProvider[sels.size()];</span>
+
+            Select sel;
+            BitSet paged;
+<span class="nc bnc" id="L231" title="All 2 branches missed.">            for (int i = 0, idx = 0; i &lt; sels.size(); i++) {</span>
+<span class="nc" id="L232">                sel = (Select) sels.get(i);</span>
+<span class="nc" id="L233">                paged = populateSelect(sel, (ClassMapping) selMappings.get(i),</span>
+<span class="nc" id="L234">                    subclassBits.get(i), (JDBCExpressionFactory) facts[idx],</span>
+                    exps[idx], states[idx], ctx, lrs, eager, start, end);
+
+<span class="nc" id="L237">                rop = executeSelect(sel, (ClassMapping) selMappings.get(i),</span>
+                    exps[idx], states[idx], ctx, paged, start, end);
+<span class="nc bnc" id="L239" title="All 2 branches missed.">                if (rops != null)</span>
+<span class="nc" id="L240">                    rops[i] = rop;</span>
+
+<span class="nc bnc" id="L242" title="All 2 branches missed.">                if (nextBits.get(i))</span>
+<span class="nc" id="L243">                    idx++;</span>
+            }
+        }
+
+<span class="nc bnc" id="L247" title="All 2 branches missed.">        if (rops != null) {</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">            if (exps[0].ascending.length == 0)</span>
+<span class="nc" id="L249">                rop = new MergedResultObjectProvider(rops);</span>
+            else {
+<span class="nc" id="L251">                rop = new OrderingMergedResultObjectProvider(rops,</span>
+                    exps[0].ascending, ex, this, params);
+            }
+        }
+
+        // need to fake result range?
+<span class="nc bnc" id="L257" title="All 8 branches missed.">        if ((rops != null &amp;&amp; range.end != Long.MAX_VALUE)</span>
+            || start != range.start || end != range.end)
+<span class="nc" id="L259">            rop = new RangeResultObjectProvider(rop, range.start, range.end);</span>
+
+<span class="nc" id="L261">        localContext.remove();</span>
+<span class="nc" id="L262">        return rop;</span>
+    }
+
+    /**
+     * Select data for the given union, returning paged fields.
+     */
+    private BitSet[] populateUnion(Union union, final ClassMapping[] mappings,
+        final boolean subclasses, final ExpressionFactory[] facts,
+        final QueryExpressions[] exps, final QueryExpressionsState[] states,
+        final ExpContext ctx, final boolean lrs, final int eager,
+        final long start, final long end) {
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        final BitSet[] paged = (exps[0].projections.length &gt; 0) ? null</span>
+<span class="nc" id="L274">            : new BitSet[mappings.length];</span>
+<span class="nc" id="L275">        union.select(new Union.Selector() {</span>
+            @Override
+            public void select(Select sel, int idx) {
+<span class="nc" id="L278">                BitSet bits = populateSelect(sel, mappings[idx], subclasses,</span>
+                    (JDBCExpressionFactory) facts[idx], exps[idx], states[idx],
+                    ctx,  lrs, eager, start, end);
+<span class="nc bnc" id="L281" title="All 2 branches missed.">                if (paged != null)</span>
+<span class="nc" id="L282">                    paged[idx] = bits;</span>
+<span class="nc" id="L283">            }</span>
+        });
+<span class="nc" id="L285">        return paged;</span>
+    }
+
+    /**
+     * Select data for the given select, returning paged fields.
+     */
+    private BitSet populateSelect(Select sel, ClassMapping mapping,
+        boolean subclasses, JDBCExpressionFactory fact, QueryExpressions exps,
+        QueryExpressionsState state, ExpContext ctx, boolean lrs, int eager,
+        long start, long end) {
+<span class="nc" id="L295">        sel.setLRS(lrs);</span>
+<span class="nc" id="L296">        sel.setRange(start, end);</span>
+
+<span class="nc" id="L298">        BitSet paged = null;</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        if (exps.projections.length == 0) {</span>
+<span class="nc" id="L300">            paged = PagingResultObjectProvider.getPagedFields(sel, mapping,</span>
+                _store, ctx.fetch, eager, end - start);
+<span class="nc bnc" id="L302" title="All 2 branches missed.">            if (paged != null)</span>
+<span class="nc" id="L303">                eager = EagerFetchModes.EAGER_JOIN;</span>
+        }
+
+<span class="nc" id="L306">        fact.getSelectConstructor().select(sel, ctx, mapping, subclasses, exps,</span>
+            state, eager);
+<span class="nc" id="L308">        return paged;</span>
+    }
+
+    /**
+     * Execute the given union.
+     */
+    private ResultObjectProvider executeUnion(Union union,
+        ClassMapping[] mappings, QueryExpressions[] exps,
+        QueryExpressionsState[] states, ExpContext ctx, BitSet[] paged) {
+<span class="nc bnc" id="L317" title="All 2 branches missed.">        if (exps[0].projections.length &gt; 0)</span>
+<span class="nc" id="L318">            return new ProjectionResultObjectProvider(union, exps, states, ctx);</span>
+
+<span class="nc bnc" id="L320" title="All 2 branches missed.">        if (paged != null)</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">            for (int i = 0; i &lt; paged.length; i++)</span>
+<span class="nc bnc" id="L322" title="All 2 branches missed.">                if (paged[i] != null)</span>
+<span class="nc" id="L323">                    return new PagingResultObjectProvider(union, mappings,</span>
+                        _store, ctx.fetch, paged, Long.MAX_VALUE);
+
+<span class="nc" id="L326">        return new InstanceResultObjectProvider(union, mappings[0], _store,</span>
+            ctx.fetch);
+    }
+
+    /**
+     * Execute the given select.
+     */
+    private ResultObjectProvider executeSelect(Select sel, ClassMapping mapping,
+        QueryExpressions exps, QueryExpressionsState state, ExpContext ctx,
+        BitSet paged, long start, long end) {
+<span class="nc bnc" id="L336" title="All 2 branches missed.">        if (exps.projections.length &gt; 0)</span>
+<span class="nc" id="L337">            return new ProjectionResultObjectProvider(sel, exps, state, ctx);</span>
+<span class="nc bnc" id="L338" title="All 2 branches missed.">        if (paged != null)</span>
+<span class="nc" id="L339">            return new PagingResultObjectProvider(sel, mapping, _store,</span>
+                ctx.fetch, paged, end - start);
+<span class="nc" id="L341">        return new InstanceResultObjectProvider(sel, mapping, _store,</span>
+            ctx.fetch);
+    }
+
+    /**
+     * Generate the selects with WHERE conditions needed to execute the query
+     * for the given mappings.
+     */
+    private boolean createWhereSelects(List sels, ClassMapping[] mappings,
+        List selMappings, boolean subclasses, BitSet subclassBits,
+        BitSet nextBits, ExpressionFactory[] facts, QueryExpressions[] exps,
+        QueryExpressionsState[] states, ExpContext ctx, int subclassMode) {
+<span class="nc" id="L353">        Number optHint = (Number) ctx.fetch.getHint</span>
+<span class="nc" id="L354">            (QueryHints.HINT_RESULT_COUNT);</span>
+        ClassMapping[] verts;
+<span class="nc" id="L356">        boolean unionable = true;</span>
+        Select sel;
+<span class="nc bnc" id="L358" title="All 2 branches missed.">        for (int i = 0; i &lt; mappings.length; i++) {</span>
+            // determine vertical mappings to select separately
+<span class="nc" id="L360">            verts = getVerticalMappings(mappings[i], subclasses, exps[i],</span>
+                subclassMode);
+<span class="nc bnc" id="L362" title="All 4 branches missed.">            if (verts.length == 1 &amp;&amp; subclasses)</span>
+<span class="nc" id="L363">                subclassBits.set(sels.size());</span>
+
+<span class="nc" id="L365">            Discriminator disc = mappings[i].getDiscriminator();</span>
+<span class="nc bnc" id="L366" title="All 6 branches missed.">            if (mappings.length &gt; 1 &amp;&amp; disc != null &amp;&amp; disc.getColumns().length == 0 &amp;&amp;</span>
+<span class="nc bnc" id="L367" title="All 2 branches missed.">                disc.getStrategy() instanceof NoneDiscriminatorStrategy)</span>
+<span class="nc" id="L368">                ctx.tpcMeta = mappings[i];</span>
+
+            // create criteria select and clone for each vert mapping
+<span class="nc" id="L371">            sel = ((JDBCExpressionFactory) facts[i]).getSelectConstructor().</span>
+<span class="nc" id="L372">                evaluate(ctx, null, null, exps[i], states[i]);</span>
+<span class="nc bnc" id="L373" title="All 2 branches missed.">            if (optHint != null)</span>
+<span class="nc" id="L374">               sel.setExpectedResultCount(optHint.intValue(), true);</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">            else if (this.ctx.isUnique())</span>
+<span class="nc" id="L376">                sel.setExpectedResultCount(1, false);</span>
+
+<span class="nc" id="L378">            List selectFrom = getJoinedTableMeta(sel);</span>
+<span class="nc" id="L379">            int size = 0;</span>
+<span class="nc bnc" id="L380" title="All 2 branches missed.">            if (selectFrom != null) {</span>
+<span class="nc" id="L381">                size = selectFrom.size();</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">                for (int j = 0; j &lt; size; j++) {</span>
+<span class="nc" id="L383">                    ClassMapping vert = (ClassMapping)selectFrom.get(j);</span>
+<span class="nc" id="L384">                    selMappings.add(vert);</span>
+<span class="nc bnc" id="L385" title="All 2 branches missed.">                    if (j == size - 1) {</span>
+<span class="nc" id="L386">                        nextBits.set(sels.size());</span>
+<span class="nc" id="L387">                        sel.select(vert.getPrimaryKeyColumns(), null);</span>
+<span class="nc" id="L388">                        sels.add(sel);</span>
+                    } else {
+<span class="nc" id="L390">                        SelectImpl selClone = (SelectImpl)sel.fullClone(1);</span>
+<span class="nc" id="L391">                        selClone.select(vert.getPrimaryKeyColumns(), null);</span>
+<span class="nc" id="L392">                        sels.add(selClone);</span>
+                    }
+                }
+            } else {
+<span class="nc bnc" id="L396" title="All 2 branches missed.">                for (int j = 0; j &lt; verts.length; j++) {</span>
+<span class="nc" id="L397">                    selMappings.add(verts[j]);</span>
+<span class="nc bnc" id="L398" title="All 2 branches missed.">                    if (j == verts.length - 1) {</span>
+<span class="nc" id="L399">                        nextBits.set(sels.size());</span>
+<span class="nc" id="L400">                        sels.add(sel);</span>
+                    } else
+<span class="nc" id="L402">                        sels.add(sel.fullClone(1));</span>
+                }
+            }
+
+            // turn off unioning if a given independent mapping requires
+            // multiple selects, or if we're using FROM selects
+<span class="nc bnc" id="L408" title="All 6 branches missed.">            if (verts.length &gt; 1 || size &gt; 1 || sel.getFromSelect() != null)</span>
+<span class="nc" id="L409">                unionable = false;</span>
+        }
+<span class="nc" id="L411">        return unionable;</span>
+    }
+
+    private List getJoinedTableMeta(Select sel) {
+<span class="nc" id="L415">        List selectFrom = sel.getJoinedTableClassMeta();</span>
+<span class="nc" id="L416">        List exSelectFrom = sel.getExcludedJoinedTableClassMeta();</span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">        if (exSelectFrom == null)</span>
+<span class="nc" id="L418">            return selectFrom;</span>
+<span class="nc bnc" id="L419" title="All 2 branches missed.">        if (selectFrom == null)</span>
+<span class="nc" id="L420">            return null;</span>
+<span class="nc" id="L421">        int size = selectFrom.size();</span>
+<span class="nc" id="L422">        List retList = new ArrayList(size);</span>
+<span class="nc bnc" id="L423" title="All 2 branches missed.">        for (int i = 0; i &lt; size; i++) {</span>
+<span class="nc" id="L424">            Object obj = selectFrom.get(i);</span>
+<span class="nc bnc" id="L425" title="All 2 branches missed.">            if (!exSelectFrom.contains(obj))</span>
+<span class="nc" id="L426">                retList.add(obj);</span>
+        }
+<span class="nc" id="L428">        return retList;</span>
+    }
+
+    /**
+     * Return all the vertical mappings to select separately. Depends on
+     * subclass fetch mode and the type of query.
+     */
+    private ClassMapping[] getVerticalMappings(ClassMapping mapping,
+        boolean subclasses, QueryExpressions exps, int subclassMode) {
+<span class="nc bnc" id="L437" title="All 4 branches missed.">        if (!subclasses || exps.projections.length &gt; 0)</span>
+<span class="nc" id="L438">            return new ClassMapping[] { mapping };</span>
+
+<span class="nc bnc" id="L440" title="All 2 branches missed.">        if (subclassMode != EagerFetchModes.EAGER_PARALLEL</span>
+<span class="nc bnc" id="L441" title="All 2 branches missed.">            || !hasVerticalSubclasses(mapping))</span>
+<span class="nc" id="L442">            return new ClassMapping[] { mapping };</span>
+
+<span class="nc" id="L444">        List subs = new ArrayList(4);</span>
+<span class="nc" id="L445">        addSubclasses(mapping, subs);</span>
+<span class="nc" id="L446">        return (ClassMapping[]) subs.toArray(new ClassMapping[subs.size()]);</span>
+    }
+
+    /**
+     * Recursive helper to add mappings for subclasses to the given list.
+     */
+    private void addSubclasses(ClassMapping mapping, Collection subs) {
+        // possible future optimizations:
+        // - if no fields in meta or its subclasses (and not in an
+        //   already-selected table) are in the current fetch
+        //   configuration, stop creating new executors
+        // - allow an executor to select a range of subclasses, rather
+        //   than just all subclasses / no subclasses; this would
+        //   allow us to do just one query per actual vertically-mapped
+        //   subclass, rather than one per mapped subclass, as is happening now
+
+<span class="nc" id="L462">        subs.add(mapping);</span>
+<span class="nc bnc" id="L463" title="All 2 branches missed.">        if (!hasVerticalSubclasses(mapping))</span>
+<span class="nc" id="L464">            return;</span>
+
+        // recurse on immediate subclasses
+<span class="nc" id="L467">        ClassMapping[] subMappings = mapping.getJoinablePCSubclassMappings();</span>
+<span class="nc bnc" id="L468" title="All 2 branches missed.">        for (int i = 0; i &lt; subMappings.length; i++)</span>
+<span class="nc bnc" id="L469" title="All 2 branches missed.">            if (subMappings[i].getJoinablePCSuperclassMapping() == mapping)</span>
+<span class="nc" id="L470">                addSubclasses(subMappings[i], subs);</span>
+<span class="nc" id="L471">    }</span>
+
+    /**
+     * Return whether the given class has any vertical subclasses.
+     */
+    private static boolean hasVerticalSubclasses(ClassMapping mapping) {
+<span class="nc" id="L477">        ClassMapping[] subs = mapping.getJoinablePCSubclassMappings();</span>
+<span class="nc bnc" id="L478" title="All 2 branches missed.">        for (int i = 0; i &lt; subs.length; i++)</span>
+<span class="nc bnc" id="L479" title="All 2 branches missed.">            if (subs[i].getStrategy() instanceof VerticalClassStrategy)</span>
+<span class="nc" id="L480">                return true;</span>
+<span class="nc" id="L481">        return false;</span>
+    }
+
+    /**
+     * The eager mode depends on the unique setting and range. If the range
+     * produces 0 results, use eager setting of none. If it produces 1 result
+     * or the query is unique, use an eager setting of single. Otherwise use
+     * an eager mode of multiple.
+     */
+    private int calculateEagerMode(QueryExpressions exps, long start,
+        long end) {
+<span class="nc bnc" id="L492" title="All 4 branches missed.">        if (exps.projections.length &gt; 0 || start &gt;= end)</span>
+<span class="nc" id="L493">            return EagerFetchModes.EAGER_NONE;</span>
+<span class="nc bnc" id="L494" title="All 4 branches missed.">        if (end - start == 1 || ctx.isUnique())</span>
+<span class="nc" id="L495">            return EagerFetchModes.EAGER_JOIN;</span>
+<span class="nc" id="L496">        return EagerFetchModes.EAGER_PARALLEL;</span>
+    }
+
+    @Override
+    protected Number executeDelete(Executor ex, ClassMetaData base,
+        ClassMetaData[] metas, boolean subclasses, ExpressionFactory[] facts,
+        QueryExpressions[] exps, Object[] params) {
+<span class="nc" id="L503">        return executeBulkOperation(metas, subclasses, facts, exps,</span>
+            params, null);
+    }
+
+    @Override
+    protected Number executeUpdate(Executor ex, ClassMetaData base,
+        ClassMetaData[] metas, boolean subclasses, ExpressionFactory[] facts,
+        QueryExpressions[] exps, Object[] params) {
+<span class="nc" id="L511">        return executeBulkOperation(metas, subclasses, facts, exps,</span>
+            params, exps[0].updates);
+    }
+
+    private Number executeBulkOperation(ClassMetaData[] metas,
+        boolean subclasses, ExpressionFactory[] facts, QueryExpressions[] exps,
+        Object[] params, Map updates) {
+<span class="nc" id="L518">        Context[] ctxs = new Context[exps.length];</span>
+<span class="nc bnc" id="L519" title="All 2 branches missed.">        for (int i = 0; i &lt; exps.length; i++)</span>
+<span class="nc" id="L520">            ctxs[i] = exps[i].ctx();</span>
+<span class="nc" id="L521">        localContext.set(clone(ctxs, null));</span>
+
+        // we cannot execute a bulk delete statement when have mappings in
+        // multiple tables, so indicate we want to use in-memory with null
+<span class="nc" id="L525">        ClassMapping[] mappings = (ClassMapping[]) metas;</span>
+
+        // specification of the &quot;updates&quot; map indicates that this is
+        // an update query; otherwise, this is a delete statement
+<span class="nc bnc" id="L529" title="All 4 branches missed.">        boolean isUpdate = updates != null &amp;&amp; updates.size() &gt; 0;</span>
+
+<span class="nc bnc" id="L531" title="All 2 branches missed.">        for (int i = 0; i &lt; mappings.length; i++) {</span>
+<span class="nc bnc" id="L532" title="All 4 branches missed.">            if (!isSingleTableMapping(mappings[i], subclasses) &amp;&amp; !isUpdate)</span>
+<span class="nc" id="L533">                return null;</span>
+
+<span class="nc bnc" id="L535" title="All 2 branches missed.">            if (!isUpdate) {</span>
+                // if there are any delete callbacks, we need to
+                // execute in-memory so the callbacks are invoked
+<span class="nc" id="L538">                LifecycleEventManager mgr = ctx.getStoreContext().getBroker()</span>
+<span class="nc" id="L539">                    .getLifecycleEventManager();</span>
+<span class="nc bnc" id="L540" title="All 2 branches missed.">                if (mgr.hasDeleteListeners(null, mappings[i]))</span>
+<span class="nc" id="L541">                    return null;</span>
+            }
+        }
+
+<span class="nc" id="L545">        JDBCFetchConfiguration fetch = (JDBCFetchConfiguration)</span>
+<span class="nc" id="L546">            ctx.getFetchConfiguration();</span>
+<span class="nc" id="L547">        ExpContext ctx = new ExpContext(_store, params, fetch);</span>
+<span class="nc" id="L548">        DBDictionary dict = _store.getDBDictionary();</span>
+<span class="nc" id="L549">        QueryExpressionsState[] state = new QueryExpressionsState[exps.length];</span>
+<span class="nc bnc" id="L550" title="All 2 branches missed.">        for (int i = 0; i &lt; state.length; i++)</span>
+<span class="nc" id="L551">            state[i] = new QueryExpressionsState();</span>
+
+<span class="nc" id="L553">        SQLBuffer[] sql = new SQLBuffer[mappings.length];</span>
+        JDBCExpressionFactory jdbcFactory;
+        Select sel;
+<span class="nc bnc" id="L556" title="All 2 branches missed.">        for (int i = 0; i &lt; mappings.length; i++) {</span>
+<span class="nc" id="L557">            jdbcFactory = (JDBCExpressionFactory) facts[i];</span>
+<span class="nc" id="L558">            sel = jdbcFactory.getSelectConstructor().evaluate(ctx, null, null,</span>
+                exps[i], state[i]);
+<span class="nc" id="L560">            jdbcFactory.getSelectConstructor().select(sel, ctx, mappings[i],</span>
+                subclasses, exps[i], state[i],
+                EagerFetchModes.EAGER_NONE);
+
+            // The bulk operation will return null to indicate that the database
+            // does not support the request bulk delete operation; in
+            // this case, we need to perform the query in-memory and
+            // manually delete the instances
+<span class="nc bnc" id="L568" title="All 2 branches missed.">            if (!isUpdate)</span>
+<span class="nc" id="L569">                sql[i] = dict.toDelete(mappings[i], sel, params);</span>
+            else
+<span class="nc" id="L571">                sql[i] = dict.toUpdate(mappings[i], sel, _store, params,</span>
+                    updates);
+
+<span class="nc bnc" id="L574" title="All 2 branches missed.">            if (sql[i] == null)</span>
+<span class="nc" id="L575">                return null;</span>
+        }
+
+        // we need to make sure we have an active store connection
+<span class="nc" id="L579">        _store.getContext().beginStore();</span>
+
+<span class="nc" id="L581">        Connection conn = _store.getConnection();</span>
+<span class="nc" id="L582">        long count = 0;</span>
+        try {
+            PreparedStatement stmnt;
+<span class="nc bnc" id="L585" title="All 2 branches missed.">            for (int i = 0; i &lt; sql.length; i++) {</span>
+<span class="nc" id="L586">                stmnt = null;</span>
+                try {
+<span class="nc" id="L588">                    stmnt = prepareStatement(conn, sql[i]);</span>
+<span class="nc" id="L589">                    dict.setTimeouts(stmnt, fetch, true);</span>
+<span class="nc" id="L590">                    count += executeUpdate(conn, stmnt, sql[i], isUpdate);</span>
+<span class="nc" id="L591">                } catch (SQLException se) {</span>
+<span class="nc" id="L592">                    throw SQLExceptions.getStore(se, sql[i].getSQL(),</span>
+<span class="nc" id="L593">                        _store.getDBDictionary());</span>
+                } finally {
+<span class="nc bnc" id="L595" title="All 2 branches missed.">                    if (stmnt != null)</span>
+<span class="nc" id="L596">                        try { stmnt.close(); } catch (SQLException se) {}</span>
+                }
+            }
+        } finally {
+            try {
+<span class="nc bnc" id="L601" title="All 2 branches missed.">            	if (conn.getAutoCommit())</span>
+<span class="nc" id="L602">            		conn.close();</span>
+<span class="nc" id="L603">            } catch (SQLException se) {</span>
+
+<span class="nc" id="L605">            }</span>
+        }
+
+<span class="nc" id="L608">        localContext.remove();</span>
+<span class="nc" id="L609">        return count;</span>
+    }
+
+    /**
+     * Whether the given mapping occupies only one table.
+     */
+    private boolean isSingleTableMapping(ClassMapping mapping,
+        boolean subclasses) {
+<span class="nc" id="L617">        ClassMapping root = mapping;</span>
+<span class="nc bnc" id="L618" title="All 2 branches missed.">        while (root.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L619">            root = root.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L620" title="All 2 branches missed.">        if (hasVerticalSubclasses(root))</span>
+<span class="nc" id="L621">            return false;</span>
+
+        // we cannot execute a bulk delete if any of the
+        // field mappings for the candidates have columns
+        // in any other table, since bulk deleting just from the
+        // class will leave dangling relations; we might be able
+        // to issue bulk deletes separately for the joins (possibly
+        // using a temporary table to select the primary keys for
+        // all the related tables and then issing a delete against those
+        // keys), but that logic is not currently implemented
+<span class="nc" id="L631">        Table table = getTable(mapping.getFieldMappings(), null);</span>
+<span class="nc bnc" id="L632" title="All 2 branches missed.">        if (table == INVALID)</span>
+<span class="nc" id="L633">            return false;</span>
+
+<span class="nc bnc" id="L635" title="All 2 branches missed.">        if (subclasses) {</span>
+            // if we are including subclasses, we also need to gather
+            // all the mappings for all known subclasses
+<span class="nc" id="L638">            ClassMapping[] subs = mapping.getJoinablePCSubclassMappings();</span>
+<span class="nc bnc" id="L639" title="All 4 branches missed.">            for (int i = 0; subs != null &amp;&amp; i &lt; subs.length; i++) {</span>
+<span class="nc" id="L640">                table = getTable(subs[i].getDefinedFieldMappings(), table);</span>
+<span class="nc bnc" id="L641" title="All 2 branches missed.">                if (table == INVALID)</span>
+<span class="nc" id="L642">                    return false;</span>
+            }
+        }
+<span class="nc" id="L645">        return true;</span>
+    }
+
+    /**
+     * Return the single table for the given fields, or INVALID if they
+     * use multiple tables.
+     */
+    private Table getTable(FieldMapping[] fields, Table table) {
+<span class="nc bnc" id="L653" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc" id="L654">            table = getTable(fields[i], table);</span>
+<span class="nc bnc" id="L655" title="All 2 branches missed.">            if (table == INVALID)</span>
+<span class="nc" id="L656">                break;</span>
+        }
+<span class="nc" id="L658">        return table;</span>
+    }
+
+    /**
+     * Return the table for the field if the given table hasn't been set
+     * yet, or if the tables match. If the field uses a different table,
+     * returns INVALID. Also returns INVALID if field is dependent.
+     */
+    private Table getTable(FieldMapping fm, Table table) {
+<span class="nc bnc" id="L667" title="All 2 branches missed.">        if (fm.getCascadeDelete() != ValueMetaData.CASCADE_NONE</span>
+<span class="nc bnc" id="L668" title="All 2 branches missed.">            &amp;&amp; !fm.isEmbeddedPC())</span>
+<span class="nc" id="L669">            return INVALID;</span>
+
+<span class="nc" id="L671">        Column[] columns = fm.getColumns();</span>
+<span class="nc bnc" id="L672" title="All 4 branches missed.">        for (int i = 0; columns != null &amp;&amp; i &lt; columns.length; i++) {</span>
+<span class="nc bnc" id="L673" title="All 2 branches missed.">            if (table == null)</span>
+<span class="nc" id="L674">                table = columns[i].getTable();</span>
+<span class="nc bnc" id="L675" title="All 2 branches missed.">            else if (table != columns[i].getTable())</span>
+<span class="nc" id="L676">                return INVALID;</span>
+        }
+<span class="nc bnc" id="L678" title="All 2 branches missed.">        if (fm.isBidirectionalJoinTableMappingOwner())</span>
+<span class="nc" id="L679">        	return INVALID;</span>
+<span class="nc" id="L680">        return table;</span>
+    }
+
+    protected Number executeUpdate(ClassMetaData base, ClassMetaData[] metas,
+        boolean subclasses, ExpressionFactory[] facts,
+        QueryExpressions[] parsed, Object[] params) {
+<span class="nc" id="L686">        return null;</span>
+    }
+
+    @Override
+    protected String[] getDataStoreActions(ClassMetaData base,
+        ClassMetaData[] metas, boolean subclasses, ExpressionFactory[] facts,
+        QueryExpressions[] exps, Object[] params, Range range) {
+<span class="nc" id="L693">        Context[] ctxs = new Context[exps.length];</span>
+<span class="nc bnc" id="L694" title="All 2 branches missed.">        for (int i = 0; i &lt; exps.length; i++)</span>
+<span class="nc" id="L695">            ctxs[i] = exps[i].ctx();</span>
+<span class="nc" id="L696">        localContext.set(clone(ctxs, null));</span>
+<span class="nc" id="L697">        ClassMapping[] mappings = (ClassMapping[]) metas;</span>
+<span class="nc" id="L698">        JDBCFetchConfiguration fetch = (JDBCFetchConfiguration) ctx.</span>
+<span class="nc" id="L699">            getFetchConfiguration();</span>
+<span class="nc bnc" id="L700" title="All 2 branches missed.">        if (exps[0].fetchPaths != null) {</span>
+<span class="nc" id="L701">            fetch.addFields(Arrays.asList(exps[0].fetchPaths));</span>
+<span class="nc" id="L702">            fetch.addJoins(Arrays.asList(exps[0].fetchPaths));</span>
+        }
+<span class="nc bnc" id="L704" title="All 2 branches missed.">        if (exps[0].fetchInnerPaths != null)</span>
+<span class="nc" id="L705">            fetch.addFetchInnerJoins(Arrays.asList(exps[0].fetchInnerPaths));</span>
+
+<span class="nc" id="L707">        int eager = calculateEagerMode(exps[0], range.start, range.end);</span>
+<span class="nc" id="L708">        eager = Math.min(eager, EagerFetchModes.EAGER_JOIN);</span>
+<span class="nc" id="L709">        int subclassMode = fetch.getSubclassFetchMode((ClassMapping) base);</span>
+<span class="nc" id="L710">        DBDictionary dict = _store.getDBDictionary();</span>
+<span class="nc bnc" id="L711" title="All 4 branches missed.">        long start = (mappings.length == 1 &amp;&amp; dict.supportsSelectStartIndex)</span>
+<span class="nc" id="L712">            ? range.start : 0L;</span>
+<span class="nc bnc" id="L713" title="All 2 branches missed.">        long end = (dict.supportsSelectEndIndex) ? range.end : Long.MAX_VALUE;</span>
+
+<span class="nc" id="L715">        QueryExpressionsState[] states = new QueryExpressionsState[exps.length];</span>
+<span class="nc bnc" id="L716" title="All 2 branches missed.">        for (int i = 0; i &lt; states.length; i++)</span>
+<span class="nc" id="L717">            states[i] = new QueryExpressionsState();</span>
+<span class="nc" id="L718">        ExpContext ctx = new ExpContext(_store, params, fetch);</span>
+
+        // add selects with populate WHERE conditions to list
+<span class="nc" id="L721">        List sels = new ArrayList(mappings.length);</span>
+<span class="nc" id="L722">        List selMappings = new ArrayList(mappings.length);</span>
+<span class="nc" id="L723">        BitSet subclassBits = new BitSet();</span>
+<span class="nc" id="L724">        BitSet nextBits = new BitSet();</span>
+<span class="nc bnc" id="L725" title="All 4 branches missed.">        boolean unionable = createWhereSelects(sels, mappings, selMappings,</span>
+            subclasses, subclassBits, nextBits, facts, exps, states, ctx,
+            subclassMode) &amp;&amp; subclassMode == EagerFetchModes.EAGER_JOIN;
+<span class="nc bnc" id="L728" title="All 2 branches missed.">        if (sels.size() &gt; 1)</span>
+<span class="nc" id="L729">            start = 0L;</span>
+
+<span class="nc bnc" id="L731" title="All 2 branches missed.">        if (unionable) {</span>
+<span class="nc" id="L732">            Union union = _store.getSQLFactory().newUnion(</span>
+<span class="nc" id="L733">                (Select[]) sels.toArray(new Select[sels.size()]));</span>
+<span class="nc" id="L734">            populateUnion(union, mappings, subclasses, facts, exps, states, ctx,</span>
+                false, eager, start, end);
+<span class="nc bnc" id="L736" title="All 2 branches missed.">            if (union.isUnion())</span>
+<span class="nc" id="L737">                return new String[] {union.toSelect(false, fetch).getSQL(true)};</span>
+<span class="nc" id="L738">            sels = Arrays.asList(union.getSelects());</span>
+<span class="nc" id="L739">        } else {</span>
+            Select sel;
+<span class="nc bnc" id="L741" title="All 2 branches missed.">            for (int i = 0, idx = 0; i &lt; sels.size(); i++) {</span>
+<span class="nc" id="L742">                sel = (Select) sels.get(i);</span>
+<span class="nc" id="L743">                populateSelect(sel, (ClassMapping) selMappings.get(i),</span>
+<span class="nc" id="L744">                    subclassBits.get(i), (JDBCExpressionFactory) facts[idx],</span>
+                    exps[idx], states[idx], ctx, false, eager, start, end);
+<span class="nc bnc" id="L746" title="All 2 branches missed.">                if (nextBits.get(i))</span>
+<span class="nc" id="L747">                    idx++;</span>
+            }
+        }
+
+<span class="nc" id="L751">        String[] sql = new String[sels.size()];</span>
+<span class="nc bnc" id="L752" title="All 2 branches missed.">        for (int i = 0; i &lt; sels.size(); i++)</span>
+<span class="nc" id="L753">            sql[i] = ((Select) sels.get(i)).toSelect(false, fetch).getSQL(true);</span>
+
+<span class="nc" id="L755">        localContext.remove();</span>
+<span class="nc" id="L756">        return sql;</span>
+    }
+
+    /**
+     * This method is to provide override for non-JDBC or JDBC-like
+     * implementation of executing update.
+     */
+    protected int executeUpdate(Connection conn, PreparedStatement stmnt,
+        SQLBuffer sqlBuf, boolean isUpdate) throws SQLException {
+<span class="nc" id="L765">        return stmnt.executeUpdate();</span>
+    }
+
+    /**
+     * This method is to provide override for non-JDBC or JDBC-like
+     * implementation of preparing statement.
+     */
+    protected PreparedStatement prepareStatement(Connection conn, SQLBuffer sql)
+        throws SQLException {
+<span class="nc" id="L774">        return sql.prepareStatement(conn);</span>
+    }
+
+    @Override
+    public Object evaluate(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L780">        int id = 0;</span>
+<span class="nc bnc" id="L781" title="All 2 branches missed.">        if (value instanceof org.apache.openjpa.jdbc.kernel.exps.Val)</span>
+<span class="nc" id="L782">            id = ((org.apache.openjpa.jdbc.kernel.exps.Val)value).getId();</span>
+        else
+<span class="nc" id="L784">            throw new UnsupportedException();</span>
+
+<span class="nc bnc" id="L786" title="All 12 branches missed.">        switch(id) {</span>
+        case Val.MATH_VAL:
+<span class="nc" id="L788">            return handleMathVal(value, ob, params, sm);</span>
+        case Val.CONCAT_VAL:
+<span class="nc" id="L790">            return handleConcatVal(value, ob, params, sm);</span>
+        case Val.SUBSTRING_VAL:
+<span class="nc" id="L792">            return handleSubstringVal(value, ob, params, sm);</span>
+        case Val.ARGS_VAL:
+<span class="nc" id="L794">            return handleArgsVal(value, ob, params, sm);</span>
+        case Val.LOWER_VAL:
+<span class="nc" id="L796">            return handleLowerVal(value, ob, params, sm);</span>
+        case Val.UPPER_VAL:
+<span class="nc" id="L798">            return handleUpperVal(value, ob, params, sm);</span>
+        case Val.LENGTH_VAL:
+<span class="nc" id="L800">            return handleLengthVal(value, ob, params, sm);</span>
+        case Val.TRIM_VAL:
+<span class="nc" id="L802">            return handleTrimVal(value, ob, params, sm);</span>
+        case Val.INDEXOF_VAL:
+<span class="nc" id="L804">            return handleIndexOfVal(value, ob, params, sm);</span>
+        case Val.ABS_VAL:
+<span class="nc" id="L806">            return handleAbsVal(value, ob, params, sm);</span>
+        case Val.SQRT_VAL:
+<span class="nc" id="L808">            return handleSqrtVal(value, ob, params, sm);</span>
+        default:
+<span class="nc" id="L810">            throw new UnsupportedException();</span>
+        }
+    }
+
+    private Object handleMathVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L816">        org.apache.openjpa.jdbc.kernel.exps.Math mathVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.Math) value;
+<span class="nc" id="L818">        Val value1 = mathVal.getVal1();</span>
+<span class="nc" id="L819">        Object val1 = getValue(value1, ob, params, sm);</span>
+<span class="nc" id="L820">        Class c1 = value1.getType();</span>
+
+<span class="nc" id="L822">        Val value2 = mathVal.getVal2();</span>
+<span class="nc" id="L823">        Object val2 = getValue(value2, ob, params, sm);</span>
+<span class="nc" id="L824">        Class c2 = value2.getType();</span>
+
+<span class="nc" id="L826">        String op = mathVal.getOperation();</span>
+<span class="nc bnc" id="L827" title="All 2 branches missed.">        if (op.equals(org.apache.openjpa.jdbc.kernel.exps.Math.ADD))</span>
+<span class="nc" id="L828">            return Filters.add(val1, c1, val2, c2);</span>
+<span class="nc bnc" id="L829" title="All 2 branches missed.">        else if (op.equals(</span>
+                org.apache.openjpa.jdbc.kernel.exps.Math.SUBTRACT))
+<span class="nc" id="L831">            return Filters.subtract(val1, c1, val2, c2);</span>
+<span class="nc bnc" id="L832" title="All 2 branches missed.">        else if (op.equals(</span>
+                org.apache.openjpa.jdbc.kernel.exps.Math.MULTIPLY))
+<span class="nc" id="L834">            return Filters.multiply(val1, c1, val2, c2);</span>
+<span class="nc bnc" id="L835" title="All 2 branches missed.">        else if (op.equals(</span>
+                org.apache.openjpa.jdbc.kernel.exps.Math.DIVIDE))
+<span class="nc" id="L837">            return Filters.divide(val1, c1, val2, c2);</span>
+<span class="nc bnc" id="L838" title="All 2 branches missed.">        else if (op.equals(org.apache.openjpa.jdbc.kernel.exps.Math.MOD))</span>
+<span class="nc" id="L839">            return Filters.mod(val1, c1, val2, c2);</span>
+<span class="nc" id="L840">        throw new UnsupportedException();</span>
+    }
+
+    private Object handleConcatVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L845">        org.apache.openjpa.jdbc.kernel.exps.Concat concatVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.Concat)value;
+<span class="nc" id="L847">        Val value1 = concatVal.getVal1();</span>
+<span class="nc" id="L848">        Object val1 = getValue(value1, ob, params, sm);</span>
+
+<span class="nc" id="L850">        Val value2 = concatVal.getVal2();</span>
+<span class="nc" id="L851">        Object val2 = getValue(value2, ob, params, sm);</span>
+<span class="nc" id="L852">        return new StringBuilder(100).append(val1).append(val2).toString();</span>
+    }
+
+    private Object handleSubstringVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L857">        org.apache.openjpa.jdbc.kernel.exps.Substring substrVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.Substring) value;
+<span class="nc" id="L859">        Val value1 = substrVal.getVal1();</span>
+<span class="nc" id="L860">        String val1 = (String) getValue(value1, ob, params, sm);</span>
+
+<span class="nc" id="L862">        Val value2 = substrVal.getVal2();</span>
+<span class="nc" id="L863">        Object val2 = getValue(value2, ob, params, sm);</span>
+
+<span class="nc" id="L865">        org.apache.openjpa.kernel.exps.Value[] valAry2 =</span>
+            (org.apache.openjpa.kernel.exps.Value[]) val2;
+<span class="nc" id="L867">        Object arg1 = getValue(valAry2[0], ob, params, sm); //starting pos</span>
+<span class="nc" id="L868">        Object arg2 = getValue(valAry2[1], ob, params, sm); // length</span>
+<span class="nc" id="L869">        int startIdx = ((Long) arg1).intValue();</span>
+<span class="nc" id="L870">        int length = ((Long) arg2).intValue();</span>
+<span class="nc" id="L871">        int endIdx = startIdx + length;</span>
+<span class="nc" id="L872">        return val1.substring(startIdx, endIdx);</span>
+    }
+
+    private Object handleArgsVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L877">        org.apache.openjpa.jdbc.kernel.exps.Args argsVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.Args) value;
+<span class="nc" id="L879">        return argsVal.getValues();</span>
+    }
+
+    private Object handleLowerVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L884">        org.apache.openjpa.jdbc.kernel.exps.ToLowerCase lowerVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.ToLowerCase) value;
+<span class="nc" id="L886">        Val val = lowerVal.getValue();</span>
+<span class="nc" id="L887">        return ((String) getValue(val, ob, params, sm)).toLowerCase();</span>
+    }
+
+    private Object handleUpperVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm){
+<span class="nc" id="L892">        org.apache.openjpa.jdbc.kernel.exps.ToUpperCase upperVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.ToUpperCase) value;
+<span class="nc" id="L894">        Val val = upperVal.getValue();</span>
+<span class="nc" id="L895">        return ((String) getValue(val, ob, params, sm)).toUpperCase();</span>
+    }
+
+    private Object handleLengthVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm){
+<span class="nc" id="L900">        org.apache.openjpa.jdbc.kernel.exps.StringLength strLenVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.StringLength) value;
+<span class="nc" id="L902">        Val val = strLenVal.getValue();</span>
+<span class="nc" id="L903">        return ((String) getValue(val, ob, params, sm)).length();</span>
+    }
+
+    private Object handleTrimVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L908">        org.apache.openjpa.jdbc.kernel.exps.Trim trimVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.Trim) value;
+<span class="nc" id="L910">        Val val = trimVal.getVal();</span>
+<span class="nc" id="L911">        String valStr = (String) getValue(val, ob, params, sm);</span>
+<span class="nc" id="L912">        Val trimChar = trimVal.getTrimChar();</span>
+<span class="nc" id="L913">        char trimCharObj = ((String) getValue(trimChar, ob, params, sm)).</span>
+<span class="nc" id="L914">            charAt(0);</span>
+<span class="nc" id="L915">        Boolean where = trimVal.getWhere();</span>
+<span class="nc bnc" id="L916" title="All 2 branches missed.">        if (where == null) { //trim both</span>
+<span class="nc" id="L917">            return trimLeading(trimTrailing(valStr, trimCharObj), trimCharObj);</span>
+<span class="nc bnc" id="L918" title="All 2 branches missed.">        } else if (where.booleanValue()) { // trim leading</span>
+<span class="nc" id="L919">            return trimLeading(valStr, trimCharObj);</span>
+        } else { // trim trailing
+<span class="nc" id="L921">            return trimTrailing(valStr, trimCharObj);</span>
+        }
+    }
+
+    private String trimLeading(String value, char trimChar) {
+<span class="nc" id="L926">        int startIdx = 0;</span>
+<span class="nc" id="L927">        int len = value.length();</span>
+<span class="nc bnc" id="L928" title="All 2 branches missed.">        for (int i = 0; i &lt; len; i++) {</span>
+<span class="nc bnc" id="L929" title="All 2 branches missed.">            if (value.charAt(i) != trimChar) {</span>
+<span class="nc" id="L930">                startIdx = i;</span>
+<span class="nc" id="L931">                break;</span>
+            }
+        }
+<span class="nc" id="L934">        return value.substring(startIdx);</span>
+    }
+
+    private String trimTrailing(String value, char trimChar) {
+<span class="nc" id="L938">        int endIdx = 0;</span>
+<span class="nc" id="L939">        int len = value.length();</span>
+<span class="nc bnc" id="L940" title="All 2 branches missed.">        for (int i = len-1; i &gt;= 0; i--) {</span>
+<span class="nc bnc" id="L941" title="All 2 branches missed.">            if (value.charAt(i) != trimChar) {</span>
+<span class="nc" id="L942">                endIdx = i;</span>
+<span class="nc" id="L943">                break;</span>
+            }
+        }
+<span class="nc" id="L946">        return value.substring(0, endIdx+1);</span>
+    }
+
+    private Object handleIndexOfVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L951">        org.apache.openjpa.jdbc.kernel.exps.IndexOf locateVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.IndexOf) value;
+<span class="nc" id="L953">        String val1 = (String) getValue(locateVal.getVal1(), ob, params, sm);</span>
+<span class="nc" id="L954">        Val[] val2 = (Val[]) getValue(locateVal.getVal2(), ob, params, sm);</span>
+<span class="nc" id="L955">        String strVal = (String) getValue(val2[0], ob, params, sm);</span>
+<span class="nc" id="L956">        int idx = ((Long) getValue(val2[1], ob, params, sm)).intValue();</span>
+<span class="nc" id="L957">        return strVal.indexOf(val1, idx);</span>
+    }
+
+    private Object handleAbsVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L962">        org.apache.openjpa.jdbc.kernel.exps.Abs absVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.Abs) value;
+<span class="nc" id="L964">        Object val = getValue(absVal.getValue(), ob, params, sm);</span>
+<span class="nc" id="L965">        Class c = val.getClass();</span>
+<span class="nc bnc" id="L966" title="All 2 branches missed.">        if (c == Integer.class)</span>
+<span class="nc" id="L967">            return Integer.valueOf(java.lang.Math.abs(((Integer) val).intValue()));</span>
+<span class="nc bnc" id="L968" title="All 2 branches missed.">        else if (c == Float.class)</span>
+<span class="nc" id="L969">            return Float.valueOf(java.lang.Math.abs(((Float) val).floatValue()));</span>
+<span class="nc bnc" id="L970" title="All 2 branches missed.">        else if (c == Double.class)</span>
+<span class="nc" id="L971">            return Double.valueOf(java.lang.Math.abs(((Double) val).doubleValue()));</span>
+<span class="nc bnc" id="L972" title="All 2 branches missed.">        else if (c == Long.class)</span>
+<span class="nc" id="L973">            return Long.valueOf(java.lang.Math.abs(((Long) val).longValue()));</span>
+<span class="nc" id="L974">        throw new UnsupportedException();</span>
+    }
+
+    private Object handleSqrtVal(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L979">        org.apache.openjpa.jdbc.kernel.exps.Sqrt sqrtVal =</span>
+            (org.apache.openjpa.jdbc.kernel.exps.Sqrt) value;
+<span class="nc" id="L981">        Object val = getValue(sqrtVal.getValue(), ob, params, sm);</span>
+<span class="nc" id="L982">        Class c = val.getClass();</span>
+<span class="nc bnc" id="L983" title="All 2 branches missed.">        if (c == Integer.class)</span>
+<span class="nc" id="L984">            return Double.valueOf(java.lang.Math.sqrt(((Integer) val).doubleValue()));</span>
+<span class="nc bnc" id="L985" title="All 2 branches missed.">        else if (c == Float.class)</span>
+<span class="nc" id="L986">            return Double.valueOf(java.lang.Math.sqrt(((Float) val).floatValue()));</span>
+<span class="nc bnc" id="L987" title="All 2 branches missed.">        else if (c == Double.class)</span>
+<span class="nc" id="L988">            return Double.valueOf(java.lang.Math.sqrt(((Double) val).doubleValue()));</span>
+<span class="nc bnc" id="L989" title="All 2 branches missed.">        else if (c == Long.class)</span>
+<span class="nc" id="L990">            return Double.valueOf(java.lang.Math.sqrt(((Long) val).doubleValue()));</span>
+<span class="nc" id="L991">        throw new UnsupportedException();</span>
+    }
+
+    private Object getValue(Object value, Object ob, Object[] params,
+        OpenJPAStateManager sm) {
+<span class="nc bnc" id="L996" title="All 2 branches missed.">        if (value instanceof PCPath) {</span>
+<span class="nc" id="L997">            FieldMapping fm = (FieldMapping)((PCPath) value).last();</span>
+<span class="nc" id="L998">            return getValue(ob, fm, sm);</span>
+<span class="nc bnc" id="L999" title="All 2 branches missed.">        } else if (value instanceof Literal) {</span>
+<span class="nc" id="L1000">            return ((Literal) value).getValue();</span>
+<span class="nc bnc" id="L1001" title="All 2 branches missed.">        } else if (value instanceof Constant) {</span>
+<span class="nc" id="L1002">            return ((Constant) value).getValue(params);</span>
+        } else {
+<span class="nc" id="L1004">            return evaluate(value, ob, params, sm);</span>
+        }
+    }
+
+    private Object getValue(Object ob, FieldMapping fmd,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L1010">        int i = fmd.getIndex();</span>
+<span class="nc bnc" id="L1011" title="All 11 branches missed.">        switch (fmd.getDeclaredTypeCode()) {</span>
+        case JavaTypes.BOOLEAN:
+<span class="nc" id="L1013">            return sm.fetchBooleanField(i);</span>
+        case JavaTypes.BYTE:
+<span class="nc" id="L1015">            return sm.fetchByteField(i);</span>
+        case JavaTypes.CHAR:
+<span class="nc" id="L1017">            return sm.fetchCharField(i);</span>
+        case JavaTypes.DOUBLE:
+<span class="nc" id="L1019">            return sm.fetchDoubleField(i);</span>
+        case JavaTypes.FLOAT:
+<span class="nc" id="L1021">            return sm.fetchFloatField(i);</span>
+        case JavaTypes.INT:
+<span class="nc" id="L1023">            return sm.fetchIntField(i);</span>
+        case JavaTypes.LONG:
+<span class="nc" id="L1025">            return sm.fetchLongField(i);</span>
+        case JavaTypes.SHORT:
+<span class="nc" id="L1027">            return sm.fetchShortField(i);</span>
+        case JavaTypes.STRING:
+<span class="nc" id="L1029">            return sm.fetchStringField(i);</span>
+        case JavaTypes.DATE:
+        case JavaTypes.NUMBER:
+        case JavaTypes.BOOLEAN_OBJ:
+        case JavaTypes.BYTE_OBJ:
+        case JavaTypes.CHAR_OBJ:
+        case JavaTypes.DOUBLE_OBJ:
+        case JavaTypes.FLOAT_OBJ:
+        case JavaTypes.INT_OBJ:
+        case JavaTypes.LONG_OBJ:
+        case JavaTypes.SHORT_OBJ:
+        case JavaTypes.BIGDECIMAL:
+        case JavaTypes.BIGINTEGER:
+        case JavaTypes.LOCALE:
+        case JavaTypes.OBJECT:
+        case JavaTypes.OID:
+<span class="nc" id="L1045">            return sm.fetchObjectField(i);</span>
+        default:
+<span class="nc" id="L1047">            throw new UnsupportedException();</span>
+        }
+    }
+
+    private static class ThreadLocalContext extends ThreadLocal&lt;Context[]&gt; {
+        @Override
+        public Context[] initialValue() {
+<span class="nc" id="L1054">          return null;</span>
+        }
+    }
+
+    public static Context[] getThreadLocalContext() {
+<span class="nc" id="L1059">        return localContext.get();</span>
+    }
+
+    public static Context getThreadLocalContext(Context orig) {
+<span class="nc" id="L1063">        Context[] root = localContext.get();</span>
+<span class="nc bnc" id="L1064" title="All 2 branches missed.">        for (int i = 0; i &lt; root.length; i++) {</span>
+<span class="nc" id="L1065">            Context lctx = getThreadLocalContext(root[i], orig);</span>
+<span class="nc bnc" id="L1066" title="All 2 branches missed.">            if (lctx != null)</span>
+<span class="nc" id="L1067">                return lctx;</span>
+        }
+<span class="nc" id="L1069">        return null;</span>
+    }
+
+    public static Select getThreadLocalSelect(Select select) {
+<span class="nc bnc" id="L1073" title="All 2 branches missed.">        if (select == null)</span>
+<span class="nc" id="L1074">            return null;</span>
+<span class="nc" id="L1075">        Context[] lctx = JDBCStoreQuery.getThreadLocalContext();</span>
+<span class="nc" id="L1076">        Context cloneFrom = select.ctx();</span>
+<span class="nc bnc" id="L1077" title="All 2 branches missed.">        for (int i = 0; i &lt; lctx.length; i++) {</span>
+<span class="nc" id="L1078">            Context cloneTo = getThreadLocalContext(lctx[i], cloneFrom);</span>
+<span class="nc bnc" id="L1079" title="All 2 branches missed.">            if (cloneTo != null)</span>
+<span class="nc" id="L1080">                return (Select)cloneTo.getSelect();</span>
+        }
+<span class="nc" id="L1082">        return select;</span>
+    }
+
+    public static Context getThreadLocalContext(Context lctx, Context cloneFrom) {
+<span class="nc bnc" id="L1086" title="All 2 branches missed.">        if (lctx.cloneFrom == cloneFrom)</span>
+<span class="nc" id="L1087">            return lctx;</span>
+<span class="nc" id="L1088">        java.util.List&lt;Context&gt; subselCtxs = lctx.getSubselContexts();</span>
+<span class="nc bnc" id="L1089" title="All 2 branches missed.">        if (subselCtxs != null) {</span>
+<span class="nc bnc" id="L1090" title="All 2 branches missed.">            for (Context subselCtx : subselCtxs) {</span>
+<span class="nc" id="L1091">                Context ctx = getThreadLocalContext(subselCtx, cloneFrom);</span>
+<span class="nc bnc" id="L1092" title="All 2 branches missed.">                if (ctx != null)</span>
+<span class="nc" id="L1093">                    return ctx;</span>
+<span class="nc" id="L1094">            }</span>
+        }
+<span class="nc" id="L1096">        return null;</span>
+    }
+
+    private static Context[] clone(Context[] orig, Context parent) {
+<span class="nc" id="L1100">        Context[] newCtx = new Context[orig.length];</span>
+<span class="nc bnc" id="L1101" title="All 2 branches missed.">        for (int i = 0; i &lt; orig.length; i++) {</span>
+<span class="nc" id="L1102">            newCtx[i] = clone(orig[i], parent);</span>
+        }
+<span class="nc" id="L1104">        return newCtx;</span>
+    }
+
+    private static Context clone(Context orig, Context parent) {
+<span class="nc" id="L1108">        Context myParent = null;</span>
+<span class="nc bnc" id="L1109" title="All 2 branches missed.">        if (parent == null) {</span>
+<span class="nc" id="L1110">            Context origParent = orig.getParent();</span>
+<span class="nc bnc" id="L1111" title="All 2 branches missed.">            if (origParent != null)</span>
+<span class="nc" id="L1112">                myParent = clone(orig.getParent(), null);</span>
+<span class="nc" id="L1113">        } else</span>
+<span class="nc" id="L1114">            myParent = parent;</span>
+
+<span class="nc" id="L1116">        Context newCtx = new Context(orig.parsed, null, myParent);</span>
+<span class="nc" id="L1117">        newCtx.from = orig.from;</span>
+<span class="nc" id="L1118">        newCtx.meta = orig.meta;</span>
+<span class="nc" id="L1119">        newCtx.schemaAlias = orig.schemaAlias;</span>
+<span class="nc" id="L1120">        newCtx.setSchemas(orig.getSchemas());</span>
+<span class="nc" id="L1121">        newCtx.setVariables(orig.getVariables());</span>
+<span class="nc" id="L1122">        newCtx.cloneFrom = orig;</span>
+<span class="nc" id="L1123">        Object select = orig.getSelect();</span>
+<span class="nc bnc" id="L1124" title="All 2 branches missed.">        if (select != null)</span>
+<span class="nc" id="L1125">            newCtx.setSelect(((SelectImpl)select).clone(newCtx));</span>
+<span class="nc" id="L1126">        newCtx.subquery = orig.subquery;</span>
+<span class="nc" id="L1127">        List&lt;Context&gt; subsels = orig.getSubselContexts();</span>
+<span class="nc bnc" id="L1128" title="All 2 branches missed.">        if (subsels != null) {</span>
+<span class="nc bnc" id="L1129" title="All 2 branches missed.">            for (Context subsel : subsels)</span>
+<span class="nc" id="L1130">                newCtx.addSubselContext(clone(subsel, newCtx));</span>
+        }
+
+<span class="nc" id="L1133">        return newCtx;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

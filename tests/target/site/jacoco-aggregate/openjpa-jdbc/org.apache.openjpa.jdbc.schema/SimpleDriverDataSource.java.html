@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SimpleDriverDataSource.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">SimpleDriverDataSource.java</span></div><h1>SimpleDriverDataSource.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.io.PrintWriter;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.util.List;
+import java.util.Properties;
+import java.util.logging.Logger;
+
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.jdbc.ConnectionDecorator;
+import org.apache.openjpa.lib.jdbc.DelegatingDataSource;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.StoreException;
+
+/**
+ * Non-pooling driver data source.
+ */
+<span class="nc" id="L43">public class SimpleDriverDataSource</span>
+    implements DriverDataSource {
+
+    private String _connectionDriverName;
+    private String _connectionURL;
+    private String _connectionUserName;
+    private String _connectionPassword;
+    private Properties _connectionProperties;
+    private Properties _connectionFactoryProperties;
+    private Driver _driver;
+    private ClassLoader _classLoader;
+
+<span class="nc" id="L55">    protected static Localizer _loc = Localizer.forPackage(SimpleDriverDataSource.class);</span>
+<span class="nc" id="L56">    protected static Localizer _eloc = Localizer.forPackage(DelegatingDataSource.class);</span>
+
+    @Override
+    public Connection getConnection()
+        throws SQLException {
+<span class="nc" id="L61">        return getConnection(null);</span>
+    }
+
+    @Override
+    public Connection getConnection(String username, String password)
+        throws SQLException {
+<span class="nc" id="L67">        Properties props = new Properties();</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        if (username == null)</span>
+<span class="nc" id="L69">            username = _connectionUserName;</span>
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        if (username != null)</span>
+<span class="nc" id="L71">            props.put(&quot;user&quot;, username);</span>
+
+<span class="nc bnc" id="L73" title="All 2 branches missed.">        if (password == null)</span>
+<span class="nc" id="L74">            password = _connectionPassword;</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if (password != null)</span>
+<span class="nc" id="L76">            props.put(&quot;password&quot;, password);</span>
+
+<span class="nc" id="L78">        return getConnection(props);</span>
+    }
+
+    public Connection getConnection(Properties props) throws SQLException {
+<span class="nc" id="L82">        return getSimpleConnection(props);</span>
+    }
+
+    protected Connection getSimpleConnection(Properties props) throws SQLException {
+<span class="nc" id="L86">        Properties conProps = new Properties();</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">        if (props != null) {</span>
+<span class="nc" id="L88">            conProps.putAll(props);</span>
+        }
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if (_connectionProperties != null) {</span>
+<span class="nc" id="L91">            conProps.putAll(_connectionProperties);</span>
+        }
+<span class="nc" id="L93">        Connection con = getSimpleDriver().connect(_connectionURL, conProps);</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if (con == null) {</span>
+<span class="nc" id="L95">            throw new SQLException(_eloc.get(&quot;poolds-null&quot;,</span>
+<span class="nc" id="L96">                    _connectionDriverName, _connectionURL).getMessage());</span>
+        }
+<span class="nc" id="L98">        return con;</span>
+    }
+
+    @Override
+    public int getLoginTimeout() {
+<span class="nc" id="L103">        return 0;</span>
+    }
+
+    @Override
+    public void setLoginTimeout(int seconds) {
+<span class="nc" id="L108">    }</span>
+
+    @Override
+    public PrintWriter getLogWriter() {
+<span class="nc" id="L112">        return DriverManager.getLogWriter();</span>
+    }
+
+    @Override
+    public void setLogWriter(PrintWriter out) {
+<span class="nc" id="L117">    }</span>
+
+    @Override
+    public void initDBDictionary(DBDictionary dict) {
+<span class="nc" id="L121">    }</span>
+
+    @Override
+    public void setConnectionURL(String connectionURL) {
+<span class="nc" id="L125">        _connectionURL = connectionURL;</span>
+<span class="nc" id="L126">    }</span>
+
+    @Override
+    public String getConnectionURL() {
+<span class="nc" id="L130">        return _connectionURL;</span>
+    }
+
+    @Override
+    public void setConnectionUserName(String connectionUserName) {
+<span class="nc" id="L135">        _connectionUserName = connectionUserName;</span>
+<span class="nc" id="L136">    }</span>
+
+    @Override
+    public String getConnectionUserName() {
+<span class="nc" id="L140">        return _connectionUserName;</span>
+    }
+
+    @Override
+    public void setConnectionPassword(String connectionPassword) {
+<span class="nc" id="L145">        _connectionPassword = connectionPassword;</span>
+<span class="nc" id="L146">    }</span>
+
+    // Only allow sub-classes to retrieve the password
+    protected String getConnectionPassword() {
+<span class="nc" id="L150">        return _connectionPassword;</span>
+    }
+
+    @Override
+    public void setConnectionProperties(Properties props) {
+<span class="nc" id="L155">        _connectionProperties = props;</span>
+<span class="nc" id="L156">    }</span>
+
+    @Override
+    public Properties getConnectionProperties() {
+<span class="nc" id="L160">        return _connectionProperties;</span>
+    }
+
+    @Override
+    public void setConnectionFactoryProperties(Properties props) {
+<span class="nc" id="L165">        _connectionFactoryProperties = props;</span>
+<span class="nc" id="L166">    }</span>
+
+    @Override
+    public Properties getConnectionFactoryProperties() {
+<span class="nc" id="L170">        return _connectionFactoryProperties;</span>
+    }
+
+    @Override
+    public List&lt;ConnectionDecorator&gt; createConnectionDecorators() {
+<span class="nc" id="L175">        return null;</span>
+    }
+
+    @Override
+    public void setClassLoader(ClassLoader classLoader) {
+<span class="nc" id="L180">        _classLoader = classLoader;</span>
+<span class="nc" id="L181">    }</span>
+
+    @Override
+    public ClassLoader getClassLoader() {
+<span class="nc" id="L185">        return _classLoader;</span>
+    }
+
+    @Override
+    public void setConnectionDriverName(String connectionDriverName) {
+<span class="nc" id="L190">        _connectionDriverName = connectionDriverName;</span>
+<span class="nc" id="L191">    }</span>
+
+    @Override
+    public String getConnectionDriverName() {
+<span class="nc" id="L195">        return _connectionDriverName;</span>
+    }
+
+    protected Driver getSimpleDriver() {
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        if (_driver != null)</span>
+<span class="nc" id="L200">            return _driver;</span>
+
+        try {
+<span class="nc" id="L203">            _driver = DriverManager.getDriver(_connectionURL);</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">            if (_driver != null)</span>
+<span class="nc" id="L205">                return _driver;</span>
+<span class="nc" id="L206">        } catch (Exception e) {</span>
+<span class="nc" id="L207">        }</span>
+
+        try {
+<span class="nc" id="L210">            Class.forName(_connectionDriverName, true, _classLoader);</span>
+<span class="nc" id="L211">        } catch (Exception e) {</span>
+<span class="nc" id="L212">        }</span>
+        try {
+<span class="nc" id="L214">            _driver = DriverManager.getDriver(_connectionURL);</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">            if (_driver != null)</span>
+<span class="nc" id="L216">                return _driver;</span>
+<span class="nc" id="L217">        } catch (Exception e) {</span>
+<span class="nc" id="L218">        }</span>
+
+        try {
+<span class="nc" id="L221">            Class&lt;?&gt; c = Class.forName(_connectionDriverName,</span>
+                true, _classLoader);
+<span class="nc" id="L223">            _driver = (Driver) AccessController.doPrivileged(</span>
+<span class="nc" id="L224">                J2DoPrivHelper.newInstanceAction(c));</span>
+<span class="nc" id="L225">            return _driver;</span>
+<span class="nc" id="L226">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">            if (e instanceof RuntimeException)</span>
+<span class="nc" id="L228">                throw(RuntimeException) e;</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">            if (e instanceof PrivilegedActionException)</span>
+<span class="nc" id="L230">                e = ((PrivilegedActionException) e).getException();</span>
+<span class="nc" id="L231">            throw new StoreException(e);</span>
+        }
+    }
+
+
+    // java.sql.Wrapper implementation (JDBC 4)
+    @Override
+    public boolean isWrapperFor(Class&lt;?&gt; iface) {
+<span class="nc" id="L239">        return iface.isAssignableFrom(SimpleDriverDataSource.class);</span>
+    }
+
+    @Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public Object unwrap(Class iface) {
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if (isWrapperFor(iface))</span>
+<span class="nc" id="L246">            return this;</span>
+        else
+<span class="nc" id="L248">            return null;</span>
+    }
+
+    // Java 7 methods follow
+
+    @Override
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException{
+<span class="nc" id="L255">    	throw new SQLFeatureNotSupportedException();</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

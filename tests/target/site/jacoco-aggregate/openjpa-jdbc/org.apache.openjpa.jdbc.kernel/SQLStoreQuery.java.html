@@ -1,0 +1,429 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SQLStoreQuery.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">SQLStoreQuery.java</span></div><h1>SQLStoreQuery.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.io.IOException;
+import java.io.StreamTokenizer;
+import java.io.StringReader;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.MappingRepository;
+import org.apache.openjpa.jdbc.meta.QueryResultMapping;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.ResultSetResult;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.kernel.AbstractStoreQuery;
+import org.apache.openjpa.kernel.QueryContext;
+import org.apache.openjpa.kernel.StoreQuery;
+import org.apache.openjpa.lib.rop.RangeResultObjectProvider;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.util.UserException;
+
+
+/**
+ * A SQL query.
+ *
+ * @author Abe White
+ */
+public class SQLStoreQuery
+    extends AbstractStoreQuery {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L63">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L64">        (SQLStoreQuery.class);</span>
+
+    private transient final JDBCStore _store;
+
+    /**
+     * Construct a query managed by the given context.
+     */
+<span class="nc" id="L71">    public SQLStoreQuery(JDBCStore store) {</span>
+<span class="nc" id="L72">        _store = store;</span>
+<span class="nc" id="L73">    }</span>
+
+    public JDBCStore getStore() {
+<span class="nc" id="L76">        return _store;</span>
+    }
+
+    @Override
+    public boolean supportsParameterDeclarations() {
+<span class="nc" id="L81">        return false;</span>
+    }
+
+    @Override
+    public boolean supportsDataStoreExecution() {
+<span class="nc" id="L86">        return true;</span>
+    }
+
+    @Override
+    public Executor newDataStoreExecutor(ClassMetaData meta,
+        boolean subclasses) {
+<span class="nc" id="L92">        return new SQLExecutor(this, meta);</span>
+    }
+
+    @Override
+    public boolean requiresCandidateType() {
+<span class="nc" id="L97">        return false;</span>
+    }
+
+    @Override
+    public boolean requiresParameterDeclarations() {
+<span class="nc" id="L102">        return false;</span>
+    }
+
+    /**
+     * Executes the filter as a SQL query.
+     */
+    public static class SQLExecutor
+        extends AbstractExecutor {
+
+        private final ClassMetaData _meta;
+        private final boolean _select;
+        private final boolean _call;   // native call stored procedure
+        private final QueryResultMapping _resultMapping;
+
+<span class="nc" id="L116">        public SQLExecutor(SQLStoreQuery q, ClassMetaData candidate) {</span>
+<span class="nc" id="L117">            QueryContext ctx = q.getContext();</span>
+<span class="nc" id="L118">            String resultMapping = ctx.getResultMappingName();</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">            if (resultMapping == null)</span>
+<span class="nc" id="L120">                _resultMapping = null;</span>
+            else {
+<span class="nc" id="L122">                ClassLoader envLoader = ctx.getStoreContext().getClassLoader();</span>
+<span class="nc" id="L123">                MappingRepository repos = q.getStore().getConfiguration().</span>
+<span class="nc" id="L124">                    getMappingRepositoryInstance();</span>
+<span class="nc" id="L125">                _resultMapping = repos.getQueryResultMapping</span>
+<span class="nc" id="L126">                    (ctx.getResultMappingScope(), resultMapping, envLoader,</span>
+                        true);
+            }
+<span class="nc" id="L129">            _meta = candidate;</span>
+
+<span class="nc" id="L131">            String sql = StringUtil.trimToNull(ctx.getQueryString());</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">            if (sql == null)</span>
+<span class="nc" id="L133">                throw new UserException(_loc.get(&quot;no-sql&quot;));</span>
+<span class="nc" id="L134">            _select = q.getStore().getDBDictionary().isSelect(sql);</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">            _call = sql.length() &gt; 4</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">                &amp;&amp; sql.substring(0, 4).equalsIgnoreCase(&quot;call&quot;);</span>
+<span class="nc" id="L137">        }</span>
+
+        @Override
+        public int getOperation(StoreQuery q) {
+<span class="nc bnc" id="L141" title="All 2 branches missed.">           return _select ? OP_SELECT :</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">                (q.getContext().getCandidateType() != null</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">                        || q.getContext().getResultType() != null</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">                        || q.getContext().getResultMappingName() != null</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">                        || q.getContext().getResultMappingScope() != null)</span>
+<span class="nc" id="L146">                        ? OP_SELECT : OP_UPDATE;</span>
+        }
+
+        @Override
+        public Number executeUpdate(StoreQuery q, Object[] params) {
+<span class="nc" id="L151">            JDBCStore store = ((SQLStoreQuery) q).getStore();</span>
+<span class="nc" id="L152">            DBDictionary dict = store.getDBDictionary();</span>
+<span class="nc" id="L153">            String sql = q.getContext().getQueryString();</span>
+
+<span class="nc" id="L155">            List paramList = new ArrayList(Arrays.asList(params));</span>
+<span class="nc" id="L156">            SQLBuffer buf = new SQLBuffer(dict).append(sql);</span>
+
+            // we need to make sure we have an active store connection
+<span class="nc" id="L159">            store.getContext().beginStore();</span>
+<span class="nc" id="L160">            Connection conn = store.getConnection();</span>
+<span class="nc" id="L161">            JDBCFetchConfiguration fetch = (JDBCFetchConfiguration)</span>
+<span class="nc" id="L162">                q.getContext().getFetchConfiguration();</span>
+
+<span class="nc" id="L164">            PreparedStatement stmnt = null;</span>
+            try {
+<span class="nc bnc" id="L166" title="All 2 branches missed.">                if (_call)</span>
+<span class="nc" id="L167">                    stmnt = prepareCall(conn, buf);</span>
+                else
+<span class="nc" id="L169">                    stmnt = prepareStatement(conn, buf);</span>
+
+<span class="nc" id="L171">                buf.setParameters(paramList);</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">                if (stmnt != null)</span>
+<span class="nc" id="L173">                    buf.setParameters(stmnt);</span>
+
+<span class="nc" id="L175">                dict.setTimeouts(stmnt, fetch, true);</span>
+
+<span class="nc" id="L177">                int count = executeUpdate(store, conn, stmnt, buf);</span>
+
+<span class="nc" id="L179">                return count;</span>
+<span class="nc" id="L180">            } catch (SQLException se) {</span>
+<span class="nc" id="L181">                throw SQLExceptions.getStore(se, dict);</span>
+            } finally {
+<span class="nc bnc" id="L183" title="All 2 branches missed.">                if (stmnt != null) {</span>
+                    try {
+<span class="nc" id="L185">                        stmnt.close();</span>
+<span class="nc" id="L186">                    } catch (SQLException se) {</span>
+                        // safe to ignore
+                    } finally {
+<span class="nc" id="L189">                        stmnt = null;</span>
+                    }
+                }
+                try {
+<span class="nc" id="L193">                    conn.close();</span>
+<span class="nc" id="L194">                } catch (SQLException se) {</span>
+<span class="nc" id="L195">                }</span>
+            }
+        }
+
+        @Override
+        public ResultObjectProvider executeQuery(StoreQuery q,
+            Object[] params, Range range) {
+<span class="nc" id="L202">            JDBCStore store = ((SQLStoreQuery) q).getStore();</span>
+<span class="nc" id="L203">            DBDictionary dict = store.getDBDictionary();</span>
+<span class="nc" id="L204">            String sql = q.getContext().getQueryString();</span>
+
+<span class="nc" id="L206">            List paramList = new ArrayList(Arrays.asList(params));</span>
+<span class="nc" id="L207">            SQLBuffer buf = new SQLBuffer(dict).append(sql);</span>
+<span class="nc" id="L208">            Connection conn = store.getConnection();</span>
+<span class="nc" id="L209">            JDBCFetchConfiguration fetch = (JDBCFetchConfiguration)</span>
+<span class="nc" id="L210">                q.getContext().getFetchConfiguration();</span>
+
+            ResultObjectProvider rop;
+<span class="nc" id="L213">            PreparedStatement stmnt = null;</span>
+            try {
+                // use the right method depending on sel vs. proc, lrs setting
+<span class="nc bnc" id="L216" title="All 4 branches missed.">                if (_select &amp;&amp; !range.lrs)</span>
+<span class="nc" id="L217">                    stmnt = prepareStatement(conn, buf);</span>
+<span class="nc bnc" id="L218" title="All 2 branches missed.">                else if (_select)</span>
+<span class="nc" id="L219">                    stmnt = prepareStatement(conn, buf, fetch, -1, -1);</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">                else if (!range.lrs)</span>
+<span class="nc" id="L221">                    stmnt = prepareCall(conn, buf);</span>
+                else
+<span class="nc" id="L223">                    stmnt = prepareCall(conn, buf, fetch, -1, -1);</span>
+
+<span class="nc" id="L225">                int index = 0;</span>
+<span class="nc bnc" id="L226" title="All 4 branches missed.">                for (Iterator i = paramList.iterator(); i.hasNext() &amp;&amp;</span>
+                    stmnt != null;)
+<span class="nc" id="L228">                    dict.setUnknown(stmnt, ++index, i.next(), null);</span>
+
+<span class="nc" id="L230">                dict.setTimeouts(stmnt, fetch, false);</span>
+<span class="nc" id="L231">                ResultSet rs = executeQuery(store, conn, stmnt, buf, paramList);</span>
+<span class="nc bnc" id="L232" title="All 2 branches missed.">                ResultSetResult res = stmnt != null ?</span>
+<span class="nc" id="L233">                    new ResultSetResult(conn, stmnt, rs, store) :</span>
+<span class="nc" id="L234">                    new ResultSetResult(conn, rs, dict);</span>
+<span class="nc bnc" id="L235" title="All 2 branches missed.">                if (_resultMapping != null)</span>
+<span class="nc" id="L236">                    rop = new MappedQueryResultObjectProvider(_resultMapping,</span>
+                        store, fetch, res);
+<span class="nc bnc" id="L238" title="All 2 branches missed.">                else if (q.getContext().getCandidateType() != null)</span>
+<span class="nc" id="L239">                    rop = new GenericResultObjectProvider((ClassMapping) _meta,</span>
+                        store, fetch, res);
+                else
+<span class="nc" id="L242">                    rop = new SQLProjectionResultObjectProvider(store, fetch,</span>
+<span class="nc" id="L243">                        res, q.getContext().getResultType());</span>
+<span class="nc" id="L244">            } catch (SQLException se) {</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">                if (stmnt != null)</span>
+<span class="nc" id="L246">                    try { stmnt.close(); } catch (SQLException se2) {}</span>
+<span class="nc" id="L247">                try { conn.close(); } catch (SQLException se2) {}</span>
+<span class="nc" id="L248">                throw SQLExceptions.getStore(se, dict);</span>
+<span class="nc" id="L249">            }</span>
+
+<span class="nc bnc" id="L251" title="All 4 branches missed.">            if (range.start != 0 || range.end != Long.MAX_VALUE)</span>
+<span class="nc" id="L252">                rop = new RangeResultObjectProvider(rop, range.start,range.end);</span>
+<span class="nc" id="L253">            return rop;</span>
+        }
+
+        @Override
+        public String[] getDataStoreActions(StoreQuery q, Object[] params,
+            Range range) {
+<span class="nc" id="L259">            return new String[]{ q.getContext().getQueryString() };</span>
+        }
+
+        @Override
+        public boolean isPacking(StoreQuery q) {
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            return q.getContext().getCandidateType() == null;</span>
+        }
+
+        /**
+         * This method is to provide override for non-JDBC or JDBC-like
+         * implementation of preparing call statement.
+         */
+        protected PreparedStatement prepareCall(Connection conn, SQLBuffer buf)
+            throws SQLException {
+<span class="nc" id="L273">            return buf.prepareCall(conn);</span>
+        }
+
+        /**
+         * This method is to provide override for non-JDBC or JDBC-like
+         * implementation of executing update.
+         */
+        protected int executeUpdate(JDBCStore store, Connection conn,
+            PreparedStatement stmnt, SQLBuffer buf)
+            throws SQLException {
+<span class="nc" id="L283">            int count = 0;</span>
+<span class="nc bnc" id="L284" title="All 4 branches missed.">            if (_call &amp;&amp; stmnt.execute() == false) {</span>
+<span class="nc" id="L285">                count = stmnt.getUpdateCount();</span>
+            }
+            else {
+                // native insert, update, delete
+<span class="nc" id="L289">                count = stmnt.executeUpdate();</span>
+            }
+<span class="nc" id="L291">            return count;</span>
+        }
+
+        /**
+         * This method is to provide override for non-JDBC or JDBC-like
+         * implementation of preparing call statement.
+         */
+        protected PreparedStatement prepareCall(Connection conn, SQLBuffer buf,
+            JDBCFetchConfiguration fetch, int rsType, int rsConcur)
+            throws SQLException {
+<span class="nc" id="L301">            return buf.prepareCall(conn, fetch, rsType, rsConcur);</span>
+        }
+
+        /**
+         * This method is to provide override for non-JDBC or JDBC-like
+         * implementation of preparing statement.
+         */
+        protected PreparedStatement prepareStatement(Connection conn,
+            SQLBuffer buf) throws SQLException {
+<span class="nc" id="L310">            return buf.prepareStatement(conn);</span>
+        }
+
+        /**
+         * This method is to provide override for non-JDBC or JDBC-like
+         * implementation of preparing statement.
+         */
+        protected PreparedStatement prepareStatement(Connection conn,
+            SQLBuffer buf, JDBCFetchConfiguration fetch, int rsType,
+            int rsConcur) throws SQLException {
+<span class="nc" id="L320">            return buf.prepareStatement(conn, fetch, rsType, rsConcur);</span>
+        }
+
+        /**
+         * This method is to provide override for non-JDBC or JDBC-like
+         * implementation of executing query.
+         */
+        protected ResultSet executeQuery(JDBCStore store, Connection conn,
+            PreparedStatement stmnt, SQLBuffer buf, List paramList)
+            throws SQLException {
+<span class="nc" id="L330">            return stmnt.executeQuery();</span>
+        }
+
+        /**
+         * The given query is parsed to find the parameter tokens of the form
+         * &lt;code&gt;?n&lt;/code&gt; which is different than &lt;code&gt;?&lt;/code&gt; tokens in
+         * actual SQL parameter tokens. These &lt;code&gt;?n&lt;/code&gt; style tokens
+         * are replaced in the query string by &lt;code&gt;?&lt;/code&gt; tokens.
+         *
+         * During the token parsing, the ordering of the tokens is recorded.
+         * The given userParam must contain parameter keys as Integer and
+         * the same Integers must appear in the tokens.
+         *
+         */
+        @Override
+        public Object[] toParameterArray(StoreQuery q, Map userParams) {
+<span class="nc bnc" id="L346" title="All 4 branches missed.">            if (userParams == null || userParams.isEmpty())</span>
+<span class="nc" id="L347">                return StoreQuery.EMPTY_OBJECTS;</span>
+<span class="nc" id="L348">            String sql = q.getContext().getQueryString();</span>
+<span class="nc" id="L349">            List&lt;Integer&gt; paramOrder = new ArrayList&lt;&gt;();</span>
+            try {
+<span class="nc" id="L351">                sql = substituteParams(sql, paramOrder);</span>
+<span class="nc" id="L352">            } catch (IOException ex) {</span>
+<span class="nc" id="L353">                throw new UserException(ex.getLocalizedMessage());</span>
+<span class="nc" id="L354">            }</span>
+
+<span class="nc" id="L356">            Object[] result = new Object[paramOrder.size()];</span>
+<span class="nc" id="L357">            int idx = 0;</span>
+<span class="nc bnc" id="L358" title="All 2 branches missed.">            for (Integer key : paramOrder) {</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">                if (!userParams.containsKey(key))</span>
+<span class="nc" id="L360">                    throw new UserException(_loc.get(&quot;uparam-missing&quot;,</span>
+                        key, sql, userParams));
+<span class="nc" id="L362">                result[idx++] = userParams.get(key);</span>
+<span class="nc" id="L363">            }</span>
+            // modify original JPA-style SQL to proper SQL
+<span class="nc" id="L365">            q.getContext().getQuery().setQuery(sql);</span>
+<span class="nc" id="L366">            return result;</span>
+        }
+    }
+
+    /**
+     * Utility method to substitute '?num' for parameters in the given SQL
+     * statement, and fill-in the order of the parameter tokens
+     */
+    public static String substituteParams(String sql, List&lt;Integer&gt; paramOrder)
+            throws IOException {
+            // if there's no &quot;?&quot; parameter marker, then we don't need to
+            // perform the parsing process
+<span class="nc bnc" id="L378" title="All 2 branches missed.">            if (sql.indexOf(&quot;?&quot;) == -1)</span>
+<span class="nc" id="L379">                return sql;</span>
+
+<span class="nc" id="L381">            sql = sql.replaceAll(&quot;\\\\&quot;, &quot;\\\\\\\\&quot;);</span>
+<span class="nc" id="L382">            paramOrder.clear();</span>
+<span class="nc" id="L383">            StreamTokenizer tok = new StreamTokenizer(new StringReader(sql));</span>
+<span class="nc" id="L384">            tok.resetSyntax();</span>
+<span class="nc" id="L385">            tok.quoteChar('\'');</span>
+<span class="nc" id="L386">            tok.wordChars('0', '9');</span>
+<span class="nc" id="L387">            tok.wordChars('?', '?');</span>
+
+<span class="nc" id="L389">            StringBuilder buf = new StringBuilder(sql.length());</span>
+<span class="nc bnc" id="L390" title="All 2 branches missed.">            for (int ttype; (ttype = tok.nextToken()) !=</span>
+                    StreamTokenizer.TT_EOF;) {
+<span class="nc bnc" id="L392" title="All 3 branches missed.">                switch (ttype) {</span>
+                    case StreamTokenizer.TT_WORD:
+                        // a token is a positional parameter if it starts with
+                        // a &quot;?&quot; and the rest of the token are all numbers
+<span class="nc bnc" id="L396" title="All 2 branches missed.">                        if (tok.sval.startsWith(&quot;?&quot;)) {</span>
+<span class="nc" id="L397">                            buf.append(&quot;?&quot;);</span>
+<span class="nc" id="L398">                            String pIndex = tok.sval.substring(1);</span>
+<span class="nc bnc" id="L399" title="All 2 branches missed.">                            if (pIndex.length() &gt; 0) {</span>
+<span class="nc" id="L400">                                paramOrder.add(Integer.valueOf(pIndex));</span>
+                            } else { // or nothing
+<span class="nc" id="L402">                                paramOrder.add(paramOrder.size()+1);</span>
+                            }
+<span class="nc" id="L404">                        } else</span>
+<span class="nc" id="L405">                            buf.append(tok.sval);</span>
+<span class="nc" id="L406">                        break;</span>
+                    case'\'':
+<span class="nc" id="L408">                        buf.append('\'');</span>
+<span class="nc bnc" id="L409" title="All 2 branches missed.">                        if (tok.sval != null) {</span>
+<span class="nc" id="L410">                            buf.append(tok.sval);</span>
+<span class="nc" id="L411">                            buf.append('\'');</span>
+                        }
+//                        // StreamTokenizer can not differentiate the last quoted token as in ^.*'.*$ and ^.*',*'$
+//                        // need to check the last quote ends with &quot;'&quot; and process accordingly.
+//                        if(endsWithQuote) {
+//                            buf.append('\'');
+//                        } else if (tok.nextToken() != StreamTokenizer.TT_EOF) {
+//                        	tok.pushBack();
+//                            buf.append('\'');
+//                        }
+                        break;
+                    default:
+<span class="nc" id="L423">                        buf.append((char) ttype);</span>
+                }
+            }
+<span class="nc" id="L426">            return buf.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CollectionParam.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">CollectionParam.java</span></div><h1>CollectionParam.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Discriminator;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.Parameter;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.ImplHelper;
+
+/**
+ * A collection-valued input parameter in an in-expression.
+ *
+ * @author Catalina Wei
+ */
+public class CollectionParam
+    extends Const
+    implements Parameter {
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L46">    private static final Localizer _loc = Localizer.forPackage(</span>
+        CollectionParam.class);
+
+    private final Object _key;
+<span class="nc" id="L50">    private Class _type = null;</span>
+<span class="nc" id="L51">    private int _idx = -1;</span>
+<span class="nc" id="L52">    private boolean _container = false;</span>
+
+    /**
+     * Constructor. Supply parameter name and type.
+     */
+<span class="nc" id="L57">    public CollectionParam(Object key, Class type) {</span>
+<span class="nc" id="L58">        _key = key;</span>
+<span class="nc" id="L59">        setImplicitType(type);</span>
+<span class="nc" id="L60">    }</span>
+
+    @Override
+    public CollectionParam clone() {
+<span class="nc" id="L64">        CollectionParam c = new CollectionParam(this._key, this._type);</span>
+<span class="nc" id="L65">        c._idx = this._idx;</span>
+<span class="nc" id="L66">        c._container = this._container;</span>
+<span class="nc" id="L67">        return c;</span>
+    }
+
+    @Override
+    public Object getParameterKey() {
+<span class="nc" id="L72">        return _key;</span>
+    }
+
+    @Override
+    public Class getType() {
+<span class="nc" id="L77">        return _type;</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L82">        _type = type;</span>
+<span class="nc bnc" id="L83" title="All 4 branches missed.">        _container = (getMetaData() == null || !ImplHelper.isManagedType(</span>
+<span class="nc" id="L84">            getMetaData().getRepository().getConfiguration(), type))</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">            &amp;&amp; (Collection.class.isAssignableFrom(type)</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            || Map.class.isAssignableFrom(type));</span>
+<span class="nc" id="L87">    }</span>
+
+    public int getIndex() {
+<span class="nc" id="L90">        return _idx;</span>
+    }
+
+    @Override
+    public void setIndex(int idx) {
+<span class="nc" id="L95">        _idx = idx;</span>
+<span class="nc" id="L96">    }</span>
+
+    @Override
+    public Object getValue(Object[] params) {
+<span class="nc" id="L100">        return Filters.convert(params[_idx], getType());</span>
+    }
+
+    @Override
+    public Object getValue(ExpContext ctx, ExpState state) {
+<span class="nc" id="L105">        ParamExpState pstate = (ParamExpState) state;</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        if (pstate.discValue[0] != null)</span>
+<span class="nc" id="L107">            return Arrays.asList(pstate.discValue);</span>
+        else
+<span class="nc" id="L109">            return getValue(ctx.params);</span>
+    }
+
+    @Override
+    public Object getSQLValue(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L114">        return ((ParamExpState) state).sqlValue;</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L119">        return new ParamExpState(ctx.params[_idx]);</span>
+    }
+
+    /**
+     * Expression state.
+     */
+    public static class ParamExpState
+        extends ConstExpState {
+
+<span class="nc" id="L128">        public int size = 0;</span>
+<span class="nc" id="L129">        public Object[] sqlValue = null;</span>
+        public int[] otherLength;
+<span class="nc" id="L131">        public ClassMapping[] mapping = null;</span>
+<span class="nc" id="L132">        public Discriminator[] disc = null;</span>
+<span class="nc" id="L133">        public Object discValue[] = null;</span>
+
+<span class="nc" id="L135">        ParamExpState(Object params) {</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">            if (params instanceof Collection)</span>
+<span class="nc" id="L137">                size = ((Collection) params).size();</span>
+<span class="nc" id="L138">            sqlValue = new Object[size];</span>
+<span class="nc" id="L139">            otherLength = new int[size];</span>
+<span class="nc" id="L140">            mapping = new ClassMapping[size];</span>
+<span class="nc" id="L141">            disc = new Discriminator[size];</span>
+<span class="nc" id="L142">            discValue = new Object[size];</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">            for (int i = 0; i &lt; size; i++) {</span>
+<span class="nc" id="L144">                sqlValue[i] = null;</span>
+<span class="nc" id="L145">                otherLength[i] = 1;</span>
+<span class="nc" id="L146">                mapping[i] = null;</span>
+<span class="nc" id="L147">                disc[i] = null;</span>
+<span class="nc" id="L148">                discValue[i] = null;</span>
+            }
+<span class="nc" id="L150">        }</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L156">        super.calculateValue(sel, ctx, state, other, otherState);</span>
+<span class="nc" id="L157">        ParamExpState pstate = (ParamExpState) state;</span>
+<span class="nc" id="L158">        Object value = getValue(ctx.params);</span>
+
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (!(value instanceof Collection))</span>
+<span class="nc" id="L161">            throw new IllegalArgumentException(_loc.get(</span>
+<span class="nc" id="L162">                &quot;not-collection-parm&quot;, _key).toString());</span>
+
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        if (((Collection) value).isEmpty())</span>
+<span class="nc" id="L165">            throw new IllegalArgumentException(_loc.get(</span>
+<span class="nc" id="L166">                &quot;empty-collection-parm&quot;, _key).toString());</span>
+
+<span class="nc" id="L168">        Iterator itr = ((Collection) value).iterator();</span>
+<span class="nc bnc" id="L169" title="All 4 branches missed.">        for (int i = 0; i &lt; pstate.size &amp;&amp; itr.hasNext(); i++) {</span>
+<span class="nc" id="L170">            Object val = itr.next();</span>
+<span class="nc bnc" id="L171" title="All 4 branches missed.">            if (other != null &amp;&amp; !_container) {</span>
+<span class="nc" id="L172">                pstate.sqlValue[i] = other.toDataStoreValue(sel, ctx,</span>
+                    otherState, val);
+<span class="nc" id="L174">                pstate.otherLength[i] = other.length(sel, ctx, otherState);</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">                if (other instanceof Type) {</span>
+<span class="nc" id="L176">                    pstate.mapping[i] = ctx.store.getConfiguration().</span>
+<span class="nc" id="L177">                    getMappingRepositoryInstance().getMapping((Class) val,</span>
+<span class="nc" id="L178">                        ctx.store.getContext().getClassLoader(), true);</span>
+<span class="nc" id="L179">                    pstate.disc[i] = pstate.mapping[i].getDiscriminator();</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">                    pstate.discValue[i] = pstate.disc[i] != null ?</span>
+<span class="nc" id="L181">                        pstate.disc[i].getValue() : null;</span>
+                }
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            } else if (ImplHelper.isManageable(val)) {</span>
+<span class="nc" id="L184">                ClassMapping mapping = ctx.store.getConfiguration().</span>
+<span class="nc" id="L185">                getMappingRepositoryInstance().getMapping(val.getClass(),</span>
+<span class="nc" id="L186">                    ctx.store.getContext().getClassLoader(), true);</span>
+<span class="nc" id="L187">                pstate.sqlValue[i] = mapping.toDataStoreValue(val,</span>
+<span class="nc" id="L188">                    mapping.getPrimaryKeyColumns(), ctx.store);</span>
+<span class="nc" id="L189">                pstate.otherLength[i] = mapping.getPrimaryKeyColumns().length;</span>
+<span class="nc" id="L190">            } else</span>
+<span class="nc" id="L191">                pstate.sqlValue[i] = val;</span>
+        }
+<span class="nc" id="L193">    }</span>
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L198">        ParamExpState pstate = (ParamExpState) state;</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        for (int i = 0; i &lt; pstate.size; i++) {</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">            if (pstate.otherLength[i] &gt; 1)</span>
+<span class="nc" id="L201">                sql.appendValue(((Object[]) pstate.sqlValue[i])[index],</span>
+<span class="nc" id="L202">                        pstate.getColumn(index), this);</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">            else if (pstate.cols != null)</span>
+<span class="nc" id="L204">                sql.appendValue(pstate.sqlValue[i], pstate.getColumn(index),</span>
+                        this);
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            else if (pstate.discValue[i] != null)</span>
+<span class="nc" id="L207">                sql.appendValue(pstate.discValue[i]);</span>
+            else
+<span class="nc" id="L209">                sql.appendValue(pstate.sqlValue[i], pstate.getColumn(index),</span>
+                        this);
+        }
+<span class="nc" id="L212">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

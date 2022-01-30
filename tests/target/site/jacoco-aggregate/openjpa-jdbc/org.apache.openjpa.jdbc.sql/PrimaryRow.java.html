@@ -1,0 +1,501 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PrimaryRow.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">PrimaryRow.java</span></div><h1>PrimaryRow.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.SQLException;
+import java.util.Objects;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.RelationId;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.InvalidStateException;
+
+/**
+ * Primary table row that tracks foreign keys and auto-inc columns.
+ *
+ * @author Abe White
+ */
+public class PrimaryRow
+    extends RowImpl {
+
+    // VALID flag in superclass uses 2 &lt;&lt; 0
+    private static final byte PK_SET = 2 &lt;&lt; 1;
+    private static final byte PK_WHERE = 2 &lt;&lt; 2;
+    private static final byte DEPENDENT = 2 &lt;&lt; 4;
+
+<span class="nc" id="L47">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L48">        (PrimaryRow.class);</span>
+
+<span class="nc" id="L50">    private OpenJPAStateManager _pk = null;</span>
+<span class="nc" id="L51">    private ColumnIO _pkIO = null;</span>
+<span class="nc" id="L52">    private OpenJPAStateManager[] _fkSet = null;</span>
+<span class="nc" id="L53">    private ColumnIO[] _fkIO = null;</span>
+<span class="nc" id="L54">    private OpenJPAStateManager[] _fkWhere = null;</span>
+<span class="nc" id="L55">    private OpenJPAStateManager[] _relSet = null;</span>
+<span class="nc" id="L56">    private RelationId[] _callbacks = null;</span>
+<span class="nc" id="L57">    private Object _failed = null;</span>
+<span class="nc" id="L58">    private int _idx = -1;</span>
+
+    /**
+     * Constructor; supply table and action.
+     */
+    public PrimaryRow(Table table, int action, OpenJPAStateManager owner) {
+<span class="nc" id="L64">        this(table.getColumns(), action, owner);</span>
+<span class="nc" id="L65">    }</span>
+
+    protected PrimaryRow(Column[] cols, int action, OpenJPAStateManager owner) {
+<span class="nc" id="L68">        super(cols, action);</span>
+<span class="nc" id="L69">        _pk = owner;</span>
+<span class="nc" id="L70">    }</span>
+
+    /**
+     * Mark this row as dependent on some other row.
+     */
+    @Override
+    public boolean isDependent() {
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        return (flags &amp; DEPENDENT) &gt; 0;</span>
+    }
+
+    /**
+     * Mark this row as dependent on some other row.
+     */
+    public void setDependent(boolean dependent) {
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        if (dependent)</span>
+<span class="nc" id="L85">            flags |= DEPENDENT;</span>
+        else
+<span class="nc" id="L87">            flags &amp;= ~DEPENDENT;</span>
+<span class="nc" id="L88">    }</span>
+
+    /**
+     * The index of this row in ordered row list.
+     */
+    public int getIndex() {
+<span class="nc" id="L94">        return _idx;</span>
+    }
+
+    /**
+     * The index of this row in ordered row list.
+     */
+    public void setIndex(int idx) {
+<span class="nc" id="L101">        _idx = idx;</span>
+<span class="nc" id="L102">    }</span>
+
+    @Override
+    public Object getFailedObject() {
+<span class="nc" id="L106">        return _failed;</span>
+    }
+
+    @Override
+    public void setFailedObject(Object failed) {
+<span class="nc" id="L111">        _failed = failed;</span>
+<span class="nc" id="L112">    }</span>
+
+    @Override
+    public OpenJPAStateManager getPrimaryKey() {
+<span class="nc" id="L116">        return _pk;</span>
+    }
+
+    @Override
+    public void setPrimaryKey(OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L122">        setPrimaryKey(null, sm);</span>
+<span class="nc" id="L123">    }</span>
+
+    @Override
+    public void setPrimaryKey(ColumnIO io, OpenJPAStateManager sm) {
+<span class="nc" id="L127">        _pk = sm;</span>
+<span class="nc" id="L128">        flags |= PK_SET;</span>
+<span class="nc" id="L129">        _pkIO = io;</span>
+
+        // force valid
+<span class="nc" id="L132">        setValid(true);</span>
+<span class="nc" id="L133">    }</span>
+
+    @Override
+    public void wherePrimaryKey(OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L138">        _pk = sm;</span>
+<span class="nc" id="L139">        flags |= PK_WHERE;</span>
+
+        // force valid
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        if (getAction() == ACTION_DELETE)</span>
+<span class="nc" id="L143">            setValid(true);</span>
+<span class="nc" id="L144">    }</span>
+
+    /**
+     * Return the I/O information for the given set foreign key.
+     */
+    public ColumnIO getForeignKeyIO(ForeignKey fk) {
+<span class="nc bnc" id="L150" title="All 4 branches missed.">        return _fkIO == null ? null : _fkIO.length &lt;= fk.getIndex() ? null : _fkIO[fk.getIndex()];</span>
+    }
+
+    /**
+     * Return the value for the given foreign key. Values not needed for
+     * constraint analyses are not recorded.
+     */
+    public OpenJPAStateManager getForeignKeySet(ForeignKey fk) {
+<span class="nc bnc" id="L158" title="All 4 branches missed.">        return _fkSet == null ? null : _fkSet.length &lt;= fk.getIndex() ? null : _fkSet[fk.getIndex()];</span>
+    }
+
+    /**
+     * Return the value for the given foreign key. Values not needed for
+     * constraint analyses are not recorded.
+     */
+    public OpenJPAStateManager getForeignKeyWhere(ForeignKey fk) {
+<span class="nc bnc" id="L166" title="All 4 branches missed.">        return _fkWhere == null ? null : _fkWhere.length &lt;= fk.getIndex() ? null : _fkWhere[fk.getIndex()];</span>
+    }
+
+    @Override
+    public void setForeignKey(ForeignKey fk, OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L172">        setForeignKey(fk, null, sm);</span>
+<span class="nc" id="L173">    }</span>
+
+    @Override
+    public void setForeignKey(ForeignKey fk, ColumnIO io,
+        OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        if (!delayForeignKey(fk, sm, true))</span>
+<span class="nc" id="L180">            super.setForeignKey(fk, io, sm);</span>
+        else
+<span class="nc" id="L182">            recordForeignKey(fk, io, sm, true);</span>
+<span class="nc" id="L183">    }</span>
+
+    @Override
+    public void whereForeignKey(ForeignKey fk, OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (!delayForeignKey(fk, sm, false))</span>
+<span class="nc" id="L189">            super.whereForeignKey(fk, sm);</span>
+        else
+<span class="nc" id="L191">            recordForeignKey(fk, null, sm, false);</span>
+<span class="nc" id="L192">    }</span>
+
+    @Override
+    public void clearForeignKey(ForeignKey fk)
+        throws SQLException {
+<span class="nc" id="L197">        super.clearForeignKey(fk);</span>
+<span class="nc bnc" id="L198" title="All 4 branches missed.">        if (_fkSet != null &amp;&amp; _fkSet.length &gt; fk.getIndex())</span>
+<span class="nc" id="L199">            _fkSet[fk.getIndex()] = null;</span>
+<span class="nc bnc" id="L200" title="All 4 branches missed.">        if (_fkIO != null &amp;&amp; _fkIO.length &gt; fk.getIndex())</span>
+<span class="nc" id="L201">            _fkIO[fk.getIndex()] = null;</span>
+<span class="nc" id="L202">    }</span>
+
+    /**
+     * If this is a delete, delay foreign keys to other deleted objects if the
+     * key is restricted or cascade. If this is an update or insert, delay
+     * foreign keys to other inserts if the key is not logical. If the foreign
+     * key is to a new record and the columns are auto-inc, record it.
+     */
+    private boolean delayForeignKey(ForeignKey fk, OpenJPAStateManager sm,
+        boolean set) {
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        if (sm == null)</span>
+<span class="nc" id="L213">            return false;</span>
+
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        if (getAction() == ACTION_DELETE)</span>
+<span class="nc bnc" id="L216" title="All 4 branches missed.">            return sm.isDeleted() &amp;&amp; !fk.isDeferred()</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">                &amp;&amp; (fk.getDeleteAction() == ForeignKey.ACTION_RESTRICT ||</span>
+<span class="nc bnc" id="L218" title="All 2 branches missed.">                    fk.getDeleteAction() == ForeignKey.ACTION_CASCADE);</span>
+
+<span class="nc bnc" id="L220" title="All 4 branches missed.">        if (!sm.isNew() || sm.isFlushed())</span>
+<span class="nc" id="L221">            return false;</span>
+<span class="nc bnc" id="L222" title="All 4 branches missed.">        if (!fk.isDeferred() &amp;&amp; !fk.isLogical())</span>
+<span class="nc" id="L223">            return true;</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        if (fk.isPrimaryKeyAutoAssigned())</span>
+<span class="nc" id="L225">            return true;</span>
+<span class="nc" id="L226">        return false;</span>
+    }
+
+    /**
+     * Record a delayed foreign key.
+     */
+    private void recordForeignKey(ForeignKey fk, ColumnIO io,
+        OpenJPAStateManager sm, boolean set) {
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        if (set) {</span>
+            // force valid
+<span class="nc bnc" id="L236" title="All 2 branches missed.">            if (canSetAny(io, fk.getColumns().length</span>
+<span class="nc" id="L237">                + fk.getConstantColumns().length, false))</span>
+<span class="nc" id="L238">                setValid(true);</span>
+
+<span class="nc bnc" id="L240" title="All 2 branches missed.">            if (_fkSet == null)</span>
+<span class="nc" id="L241">                _fkSet = new OpenJPAStateManager[getTable().</span>
+<span class="nc" id="L242">                    getForeignKeys().length];</span>
+<span class="nc" id="L243">            _fkSet[fk.getIndex()] = sm;</span>
+
+<span class="nc bnc" id="L245" title="All 2 branches missed.">            if (_fkIO != null)</span>
+<span class="nc" id="L246">                _fkIO[fk.getIndex()] = io;</span>
+<span class="nc bnc" id="L247" title="All 4 branches missed.">            else if (io != null &amp;&amp; ((getAction() == ACTION_INSERT</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">                &amp;&amp; !io.isAllInsertable(fk, false))</span>
+<span class="nc bnc" id="L249" title="All 2 branches missed.">                || (getAction() != ACTION_INSERT</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">                &amp;&amp; !io.isAllUpdatable(fk, false)))) {</span>
+<span class="nc" id="L251">                _fkIO = new ColumnIO[_fkSet.length];</span>
+<span class="nc" id="L252">                _fkIO[fk.getIndex()] = io;</span>
+            }
+        } else {
+            // force valid
+<span class="nc bnc" id="L256" title="All 2 branches missed.">            if (getAction() == ACTION_DELETE)</span>
+<span class="nc" id="L257">                setValid(true);</span>
+
+<span class="nc bnc" id="L259" title="All 2 branches missed.">            if (_fkWhere == null)</span>
+<span class="nc" id="L260">                _fkWhere = new OpenJPAStateManager[getTable().</span>
+<span class="nc" id="L261">                    getForeignKeys().length];</span>
+<span class="nc" id="L262">            _fkWhere[fk.getIndex()] = sm;</span>
+        }
+<span class="nc" id="L264">    }</span>
+
+    /**
+     * Return the recorded value for the given relation id column. Only
+     * values that are dependent on a new, unflushed auto-assigned instance
+     * are recorded.
+     */
+    public OpenJPAStateManager getRelationIdSet(Column col) {
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        return (_relSet == null) ? null : _relSet[getRelationIdIndex(col)];</span>
+    }
+
+    /**
+     * Return the recorded callbacks for the given relation id column. Only
+     * values that are dependent on a new, unflushed auto-assigned instance
+     * are recorded.
+     */
+    public RelationId getRelationIdCallback(Column col) {
+<span class="nc bnc" id="L281" title="All 2 branches missed.">        return (_callbacks == null) ? null</span>
+<span class="nc" id="L282">            : _callbacks[getRelationIdIndex(col)];</span>
+    }
+
+    @Override
+    public void setRelationId(Column col, OpenJPAStateManager sm,
+        RelationId rel)
+        throws SQLException {
+<span class="nc bnc" id="L289" title="All 6 branches missed.">        if (sm == null || sm.getObjectId() != null || !sm.isNew()</span>
+<span class="nc bnc" id="L290" title="All 4 branches missed.">            || sm.isFlushed() || !isPrimaryKeyAutoAssigned(sm))</span>
+<span class="nc" id="L291">            super.setRelationId(col, sm, rel);</span>
+        else {
+<span class="nc bnc" id="L293" title="All 2 branches missed.">            if (_relSet == null) {</span>
+<span class="nc" id="L294">                Column[] cols = getTable().getRelationIdColumns();</span>
+<span class="nc" id="L295">                _relSet = new OpenJPAStateManager[cols.length];</span>
+<span class="nc" id="L296">                _callbacks = new RelationId[cols.length];</span>
+            }
+<span class="nc" id="L298">            int idx = getRelationIdIndex(col);</span>
+<span class="nc" id="L299">            _relSet[idx] = sm;</span>
+<span class="nc" id="L300">            _callbacks[idx] = rel;</span>
+        }
+<span class="nc" id="L302">    }</span>
+
+    @Override
+    public void clearRelationId(Column col)
+        throws SQLException {
+<span class="nc" id="L307">        super.clearRelationId(col);</span>
+<span class="nc bnc" id="L308" title="All 2 branches missed.">        if (_relSet != null) {</span>
+<span class="nc" id="L309">            int idx = getRelationIdIndex(col);</span>
+<span class="nc" id="L310">            _relSet[idx] = null;</span>
+<span class="nc" id="L311">            _callbacks[idx] = null;</span>
+        }
+<span class="nc" id="L313">    }</span>
+
+    /**
+     * Return the index into our relation id array of the value for the
+     * given column.
+     */
+    private int getRelationIdIndex(Column col) {
+<span class="nc" id="L320">        Column[] cols = getTable().getRelationIdColumns();</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L322" title="All 2 branches missed.">            if (cols[i] == col)</span>
+<span class="nc" id="L323">                return i;</span>
+<span class="nc" id="L324">        return -1;</span>
+    }
+
+    /**
+     * Return true if any primary key columns of the given instance are
+     * auto-assigned.
+     */
+    private static boolean isPrimaryKeyAutoAssigned(OpenJPAStateManager sm) {
+<span class="nc" id="L332">        ClassMapping cls = (ClassMapping) sm.getMetaData();</span>
+<span class="nc bnc" id="L333" title="All 2 branches missed.">        while (cls.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L334">            cls = cls.getJoinablePCSuperclassMapping();</span>
+<span class="nc" id="L335">        Column[] cols = cls.getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L336" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L337" title="All 2 branches missed.">            if (cols[i].isAutoAssigned())</span>
+<span class="nc" id="L338">                return true;</span>
+<span class="nc" id="L339">        return false;</span>
+    }
+
+    @Override
+    protected void setObject(Column col, Object val, int metaType,
+        boolean overrideDefault)
+        throws SQLException {
+        // make sure we're not setting two different values
+        // unless the given column is an implicit relationship and value
+        // changes from logical default to non-default
+<span class="nc" id="L349">        Object prev = getSet(col);</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        if (prev != null) {</span>
+<span class="nc bnc" id="L351" title="All 2 branches missed.">            if (prev == NULL)</span>
+<span class="nc" id="L352">                prev = null;</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            if (!rowValueEquals(prev, val)) {</span>
+<span class="nc bnc" id="L354" title="All 4 branches missed.">                if (isDefaultValue(prev) || allowsUpdate(col, prev, val)) {</span>
+<span class="nc" id="L355">                    super.setObject(col, val, metaType, overrideDefault);</span>
+<span class="nc" id="L356">                    return;</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">                } else if (!isDefaultValue(val)) {</span>
+<span class="nc" id="L358">                    throw new InvalidStateException(_loc.get(&quot;diff-values&quot;,</span>
+<span class="nc" id="L359">                            new Object[]{ col.getFullDBIdentifier().getName(),</span>
+<span class="nc bnc" id="L360" title="All 2 branches missed.">                                    (prev == null) ? null : prev.getClass(), prev,</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">                                    (val == null) ? null : val.getClass(), val })).</span>
+<span class="nc" id="L362">                            setFatal(true);</span>
+                } else {
+                    // since not allow to update and the new value is 0 or null,
+                    // just return.
+<span class="nc" id="L366">                    return;</span>
+                }
+            }
+        }
+<span class="nc" id="L370">        super.setObject(col, val, metaType, overrideDefault);</span>
+<span class="nc" id="L371">    }</span>
+
+    /**
+     * Allow the given key column value to be updated if the old value is a default value
+     * or the new value is default.
+     * For primary keys we even disallow setting the current value to default
+     */
+    boolean allowsUpdate(Column col, Object old, Object cur) {
+<span class="nc bnc" id="L379" title="All 6 branches missed.">        if (col.isPrimaryKey() &amp;&amp; isDefaultValue(old) &amp;&amp; !isDefaultValue(cur)) {</span>
+            // for primary keys we disallow re-setting it to default
+<span class="nc" id="L381">            return false;</span>
+        }
+
+<span class="nc bnc" id="L384" title="All 8 branches missed.">        return !(col.isPrimaryKey() || col.isRelationId() || col.isImplicitRelation() || col.isUni1MFK())</span>
+<span class="nc bnc" id="L385" title="All 4 branches missed.">               || isDefaultValue(old) || isDefaultValue(cur);</span>
+    }
+
+    boolean isDefaultValue(Object val) {
+<span class="nc bnc" id="L389" title="All 6 branches missed.">        return val == null || val == NULL</span>
+<span class="nc bnc" id="L390" title="All 2 branches missed.">                || (val instanceof Number &amp;&amp; ((Number)val).longValue() == 0);</span>
+    }
+
+    /**
+     * Return true if the two values should be considered equal.
+     */
+    private static boolean rowValueEquals(Object o1, Object o2) {
+<span class="nc bnc" id="L397" title="All 2 branches missed.">        if (Objects.equals(o1, o2))</span>
+<span class="nc" id="L398">            return true;</span>
+
+        // check for numeric equality (bug #1151)
+<span class="nc bnc" id="L401" title="All 4 branches missed.">        return o1 instanceof Number &amp;&amp; o2 instanceof Number</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">            &amp;&amp; ((Number) o1).doubleValue() == ((Number) o2).doubleValue();</span>
+    }
+
+    @Override
+    protected String generateSQL(DBDictionary dict) {
+        try {
+<span class="nc bnc" id="L408" title="All 2 branches missed.">            if ((flags &amp; PK_SET) &gt; 0)</span>
+<span class="nc" id="L409">                super.setPrimaryKey(_pkIO, _pk);</span>
+<span class="nc bnc" id="L410" title="All 2 branches missed.">            if ((flags &amp; PK_WHERE) &gt; 0)</span>
+<span class="nc" id="L411">                super.wherePrimaryKey(_pk);</span>
+<span class="nc bnc" id="L412" title="All 2 branches missed.">            if (_fkSet != null) {</span>
+<span class="nc" id="L413">                ForeignKey[] fks = getTable().getForeignKeys();</span>
+                ColumnIO io;
+<span class="nc bnc" id="L415" title="All 2 branches missed.">                for (int i = 0; i &lt; _fkSet.length; i++) {</span>
+<span class="nc bnc" id="L416" title="All 2 branches missed.">                    if (_fkSet[i] != null) {</span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">                        io = (_fkIO == null) ? null : _fkIO[i];</span>
+<span class="nc" id="L418">                        super.setForeignKey(fks[i], io, _fkSet[i]);</span>
+                    }
+                }
+            }
+<span class="nc bnc" id="L422" title="All 2 branches missed.">            if (_relSet != null) {</span>
+<span class="nc" id="L423">                Column[] cols = getTable().getRelationIdColumns();</span>
+<span class="nc bnc" id="L424" title="All 2 branches missed.">                for (int i = 0; i &lt; _relSet.length; i++)</span>
+<span class="nc bnc" id="L425" title="All 2 branches missed.">                    if (_relSet[i] != null)</span>
+<span class="nc" id="L426">                        super.setRelationId(cols[i], _relSet[i], _callbacks[i]);</span>
+            }
+<span class="nc bnc" id="L428" title="All 2 branches missed.">            if (_fkWhere != null) {</span>
+<span class="nc" id="L429">                ForeignKey[] fks = getTable().getForeignKeys();</span>
+<span class="nc bnc" id="L430" title="All 2 branches missed.">                for (int i = 0; i &lt; _fkWhere.length; i++)</span>
+<span class="nc bnc" id="L431" title="All 2 branches missed.">                    if (_fkWhere[i] != null)</span>
+<span class="nc" id="L432">                        super.whereForeignKey(fks[i], _fkWhere[i]);</span>
+            }
+        }
+<span class="nc" id="L435">        catch (SQLException se) {</span>
+<span class="nc" id="L436">            throw SQLExceptions.getStore(se, dict);</span>
+<span class="nc" id="L437">        }</span>
+<span class="nc" id="L438">        return super.generateSQL(dict);</span>
+    }
+
+    @Override
+    protected RowImpl newInstance(Column[] cols, int action) {
+<span class="nc" id="L443">        return new PrimaryRow(cols, action, _pk);</span>
+    }
+
+    @Override
+    public void copyInto(RowImpl row, boolean whereOnly) {
+<span class="nc" id="L448">        super.copyInto(row, whereOnly);</span>
+<span class="nc bnc" id="L449" title="All 2 branches missed.">        if (!(row instanceof PrimaryRow))</span>
+<span class="nc" id="L450">            return;</span>
+
+<span class="nc" id="L452">        PrimaryRow prow = (PrimaryRow) row;</span>
+<span class="nc" id="L453">        prow._pk = _pk;</span>
+<span class="nc" id="L454">        prow._pkIO = _pkIO;</span>
+<span class="nc bnc" id="L455" title="All 2 branches missed.">        if ((flags &amp; PK_WHERE) &gt; 0)</span>
+<span class="nc" id="L456">            prow.flags |= PK_WHERE;</span>
+<span class="nc bnc" id="L457" title="All 4 branches missed.">        if (!whereOnly &amp;&amp; (flags &amp; PK_SET) &gt; 0)</span>
+<span class="nc" id="L458">            prow.flags |= PK_SET;</span>
+
+<span class="nc bnc" id="L460" title="All 2 branches missed.">        if (_fkWhere != null) {</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">            if (prow._fkWhere == null)</span>
+<span class="nc" id="L462">                prow._fkWhere = new OpenJPAStateManager[_fkWhere.length];</span>
+<span class="nc" id="L463">            System.arraycopy(_fkWhere, 0, prow._fkWhere, 0, _fkWhere.length);</span>
+        }
+<span class="nc bnc" id="L465" title="All 4 branches missed.">        if (!whereOnly &amp;&amp; _fkSet != null) {</span>
+<span class="nc bnc" id="L466" title="All 2 branches missed.">            if (prow._fkSet == null)</span>
+<span class="nc" id="L467">                prow._fkSet = new OpenJPAStateManager[_fkSet.length];</span>
+<span class="nc" id="L468">            System.arraycopy(_fkSet, 0, prow._fkSet, 0, _fkSet.length);</span>
+<span class="nc bnc" id="L469" title="All 2 branches missed.">            if (_fkIO != null) {</span>
+<span class="nc bnc" id="L470" title="All 2 branches missed.">                if (prow._fkIO == null)</span>
+<span class="nc" id="L471">                    prow._fkIO = new ColumnIO[_fkIO.length];</span>
+<span class="nc" id="L472">                System.arraycopy(_fkIO, 0, prow._fkIO, 0, _fkIO.length);</span>
+            }
+        }
+<span class="nc bnc" id="L475" title="All 4 branches missed.">        if (!whereOnly &amp;&amp; _relSet != null) {</span>
+<span class="nc bnc" id="L476" title="All 2 branches missed.">            if (prow._relSet == null) {</span>
+<span class="nc" id="L477">                prow._relSet = new OpenJPAStateManager[_relSet.length];</span>
+<span class="nc" id="L478">                prow._callbacks = new RelationId[_callbacks.length];</span>
+            }
+<span class="nc" id="L480">            System.arraycopy(_relSet, 0, prow._relSet, 0, _relSet.length);</span>
+<span class="nc" id="L481">            System.arraycopy(_callbacks, 0, prow._callbacks, 0,</span>
+                _callbacks.length);
+        }
+<span class="nc" id="L484">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L488">    	StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L489">    	buf.append(&quot;PrimaryRow[&quot;);</span>
+<span class="nc bnc" id="L490" title="All 4 branches missed.">    	switch (getAction()) {</span>
+<span class="nc" id="L491">	    	case ACTION_UPDATE: buf.append(&quot;UPDATE&quot;); break;</span>
+<span class="nc" id="L492">	    	case ACTION_INSERT: buf.append(&quot;INSERT&quot;); break;</span>
+<span class="nc" id="L493">	    	case ACTION_DELETE: buf.append(&quot;DELETE&quot;); break;</span>
+<span class="nc" id="L494">	    	default: buf.append(&quot;UNKNOWN&quot;);</span>
+    	}
+<span class="nc" id="L496">    	buf.append(&quot; &quot;).append(getTable().getName()).append(&quot;]: &quot;);</span>
+<span class="nc" id="L497">    	buf.append(_pk);</span>
+<span class="nc" id="L498">    	return buf.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

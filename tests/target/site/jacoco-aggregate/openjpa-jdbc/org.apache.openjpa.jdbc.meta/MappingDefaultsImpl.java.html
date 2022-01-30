@@ -1,0 +1,956 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MappingDefaultsImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">MappingDefaultsImpl.java</span></div><h1>MappingDefaultsImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.Normalizer;
+import org.apache.openjpa.jdbc.meta.strats.EnumValueHandler;
+import org.apache.openjpa.jdbc.meta.strats.UntypedPCValueHandler;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configuration;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.identifier.IdentifierUtil;
+import org.apache.openjpa.lib.util.ClassUtil;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * Default implementation of {@link MappingDefaults}.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L50">public class MappingDefaultsImpl</span>
+    implements MappingDefaults, Configurable {
+
+<span class="nc" id="L53">    protected transient DBDictionary dict = null;</span>
+<span class="nc" id="L54">    private String _baseClassStrategy = null;</span>
+<span class="nc" id="L55">    private String _subclassStrategy = null;</span>
+<span class="nc" id="L56">    private String _versionStrategy = null;</span>
+<span class="nc" id="L57">    private String _discStrategy = null;</span>
+<span class="nc" id="L58">    private final Map _fieldMap = new HashMap();</span>
+<span class="nc" id="L59">    private boolean _defMissing = false;</span>
+<span class="nc" id="L60">    private boolean _classCriteria = false;</span>
+<span class="nc" id="L61">    private int _joinFKAction = ForeignKey.ACTION_NONE;</span>
+<span class="nc" id="L62">    private int _fkAction = ForeignKey.ACTION_NONE;</span>
+<span class="nc" id="L63">    private boolean _defer = false;</span>
+<span class="nc" id="L64">    private boolean _indexFK = true;</span>
+<span class="nc" id="L65">    private boolean _indexDisc = true;</span>
+<span class="nc" id="L66">    private boolean _indexVers = false;</span>
+<span class="nc" id="L67">    private boolean _orderLists = true;</span>
+<span class="nc" id="L68">    private boolean _addNullInd = false;</span>
+<span class="nc" id="L69">    private boolean _ordinalEnum = false;</span>
+<span class="nc" id="L70">    private boolean _stringifyUnmapped = false;</span>
+<span class="nc" id="L71">    private DBIdentifier _dsIdName = DBIdentifier.NULL;</span>
+<span class="nc" id="L72">    private DBIdentifier _versName = DBIdentifier.NULL;</span>
+<span class="nc" id="L73">    private DBIdentifier _discName = DBIdentifier.NULL;</span>
+<span class="nc" id="L74">    private DBIdentifier _orderName = DBIdentifier.NULL;</span>
+<span class="nc" id="L75">    private DBIdentifier _nullIndName = DBIdentifier.NULL;</span>
+<span class="nc" id="L76">    private boolean _removeHungarianNotation = false;</span>
+
+    public boolean isRemoveHungarianNotation() {
+<span class="nc" id="L79">        return _removeHungarianNotation;</span>
+    }
+
+    public void setRemoveHungarianNotation(boolean removeHungarianNotation) {
+<span class="nc" id="L83">        this._removeHungarianNotation = removeHungarianNotation;</span>
+<span class="nc" id="L84">    }</span>
+
+    /**
+     * Default base class strategy alias.
+     */
+    public String getBaseClassStrategy() {
+<span class="nc" id="L90">        return _baseClassStrategy;</span>
+    }
+
+    /**
+     * Default base class strategy alias.
+     */
+    public void setBaseClassStrategy(String baseClassStrategy) {
+<span class="nc" id="L97">        _baseClassStrategy = baseClassStrategy;</span>
+<span class="nc" id="L98">    }</span>
+
+    /**
+     * Default subclass strategy alias.
+     */
+    public String getSubclassStrategy() {
+<span class="nc" id="L104">        return _subclassStrategy;</span>
+    }
+
+    /**
+     * Default subclass strategy alias.
+     */
+    public void setSubclassStrategy(String subclassStrategy) {
+<span class="nc" id="L111">        _subclassStrategy = subclassStrategy;</span>
+<span class="nc" id="L112">    }</span>
+
+    /**
+     * Default version strategy alias.
+     */
+    public String getVersionStrategy() {
+<span class="nc" id="L118">        return _versionStrategy;</span>
+    }
+
+    /**
+     * Default version strategy alias.
+     */
+    public void setVersionStrategy(String versionStrategy) {
+<span class="nc" id="L125">        _versionStrategy = versionStrategy;</span>
+<span class="nc" id="L126">    }</span>
+
+    /**
+     * Default discriminator strategy alias.
+     */
+    public String getDiscriminatorStrategy() {
+<span class="nc" id="L132">        return _discStrategy;</span>
+    }
+
+    /**
+     * Default discriminator strategy alias.
+     */
+    public void setDiscriminatorStrategy(String discStrategy) {
+<span class="nc" id="L139">        _discStrategy = discStrategy;</span>
+<span class="nc" id="L140">    }</span>
+
+    /**
+     * Property string mapping field type names to value handler or field
+     * mapping class names. For auto-configuration.
+     */
+    public void setFieldStrategies(String fieldMapString) {
+<span class="nc" id="L147">        Properties props = Configurations.parseProperties(fieldMapString);</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        if (props != null)</span>
+<span class="nc" id="L149">            _fieldMap.putAll(props);</span>
+<span class="nc" id="L150">    }</span>
+
+    /**
+     * Association of a field value type name with the handler or strategy
+     * class name.
+     */
+    public void setFieldStrategy(String valueType, String handlerType) {
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if (handlerType == null)</span>
+<span class="nc" id="L158">            _fieldMap.remove(valueType);</span>
+        else
+<span class="nc" id="L160">            _fieldMap.put(valueType, handlerType);</span>
+<span class="nc" id="L161">    }</span>
+
+    /**
+     * Association of a field value type name with the handler or strategy
+     * class name.
+     */
+    public String getFieldStrategy(String valueType) {
+<span class="nc" id="L168">        return (String) _fieldMap.get(valueType);</span>
+    }
+
+    /**
+     * Whether to store enums as the ordinal value rather than the enum name.
+     * Defaults to false.
+     */
+    public boolean getStoreEnumOrdinal() {
+<span class="nc" id="L176">        return _ordinalEnum;</span>
+    }
+
+    /**
+     * Whether to store enums as the ordinal value rather than the enum name.
+     * Defaults to false.
+     */
+    public void setStoreEnumOrdinal(boolean ordinal) {
+<span class="nc" id="L184">        _ordinalEnum = ordinal;</span>
+<span class="nc" id="L185">    }</span>
+
+    /**
+     * Whether to store a relation to an unmapped class by stringifying the
+     * oid of the related object, rather than storing primary key values.
+     */
+    public boolean getStoreUnmappedObjectIdString() {
+<span class="nc" id="L192">        return _stringifyUnmapped;</span>
+    }
+
+    /**
+     * Whether to store a relation to an unmapped class by stringifying the
+     * oid of the related object, rather than storing primary key values.
+     */
+    public void setStoreUnmappedObjectIdString(boolean stringify) {
+<span class="nc" id="L200">        _stringifyUnmapped = stringify;</span>
+<span class="nc" id="L201">    }</span>
+
+    /**
+     * Default foreign key action for join keys. Defaults to logical keys.
+     */
+    public int getJoinForeignKeyDeleteAction() {
+<span class="nc" id="L207">        return _joinFKAction;</span>
+    }
+
+    /**
+     * Default foreign key action for join keys. Defaults to logical keys.
+     */
+    public void setJoinForeignKeyDeleteAction(int joinFKAction) {
+<span class="nc" id="L214">        _joinFKAction = joinFKAction;</span>
+<span class="nc" id="L215">    }</span>
+
+    /**
+     * Default foreign key action name for join keys. Used in auto
+     * configuration.
+     */
+    public void setJoinForeignKeyDeleteAction(String joinFKAction) {
+<span class="nc" id="L222">        _joinFKAction = ForeignKey.getAction(joinFKAction);</span>
+<span class="nc" id="L223">    }</span>
+
+    /**
+     * Default foreign key action for relation keys. Defaults to logical keys.
+     */
+    public int getForeignKeyDeleteAction() {
+<span class="nc" id="L229">        return _fkAction;</span>
+    }
+
+    /**
+     * Default foreign key action for relation keys. Defaults to logical keys.
+     */
+    public void setForeignKeyDeleteAction(int fkAction) {
+<span class="nc" id="L236">        _fkAction = fkAction;</span>
+<span class="nc" id="L237">    }</span>
+
+    /**
+     * Default foreign key action name for relation keys. Used in auto
+     * configuration.
+     */
+    public void setForeignKeyDeleteAction(String fkAction) {
+<span class="nc" id="L244">        _fkAction = ForeignKey.getAction(fkAction);</span>
+<span class="nc" id="L245">    }</span>
+
+    /**
+     * Whether to index logical foreign keys by default. Defaults to true.
+     */
+    public boolean getIndexLogicalForeignKeys() {
+<span class="nc" id="L251">        return _indexFK;</span>
+    }
+
+    /**
+     * Whether to index logical foreign keys by default. Defaults to true.
+     */
+    public void setIndexLogicalForeignKeys(boolean indexFK) {
+<span class="nc" id="L258">        _indexFK = indexFK;</span>
+<span class="nc" id="L259">    }</span>
+
+    /**
+     * Whether to index discriminator columns by default. Defaults to true.
+     */
+    public boolean getIndexDiscriminator() {
+<span class="nc" id="L265">        return _indexDisc;</span>
+    }
+
+    /**
+     * Whether to index discriminator columns by default. Defaults to true.
+     */
+    public void setIndexDiscriminator(boolean indexDisc) {
+<span class="nc" id="L272">        _indexDisc = indexDisc;</span>
+<span class="nc" id="L273">    }</span>
+
+    /**
+     * Whether to index version columns by default. Defaults to true.
+     */
+    public boolean getIndexVersion() {
+<span class="nc" id="L279">        return _indexVers;</span>
+    }
+
+    /**
+     * Whether to index version columns by default. Defaults to true.
+     */
+    public void setIndexVersion(boolean indexVers) {
+<span class="nc" id="L286">        _indexVers = indexVers;</span>
+<span class="nc" id="L287">    }</span>
+
+    /**
+     * Whether to order lists and arrays using a dedicated ordering column
+     * by default.
+     */
+    public boolean getOrderLists() {
+<span class="nc" id="L294">        return _orderLists;</span>
+    }
+
+    /**
+     * Whether to order lists and arrays using a dedicated ordering column
+     * by default.
+     */
+    public void setOrderLists(boolean orderLists) {
+<span class="nc" id="L302">        _orderLists = orderLists;</span>
+<span class="nc" id="L303">    }</span>
+
+    /**
+     * Whether to add a synthetic null indicator column to embedded mappings
+     * by default.
+     */
+    public boolean getAddNullIndicator() {
+<span class="nc" id="L310">        return _addNullInd;</span>
+    }
+
+    /**
+     * Whether to add a synthetic null indicator column to embedded mappings
+     * by default.
+     */
+    public void setAddNullIndicator(boolean addNullInd) {
+<span class="nc" id="L318">        _addNullInd = addNullInd;</span>
+<span class="nc" id="L319">    }</span>
+
+    /**
+     * Whether to defer constraints by default. Defaults to false.
+     */
+    public boolean getDeferConstraints() {
+<span class="nc" id="L325">        return _defer;</span>
+    }
+
+    /**
+     * Whether to defer constraints by default. Defaults to false.
+     */
+    public void setDeferConstraints(boolean defer) {
+<span class="nc" id="L332">        _defer = defer;</span>
+<span class="nc" id="L333">    }</span>
+
+    /**
+     * Default base name for datastore identity columns, or null to the
+     * mapping's built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getDataStoreIdColumnName() {
+<span class="nc" id="L342">        return getDataStoreIdColumnIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getDataStoreIdColumnIdentifier() {
+<span class="nc bnc" id="L346" title="All 2 branches missed.">        return _dsIdName == null ? DBIdentifier.NULL : _dsIdName;</span>
+    }
+
+    /**
+     * Default base name for datastore identity columns, or null to the
+     * mapping's built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public void setDataStoreIdColumnName(String dsIdName) {
+<span class="nc" id="L356">        setDataStoreIdColumnIdentifier(DBIdentifier.newColumn(dsIdName));</span>
+<span class="nc" id="L357">    }</span>
+
+    public void setDataStoreIdColumnIdentifier(DBIdentifier dsIdName) {
+<span class="nc" id="L360">        _dsIdName = dsIdName;</span>
+<span class="nc" id="L361">    }</span>
+
+    /**
+     * Default base name for version identity columns, or null to the mapping's
+     * built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getVersionColumnName() {
+<span class="nc" id="L370">        return getVersionColumnIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getVersionColumnIdentifier() {
+<span class="nc bnc" id="L374" title="All 2 branches missed.">        return _versName == null ? DBIdentifier.NULL : _versName;</span>
+    }
+
+    /**
+     * Default base name for version identity columns, or null to the mapping's
+     * built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public void setVersionColumnName(String versName) {
+<span class="nc" id="L384">        setVersionColumnIdentifier(DBIdentifier.newColumn(versName));</span>
+<span class="nc" id="L385">    }</span>
+
+    public void setVersionColumnIdentifier(DBIdentifier versName) {
+<span class="nc" id="L388">        _versName = versName;</span>
+<span class="nc" id="L389">    }</span>
+
+    /**
+     * Default base name for discriminator columns, or null to the mapping's
+     * built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getDiscriminatorColumnName() {
+<span class="nc" id="L398">        return getDiscriminatorColumnIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getDiscriminatorColumnIdentifier() {
+<span class="nc bnc" id="L402" title="All 2 branches missed.">        return _discName == null ? DBIdentifier.NULL : _discName;</span>
+    }
+
+    /**
+     * Default base name for discriminator columns, or null to the mapping's
+     * built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public void setDiscriminatorColumnName(String discName) {
+<span class="nc" id="L412">        setDiscriminatorColumnIdentifier(DBIdentifier.newColumn(discName));</span>
+<span class="nc" id="L413">    }</span>
+
+    public void setDiscriminatorColumnIdentifier(DBIdentifier discName) {
+<span class="nc" id="L416">        _discName = discName;</span>
+<span class="nc" id="L417">    }</span>
+
+    /**
+     * Default base name for order columns, or null to the mapping's
+     * built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getOrderColumnName() {
+<span class="nc" id="L426">        return getOrderColumnIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getOrderColumnIdentifier() {
+<span class="nc bnc" id="L430" title="All 2 branches missed.">        return _orderName == null ? DBIdentifier.NULL : _orderName;</span>
+    }
+
+    /**
+     * Default base name for order columns, or null to the mapping's
+     * built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public void setOrderColumnName(String orderName) {
+<span class="nc" id="L440">        setOrderColumnIdentifier(DBIdentifier.newColumn(orderName));</span>
+<span class="nc" id="L441">    }</span>
+
+    public void setOrderColumnIdentifier(DBIdentifier orderName) {
+<span class="nc" id="L444">        _orderName = orderName;</span>
+<span class="nc" id="L445">    }</span>
+
+    /**
+     * Default base name for null indicator columns, or null to the mapping's
+     * built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getNullIndicatorColumnName() {
+<span class="nc" id="L454">        return getNullIndicatorColumnIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getNullIndicatorColumnIdentifier() {
+<span class="nc bnc" id="L458" title="All 2 branches missed.">        return _nullIndName == null ? DBIdentifier.NULL : _nullIndName;</span>
+    }
+
+    /**
+     * Default base name for null indicator columns, or null to the mapping's
+     * built-in name.
+     * @deprecated
+     */
+    @Deprecated
+    public void setNullIndicatorColumnName(String nullIndName) {
+<span class="nc" id="L468">        setNullIndicatorColumnIdentifier(DBIdentifier.newColumn(nullIndName));</span>
+<span class="nc" id="L469">    }</span>
+
+    public void setNullIndicatorColumnIdentifier(DBIdentifier nullIndName) {
+<span class="nc" id="L472">        _nullIndName = nullIndName;</span>
+<span class="nc" id="L473">    }</span>
+
+    @Override
+    public boolean defaultMissingInfo() {
+<span class="nc" id="L477">        return _defMissing;</span>
+    }
+
+    public void setDefaultMissingInfo(boolean defMissing) {
+<span class="nc" id="L481">        _defMissing = defMissing;</span>
+<span class="nc" id="L482">    }</span>
+
+    @Override
+    public boolean useClassCriteria() {
+<span class="nc" id="L486">        return _classCriteria;</span>
+    }
+
+    public void setUseClassCriteria(boolean classCriteria) {
+<span class="nc" id="L490">        _classCriteria = classCriteria;</span>
+<span class="nc" id="L491">    }</span>
+
+    @Override
+    public Object getStrategy(ClassMapping cls, boolean adapt) {
+<span class="nc bnc" id="L495" title="All 4 branches missed.">        if (adapt || defaultMissingInfo())</span>
+<span class="nc bnc" id="L496" title="All 2 branches missed.">            return (cls.getMappedPCSuperclassMapping() == null)</span>
+<span class="nc" id="L497">                ? _baseClassStrategy : _subclassStrategy;</span>
+<span class="nc" id="L498">        return null;</span>
+    }
+
+    @Override
+    public Object getStrategy(Version vers, boolean adapt) {
+<span class="nc" id="L503">        ClassMapping cls = vers.getClassMapping();</span>
+<span class="nc bnc" id="L504" title="All 4 branches missed.">        if ((adapt || defaultMissingInfo())</span>
+<span class="nc bnc" id="L505" title="All 2 branches missed.">            &amp;&amp; cls.getJoinablePCSuperclassMapping() == null</span>
+<span class="nc bnc" id="L506" title="All 2 branches missed.">            &amp;&amp; cls.getVersionField() == null)</span>
+<span class="nc" id="L507">            return _versionStrategy;</span>
+<span class="nc" id="L508">        return null;</span>
+    }
+
+    @Override
+    public Object getStrategy(Discriminator disc, boolean adapt) {
+<span class="nc" id="L513">        ClassMapping cls = disc.getClassMapping();</span>
+<span class="nc bnc" id="L514" title="All 4 branches missed.">        if ((adapt || defaultMissingInfo())</span>
+<span class="nc bnc" id="L515" title="All 2 branches missed.">            &amp;&amp; cls.getJoinablePCSuperclassMapping() == null</span>
+<span class="nc bnc" id="L516" title="All 2 branches missed.">            &amp;&amp; disc.getMappingInfo().getValue() == null)</span>
+<span class="nc" id="L517">            return _discStrategy;</span>
+<span class="nc" id="L518">        return null;</span>
+    }
+
+    @Override
+    public Object getStrategy(ValueMapping vm, Class&lt;?&gt; type, boolean adapt) {
+<span class="nc" id="L523">        Object ret = _fieldMap.get(type.getName());</span>
+<span class="nc bnc" id="L524" title="All 2 branches missed.">        if (ret != null) {</span>
+<span class="nc" id="L525">            return ret;</span>
+        }
+
+<span class="nc bnc" id="L528" title="All 4 branches missed.">        if (_stringifyUnmapped &amp;&amp; vm.getTypeMapping() != null</span>
+<span class="nc bnc" id="L529" title="All 2 branches missed.">            &amp;&amp; !vm.getTypeMapping().isMapped()) {</span>
+<span class="nc" id="L530">            return UntypedPCValueHandler.getInstance();</span>
+        }
+
+<span class="nc bnc" id="L533" title="All 4 branches missed.">        if (type.isEnum() &amp;&amp; !vm.isSerialized()) {</span>
+<span class="nc" id="L534">            EnumValueHandler enumHandler = new EnumValueHandler();</span>
+<span class="nc" id="L535">            enumHandler.setStoreOrdinal(_ordinalEnum);</span>
+<span class="nc" id="L536">            return enumHandler;</span>
+        }
+
+<span class="nc" id="L539">        return null;</span>
+    }
+
+    /**
+     * Provides a default value for the given Discriminator.
+     *
+     * &lt;P&gt;
+     * The type of the object returned relies on the javaType field being set on
+     * the Discriminator which is provided.
+     * &lt;TABLE border=&quot;2&quot;&gt;
+     * &lt;TH&gt;JavaType
+     * &lt;TH&gt;Default value
+     * &lt;TBODY&gt;
+     * &lt;TR&gt;&lt;TD&gt;{@link JavaTypes#INT}&lt;TD&gt; The hashcode of the entity name&lt;/TR&gt;
+     * &lt;TR&gt;&lt;TD&gt;{@link JavaTypes#CHAR}&lt;TD&gt;The first character of the entity name
+     * &lt;/TR&gt;
+     * &lt;TR&gt;&lt;TD&gt;{@link JavaTypes#STRING}&lt;TD&gt;The entity name&lt;/TR&gt;
+     * &lt;/TBODY&gt;
+     * &lt;/TABLE&gt;
+     *
+     * @param disc The discriminator that needs a default value
+     * @param adapt
+     *
+     * @return A new object containing the generated Discriminator value.
+     */
+    @Override
+    public Object getDiscriminatorValue(Discriminator disc, boolean adapt) {
+<span class="nc bnc" id="L566" title="All 4 branches missed.">        if (!adapt &amp;&amp; !defaultMissingInfo())</span>
+<span class="nc" id="L567">            return null;</span>
+
+        // WARNING: CHANGING THIS WILL INVALIDATE EXISTING DATA IF DEFAULTING
+        // MISSING MAPPING INFO
+
+<span class="nc" id="L572">        String alias = ClassUtil.getClassName(disc.getClassMapping().getTypeAlias());</span>
+
+<span class="nc bnc" id="L574" title="All 3 branches missed.">        switch (disc.getJavaType()) {</span>
+            case JavaTypes.INT:
+<span class="nc" id="L576">                return Integer.valueOf(alias.hashCode());</span>
+            case JavaTypes.CHAR:
+<span class="nc" id="L578">                return Character.valueOf(alias.charAt(0));</span>
+            case JavaTypes.STRING:
+            default:
+<span class="nc" id="L581">                return alias;</span>
+        }
+    }
+
+    @Override
+    public String getTableName(ClassMapping cls, Schema schema) {
+<span class="nc" id="L587">        String name = ClassUtil.getClassName(cls.getDescribedType()).</span>
+<span class="nc" id="L588">            replace(IdentifierUtil.DOLLAR_CHAR, IdentifierUtil.UNDERSCORE_CHAR);</span>
+<span class="nc bnc" id="L589" title="All 2 branches missed.">        if (!_defMissing)</span>
+<span class="nc" id="L590">            name = dict.getValidTableName(name, schema);</span>
+<span class="nc" id="L591">        return name;</span>
+    }
+
+    @Override
+    public DBIdentifier getTableIdentifier(ClassMapping cls, Schema schema) {
+<span class="nc" id="L596">        return DBIdentifier.newTable(getTableName(cls, schema));</span>
+    }
+
+    @Override
+    public String getTableName(FieldMapping fm, Schema schema) {
+<span class="nc" id="L601">        return getTableIdentifier(fm, schema).getName();</span>
+    }
+
+    @Override
+    public DBIdentifier getTableIdentifier(FieldMapping fm, Schema schema) {
+<span class="nc" id="L606">        DBIdentifier sName = DBIdentifier.newTable(fm.getName());</span>
+<span class="nc" id="L607">        Table table = fm.getDefiningMapping().getTable();</span>
+<span class="nc bnc" id="L608" title="All 2 branches missed.">        if (table != null) {</span>
+<span class="nc" id="L609">            DBIdentifier tableName = DBIdentifier.truncate(table.getIdentifier(),5);</span>
+<span class="nc" id="L610">            sName = DBIdentifier.append(tableName, fm.getName());</span>
+        }
+<span class="nc bnc" id="L612" title="All 2 branches missed.">        if (!_defMissing)</span>
+<span class="nc" id="L613">            sName = dict.getValidTableName(sName, schema);</span>
+<span class="nc" id="L614">        return sName;</span>
+    }
+
+    @Override
+    public void populateDataStoreIdColumns(ClassMapping cls, Table table,
+        Column[] cols) {
+<span class="nc bnc" id="L620" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L621" title="All 4 branches missed.">            if (!DBIdentifier.isNull(_dsIdName) &amp;&amp; cols.length == 1)</span>
+<span class="nc" id="L622">                cols[i].setIdentifier(_dsIdName);</span>
+<span class="nc bnc" id="L623" title="All 2 branches missed.">            else if (!DBIdentifier.isNull(_dsIdName))</span>
+<span class="nc" id="L624">                cols[i].setIdentifier(DBIdentifier.append(_dsIdName, Integer.toString(i)));</span>
+<span class="nc" id="L625">            correctName(table, cols[i]);</span>
+        }
+<span class="nc" id="L627">    }</span>
+
+    /**
+     * Correct the given column's name.
+     */
+    protected void correctName(Table table, Column col) {
+<span class="nc" id="L633">        DBIdentifier name = col.getIdentifier();</span>
+<span class="nc" id="L634">        boolean corrected = false;</span>
+<span class="nc bnc" id="L635" title="All 2 branches missed.">        if (dict.javaToDbColumnNameProcessing != null) {</span>
+<span class="nc" id="L636">            name = dict.processDBColumnName(name);</span>
+<span class="nc" id="L637">            corrected = true;</span>
+        }
+<span class="nc bnc" id="L639" title="All 4 branches missed.">        if (!_defMissing || _removeHungarianNotation)</span>
+        {
+<span class="nc bnc" id="L641" title="All 2 branches missed.">            if (_removeHungarianNotation)</span>
+<span class="nc" id="L642">                name = DBIdentifier.removeHungarianNotation(name);</span>
+<span class="nc" id="L643">            corrected = true;</span>
+        }
+<span class="nc bnc" id="L645" title="All 2 branches missed.">        if (corrected) {</span>
+<span class="nc" id="L646">            name = dict.getValidColumnName(name, table, true);</span>
+<span class="nc" id="L647">            col.setIdentifier(name);</span>
+<span class="nc" id="L648">            table.addCorrectedColumnName(name, true);</span>
+        }
+<span class="nc" id="L650">    }</span>
+
+    protected String removeHungarianNotation(String columnName) {
+<span class="nc" id="L653">        return Normalizer.removeHungarianNotation(columnName);</span>
+    }
+
+    @Override
+    public void populateColumns(Version vers, Table table, Column[] cols) {
+<span class="nc bnc" id="L658" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L659" title="All 4 branches missed.">            if (!DBIdentifier.isNull(_versName) &amp;&amp; cols.length == 1)</span>
+<span class="nc" id="L660">                cols[i].setIdentifier(_versName);</span>
+<span class="nc bnc" id="L661" title="All 2 branches missed.">            else if (!DBIdentifier.isNull(_versName)) {</span>
+<span class="nc bnc" id="L662" title="All 2 branches missed.">                if (i == 0) {</span>
+<span class="nc" id="L663">                    cols[i].setIdentifier(_versName);</span>
+                } else {
+<span class="nc" id="L665">                    cols[i].setIdentifier(DBIdentifier.append(_versName, Integer.toString(i)));</span>
+                }
+<span class="nc bnc" id="L667" title="All 2 branches missed.">            } else if (!DBIdentifier.isNull(_versName))</span>
+<span class="nc" id="L668">                cols[i].setIdentifier(DBIdentifier.append(_versName, Integer.toString(i)));</span>
+<span class="nc" id="L669">            correctName(table, cols[i]);</span>
+        }
+<span class="nc" id="L671">    }</span>
+
+    @Override
+    public void populateColumns(Discriminator disc, Table table,
+        Column[] cols) {
+<span class="nc bnc" id="L676" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L677" title="All 4 branches missed.">            if (!DBIdentifier.isNull(_discName) &amp;&amp; cols.length == 1)</span>
+<span class="nc" id="L678">                cols[i].setIdentifier(_discName);</span>
+<span class="nc bnc" id="L679" title="All 2 branches missed.">            else if (!DBIdentifier.isNull(_discName))</span>
+<span class="nc" id="L680">                cols[i].setIdentifier(DBIdentifier.append(_discName, Integer.toString(i)));</span>
+<span class="nc" id="L681">            correctName(table, cols[i]);</span>
+        }
+<span class="nc" id="L683">    }</span>
+
+    @Override
+    public void populateJoinColumn(ClassMapping cm, Table local, Table foreign,
+        Column col, Object target, int pos, int cols) {
+<span class="nc" id="L688">        correctName(local, col);</span>
+<span class="nc" id="L689">    }</span>
+
+    @Override
+    public void populateJoinColumn(FieldMapping fm, Table local, Table foreign,
+        Column col, Object target, int pos, int cols) {
+<span class="nc" id="L694">        correctName(local, col);</span>
+<span class="nc" id="L695">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public void populateForeignKeyColumn(ValueMapping vm, String name,
+        Table local, Table foreign, Column col, Object target, boolean inverse,
+        int pos, int cols) {
+<span class="nc" id="L705">        populateForeignKeyColumn(vm, DBIdentifier.newColumn(name), local, foreign, col,</span>
+            target, inverse, pos, cols);
+<span class="nc" id="L707">    }</span>
+
+    @Override
+    public void populateForeignKeyColumn(ValueMapping vm, DBIdentifier name,
+        Table local, Table foreign, Column col, Object target, boolean inverse,
+        int pos, int cols) {
+<span class="nc bnc" id="L713" title="All 2 branches missed.">        if (cols == 1)</span>
+<span class="nc" id="L714">            col.setIdentifier(name);</span>
+<span class="nc bnc" id="L715" title="All 2 branches missed.">        else if (target instanceof Column)</span>
+<span class="nc" id="L716">            col.setIdentifier(DBIdentifier.combine(name,((Column) target).getIdentifier().getName()));</span>
+<span class="nc" id="L717">        correctName(local, col);</span>
+<span class="nc" id="L718">    }</span>
+
+    @Override
+    public void populateColumns(ValueMapping vm, String name, Table table,
+        Column[] cols) {
+<span class="nc" id="L723">        populateColumns(vm, DBIdentifier.newColumn(name), table, cols);</span>
+<span class="nc" id="L724">    }</span>
+
+    @Override
+    public void populateColumns(ValueMapping vm, DBIdentifier name, Table table,
+        Column[] cols) {
+<span class="nc bnc" id="L729" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L730">            correctName(table, cols[i]);</span>
+<span class="nc" id="L731">    }</span>
+
+    @Override
+    public boolean populateOrderColumns(FieldMapping fm, Table table,
+        Column[] cols) {
+<span class="nc bnc" id="L736" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L737" title="All 4 branches missed.">            if (!DBIdentifier.isNull(_orderName) &amp;&amp; cols.length == 1)</span>
+<span class="nc" id="L738">                cols[i].setIdentifier(_orderName);</span>
+<span class="nc bnc" id="L739" title="All 2 branches missed.">            else if (!DBIdentifier.isNull(_orderName))</span>
+<span class="nc" id="L740">                cols[i].setIdentifier(DBIdentifier.append(_orderName, Integer.toString(i)));</span>
+<span class="nc" id="L741">            correctName(table, cols[i]);</span>
+        }
+<span class="nc bnc" id="L743" title="All 4 branches missed.">        return _orderLists &amp;&amp; (JavaTypes.ARRAY == fm.getTypeCode()</span>
+<span class="nc bnc" id="L744" title="All 2 branches missed.">            || List.class.isAssignableFrom(fm.getType()));</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public boolean populateNullIndicatorColumns(ValueMapping vm, String name,
+        Table table, Column[] cols) {
+<span class="nc" id="L754">        return populateNullIndicatorColumns(vm, DBIdentifier.newColumn(name), table, cols);</span>
+    }
+
+    @Override
+    public boolean populateNullIndicatorColumns(ValueMapping vm, DBIdentifier name,
+        Table table, Column[] cols) {
+<span class="nc bnc" id="L760" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L761" title="All 4 branches missed.">            if (!DBIdentifier.isNull(_nullIndName) &amp;&amp; cols.length == 1)</span>
+<span class="nc" id="L762">                cols[i].setIdentifier(_nullIndName);</span>
+<span class="nc bnc" id="L763" title="All 2 branches missed.">            else if (!DBIdentifier.isNull(_nullIndName))</span>
+<span class="nc" id="L764">                cols[i].setIdentifier(DBIdentifier.append(_nullIndName, Integer.toString(i)));</span>
+<span class="nc" id="L765">            correctName(table, cols[i]);</span>
+        }
+<span class="nc" id="L767">        return _addNullInd;</span>
+    }
+
+    @Override
+    public ForeignKey getJoinForeignKey(ClassMapping cls, Table local,
+        Table foreign) {
+<span class="nc bnc" id="L773" title="All 2 branches missed.">        if (_joinFKAction == ForeignKey.ACTION_NONE)</span>
+<span class="nc" id="L774">            return null;</span>
+<span class="nc" id="L775">        ForeignKey fk = new ForeignKey();</span>
+<span class="nc" id="L776">        fk.setDeleteAction(_joinFKAction);</span>
+<span class="nc" id="L777">        fk.setDeferred(_defer);</span>
+<span class="nc" id="L778">        return fk;</span>
+    }
+
+    @Override
+    public ForeignKey getJoinForeignKey(FieldMapping fm, Table local,
+        Table foreign) {
+<span class="nc bnc" id="L784" title="All 2 branches missed.">        if (_joinFKAction == ForeignKey.ACTION_NONE)</span>
+<span class="nc" id="L785">            return null;</span>
+<span class="nc" id="L786">        ForeignKey fk = new ForeignKey();</span>
+<span class="nc" id="L787">        fk.setDeleteAction(_joinFKAction);</span>
+<span class="nc" id="L788">        fk.setDeferred(_defer);</span>
+<span class="nc" id="L789">        return fk;</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public ForeignKey getForeignKey(ValueMapping vm, String name, Table local,
+        Table foreign, boolean inverse) {
+<span class="nc" id="L799">        return getForeignKey(vm, DBIdentifier.newForeignKey(name), local, foreign, inverse);</span>
+    }
+
+    @Override
+    public ForeignKey getForeignKey(ValueMapping vm, DBIdentifier name, Table local,
+        Table foreign, boolean inverse) {
+<span class="nc bnc" id="L805" title="All 2 branches missed.">        if (_fkAction == ForeignKey.ACTION_NONE)</span>
+<span class="nc" id="L806">            return null;</span>
+<span class="nc" id="L807">        ForeignKey fk = new ForeignKey();</span>
+<span class="nc" id="L808">        fk.setDeleteAction(_fkAction);</span>
+<span class="nc" id="L809">        fk.setDeferred(_defer);</span>
+<span class="nc" id="L810">        return fk;</span>
+    }
+
+    @Override
+    public Index getJoinIndex(FieldMapping fm, Table table, Column[] cols) {
+<span class="nc bnc" id="L815" title="All 4 branches missed.">        if (!_indexFK || fm.getJoinForeignKey() == null</span>
+<span class="nc bnc" id="L816" title="All 2 branches missed.">            || !fm.getJoinForeignKey().isLogical())</span>
+<span class="nc" id="L817">            return null;</span>
+<span class="nc bnc" id="L818" title="All 2 branches missed.">        if (areAllPrimaryKeyColumns(cols))</span>
+<span class="nc" id="L819">            return null;</span>
+
+<span class="nc" id="L821">        Index idx = new Index();</span>
+<span class="nc" id="L822">        idx.setIdentifier(getIndexName(DBIdentifier.NULL, table, cols));</span>
+<span class="nc" id="L823">        return idx;</span>
+    }
+
+    /**
+     * Return whether all the given columns are primary key columns.
+     */
+    protected boolean areAllPrimaryKeyColumns(Column[] cols) {
+<span class="nc bnc" id="L830" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L831" title="All 2 branches missed.">            if (!cols[i].isPrimaryKey())</span>
+<span class="nc" id="L832">                return false;</span>
+<span class="nc" id="L833">        return true;</span>
+    }
+
+    /**
+     * Generate an index name.
+     * @deprecated
+     */
+    @Deprecated
+    protected String getIndexName(String name, Table table, Column[] cols) {
+<span class="nc" id="L842">        return getIndexName(DBIdentifier.newIndex(name), table, cols).getName();</span>
+    }
+
+    protected DBIdentifier getIndexName(DBIdentifier name, Table table, Column[] cols) {
+        // always use dict for index names because no spec mandates them
+        // based on defaults
+<span class="nc" id="L848">        DBIdentifier sName = name;</span>
+<span class="nc bnc" id="L849" title="All 2 branches missed.">        if (DBIdentifier.isNull(sName))</span>
+<span class="nc" id="L850">            sName = cols[0].getIdentifier();</span>
+
+<span class="nc bnc" id="L852" title="All 2 branches missed.">        if (_removeHungarianNotation)</span>
+<span class="nc" id="L853">            sName = DBIdentifier.removeHungarianNotation(sName);</span>
+
+<span class="nc" id="L855">        return dict.getValidIndexName(sName, table);</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Index getIndex(ValueMapping vm, String name, Table table,
+        Column[] cols) {
+<span class="nc" id="L865">        return getIndex(vm, DBIdentifier.newIndex(name), table, cols);</span>
+    }
+
+    @Override
+    public Index getIndex(ValueMapping vm, DBIdentifier name, Table table,
+        Column[] cols) {
+<span class="nc bnc" id="L871" title="All 4 branches missed.">        if (!_indexFK || vm.getForeignKey() == null</span>
+<span class="nc bnc" id="L872" title="All 2 branches missed.">            || !vm.getForeignKey().isLogical())</span>
+<span class="nc" id="L873">            return null;</span>
+<span class="nc bnc" id="L874" title="All 2 branches missed.">        if (areAllPrimaryKeyColumns(cols))</span>
+<span class="nc" id="L875">            return null;</span>
+
+<span class="nc" id="L877">        Index idx = new Index();</span>
+<span class="nc" id="L878">        idx.setIdentifier(getIndexName(name, table, cols));</span>
+<span class="nc" id="L879">        return idx;</span>
+    }
+
+    @Override
+    public Index getIndex(Version vers, Table table, Column[] cols) {
+<span class="nc bnc" id="L884" title="All 2 branches missed.">        if (!_indexVers)</span>
+<span class="nc" id="L885">            return null;</span>
+<span class="nc" id="L886">        Index idx = new Index();</span>
+<span class="nc" id="L887">        idx.setIdentifier(getIndexName(_versName, table, cols));</span>
+<span class="nc" id="L888">        return idx;</span>
+    }
+
+    @Override
+    public Index getIndex(Discriminator disc, Table table, Column[] cols) {
+<span class="nc bnc" id="L893" title="All 2 branches missed.">        if (!_indexDisc)</span>
+<span class="nc" id="L894">            return null;</span>
+<span class="nc" id="L895">        Index idx = new Index();</span>
+<span class="nc" id="L896">        idx.setIdentifier(getIndexName(_discName, table, cols));</span>
+<span class="nc" id="L897">        return idx;</span>
+    }
+
+    @Override
+    public Unique getJoinUnique(FieldMapping fm, Table table, Column[] cols) {
+<span class="nc" id="L902">        return null;</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Unique getUnique(ValueMapping vm, String name, Table table,
+        Column[] cols) {
+<span class="nc" id="L912">        return null;</span>
+    }
+
+    @Override
+    public Unique getUnique(ValueMapping vm, DBIdentifier name, Table table,
+        Column[] cols) {
+<span class="nc" id="L918">        return null;</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public String getPrimaryKeyName(ClassMapping cm, Table table) {
+<span class="nc" id="L927">        return null;</span>
+    }
+
+    @Override
+    public DBIdentifier getPrimaryKeyIdentifier(ClassMapping cm, Table table) {
+<span class="nc" id="L932">        return DBIdentifier.NULL;</span>
+    }
+
+    @Override
+    public void installPrimaryKey(FieldMapping fm, Table table) {
+<span class="nc" id="L937">    }</span>
+
+    ///////////////////////////////
+    // Configurable implementation
+    ///////////////////////////////
+
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc" id="L945">        dict = ((JDBCConfiguration) conf).getDBDictionaryInstance();</span>
+<span class="nc" id="L946">    }</span>
+
+    @Override
+    public void startConfiguration() {
+<span class="nc" id="L950">    }</span>
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L954">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

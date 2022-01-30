@@ -1,0 +1,682 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ClassMappingInfo.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">ClassMappingInfo.java</span></div><h1>ClassMappingInfo.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+import org.apache.openjpa.jdbc.meta.strats.FullClassStrategy;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.lib.meta.SourceTracker;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.xml.Commentable;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.MetaDataContext;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Information about the mapping from a class to the schema, in raw form.
+ * The columns and tables used in mapping info will not be part of the
+ * {@link SchemaGroup} used at runtime. Rather, they will be structs
+ * with the relevant pieces of information filled in.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L57">public class ClassMappingInfo</span>
+    extends MappingInfo
+    implements SourceTracker, Commentable {
+
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L63">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L64">        (ClassMappingInfo.class);</span>
+
+<span class="nc" id="L66">    private String _className = Object.class.getName();</span>
+<span class="nc" id="L67">    private DBIdentifier _tableName = DBIdentifier.NULL;</span>
+<span class="nc" id="L68">    private DBIdentifier _schemaName = DBIdentifier.NULL;</span>
+<span class="nc" id="L69">    private boolean _joined = false;</span>
+<span class="nc" id="L70">    private Map&lt;DBIdentifier, List&lt;Column&gt;&gt; _seconds = null;</span>
+<span class="nc" id="L71">    private String _subStrat = null;</span>
+<span class="nc" id="L72">    private File _file = null;</span>
+<span class="nc" id="L73">    private int _srcType = SRC_OTHER;</span>
+<span class="nc" id="L74">    private String[] _comments = null;</span>
+<span class="nc" id="L75">    private int _lineNum = 0;</span>
+<span class="nc" id="L76">    private int _colNum = 0;</span>
+
+    // Unique constraints indexed by primary or secondary table name
+    private Map&lt;DBIdentifier,List&lt;Unique&gt;&gt; _uniques;
+
+<span class="nc" id="L81">    private Map&lt;DBIdentifier,List&lt;Index&gt;&gt; _indices = new HashMap&lt;&gt;();</span>
+    /**
+     * The described class name.
+     */
+    public String getClassName() {
+<span class="nc" id="L86">        return _className;</span>
+    }
+
+    /**
+     * The described class name.
+     */
+    public void setClassName(String name) {
+<span class="nc" id="L93">        _className = name;</span>
+<span class="nc" id="L94">    }</span>
+
+    /**
+     * The default strategy for subclasses in this hierarchy.
+     */
+    public String getHierarchyStrategy() {
+<span class="nc" id="L100">        return _subStrat;</span>
+    }
+
+    /**
+     * The default strategy for subclasses in this hierarchy.
+     */
+    public void setHierarchyStrategy(String strategy) {
+<span class="nc" id="L107">        _subStrat = strategy;</span>
+<span class="nc" id="L108">    }</span>
+
+    /**
+     * The given table name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getTableName() {
+<span class="nc" id="L116">        return getTableIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getTableIdentifier() {
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        return _tableName == null ? DBIdentifier.NULL : _tableName;</span>
+    }
+
+    /**
+     * The given table name.
+     * @deprecated
+     */
+    @Deprecated
+    public void setTableName(String table) {
+<span class="nc" id="L129">        setTableIdentifier(DBIdentifier.newTable(table));</span>
+<span class="nc" id="L130">    }</span>
+
+    public void setTableIdentifier(DBIdentifier table) {
+<span class="nc" id="L133">        _tableName = table;</span>
+<span class="nc" id="L134">    }</span>
+
+    /**
+     * The default schema name for unqualified tables.
+     * @deprecated
+     */
+    @Deprecated
+    public String getSchemaName() {
+<span class="nc" id="L142">        return getSchemaIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getSchemaIdentifier() {
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        return _schemaName == null ? DBIdentifier.NULL : _schemaName;</span>
+    }
+
+    /**
+     * The default schema name for unqualified tables.
+     * @deprecated
+     */
+    @Deprecated
+    public void setSchemaName(String schema) {
+<span class="nc" id="L155">        setSchemaIdentifier(DBIdentifier.newSchema(schema));</span>
+<span class="nc" id="L156">    }</span>
+
+    public void setSchemaIdentifier(DBIdentifier schema) {
+<span class="nc" id="L159">        _schemaName = schema;</span>
+<span class="nc" id="L160">    }</span>
+
+    /**
+     * Whether there is a join to the superclass table.
+     */
+    public boolean isJoinedSubclass() {
+<span class="nc" id="L166">        return _joined;</span>
+    }
+
+    /**
+     * Whether there is a join to the superclass table.
+     */
+    public void setJoinedSubclass(boolean joined) {
+<span class="nc" id="L173">        _joined = joined;</span>
+<span class="nc" id="L174">    }</span>
+
+    /**
+     * Return the class-level joined tables.
+     * @deprecated
+     */
+    @Deprecated
+    public String[] getSecondaryTableNames() {
+<span class="nc bnc" id="L182" title="All 2 branches missed.">        if (_seconds == null)</span>
+<span class="nc" id="L183">            return new String[0];</span>
+<span class="nc" id="L184">        return DBIdentifier.toStringArray(_seconds.keySet().toArray(new DBIdentifier[]{ }));</span>
+    }
+
+    public DBIdentifier[] getSecondaryTableIdentifiers() {
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (_seconds == null)</span>
+<span class="nc" id="L189">            return new DBIdentifier[0];</span>
+<span class="nc" id="L190">        return _seconds.keySet().toArray(new DBIdentifier[_seconds.size()]);</span>
+    }
+
+    /**
+     * We allow fields to reference class-level joins using just the table
+     * name, whereas the class join might have schema, etc information.
+     * This method returns the name of the given table as listed in a
+     * class-level join, or the given name if no join exists.
+     * @deprecated
+     */
+    @Deprecated
+    public String getSecondaryTableName(String tableName) {
+<span class="nc" id="L202">        return getSecondaryTableIdentifier(DBIdentifier.newTable(tableName)).getName();</span>
+    }
+
+    public DBIdentifier getSecondaryTableIdentifier(DBIdentifier tableName) {
+        // if no secondary table joins, bad table name, exact match,
+        // or an already-qualified table name, nothing to do
+<span class="nc" id="L208">        QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(tableName);</span>
+<span class="nc bnc" id="L209" title="All 4 branches missed.">        if (_seconds == null || DBIdentifier.isNull(tableName)</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">            || _seconds.containsKey(tableName)</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">            || !DBIdentifier.isNull(path.getSchemaName()))</span>
+<span class="nc" id="L212">            return tableName;</span>
+
+        // decide which class-level join table is best match
+<span class="nc" id="L215">        DBIdentifier best = tableName;</span>
+<span class="nc" id="L216">        int pts = 0;</span>
+<span class="nc" id="L217">        DBIdentifier fullJoin = DBIdentifier.NULL;</span>
+<span class="nc" id="L218">        DBIdentifier join = DBIdentifier.NULL;</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        for (Iterator&lt;DBIdentifier&gt; itr = _seconds.keySet().iterator(); itr.hasNext();) {</span>
+            // award a caseless match without schema 2 points
+<span class="nc" id="L221">            fullJoin = itr.next();</span>
+<span class="nc" id="L222">            QualifiedDBIdentifier joinPath = QualifiedDBIdentifier.getPath(fullJoin);</span>
+<span class="nc bnc" id="L223" title="All 6 branches missed.">            if (joinPath.isUnqualifiedObject() &amp;&amp; pts &lt; 2 &amp;&amp; fullJoin.equalsIgnoreCase(tableName)) {</span>
+<span class="nc" id="L224">                best = fullJoin;</span>
+<span class="nc" id="L225">                pts = 2;</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">            } else if (joinPath.isUnqualifiedObject())</span>
+<span class="nc" id="L227">                continue;</span>
+
+            // immediately return an exact match with schema
+<span class="nc" id="L230">            join = joinPath.getIdentifier();</span>
+<span class="nc bnc" id="L231" title="All 2 branches missed.">            if (join.equals(tableName))</span>
+<span class="nc" id="L232">                return fullJoin;</span>
+
+            // caseless match with schema worth 1 point
+<span class="nc bnc" id="L235" title="All 4 branches missed.">            if (pts &lt; 1 &amp;&amp; join.equalsIgnoreCase(tableName)) {</span>
+<span class="nc" id="L236">                best = fullJoin;</span>
+<span class="nc" id="L237">                pts = 1;</span>
+            }
+<span class="nc" id="L239">        }</span>
+<span class="nc" id="L240">        return best;</span>
+    }
+
+    /**
+     * Return any columns defined for the given class level join, or empty
+     * list if none.
+     * @deprecated
+     */
+    @Deprecated
+    public List&lt;Column&gt; getSecondaryTableJoinColumns(String tableName) {
+<span class="nc" id="L250">        return getSecondaryTableJoinColumns(DBIdentifier.newTable(tableName));</span>
+    }
+
+    public List&lt;Column&gt; getSecondaryTableJoinColumns(DBIdentifier tableName) {
+<span class="nc bnc" id="L254" title="All 4 branches missed.">        if (_seconds == null || DBIdentifier.isNull(tableName)) {</span>
+<span class="nc" id="L255">            return Collections.emptyList();</span>
+        }
+
+        // get the columns for the join with the best match for table name
+<span class="nc" id="L259">        List&lt;Column&gt; cols = _seconds.get(getSecondaryTableIdentifier(tableName));</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">        if (cols == null) {</span>
+            // possible that given table has extra info the join table
+            // doesn't have; strip it
+<span class="nc" id="L263">            QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(tableName);</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            if (!DBIdentifier.isNull(path.getSchemaName())) {</span>
+<span class="nc" id="L265">                tableName = path.getIdentifier();</span>
+<span class="nc" id="L266">                cols = _seconds.get(getSecondaryTableIdentifier(tableName));</span>
+            }
+        }
+<span class="nc bnc" id="L269" title="All 2 branches missed.">        if (cols == null) {</span>
+<span class="nc" id="L270">            return Collections.emptyList();</span>
+        }
+<span class="nc" id="L272">        return cols;</span>
+    }
+
+    /**
+     * Adds a Secondary table of given name to this mapping. A secondary table
+     * must be known before unique constraints are added to a Secondary table.
+     * @deprecated
+     */
+    @Deprecated
+    public void addSecondaryTable(String second) {
+<span class="nc" id="L282">    	setSecondaryTableJoinColumns(DBIdentifier.newTable(second), null);</span>
+<span class="nc" id="L283">    }</span>
+
+    public void addSecondaryTable(DBIdentifier second) {
+<span class="nc" id="L286">        setSecondaryTableJoinColumns(second, null);</span>
+<span class="nc" id="L287">    }</span>
+
+    /**
+     * Declare the given class-level join to the named (secondary) table.
+     * @deprecated
+     */
+    @Deprecated
+    public void setSecondaryTableJoinColumns(String tableName, List&lt;Column&gt; cols) {
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (cols == null)</span>
+<span class="nc" id="L296">            cols = Collections.emptyList();</span>
+<span class="nc" id="L297">        setSecondaryTableJoinColumns(DBIdentifier.newTable(tableName), cols);</span>
+<span class="nc" id="L298">    }</span>
+
+    public void setSecondaryTableJoinColumns(DBIdentifier tableName, List&lt;Column&gt; cols) {
+<span class="nc bnc" id="L301" title="All 2 branches missed.">        if (cols == null)</span>
+<span class="nc" id="L302">            cols = Collections.emptyList();</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        if (_seconds == null)</span>
+<span class="nc" id="L304">            _seconds = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc" id="L305">        _seconds.put(tableName, cols);</span>
+<span class="nc" id="L306">    }</span>
+
+    /**
+     * Return the named table for the given class.
+     * @deprecated
+     */
+    @Deprecated
+    public Table getTable(final ClassMapping cls, String tableName,
+        boolean adapt) {
+<span class="nc" id="L315">        return getTable(cls, DBIdentifier.newTable(tableName), adapt);</span>
+    }
+
+    /**
+     * Return the named table for the given class.
+     */
+    public Table getTable(final ClassMapping cls, DBIdentifier tableName,
+            boolean adapt) {
+
+<span class="nc" id="L324">        Table t = createTable(cls, new TableDefaults() {</span>
+            @Override
+            public String get(Schema schema) {
+                // delay this so that we don't do schema reflection for unique
+                // table name unless necessary
+<span class="nc" id="L329">                return cls.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L330">                    getTableName(cls, schema);</span>
+            }
+            @Override
+            public DBIdentifier getIdentifier(Schema schema) {
+<span class="nc" id="L334">                return cls.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L335">                    getTableIdentifier(cls, schema);</span>
+            }
+        }, _schemaName, tableName, adapt);
+<span class="nc bnc" id="L338" title="All 2 branches missed.">        t.setComment(cls.getTypeAlias() == null</span>
+<span class="nc" id="L339">            ? cls.getDescribedType().getName()</span>
+<span class="nc" id="L340">            : cls.getTypeAlias());</span>
+<span class="nc" id="L341">        return t;</span>
+    }
+
+    /**
+     * Return the primary table for the given class.
+     */
+    public Table getTable(final ClassMapping cls, boolean adapt) {
+<span class="nc" id="L348">    	return getTable(cls, _tableName, adapt);</span>
+    }
+
+    /**
+     * Return the datastore identity columns for the given class, based on the
+     * given templates.
+     */
+    public Column[] getDataStoreIdColumns(ClassMapping cls, Column[] tmplates,
+        Table table, boolean adapt) {
+<span class="nc" id="L357">        cls.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L358">            populateDataStoreIdColumns(cls, table, tmplates);</span>
+<span class="nc" id="L359">        return createColumns(cls, &quot;datastoreid&quot;, tmplates, table, adapt);</span>
+    }
+
+    /**
+     * Return the join from this class to its superclass. The table for
+     * this class must be set.
+     */
+    public ForeignKey getSuperclassJoin(final ClassMapping cls, Table table,
+        boolean adapt) {
+<span class="nc" id="L368">        ClassMapping sup = cls.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">        if (sup == null)</span>
+<span class="nc" id="L370">            return null;</span>
+
+<span class="nc" id="L372">        ForeignKeyDefaults def = new ForeignKeyDefaults() {</span>
+            @Override
+            public ForeignKey get(Table local, Table foreign, boolean inverse) {
+<span class="nc" id="L375">                return cls.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L376">                    getJoinForeignKey(cls, local, foreign);</span>
+            }
+
+            @Override
+            public void populate(Table local, Table foreign, Column col,
+                Object target, boolean inverse, int pos, int cols) {
+<span class="nc" id="L382">                cls.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L383">                    populateJoinColumn(cls, local, foreign, col, target,</span>
+                        pos, cols);
+<span class="nc" id="L385">            }</span>
+        };
+<span class="nc" id="L387">        return createForeignKey(cls, &quot;superclass&quot;, getColumns(), def, table,</span>
+            cls, sup, false, adapt);
+    }
+
+    /**
+     * Synchronize internal information with the mapping data for the given
+     * class.
+     */
+    public void syncWith(ClassMapping cls) {
+<span class="nc" id="L396">        clear(false);</span>
+
+<span class="nc" id="L398">        ClassMapping sup = cls.getMappedPCSuperclassMapping();</span>
+<span class="nc bnc" id="L399" title="All 4 branches missed.">        if (cls.getTable() != null &amp;&amp; (sup == null</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">            || sup.getTable() != cls.getTable()))</span>
+<span class="nc" id="L401">            _tableName = cls.getMappingRepository().getDBDictionary().</span>
+<span class="nc" id="L402">                getFullIdentifier(cls.getTable(), true);</span>
+
+        // set io before syncing cols
+<span class="nc" id="L405">        setColumnIO(cls.getColumnIO());</span>
+<span class="nc bnc" id="L406" title="All 4 branches missed.">        if (cls.getJoinForeignKey() != null &amp;&amp; sup != null</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">            &amp;&amp; sup.getTable() != null)</span>
+<span class="nc" id="L408">            syncForeignKey(cls, cls.getJoinForeignKey(), cls.getTable(),</span>
+<span class="nc" id="L409">                sup.getTable());</span>
+<span class="nc bnc" id="L410" title="All 2 branches missed.">        else if (cls.getIdentityType() == ClassMetaData.ID_DATASTORE)</span>
+<span class="nc" id="L411">            syncColumns(cls, cls.getPrimaryKeyColumns(), false);</span>
+
+        // record inheritance strategy if class does not use default strategy
+        // for base classes, and for all subclasses so we can be sure subsequent
+        // mapping runs don't think subclass is unmapped
+<span class="nc bnc" id="L416" title="All 2 branches missed.">        String strat = (cls.getStrategy() == null) ? null</span>
+<span class="nc" id="L417">            : cls.getStrategy().getAlias();</span>
+<span class="nc bnc" id="L418" title="All 4 branches missed.">        if (strat != null &amp;&amp; (cls.getPCSuperclass() != null</span>
+<span class="nc bnc" id="L419" title="All 2 branches missed.">            || !FullClassStrategy.ALIAS.equals(strat)))</span>
+<span class="nc" id="L420">            setStrategy(strat);</span>
+<span class="nc" id="L421">    }</span>
+
+    @Override
+    public boolean hasSchemaComponents() {
+<span class="nc bnc" id="L425" title="All 4 branches missed.">        return super.hasSchemaComponents() || !DBIdentifier.isNull(_tableName);</span>
+    }
+
+    @Override
+    protected void clear(boolean canFlags) {
+<span class="nc" id="L430">        super.clear(canFlags);</span>
+<span class="nc" id="L431">        _tableName = DBIdentifier.NULL;</span>
+<span class="nc" id="L432">    }</span>
+
+    @Override
+    public void copy(MappingInfo info) {
+<span class="nc" id="L436">        super.copy(info);</span>
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        if (!(info instanceof ClassMappingInfo))</span>
+<span class="nc" id="L438">            return;</span>
+
+<span class="nc" id="L440">        ClassMappingInfo cinfo = (ClassMappingInfo) info;</span>
+<span class="nc bnc" id="L441" title="All 2 branches missed.">        if (DBIdentifier.isNull(_tableName))</span>
+<span class="nc" id="L442">            _tableName = cinfo.getTableIdentifier();</span>
+<span class="nc bnc" id="L443" title="All 2 branches missed.">        if (_subStrat == null)</span>
+<span class="nc" id="L444">            _subStrat = cinfo.getHierarchyStrategy();</span>
+<span class="nc bnc" id="L445" title="All 2 branches missed.">        if (cinfo._seconds != null) {</span>
+<span class="nc bnc" id="L446" title="All 2 branches missed.">            if (_seconds == null)</span>
+<span class="nc" id="L447">                _seconds = new HashMap&lt;&gt;();</span>
+            DBIdentifier key;
+<span class="nc" id="L449">            for (Iterator&lt;DBIdentifier&gt; itr = cinfo._seconds.keySet().iterator();</span>
+<span class="nc bnc" id="L450" title="All 2 branches missed.">                itr.hasNext();) {</span>
+<span class="nc" id="L451">                key = itr.next();</span>
+<span class="nc bnc" id="L452" title="All 2 branches missed.">                if (!_seconds.containsKey(key))</span>
+<span class="nc" id="L453">                    _seconds.put(key, cinfo._seconds.get(key));</span>
+            }
+        }
+<span class="nc bnc" id="L456" title="All 2 branches missed.">        if (cinfo._uniques != null) {</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">            if (_uniques == null) {</span>
+<span class="nc" id="L458">                _uniques = new HashMap&lt;&gt;();</span>
+            }
+<span class="nc bnc" id="L460" title="All 2 branches missed.">            for (Entry&lt;DBIdentifier, List&lt;Unique&gt;&gt; entry : cinfo._uniques.entrySet()) {</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">                if (!_uniques.containsKey(entry.getKey())) {</span>
+<span class="nc" id="L462">                    _uniques.put(entry.getKey(), entry.getValue());</span>
+                }
+<span class="nc" id="L464">            }</span>
+        }
+<span class="nc" id="L466">        _indices.clear();</span>
+<span class="nc bnc" id="L467" title="All 2 branches missed.">        for (Entry&lt;DBIdentifier, List&lt;Index&gt;&gt; entry : cinfo._indices.entrySet()) {</span>
+<span class="nc bnc" id="L468" title="All 2 branches missed.">            if (!_indices.containsKey(entry.getKey())) {</span>
+<span class="nc" id="L469">                _indices.put(entry.getKey(), entry.getValue());</span>
+            }
+<span class="nc" id="L471">        }</span>
+<span class="nc" id="L472">    }</span>
+
+    /**
+     * Add a unique constraint for the given table.
+     * @param table must be primary table or secondary table name added a
+     * priori to this receiver.
+     * @param unique the unique constraint. null means no-op.
+     * @deprecated
+     */
+    @Deprecated
+    public void addUnique(String table, Unique unique) {
+<span class="nc" id="L483">        addUnique(DBIdentifier.newTable(table), unique);</span>
+<span class="nc" id="L484">    }</span>
+
+    /**
+     * Add a unique constraint for the given table.
+     * @param table must be primary table or secondary table name added a
+     * priori to this receiver.
+     * @param unique the unique constraint. null means no-op.
+     */
+    public void addUnique(DBIdentifier table, Unique unique) {
+<span class="nc bnc" id="L493" title="All 4 branches missed.">        if (!DBIdentifier.equal(_tableName, table) &amp;&amp;</span>
+<span class="nc bnc" id="L494" title="All 2 branches missed.">            (_seconds == null || !_seconds.containsKey(table))) {</span>
+<span class="nc" id="L495">            throw new UserException(_loc.get(&quot;unique-no-table&quot;,</span>
+                    new Object[]{table, _className, _tableName,
+<span class="nc bnc" id="L497" title="All 2 branches missed.">                    ((_seconds == null) ? &quot;&quot; : _seconds.keySet())}));</span>
+        }
+<span class="nc bnc" id="L499" title="All 2 branches missed.">        if (unique == null)</span>
+<span class="nc" id="L500">            return;</span>
+<span class="nc bnc" id="L501" title="All 2 branches missed.">        if (_uniques == null)</span>
+<span class="nc" id="L502">            _uniques = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L503">        unique.setTableIdentifier(table);</span>
+<span class="nc" id="L504">        List&lt;Unique&gt; uniques = _uniques.get(table);</span>
+<span class="nc bnc" id="L505" title="All 2 branches missed.">        if (uniques == null) {</span>
+<span class="nc" id="L506">            uniques = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L507">            uniques.add(unique);</span>
+<span class="nc" id="L508">            _uniques.put(table, uniques);</span>
+        } else {
+<span class="nc" id="L510">            uniques.add(unique);</span>
+        }
+<span class="nc" id="L512">    }</span>
+
+    /**
+     * Add index for the given table.
+     * @param table must be primary table or secondary table name added a
+     * priori to this receiver.
+     * @param idx the index. null means no-op.
+     */
+    public void addIndex(DBIdentifier table, Index idx) {
+<span class="nc bnc" id="L521" title="All 4 branches missed.">        if (!DBIdentifier.equal(_tableName, table) &amp;&amp;</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">           (_seconds == null || !_seconds.containsKey(table))) {</span>
+<span class="nc" id="L523">            throw new UserException(_loc.get(&quot;index-no-table&quot;,</span>
+                    new Object[]{table, _className, _tableName,
+<span class="nc bnc" id="L525" title="All 2 branches missed.">                    ((_seconds == null) ? &quot;&quot; : _seconds.keySet())}));</span>
+        }
+<span class="nc bnc" id="L527" title="All 2 branches missed.">        if (idx == null)</span>
+<span class="nc" id="L528">            return;</span>
+<span class="nc" id="L529">        idx.setTableIdentifier(table);</span>
+<span class="nc" id="L530">        List&lt;Index&gt; indices = _indices.get(table);</span>
+<span class="nc bnc" id="L531" title="All 2 branches missed.">        if (indices == null) {</span>
+<span class="nc" id="L532">            indices = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L533">            indices.add(idx);</span>
+<span class="nc" id="L534">            _indices.put(table, indices);</span>
+        } else {
+<span class="nc" id="L536">            indices.add(idx);</span>
+        }
+<span class="nc" id="L538">    }</span>
+
+    /**
+     * Get the unique constraints of the given primary or secondary table.
+     * @deprecated
+     */
+    @Deprecated
+    public Unique[] getUniques(String table) {
+<span class="nc" id="L546">        return getUniques(DBIdentifier.newTable(table));</span>
+    }
+
+    /**
+     * Get the unique constraints of the given primary or secondary table.
+     */
+    public Unique[] getUniques(DBIdentifier table) {
+<span class="nc bnc" id="L553" title="All 4 branches missed.">        if (_uniques == null || _uniques.isEmpty()</span>
+<span class="nc bnc" id="L554" title="All 2 branches missed.">        || _uniques.containsKey(table))</span>
+<span class="nc" id="L555">            return new Unique[0];</span>
+<span class="nc" id="L556">        List&lt;Unique&gt; uniques = _uniques.get(table);</span>
+<span class="nc" id="L557">        return uniques.toArray(new Unique[uniques.size()]);</span>
+    }
+
+    /**
+     * Get all the unique constraints associated with both the primary and/or
+     * secondary tables.
+     *
+     */
+    public Unique[] getUniques(MetaDataContext cm, boolean adapt) {
+<span class="nc bnc" id="L566" title="All 4 branches missed.">        if (_uniques == null || _uniques.isEmpty())</span>
+<span class="nc" id="L567">            return new Unique[0];</span>
+<span class="nc" id="L568">        List&lt;Unique&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L569" title="All 2 branches missed.">        for (DBIdentifier tableName : _uniques.keySet()) {</span>
+<span class="nc" id="L570">            List&lt;Unique&gt; uniqueConstraints = _uniques.get(tableName);</span>
+<span class="nc bnc" id="L571" title="All 2 branches missed.">            for (Unique template : uniqueConstraints) {</span>
+<span class="nc" id="L572">                Column[] templateColumns = template.getColumns();</span>
+<span class="nc" id="L573">                Column[] uniqueColumns = new Column[templateColumns.length];</span>
+<span class="nc" id="L574">                Table table = getTable((ClassMapping)cm, tableName, adapt);</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">                for (int i=0; i&lt;uniqueColumns.length; i++) {</span>
+<span class="nc" id="L576">                    DBIdentifier columnName = templateColumns[i].getIdentifier();</span>
+<span class="nc bnc" id="L577" title="All 2 branches missed.">                    if (!table.containsColumn(columnName)) {</span>
+<span class="nc" id="L578">                        throw new UserException(_loc.get(</span>
+                                &quot;unique-missing-column&quot;,
+                                new Object[]{cm, columnName, tableName,
+<span class="nc" id="L581">                                Arrays.toString(table.getColumnNames())}));</span>
+                    }
+<span class="nc" id="L583">                    Column uniqueColumn = table.getColumn(columnName);</span>
+<span class="nc" id="L584">                    uniqueColumns[i] = uniqueColumn;</span>
+                }
+<span class="nc" id="L586">                Unique unique = createUnique(cm, &quot;unique&quot;, template,</span>
+                        uniqueColumns, adapt);
+<span class="nc bnc" id="L588" title="All 2 branches missed.">                if (unique != null)</span>
+<span class="nc" id="L589">                    result.add(unique);</span>
+<span class="nc" id="L590">            }</span>
+<span class="nc" id="L591">        }</span>
+<span class="nc" id="L592">        return result.toArray(new Unique[result.size()]);</span>
+    }
+
+    /**
+     * Get all indices associated with both the primary and/or
+     * secondary tables.
+     *
+     */
+    public Index[] getIndices(MetaDataContext cm, boolean adapt) {
+<span class="nc bnc" id="L601" title="All 2 branches missed.">        if (_indices.isEmpty())</span>
+<span class="nc" id="L602">            return new Index[0];</span>
+<span class="nc" id="L603">        List&lt;Index&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L604" title="All 2 branches missed.">        for (DBIdentifier tableName : _indices.keySet()) {</span>
+<span class="nc" id="L605">            List&lt;Index&gt; indices = _indices.get(tableName);</span>
+<span class="nc bnc" id="L606" title="All 2 branches missed.">            for (Index template : indices) {</span>
+<span class="nc" id="L607">                Column[] templateColumns = template.getColumns();</span>
+<span class="nc" id="L608">                Column[] columns = new Column[templateColumns.length];</span>
+<span class="nc" id="L609">                Table table = getTable((ClassMapping)cm, tableName, adapt);</span>
+<span class="nc bnc" id="L610" title="All 2 branches missed.">                for (int i = 0; i &lt; columns.length; i++) {</span>
+<span class="nc" id="L611">                    DBIdentifier columnName = templateColumns[i].getIdentifier();</span>
+<span class="nc bnc" id="L612" title="All 2 branches missed.">                    if (!table.containsColumn(columnName)) {</span>
+<span class="nc" id="L613">                        throw new UserException(_loc.get(</span>
+                                &quot;index-missing-column&quot;,
+                                new Object[]{cm, columnName, tableName,
+<span class="nc" id="L616">                                Arrays.toString(table.getColumnNames())}));</span>
+                    }
+<span class="nc" id="L618">                    Column column = table.getColumn(columnName);</span>
+<span class="nc" id="L619">                    columns[i] = column;</span>
+                }
+<span class="nc" id="L621">                Index idx = createIndex(cm, &quot;index&quot;, template, columns, adapt);</span>
+<span class="nc bnc" id="L622" title="All 2 branches missed.">                if (idx != null)</span>
+<span class="nc" id="L623">                    result.add(idx);</span>
+<span class="nc" id="L624">            }</span>
+<span class="nc" id="L625">        }</span>
+<span class="nc" id="L626">        return result.toArray(new Index[result.size()]);</span>
+    }
+
+    @Override
+    public File getSourceFile() {
+<span class="nc" id="L631">        return _file;</span>
+    }
+
+    @Override
+    public Object getSourceScope() {
+<span class="nc" id="L636">        return null;</span>
+    }
+
+    @Override
+    public int getSourceType() {
+<span class="nc" id="L641">        return _srcType;</span>
+    }
+
+    public void setSource(File file, int srcType) {
+<span class="nc" id="L645">        _file = file;</span>
+<span class="nc" id="L646">        _srcType = srcType;</span>
+<span class="nc" id="L647">    }</span>
+
+    @Override
+    public String getResourceName() {
+<span class="nc" id="L651">        return _className;</span>
+    }
+
+    @Override
+    public String[] getComments() {
+<span class="nc bnc" id="L656" title="All 2 branches missed.">        return (_comments == null) ? EMPTY_COMMENTS : _comments;</span>
+    }
+
+    @Override
+    public void setComments(String[] comments) {
+<span class="nc" id="L661">        _comments = comments;</span>
+<span class="nc" id="L662">    }</span>
+
+    @Override
+    public int getLineNumber() {
+<span class="nc" id="L666">        return _lineNum;</span>
+    }
+
+    public void setLineNumber(int lineNum) {
+<span class="nc" id="L670">        _lineNum = lineNum;</span>
+<span class="nc" id="L671">    }</span>
+
+    @Override
+    public int getColNumber() {
+<span class="nc" id="L675">        return _colNum;</span>
+    }
+
+    public void setColNumber(int colNum) {
+<span class="nc" id="L679">        _colNum = colNum;</span>
+<span class="nc" id="L680">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

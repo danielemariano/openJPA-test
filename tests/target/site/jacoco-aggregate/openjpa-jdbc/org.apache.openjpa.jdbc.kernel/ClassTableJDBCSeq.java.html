@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ClassTableJDBCSeq.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">ClassTableJDBCSeq.java</span></div><h1>ClassTableJDBCSeq.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.MappingRepository;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.meta.ClassArgParser;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Options;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * Specialization of the {@link TableJDBCSeq} that maintains a
+ * separate sequence count per-class. Table name defaults to
+ * &lt;code&gt;OPENJPA_SEQUENCES_TABLE&lt;/code&gt;.
+ *
+ * @author Abe White
+ */
+public class ClassTableJDBCSeq
+    extends TableJDBCSeq {
+
+<span class="nc" id="L50">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L51">        (ClassTableJDBCSeq.class);</span>
+
+<span class="nc" id="L53">    private final Map&lt;String, Status&gt; _stats = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L54">    private boolean _ignore = false;</span>
+<span class="nc" id="L55">    private boolean _aliases = false;</span>
+
+<span class="nc" id="L57">    public ClassTableJDBCSeq() {</span>
+<span class="nc" id="L58">        setTable(&quot;OPENJPA_SEQUENCES_TABLE&quot;);</span>
+<span class="nc" id="L59">    }</span>
+
+    /**
+     * Whether unmapped classes should be ignored as possible primary
+     * key values in the table. Defaults to false.
+     */
+    public boolean getIgnoreUnmapped() {
+<span class="nc" id="L66">        return _ignore;</span>
+    }
+
+    /**
+     * Whether unmapped classes should be ignored as possible primary
+     * key values in the table. Defaults to false.
+     */
+    public void setIgnoreUnmapped(boolean ignore) {
+<span class="nc" id="L74">        _ignore = ignore;</span>
+<span class="nc" id="L75">    }</span>
+
+    /**
+     * @deprecated Use {@link #setIgnoreUnmapped}. Retained for
+     * backwards-compatibility for auto-configuration.
+     */
+    @Deprecated
+    public void setIgnoreVirtual(boolean ignore) {
+<span class="nc" id="L83">        setIgnoreUnmapped(ignore);</span>
+<span class="nc" id="L84">    }</span>
+
+    /**
+     * Whether to use type alises for primary key values in place of class
+     * names. Defaults to false.
+     */
+    public boolean getUseAliases() {
+<span class="nc" id="L91">        return _aliases;</span>
+    }
+
+    /**
+     * Whether to use type alises for primary key values in place of class
+     * names. Defaults to false.
+     */
+    public void setUseAliases(boolean aliases) {
+<span class="nc" id="L99">        _aliases = aliases;</span>
+<span class="nc" id="L100">    }</span>
+
+    @Override
+    protected synchronized Status getStatus(ClassMapping mapping) {
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        if (mapping == null)</span>
+<span class="nc" id="L105">            return null;</span>
+<span class="nc" id="L106">        String key = getKey(mapping, false);</span>
+<span class="nc" id="L107">        Status stat = (Status) _stats.get(key);</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        if (stat == null) {</span>
+<span class="nc" id="L109">            stat = new Status();</span>
+<span class="nc" id="L110">            _stats.put(key, stat);</span>
+        }
+<span class="nc" id="L112">        return stat;</span>
+    }
+
+    @Override
+    protected Column addPrimaryKeyColumn(Table table) {
+<span class="nc" id="L117">        DBDictionary dict = getConfiguration().getDBDictionaryInstance();</span>
+<span class="nc" id="L118">        Column pkColumn = table.addColumn(dict.getValidColumnName(</span>
+<span class="nc" id="L119">            getPrimaryKeyColumnIdentifier(), table));</span>
+<span class="nc" id="L120">        pkColumn.setType(dict.getPreferredType(Types.VARCHAR));</span>
+<span class="nc" id="L121">        pkColumn.setJavaType(JavaTypes.STRING);</span>
+<span class="nc" id="L122">        pkColumn.setSize(dict.characterColumnSize);</span>
+<span class="nc" id="L123">        return pkColumn;</span>
+    }
+
+    @Override
+    protected Object getPrimaryKey(ClassMapping mapping) {
+<span class="nc bnc" id="L128" title="All 2 branches missed.">        if (mapping == null)</span>
+<span class="nc" id="L129">            return null;</span>
+<span class="nc" id="L130">        return getKey(mapping, true);</span>
+    }
+
+    private String getKey(ClassMapping mapping, boolean db) {
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (_ignore) {</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">            while (mapping.getMappedPCSuperclassMapping() != null)</span>
+<span class="nc" id="L136">                mapping = mapping.getMappedPCSuperclassMapping();</span>
+        } else {
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            while (mapping.getPCSuperclass() != null)</span>
+<span class="nc" id="L139">                mapping = mapping.getPCSuperclassMapping();</span>
+        }
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        if (_aliases)</span>
+<span class="nc" id="L142">            return mapping.getTypeAlias();</span>
+<span class="nc" id="L143">        return mapping.getDescribedType().getName();</span>
+    }
+
+    /////////
+    // Main
+    /////////
+
+    /**
+     * Usage: java org.apache.openjpa.jdbc.kernel.ClassTableJDBCSeq [option]*
+     * -action/-a &amp;lt;add | drop | get | set&amp;gt;
+     * [class name | .java file | .class file | .jdo file] [value]
+     *  Where the following options are recognized.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;-properties/-p &amp;lt;properties file or resource&amp;gt;&lt;/i&gt;: The
+     * path or resource name of a OpenJPA properties file containing
+     * information such as connection data as
+     * outlined in {@link JDBCConfiguration}. Optional.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-&amp;lt;property name&amp;gt; &amp;lt;property value&amp;gt;&lt;/i&gt;: All bean
+     * properties of the OpenJPA {@link JDBCConfiguration} can be set by
+     * using their	names and supplying a value.&lt;/li&gt;
+     * &lt;/ul&gt;
+     *  The various actions are as follows.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;add&lt;/i&gt;: Create the sequence table.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;drop&lt;/i&gt;: Drop the sequence table.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;get&lt;/i&gt;: Print the current sequence value for the given
+     * class.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;set&lt;/i&gt;: Set the sequence value for the given class.&lt;/li&gt;
+     * &lt;/ul&gt;
+     */
+    public static void main(String[] args) throws Exception {
+<span class="nc" id="L174">        Options opts = new Options();</span>
+<span class="nc" id="L175">        final String[] arguments = opts.setFromCmdLine(args);</span>
+<span class="nc" id="L176">        boolean ret = Configurations.runAgainstAllAnchors(opts,</span>
+<span class="nc" id="L177">            new Configurations.Runnable() {</span>
+            @Override
+            public boolean run(Options opts) throws Exception {
+<span class="nc" id="L180">                JDBCConfiguration conf = new JDBCConfigurationImpl();</span>
+                try {
+<span class="nc" id="L182">                    return ClassTableJDBCSeq.run(conf, arguments, opts);</span>
+                } finally {
+<span class="nc" id="L184">                    conf.close();</span>
+                }
+            }
+        });
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (!ret) {</span>
+            // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L190">            System.out.println(_loc.get(&quot;clstable-seq-usage&quot;));</span>
+            // STOP - ALLOW PRINT STATEMENTS
+        }
+<span class="nc" id="L193">    }</span>
+
+    /**
+     * Run the tool. Returns false if invalid options were given.
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        Options opts) throws Exception {
+<span class="nc" id="L200">        String action = opts.removeProperty(&quot;action&quot;, &quot;a&quot;, null);</span>
+<span class="nc" id="L201">        Configurations.populateConfiguration(conf, opts);</span>
+<span class="nc" id="L202">        return run(conf, args, action, null, null);</span>
+    }
+
+    /**
+     * Run the tool. Return false if an invalid option was given.
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        String action, MappingRepository repos, ClassLoader loader)
+        throws Exception {
+<span class="nc" id="L211">        ClassTableJDBCSeq seq = new ClassTableJDBCSeq();</span>
+<span class="nc" id="L212">        String props = Configurations.getProperties(conf.getSequence());</span>
+<span class="nc" id="L213">        Configurations.configureInstance(seq, conf, props);</span>
+
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        if (ACTION_DROP.equals(action)) {</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">            if (args.length != 0)</span>
+<span class="nc" id="L217">                return false;</span>
+<span class="nc" id="L218">            seq.dropTable();</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        } else if (ACTION_ADD.equals(action)) {</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">            if (args.length != 0)</span>
+<span class="nc" id="L221">                return false;</span>
+<span class="nc" id="L222">            seq.refreshTable();</span>
+<span class="nc bnc" id="L223" title="All 4 branches missed.">        } else if (ACTION_GET.equals(action) || ACTION_SET.equals(action)) {</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">            if (args.length == 0)</span>
+<span class="nc" id="L225">                return false;</span>
+
+<span class="nc bnc" id="L227" title="All 2 branches missed.">            if (loader == null)</span>
+<span class="nc" id="L228">                loader = conf.getClassResolverInstance().getClassLoader(</span>
+                    ClassTableJDBCSeq.class, null);
+
+<span class="nc" id="L231">            ClassArgParser cap = conf.getMetaDataRepositoryInstance()</span>
+<span class="nc" id="L232">                .getMetaDataFactory().newClassArgParser();</span>
+<span class="nc" id="L233">            cap.setClassLoader(loader);</span>
+<span class="nc" id="L234">            Class&lt;?&gt; cls = cap.parseTypes(args[0])[0];</span>
+
+<span class="nc bnc" id="L236" title="All 2 branches missed.">            if (repos == null)</span>
+<span class="nc" id="L237">                repos = conf.getMappingRepositoryInstance();</span>
+<span class="nc" id="L238">            ClassMapping mapping = repos.getMapping(cls, null, true);</span>
+
+<span class="nc" id="L240">            Connection conn = conf.getDataSource2(null).getConnection();</span>
+            try {
+<span class="nc" id="L242">                long cur = seq.getSequence(mapping, conn);</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">                if (ACTION_GET.equals(action)) {</span>
+                    // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L245">                    System.out.println(mapping + &quot;: &quot; + cur);</span>
+                    // STOP - ALLOW PRINT STATEMENTS
+                }else {
+                    long set;
+<span class="nc bnc" id="L249" title="All 2 branches missed.">                    if (args.length &gt; 1)</span>
+<span class="nc" id="L250">                        set = Long.parseLong(args[1]);</span>
+                    else
+<span class="nc" id="L252">                        set = cur + seq.getAllocate();</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">                    if (set &lt; cur)</span>
+<span class="nc" id="L254">                        set = cur;</span>
+                    else {
+<span class="nc" id="L256">                        Status stat = seq.getStatus(mapping);</span>
+<span class="nc" id="L257">                        seq.setSequence(null, stat, (int) (set - cur), true,</span>
+                            conn);
+<span class="nc" id="L259">                        set = stat.seq;</span>
+                    }
+                    // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L262">                    System.err.println(mapping + &quot;: &quot; + set);</span>
+                    // STOP - ALLOW PRINT STATEMENTS
+                }
+<span class="nc" id="L265">            } catch (NumberFormatException nfe) {</span>
+<span class="nc" id="L266">                return false;</span>
+            } finally {
+                try {
+<span class="nc" id="L269">                    conn.close();</span>
+<span class="nc" id="L270">                } catch (SQLException se) {</span>
+<span class="nc" id="L271">                }</span>
+            }
+<span class="nc" id="L273">        } else</span>
+<span class="nc" id="L274">            return false;</span>
+<span class="nc" id="L275">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

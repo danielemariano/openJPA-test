@@ -1,0 +1,2297 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ReverseMappingTool.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">ReverseMappingTool.java</span></div><h1>ReverseMappingTool.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.StringWriter;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.enhance.ApplicationIdTool;
+import org.apache.openjpa.enhance.CodeGenerator;
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.meta.strats.FullClassStrategy;
+import org.apache.openjpa.jdbc.meta.strats.HandlerFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.MaxEmbeddedBlobFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.MaxEmbeddedClobFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.NoneDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.PrimitiveFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.
+        RelationCollectionInverseKeyFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.RelationCollectionTableFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.RelationFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.StateComparisonVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.StringFieldStrategy;
+import org.apache.openjpa.jdbc.meta.strats.SubclassJoinDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.SuperclassDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.SuperclassVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.VerticalClassStrategy;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.SchemaGenerator;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.SchemaParser;
+import org.apache.openjpa.jdbc.schema.Schemas;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.jdbc.schema.XMLSchemaParser;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.ClassUtil;
+import org.apache.openjpa.lib.util.CodeFormat;
+import org.apache.openjpa.lib.util.Files;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Options;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.MetaDataFactory;
+import org.apache.openjpa.meta.MetaDataModes;
+import org.apache.openjpa.meta.MetaDataRepository;
+import org.apache.openjpa.meta.NoneMetaDataFactory;
+import org.apache.openjpa.meta.QueryMetaData;
+import org.apache.openjpa.meta.SequenceMetaData;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.MetaDataException;
+
+import serp.bytecode.BCClass;
+import serp.bytecode.BCClassLoader;
+import serp.bytecode.Project;
+
+/**
+ * Reverse-maps a schema into class mappings and the associated java
+ * code. Generates a Java code files for persistent classes and associated
+ * identity classes and metadata.
+ *
+ * @author Abe White
+ */
+public class ReverseMappingTool
+    implements MetaDataModes, Cloneable {
+
+    /**
+     * Unmapped table.
+     */
+    public static final int TABLE_NONE = 0;
+
+    /**
+     * Primary table for a new base class.
+     */
+    public static final int TABLE_BASE = 1;
+
+    /**
+     * Secondary table of an existing class. There is exactly one row in
+     * this table for each row in the primary table.
+     */
+    public static final int TABLE_SECONDARY = 2;
+
+    /**
+     * Secondary table of an existing class. There is zero or one row in
+     * this table for each row in the primary table.
+     */
+    public static final int TABLE_SECONDARY_OUTER = 3;
+
+    /**
+     * Association table.
+     */
+    public static final int TABLE_ASSOCIATION = 4;
+
+    /**
+     * Subclass table.
+     */
+    public static final int TABLE_SUBCLASS = 5;
+
+    public static final String LEVEL_NONE = &quot;none&quot;;
+    public static final String LEVEL_PACKAGE = &quot;package&quot;;
+    public static final String LEVEL_CLASS = &quot;class&quot;;
+
+    /**
+     * Access type for generated source, defaults to field-based access.
+     */
+    public static final String ACCESS_TYPE_FIELD = &quot;field&quot;;
+    public static final String ACCESS_TYPE_PROPERTY = &quot;property&quot;;
+
+<span class="nc" id="L156">    private static Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L157">        (ReverseMappingTool.class);</span>
+
+    // map java keywords to related words to use in their place
+<span class="nc" id="L160">    private static final Map _javaKeywords = new HashMap();</span>
+
+    static {
+<span class="nc" id="L163">        InputStream in = ReverseMappingTool.class.getResourceAsStream</span>
+<span class="nc" id="L164">            (&quot;java-keywords.rsrc&quot;);</span>
+        try {
+<span class="nc" id="L166">            String[] keywords = StringUtil.split(new BufferedReader</span>
+<span class="nc" id="L167">                (new InputStreamReader(in)).readLine(), &quot;,&quot;, 0);</span>
+
+<span class="nc bnc" id="L169" title="All 2 branches missed.">            for (int i = 0; i &lt; keywords.length; i += 2)</span>
+<span class="nc" id="L170">                _javaKeywords.put(keywords[i], keywords[i + 1]);</span>
+<span class="nc" id="L171">        } catch (IOException ioe) {</span>
+<span class="nc" id="L172">            throw new InternalException(ioe);</span>
+        } finally {
+            try {
+<span class="nc" id="L175">                in.close();</span>
+<span class="nc" id="L176">            } catch (IOException e) {</span>
+<span class="nc" id="L177">            }</span>
+        }
+<span class="nc" id="L179">    }</span>
+
+    private final JDBCConfiguration _conf;
+    private final Log _log;
+<span class="nc" id="L183">    private final Map _tables = new HashMap();</span>
+<span class="nc" id="L184">    private final Project _project = new Project();</span>
+<span class="nc" id="L185">    private final BCClassLoader _loader = AccessController</span>
+<span class="nc" id="L186">        .doPrivileged(J2DoPrivHelper.newBCClassLoaderAction(_project));</span>
+<span class="nc" id="L187">    private StrategyInstaller _strat = null;</span>
+<span class="nc" id="L188">    private String _package = null;</span>
+<span class="nc" id="L189">    private File _dir = null;</span>
+<span class="nc" id="L190">    private MappingRepository _repos = null;</span>
+<span class="nc" id="L191">    private SchemaGroup _schema = null;</span>
+<span class="nc" id="L192">    private boolean _nullAsObj = false;</span>
+<span class="nc" id="L193">    private boolean _blobAsObj = false;</span>
+<span class="nc" id="L194">    private boolean _useGenericColl = false;</span>
+<span class="nc" id="L195">    private Properties _typeMap = null;</span>
+<span class="nc" id="L196">    private boolean _useFK = false;</span>
+<span class="nc" id="L197">    private boolean _useSchema = false;</span>
+<span class="nc" id="L198">    private boolean _pkOnJoin = false;</span>
+<span class="nc" id="L199">    private boolean _datastore = false;</span>
+<span class="nc" id="L200">    private boolean _builtin = true;</span>
+<span class="nc" id="L201">    private boolean _inner = false;</span>
+<span class="nc" id="L202">    private String _idSuffix = &quot;Id&quot;;</span>
+<span class="nc" id="L203">    private boolean _inverse = true;</span>
+<span class="nc" id="L204">    private boolean _detachable = false;</span>
+<span class="nc" id="L205">    private boolean _genAnnotations = false;</span>
+<span class="nc" id="L206">    private String _accessType = ACCESS_TYPE_FIELD;</span>
+<span class="nc" id="L207">    private CodeFormat _format = null;</span>
+<span class="nc" id="L208">    private ReverseCustomizer _custom = null;</span>
+<span class="nc" id="L209">    private String _discStrat = null;</span>
+<span class="nc" id="L210">    private String _versStrat = null;</span>
+<span class="nc" id="L211">    private boolean _useSchemaElement = true;</span>
+
+    // we have to track field names that were created but then abandoned by
+    // the customizer so that we don't attempt to use them again; doing so can
+    // mess up certain customizers (bug 881)
+<span class="nc" id="L216">    private Set _abandonedFieldNames = null;</span>
+
+    // generated annotations, key = metadata, val = list of annotations
+<span class="nc" id="L219">    private Map _annos = null;</span>
+
+    /**
+     * Constructor. Supply configuration.
+     */
+<span class="nc" id="L224">    public ReverseMappingTool(JDBCConfiguration conf) {</span>
+<span class="nc" id="L225">        _conf = conf;</span>
+<span class="nc" id="L226">        _log = conf.getLog(OpenJPAConfiguration.LOG_METADATA);</span>
+<span class="nc" id="L227">    }</span>
+
+    /**
+     * Return the internal strategy installer.
+     */
+    private StrategyInstaller getStrategyInstaller() {
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        if (_strat == null)</span>
+<span class="nc" id="L234">            _strat = new ReverseStrategyInstaller(getRepository());</span>
+<span class="nc" id="L235">        return _strat;</span>
+    }
+
+    /**
+     * Return the configuration provided on construction.
+     */
+    public JDBCConfiguration getConfiguration() {
+<span class="nc" id="L242">        return _conf;</span>
+    }
+
+    /**
+     * Return the log to write to.
+     */
+    public Log getLog() {
+<span class="nc" id="L249">        return _log;</span>
+    }
+
+    /**
+     * Return the default package for the generated classes, or null if unset.
+     */
+    public String getPackageName() {
+<span class="nc" id="L256">        return _package;</span>
+    }
+
+    /**
+     * Set the default package for the generated classes; use null to
+     * indicate no package.
+     */
+    public void setPackageName(String packageName) {
+<span class="nc" id="L264">        _package = StringUtil.trimToNull(packageName);</span>
+<span class="nc" id="L265">    }</span>
+
+    /**
+     * The file to output the generated code to, or null for
+     * the current directory. If the directory matches the package, it will
+     * be used. Otherwise, the package structure will be created under
+     * this directory.
+     */
+    public File getDirectory() {
+<span class="nc" id="L274">        return _dir;</span>
+    }
+
+    /**
+     * The file to output the generated code to, or null for
+     * the current directory. If the directory matches the package, it will
+     * be used. Otherwise, the package structure will be created under
+     * this directory.
+     */
+    public void setDirectory(File dir) {
+<span class="nc" id="L284">        _dir = dir;</span>
+<span class="nc" id="L285">    }</span>
+
+    /**
+     * Return true if the schema name will be included in the generated
+     * class name for each table. Defaults to false.
+     */
+    public boolean getUseSchemaName() {
+<span class="nc" id="L292">        return _useSchema;</span>
+    }
+
+    /**
+     * Set whether the schema name will be included in the generated
+     * class name for each table. Defaults to false.
+     */
+    public void setUseSchemaName(boolean useSchema) {
+<span class="nc" id="L300">        _useSchema = useSchema;</span>
+<span class="nc" id="L301">    }</span>
+
+    /**
+     * Return whether the foreign key name will be used to generate
+     * relation names. Defaults to false.
+     */
+    public boolean getUseForeignKeyName() {
+<span class="nc" id="L308">        return _useFK;</span>
+    }
+
+    /**
+     * Set whether the foreign key name will be used to generate
+     * relation names. Defaults to false.
+     */
+    public void setUseForeignKeyName(boolean useFK) {
+<span class="nc" id="L316">        _useFK = useFK;</span>
+<span class="nc" id="L317">    }</span>
+
+    /**
+     * Return whether even nullable columns will be mapped to wrappers
+     * rather than primitives. Defaults to false.
+     */
+    public boolean getNullableAsObject() {
+<span class="nc" id="L324">        return _nullAsObj;</span>
+    }
+
+    /**
+     * Set whether even nullable columns will be mapped to wrappers
+     * rather than primitives. Defaults to false.
+     */
+    public void setNullableAsObject(boolean nullAsObj) {
+<span class="nc" id="L332">        _nullAsObj = nullAsObj;</span>
+<span class="nc" id="L333">    }</span>
+
+    /**
+     * Whether to reverse-map blob columns as containing serialized Java
+     * objects, rather than the default of using a byte[] field.
+     */
+    public boolean getBlobAsObject() {
+<span class="nc" id="L340">        return _blobAsObj;</span>
+    }
+
+    /**
+     * Whether to reverse-map blob columns as containing serialized Java
+     * objects, rather than the default of using a byte[] field.
+     */
+    public void setBlobAsObject(boolean blobAsObj) {
+<span class="nc" id="L348">        _blobAsObj = blobAsObj;</span>
+<span class="nc" id="L349">    }</span>
+
+    /**
+     * Whether to use generic collections on one-to-many and many-to-many
+     * relations instead of untyped collections.
+     */
+    public boolean getUseGenericCollections() {
+<span class="nc" id="L356">        return _useGenericColl;</span>
+    }
+
+    /**
+     * Whether to use generic collections on one-to-many and many-to-many
+     * relations instead of untyped collections.
+     */
+    public void setUseGenericCollections(boolean useGenericCollections) {
+<span class="nc" id="L364">        _useGenericColl = useGenericCollections;</span>
+<span class="nc" id="L365">    }</span>
+
+    /**
+     * Map of JDBC-name to Java-type-name entries that allows customization
+     * of reverse mapping columns to field types.
+     */
+    public Properties getTypeMap() {
+<span class="nc" id="L372">        return _typeMap;</span>
+    }
+
+    /**
+     * Map of JDBC-name to Java-type-name entries that allows customization
+     * of reverse mapping columns to field types.
+     */
+    public void setTypeMap(Properties typeMap) {
+<span class="nc" id="L380">        _typeMap = typeMap;</span>
+<span class="nc" id="L381">    }</span>
+
+    /**
+     * Return true if join tables are allowed to have primary keys, false
+     * if all primary key tables will be mapped as persistent classes.
+     * Defaults to false.
+     */
+    public boolean getPrimaryKeyOnJoin() {
+<span class="nc" id="L389">        return _pkOnJoin;</span>
+    }
+
+    /**
+     * Set to true if join tables are allowed to have primary keys, false
+     * if all primary key tables will be mapped as persistent classes.
+     * Defaults to false.
+     */
+    public void setPrimaryKeyOnJoin(boolean pkOnJoin) {
+<span class="nc" id="L398">        _pkOnJoin = pkOnJoin;</span>
+<span class="nc" id="L399">    }</span>
+
+    /**
+     * Whether to use datastore identity when possible. Defaults to false.
+     */
+    public boolean getUseDataStoreIdentity() {
+<span class="nc" id="L405">        return _datastore;</span>
+    }
+
+    /**
+     * Whether to use datastore identity when possible. Defaults to false.
+     */
+    public void setUseDataStoreIdentity(boolean datastore) {
+<span class="nc" id="L412">        _datastore = datastore;</span>
+<span class="nc" id="L413">    }</span>
+
+    /**
+     * Whether to use built in identity classes when possible. Defaults to true.
+     */
+    public boolean getUseBuiltinIdentityClass() {
+<span class="nc" id="L419">        return _builtin;</span>
+    }
+
+    /**
+     * Whether to use built in identity classes when possible. Defaults to true.
+     */
+    public void setUseBuiltinIdentityClass(boolean builtin) {
+<span class="nc" id="L426">        _builtin = builtin;</span>
+<span class="nc" id="L427">    }</span>
+
+    /**
+     * Whether or not to generate inner classes when creating application
+     * identity classes.
+     */
+    public boolean getInnerIdentityClasses() {
+<span class="nc" id="L434">        return _inner;</span>
+    }
+
+    /**
+     * Whether or not to generate inner classes when creating application
+     * identity classes.
+     */
+    public void setInnerIdentityClasses(boolean inner) {
+<span class="nc" id="L442">        _inner = inner;</span>
+<span class="nc" id="L443">    }</span>
+
+    /**
+     * Suffix used to create application identity class name from a class name,
+     * or in the case of inner identity classes, the inner class name.
+     */
+    public String getIdentityClassSuffix() {
+<span class="nc" id="L450">        return _idSuffix;</span>
+    }
+
+    /**
+     * Suffix used to create application identity class name from a class name,
+     * or in the case of inner identity classes, the inner class name.
+     */
+    public void setIdentityClassSuffix(String suffix) {
+<span class="nc" id="L458">        _idSuffix = suffix;</span>
+<span class="nc" id="L459">    }</span>
+
+    /**
+     * Whether to generate inverse 1-many/1-1 relations for all many-1/1-1
+     * relations. Defaults to true.
+     */
+    public boolean getInverseRelations() {
+<span class="nc" id="L466">        return _inverse;</span>
+    }
+
+    /**
+     * Whether to generate inverse 1-many/1-1 relations for all many-1/1-1
+     * relations. Defaults to true.
+     */
+    public void setInverseRelations(boolean inverse) {
+<span class="nc" id="L474">        _inverse = inverse;</span>
+<span class="nc" id="L475">    }</span>
+
+    /**
+     * Whether to make generated classes detachable. Defaults to false.
+     */
+    public boolean getDetachable() {
+<span class="nc" id="L481">        return _detachable;</span>
+    }
+
+    /**
+     * Whether to make generated classes detachable. Defaults to false.
+     */
+    public void setDetachable(boolean detachable) {
+<span class="nc" id="L488">        _detachable = detachable;</span>
+<span class="nc" id="L489">    }</span>
+
+    /**
+     * Default discriminator strategy for base class mappings.
+     */
+    public String getDiscriminatorStrategy() {
+<span class="nc" id="L495">        return _discStrat;</span>
+    }
+
+    /**
+     * Default discriminator strategy for base class mappings.
+     */
+    public void setDiscriminatorStrategy(String discStrat) {
+<span class="nc" id="L502">        _discStrat = discStrat;</span>
+<span class="nc" id="L503">    }</span>
+
+    /**
+     * Default version strategy for base class mappings.
+     */
+    public String getVersionStrategy() {
+<span class="nc" id="L509">        return _versStrat;</span>
+    }
+
+    /**
+     * Default version strategy for base class mappings.
+     */
+    public void setVersionStrategy(String versionStrat) {
+<span class="nc" id="L516">        _versStrat = versionStrat;</span>
+<span class="nc" id="L517">    }</span>
+
+    /**
+     * Whether to generate annotations along with generated code. Defaults
+     * to false.
+     */
+    public boolean getGenerateAnnotations() {
+<span class="nc" id="L524">        return _genAnnotations;</span>
+    }
+
+    /**
+     * Whether to generate annotations along with generated code. Defaults
+     * to false.
+     */
+    public void setGenerateAnnotations(boolean genAnnotations) {
+<span class="nc" id="L532">        _genAnnotations = genAnnotations;</span>
+<span class="nc" id="L533">    }</span>
+
+    /**
+     * Whether to use field or property-based access on generated code.
+     * Defaults to field-based access.
+     */
+    public String getAccessType() {
+<span class="nc" id="L540">        return _accessType;</span>
+    }
+
+    /**
+     * Whether to use field or property-based access on generated code.
+     * Defaults to field-based access.
+     */
+    public void setAccessType(String accessType) {
+<span class="nc bnc" id="L548" title="All 2 branches missed.">        this._accessType = ACCESS_TYPE_PROPERTY.equalsIgnoreCase(accessType) ?</span>
+<span class="nc" id="L549">            ACCESS_TYPE_PROPERTY : ACCESS_TYPE_FIELD;</span>
+<span class="nc" id="L550">    }</span>
+
+    /**
+     * The code formatter for the generated Java code.
+     */
+    public CodeFormat getCodeFormat() {
+<span class="nc" id="L556">        return _format;</span>
+    }
+
+    /**
+     * Set the code formatter for the generated Java code.
+     */
+    public void setCodeFormat(CodeFormat format) {
+<span class="nc" id="L563">        _format = format;</span>
+<span class="nc" id="L564">    }</span>
+
+    /**
+     * Return the customizer in use, or null if none.
+     */
+    public ReverseCustomizer getCustomizer() {
+<span class="nc" id="L570">        return _custom;</span>
+    }
+
+    /**
+     * Set the customizer. The configuration on the customizer, if any,
+     * should already be set.
+     */
+    public void setCustomizer(ReverseCustomizer customizer) {
+<span class="nc bnc" id="L578" title="All 2 branches missed.">        if (customizer != null)</span>
+<span class="nc" id="L579">            customizer.setTool(this);</span>
+<span class="nc" id="L580">        _custom = customizer;</span>
+<span class="nc" id="L581">    }</span>
+
+    /**
+     * Returns whether or not the schema name will be included in the @Table
+     * annotation within the generated class for each table, as well as the
+     * corresponding XML mapping files. The initialized value is true (in order
+     * to preserve backwards compatibility).
+     */
+    public boolean getUseSchemaElement() {
+<span class="nc" id="L590">    	return _useSchemaElement;</span>
+    }
+
+    /**
+     * Sets whether or not the schema name will be included in the @Table
+     * annotation within the generated class for each table, as well as the
+     * corresponding XML mapping files.
+     */
+    public void setUseSchemaElement(boolean useSchemaElement) {
+<span class="nc" id="L599">    	_useSchemaElement = useSchemaElement;</span>
+<span class="nc" id="L600">    }</span>
+
+    /**
+     * Return the mapping repository used to hold generated mappings. You
+     * can also use the repository to seed the schema group to generate
+     * classes from.
+     */
+    public MappingRepository getRepository() {
+<span class="nc bnc" id="L608" title="All 2 branches missed.">        if (_repos == null) {</span>
+            // create empty repository
+<span class="nc" id="L610">            _repos = _conf.newMappingRepositoryInstance();</span>
+<span class="nc" id="L611">            _repos.setMetaDataFactory(NoneMetaDataFactory.getInstance());</span>
+<span class="nc" id="L612">            _repos.setMappingDefaults(NoneMappingDefaults.getInstance());</span>
+<span class="nc" id="L613">            _repos.setResolve(MODE_NONE);</span>
+<span class="nc" id="L614">            _repos.setValidate(MetaDataRepository.VALIDATE_NONE);</span>
+        }
+<span class="nc" id="L616">        return _repos;</span>
+    }
+
+    /**
+     * Set the repository to use.
+     */
+    public void setRepository(MappingRepository repos) {
+<span class="nc" id="L623">        _repos = repos;</span>
+<span class="nc" id="L624">    }</span>
+
+    /**
+     * Return the schema group to reverse map. If none has been set, the
+     * schema will be generated from the database.
+     */
+    public SchemaGroup getSchemaGroup() {
+<span class="nc bnc" id="L631" title="All 2 branches missed.">        if (_schema == null) {</span>
+<span class="nc" id="L632">            SchemaGenerator gen = new SchemaGenerator(_conf);</span>
+            try {
+<span class="nc" id="L634">                gen.generateSchemas();</span>
+<span class="nc" id="L635">            } catch (SQLException se) {</span>
+<span class="nc" id="L636">                throw SQLExceptions.getStore(se,</span>
+<span class="nc" id="L637">                    _conf.getDBDictionaryInstance());</span>
+<span class="nc" id="L638">            }</span>
+<span class="nc" id="L639">            _schema = gen.getSchemaGroup();</span>
+        }
+<span class="nc" id="L641">        return _schema;</span>
+    }
+
+    /**
+     * Set the schema to reverse map.
+     */
+    public void setSchemaGroup(SchemaGroup schema) {
+<span class="nc" id="L648">        _schema = schema;</span>
+<span class="nc" id="L649">    }</span>
+
+    /**
+     * Return the generated mappings.
+     */
+    public ClassMapping[] getMappings() {
+<span class="nc" id="L655">        return getRepository().getMappings();</span>
+    }
+
+    /**
+     * Generate mappings and class code for the current schema group.
+     */
+    public void run() {
+        // map base classes first
+<span class="nc" id="L663">        Schema[] schemas = getSchemaGroup().getSchemas();</span>
+        Table[] tables;
+<span class="nc bnc" id="L665" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L666">            tables = schemas[i].getTables();</span>
+<span class="nc bnc" id="L667" title="All 2 branches missed.">            for (int j = 0; j &lt; tables.length; j++)</span>
+<span class="nc bnc" id="L668" title="All 2 branches missed.">                if (isBaseTable(tables[j]))</span>
+<span class="nc" id="L669">                    mapBaseClass(tables[j]);</span>
+        }
+
+        // map vertical subclasses
+<span class="nc" id="L673">        Set subs = null;</span>
+<span class="nc bnc" id="L674" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L675">            tables = schemas[i].getTables();</span>
+<span class="nc bnc" id="L676" title="All 2 branches missed.">            for (int j = 0; j &lt; tables.length; j++) {</span>
+<span class="nc bnc" id="L677" title="All 2 branches missed.">                if (!_tables.containsKey(tables[j])</span>
+<span class="nc bnc" id="L678" title="All 2 branches missed.">                    &amp;&amp; getSecondaryType(tables[j], false) == TABLE_SUBCLASS) {</span>
+<span class="nc bnc" id="L679" title="All 2 branches missed.">                    if (subs == null)</span>
+<span class="nc" id="L680">                        subs = new HashSet();</span>
+<span class="nc" id="L681">                    subs.add(tables[j]);</span>
+                }
+            }
+        }
+<span class="nc bnc" id="L685" title="All 2 branches missed.">        if (subs != null)</span>
+<span class="nc" id="L686">            mapSubclasses(subs);</span>
+
+        // map fields in the primary tables of the classes
+        ClassMapping cls;
+<span class="nc bnc" id="L690" title="All 2 branches missed.">        for (Iterator itr = _tables.values().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L691">            cls = (ClassMapping) itr.next();</span>
+<span class="nc" id="L692">            mapColumns(cls, cls.getTable(), null, false);</span>
+        }
+
+        // map association tables, join tables, and secondary tables
+<span class="nc bnc" id="L696" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L697">            tables = schemas[i].getTables();</span>
+<span class="nc bnc" id="L698" title="All 2 branches missed.">            for (int j = 0; j &lt; tables.length; j++)</span>
+<span class="nc bnc" id="L699" title="All 2 branches missed.">                if (!_tables.containsKey(tables[j]))</span>
+<span class="nc" id="L700">                    mapTable(tables[j], getSecondaryType(tables[j], false));</span>
+        }
+
+        // map discriminators and versions, make sure identity type is correct,
+        // set simple field column java types, and ref schema components so
+        // we can tell what is unmapped
+        FieldMapping[] fields;
+<span class="nc bnc" id="L707" title="All 2 branches missed.">        for (Iterator itr = _tables.values().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L708">            cls = (ClassMapping) itr.next();</span>
+<span class="nc" id="L709">            cls.refSchemaComponents();</span>
+<span class="nc bnc" id="L710" title="All 2 branches missed.">            if (cls.getDiscriminator().getStrategy() == null)</span>
+<span class="nc" id="L711">                getStrategyInstaller().installStrategy</span>
+<span class="nc" id="L712">                    (cls.getDiscriminator());</span>
+<span class="nc" id="L713">            cls.getDiscriminator().refSchemaComponents();</span>
+<span class="nc bnc" id="L714" title="All 2 branches missed.">            if (cls.getVersion().getStrategy() == null)</span>
+<span class="nc" id="L715">                getStrategyInstaller().installStrategy(cls.getVersion());</span>
+<span class="nc" id="L716">            cls.getVersion().refSchemaComponents();</span>
+
+            // double-check identity type; if it was set for builtin identity
+            // it might have to switch to std application identity if pk field
+            // not compatible
+<span class="nc bnc" id="L721" title="All 2 branches missed.">            if (cls.getPCSuperclass() == null</span>
+<span class="nc bnc" id="L722" title="All 2 branches missed.">                &amp;&amp; cls.getIdentityType() == ClassMetaData.ID_APPLICATION) {</span>
+<span class="nc bnc" id="L723" title="All 2 branches missed.">                if (cls.getPrimaryKeyFields().length == 0)</span>
+<span class="nc" id="L724">                    throw new MetaDataException(_loc.get(&quot;no-pk-fields&quot;, cls));</span>
+<span class="nc bnc" id="L725" title="All 2 branches missed.">                if (cls.getObjectIdType() == null</span>
+<span class="nc bnc" id="L726" title="All 4 branches missed.">                    || (cls.isOpenJPAIdentity() &amp;&amp; !isBuiltinIdentity(cls)))</span>
+<span class="nc" id="L727">                    setObjectIdType(cls);</span>
+<span class="nc bnc" id="L728" title="All 2 branches missed.">            } else if (cls.getIdentityType() == ClassMetaData.ID_DATASTORE)</span>
+<span class="nc" id="L729">                cls.getPrimaryKeyColumns()[0].setJavaType(JavaTypes.LONG);</span>
+
+            // set java types for simple fields;
+<span class="nc" id="L732">            fields = cls.getDeclaredFieldMappings();</span>
+<span class="nc bnc" id="L733" title="All 2 branches missed.">            for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc" id="L734">                fields[i].refSchemaComponents();</span>
+<span class="nc" id="L735">                setColumnJavaType(fields[i]);</span>
+<span class="nc" id="L736">                setColumnJavaType(fields[i].getElementMapping());</span>
+            }
+        }
+
+        // set the java types of foreign key columns; we couldn't do this
+        // earlier because we rely on the linked-to columns to do it
+<span class="nc bnc" id="L742" title="All 2 branches missed.">        for (Iterator itr = _tables.values().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L743">            cls = (ClassMapping) itr.next();</span>
+<span class="nc" id="L744">            setForeignKeyJavaType(cls.getJoinForeignKey());</span>
+
+<span class="nc" id="L746">            fields = cls.getDeclaredFieldMappings();</span>
+<span class="nc bnc" id="L747" title="All 2 branches missed.">            for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc" id="L748">                setForeignKeyJavaType(fields[i].getJoinForeignKey());</span>
+<span class="nc" id="L749">                setForeignKeyJavaType(fields[i].getForeignKey());</span>
+<span class="nc" id="L750">                setForeignKeyJavaType(fields[i].getElementMapping().</span>
+<span class="nc" id="L751">                    getForeignKey());</span>
+            }
+        }
+
+        // allow customizer to map unmapped tables, and warn about anything
+        // that ends up unmapped
+        Column[] cols;
+<span class="nc" id="L758">        Collection unmappedCols = new ArrayList(5);</span>
+<span class="nc bnc" id="L759" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L760">            tables = schemas[i].getTables();</span>
+<span class="nc bnc" id="L761" title="All 2 branches missed.">            for (int j = 0; j &lt; tables.length; j++) {</span>
+<span class="nc" id="L762">                unmappedCols.clear();</span>
+<span class="nc" id="L763">                cols = tables[j].getColumns();</span>
+<span class="nc bnc" id="L764" title="All 2 branches missed.">                for (int k = 0; k &lt; cols.length; k++)</span>
+<span class="nc bnc" id="L765" title="All 2 branches missed.">                    if (cols[k].getRefCount() == 0)</span>
+<span class="nc" id="L766">                        unmappedCols.add(cols[k]);</span>
+
+<span class="nc bnc" id="L768" title="All 2 branches missed.">                if (unmappedCols.size() == cols.length) {</span>
+<span class="nc bnc" id="L769" title="All 4 branches missed.">                    if (_custom == null || !_custom.unmappedTable(tables[j]))</span>
+<span class="nc" id="L770">                        _log.info(_loc.get(&quot;unmap-table&quot;, tables[j]));</span>
+<span class="nc bnc" id="L771" title="All 2 branches missed.">                } else if (unmappedCols.size() &gt; 0)</span>
+<span class="nc" id="L772">                    _log.info(_loc.get(&quot;unmap-cols&quot;, tables[j], unmappedCols));</span>
+            }
+        }
+<span class="nc bnc" id="L775" title="All 2 branches missed.">        if (_custom != null)</span>
+<span class="nc" id="L776">            _custom.close();</span>
+
+        // resolve mappings
+<span class="nc bnc" id="L779" title="All 2 branches missed.">        for (Iterator itr = _tables.values().iterator(); itr.hasNext();)</span>
+<span class="nc" id="L780">            ((ClassMapping) itr.next()).resolve(MODE_META | MODE_MAPPING);</span>
+<span class="nc" id="L781">    }</span>
+
+    /**
+     * Map the table of the given type.
+     */
+    private void mapTable(Table table, int type) {
+<span class="nc bnc" id="L787" title="All 3 branches missed.">        switch (type) {</span>
+            case TABLE_SECONDARY:
+            case TABLE_SECONDARY_OUTER:
+<span class="nc bnc" id="L790" title="All 2 branches missed.">                mapSecondaryTable(table, type != TABLE_SECONDARY);</span>
+<span class="nc" id="L791">                break;</span>
+            case TABLE_ASSOCIATION:
+<span class="nc" id="L793">                mapAssociationTable(table);</span>
+                break;
+        }
+<span class="nc" id="L796">    }</span>
+
+    /**
+     * Return true if the given class is compatible with builtin identity.
+     */
+    private static boolean isBuiltinIdentity(ClassMapping cls) {
+<span class="nc" id="L802">        FieldMapping[] fields = cls.getPrimaryKeyFieldMappings();</span>
+<span class="nc bnc" id="L803" title="All 2 branches missed.">        if (fields.length != 1)</span>
+<span class="nc" id="L804">            return false;</span>
+<span class="nc bnc" id="L805" title="All 2 branches missed.">        switch (fields[0].getDeclaredTypeCode()) {</span>
+            case JavaTypes.BYTE:
+            case JavaTypes.CHAR:
+            case JavaTypes.INT:
+            case JavaTypes.LONG:
+            case JavaTypes.SHORT:
+            case JavaTypes.BYTE_OBJ:
+            case JavaTypes.CHAR_OBJ:
+            case JavaTypes.INT_OBJ:
+            case JavaTypes.LONG_OBJ:
+            case JavaTypes.SHORT_OBJ:
+            case JavaTypes.STRING:
+            case JavaTypes.OID:
+<span class="nc" id="L818">                return true;</span>
+        }
+<span class="nc" id="L820">        return false;</span>
+    }
+
+    /**
+     * Set the Java type of the column for the given value.
+     */
+    private static void setColumnJavaType(ValueMapping vm) {
+<span class="nc" id="L827">        Column[] cols = vm.getColumns();</span>
+<span class="nc bnc" id="L828" title="All 2 branches missed.">        if (cols.length == 1)</span>
+<span class="nc" id="L829">            cols[0].setJavaType(vm.getDeclaredTypeCode());</span>
+<span class="nc" id="L830">    }</span>
+
+    /**
+     * Set the Java type of the foreign key columns.
+     */
+    private static void setForeignKeyJavaType(ForeignKey fk) {
+<span class="nc bnc" id="L836" title="All 2 branches missed.">        if (fk == null)</span>
+<span class="nc" id="L837">            return;</span>
+<span class="nc" id="L838">        Column[] cols = fk.getColumns();</span>
+<span class="nc" id="L839">        Column[] pks = fk.getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L840" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L841" title="All 2 branches missed.">            if (cols[i].getJavaType() == JavaTypes.OBJECT)</span>
+<span class="nc" id="L842">                cols[i].setJavaType(pks[i].getJavaType());</span>
+<span class="nc" id="L843">    }</span>
+
+    /**
+     * Uses {@link CodeGenerator}s to write the Java code for the generated
+     * mappings to the proper packages.
+     *
+     * @return a list of {@link File} instances that were written
+     */
+    public List recordCode() throws IOException {
+<span class="nc" id="L852">        return recordCode(null);</span>
+    }
+
+    /**
+     * Write the code for the tool.
+     *
+     * @param output if null, then perform the write directly
+     * to the filesystem; otherwise, populate the
+     * specified map with keys as the generated
+     * {@link ClassMapping} and values as a
+     * {@link String} that contains the generated code
+     * @return a list of {@link File} instances that were written
+     */
+    public List recordCode(Map&lt;Class&lt;?&gt;, String&gt; output)
+        throws IOException {
+<span class="nc" id="L867">        List written = new LinkedList();</span>
+
+<span class="nc" id="L869">        ClassMapping[] mappings = getMappings();</span>
+        ReverseCodeGenerator gen;
+<span class="nc bnc" id="L871" title="All 2 branches missed.">        for (int i = 0; i &lt; mappings.length; i++) {</span>
+<span class="nc bnc" id="L872" title="All 2 branches missed.">            if (_log.isInfoEnabled())</span>
+<span class="nc" id="L873">                _log.info(_loc.get(&quot;class-code&quot;, mappings[i]));</span>
+
+<span class="nc" id="L875">            ApplicationIdTool aid = newApplicationIdTool(mappings[i]);</span>
+<span class="nc bnc" id="L876" title="All 2 branches missed.">            if (getGenerateAnnotations())</span>
+<span class="nc" id="L877">                gen = new AnnotatedCodeGenerator(mappings[i], aid);</span>
+            else
+<span class="nc" id="L879">                gen = new ReverseCodeGenerator(mappings[i], aid);</span>
+
+<span class="nc" id="L881">            gen.generateCode();</span>
+
+<span class="nc bnc" id="L883" title="All 2 branches missed.">            if (output == null) {</span>
+<span class="nc" id="L884">                gen.writeCode();</span>
+<span class="nc" id="L885">                written.add(gen.getFile());</span>
+<span class="nc bnc" id="L886" title="All 4 branches missed.">                if (aid != null &amp;&amp; !aid.isInnerClass())</span>
+<span class="nc" id="L887">                    aid.record();</span>
+            } else {
+<span class="nc" id="L889">                StringWriter writer = new StringWriter();</span>
+<span class="nc" id="L890">                gen.writeCode(writer);</span>
+<span class="nc" id="L891">                output.put(mappings[i].getDescribedType(), writer.toString());</span>
+
+<span class="nc bnc" id="L893" title="All 4 branches missed.">                if (aid != null &amp;&amp; !aid.isInnerClass()) {</span>
+<span class="nc" id="L894">                    writer = new StringWriter();</span>
+<span class="nc" id="L895">                    aid.setWriter(writer);</span>
+<span class="nc" id="L896">                    aid.record();</span>
+<span class="nc" id="L897">                    output.put(mappings[i].getObjectIdType(),</span>
+<span class="nc" id="L898">                        writer.toString());</span>
+                }
+            }
+        }
+<span class="nc" id="L902">        return written;</span>
+    }
+
+    /**
+     * Write the generated metadata to the proper packages.
+     *
+     * @return the set of metadata {@link File}s that were written
+     */
+    public Collection recordMetaData(boolean perClass)
+        throws IOException {
+<span class="nc" id="L912">        return recordMetaData(perClass, null);</span>
+    }
+
+    /**
+     * Write the code for the tool.
+     *
+     * @param output if null, then perform the write directly
+     * to the filesystem; otherwise, populate the
+     * specified map with keys as the generated
+     * {@link ClassMapping} and values as a
+     * {@link String} that contains the generated code
+     * @return the set of metadata {@link File}s that were written
+     */
+    public Collection recordMetaData(boolean perClass, Map output)
+        throws IOException {
+        // pretend mappings are all resolved
+<span class="nc" id="L928">        ClassMapping[] mappings = getMappings();</span>
+<span class="nc bnc" id="L929" title="All 2 branches missed.">        for (int i = 0; i &lt; mappings.length; i++)</span>
+        {
+<span class="nc" id="L931">            mappings[i].setResolve(MODE_META | MODE_MAPPING, true);</span>
+<span class="nc" id="L932">            mappings[i].setUseSchemaElement(getUseSchemaElement());</span>
+        }
+        // store in user's configured IO
+<span class="nc" id="L935">        MetaDataFactory mdf = _conf.newMetaDataFactoryInstance();</span>
+<span class="nc" id="L936">        mdf.setRepository(getRepository());</span>
+<span class="nc" id="L937">        mdf.setStoreDirectory(_dir);</span>
+<span class="nc bnc" id="L938" title="All 2 branches missed.">        if (perClass)</span>
+<span class="nc" id="L939">            mdf.setStoreMode(MetaDataFactory.STORE_PER_CLASS);</span>
+<span class="nc" id="L940">        mdf.store(mappings, new QueryMetaData[0], new SequenceMetaData[0],</span>
+            MODE_META | MODE_MAPPING, output);
+
+<span class="nc" id="L943">        Set files = new TreeSet();</span>
+<span class="nc bnc" id="L944" title="All 2 branches missed.">        for (int i = 0; i &lt; mappings.length; i++)</span>
+<span class="nc bnc" id="L945" title="All 2 branches missed.">            if (mappings[i].getSourceFile() != null)</span>
+<span class="nc" id="L946">                files.add(mappings[i].getSourceFile());</span>
+<span class="nc" id="L947">        return files;</span>
+    }
+
+    public void buildAnnotations() {
+<span class="nc" id="L951">        Map output = new HashMap();</span>
+        // pretend mappings are all resolved
+<span class="nc" id="L953">        ClassMapping[] mappings = getMappings();</span>
+<span class="nc bnc" id="L954" title="All 2 branches missed.">        for (int i = 0; i &lt; mappings.length; i++)</span>
+        {
+<span class="nc" id="L956">            mappings[i].setResolve(MODE_META | MODE_MAPPING, true);</span>
+<span class="nc" id="L957">            mappings[i].setUseSchemaElement(getUseSchemaElement());</span>
+        }
+        // store in user's configured IO
+<span class="nc" id="L960">        MetaDataFactory mdf = _conf.newMetaDataFactoryInstance();</span>
+<span class="nc" id="L961">        mdf.setRepository(getRepository());</span>
+<span class="nc" id="L962">        mdf.setStoreDirectory(_dir);</span>
+<span class="nc" id="L963">        mdf.store(mappings, new QueryMetaData[0], new SequenceMetaData[0],</span>
+            MODE_META | MODE_MAPPING | MODE_ANN_MAPPING, output);
+<span class="nc" id="L965">        _annos = output;</span>
+<span class="nc" id="L966">    }</span>
+
+    /**
+     * Returns a list of stringified annotations for specified meta.
+     */
+    public List getAnnotationsForMeta(Object meta) {
+<span class="nc bnc" id="L972" title="All 2 branches missed.">        if (null == _annos)</span>
+<span class="nc" id="L973">            return null;</span>
+<span class="nc" id="L974">        return (List) _annos.get(meta);</span>
+    }
+
+    /**
+     * Generate and write the application identity code.
+     */
+    private ApplicationIdTool newApplicationIdTool(ClassMapping mapping) {
+        ApplicationIdTool tool;
+<span class="nc bnc" id="L982" title="All 2 branches missed.">        if (mapping.getIdentityType() == ClassMetaData.ID_APPLICATION</span>
+<span class="nc bnc" id="L983" title="All 2 branches missed.">            &amp;&amp; !mapping.isOpenJPAIdentity()</span>
+<span class="nc bnc" id="L984" title="All 2 branches missed.">            &amp;&amp; mapping.getPCSuperclass() == null) {</span>
+<span class="nc" id="L985">            tool = new ApplicationIdTool(_conf, mapping.getDescribedType(),</span>
+                mapping);
+<span class="nc" id="L987">            tool.setDirectory(_dir);</span>
+<span class="nc" id="L988">            tool.setCodeFormat(_format);</span>
+<span class="nc bnc" id="L989" title="All 2 branches missed.">            if (!tool.run())</span>
+<span class="nc" id="L990">                return null;</span>
+<span class="nc" id="L991">            return tool;</span>
+        }
+<span class="nc" id="L993">        return null;</span>
+    }
+
+    //////////////////////////////////
+    // Methods for customizers to use
+    //////////////////////////////////
+
+    /**
+     * Return the class mapping for the given table, or null if none.
+     */
+    public ClassMapping getClassMapping(Table table) {
+<span class="nc" id="L1004">        return (ClassMapping) _tables.get(table);</span>
+    }
+
+    /**
+     * Create a new class to be mapped to a table. The class will start out
+     * with a default application identity class set.
+     */
+    public ClassMapping newClassMapping(Class cls, Table table) {
+<span class="nc" id="L1012">        ClassMapping mapping = (ClassMapping) getRepository().addMetaData(cls);</span>
+<span class="nc" id="L1013">        Class sup = mapping.getDescribedType().getSuperclass();</span>
+<span class="nc bnc" id="L1014" title="All 2 branches missed.">        if (sup == Object.class)</span>
+<span class="nc" id="L1015">            setObjectIdType(mapping);</span>
+        else
+<span class="nc" id="L1017">            mapping.setPCSuperclass(sup);</span>
+<span class="nc" id="L1018">        mapping.setTable(table);</span>
+<span class="nc bnc" id="L1019" title="All 2 branches missed.">        if (_detachable)</span>
+<span class="nc" id="L1020">            mapping.setDetachable(true);</span>
+<span class="nc" id="L1021">        _tables.put(table, mapping);</span>
+<span class="nc" id="L1022">        return mapping;</span>
+    }
+
+    /**
+     * Set the given class' objectid-class.
+     */
+    private void setObjectIdType(ClassMapping cls) {
+<span class="nc" id="L1029">        String name = cls.getDescribedType().getName();</span>
+<span class="nc bnc" id="L1030" title="All 2 branches missed.">        if (_inner)</span>
+<span class="nc" id="L1031">            name += &quot;$&quot;;</span>
+<span class="nc" id="L1032">        name += _idSuffix;</span>
+<span class="nc" id="L1033">        cls.setObjectIdType(generateClass(name, null), false);</span>
+<span class="nc" id="L1034">    }</span>
+
+    /**
+     * Generate a new class with the given name. If a non-null parent class
+     * is given, it will be set as the superclass.
+     */
+    public Class generateClass(String name, Class parent) {
+<span class="nc" id="L1041">        BCClass bc = _project.loadClass(name, null);</span>
+<span class="nc bnc" id="L1042" title="All 2 branches missed.">        if (parent != null)</span>
+<span class="nc" id="L1043">            bc.setSuperclass(parent);</span>
+<span class="nc" id="L1044">        bc.addDefaultConstructor();</span>
+
+        try {
+<span class="nc" id="L1047">            return Class.forName(name, false, _loader);</span>
+<span class="nc" id="L1048">        } catch (ClassNotFoundException cnfe) {</span>
+<span class="nc" id="L1049">            throw new InternalException(cnfe.toString(), cnfe);</span>
+        }
+    }
+
+    /**
+     * Return whether the given foreign key is unique.
+     */
+    public boolean isUnique(ForeignKey fk) {
+<span class="nc" id="L1057">        PrimaryKey pk = fk.getTable().getPrimaryKey();</span>
+<span class="nc bnc" id="L1058" title="All 4 branches missed.">        if (pk != null &amp;&amp; pk.columnsMatch(fk.getColumns()))</span>
+<span class="nc" id="L1059">            return true;</span>
+<span class="nc" id="L1060">        Index[] idx = fk.getTable().getIndexes();</span>
+<span class="nc bnc" id="L1061" title="All 2 branches missed.">        for (int i = 0; i &lt; idx.length; i++)</span>
+<span class="nc bnc" id="L1062" title="All 4 branches missed.">            if (idx[i].isUnique() &amp;&amp; idx[i].columnsMatch(fk.getColumns()))</span>
+<span class="nc" id="L1063">                return true;</span>
+<span class="nc" id="L1064">        Unique[] unq = fk.getTable().getUniques();</span>
+<span class="nc bnc" id="L1065" title="All 2 branches missed.">        for (int i = 0; i &lt; unq.length; i++)</span>
+<span class="nc bnc" id="L1066" title="All 2 branches missed.">            if (unq[i].columnsMatch(fk.getColumns()))</span>
+<span class="nc" id="L1067">                return true;</span>
+<span class="nc" id="L1068">        return false;</span>
+    }
+
+    /**
+     * If the given table has a single unique foreign key or a foreign
+     * key that matches the primary key, return it. Else return null.
+     */
+    public ForeignKey getUniqueForeignKey(Table table) {
+<span class="nc" id="L1076">        ForeignKey[] fks = table.getForeignKeys();</span>
+<span class="nc" id="L1077">        PrimaryKey pk = table.getPrimaryKey();</span>
+<span class="nc" id="L1078">        ForeignKey unq = null;</span>
+<span class="nc" id="L1079">        int count = 0;</span>
+<span class="nc bnc" id="L1080" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++) {</span>
+<span class="nc bnc" id="L1081" title="All 4 branches missed.">            if (pk != null &amp;&amp; pk.columnsMatch(fks[i].getColumns()))</span>
+<span class="nc" id="L1082">                return fks[i];</span>
+<span class="nc bnc" id="L1083" title="All 2 branches missed.">            if (!isUnique(fks[i]))</span>
+<span class="nc" id="L1084">                continue;</span>
+
+<span class="nc" id="L1086">            count++;</span>
+<span class="nc bnc" id="L1087" title="All 2 branches missed.">            if (unq == null)</span>
+<span class="nc" id="L1088">                unq = fks[i];</span>
+        }
+<span class="nc bnc" id="L1090" title="All 2 branches missed.">        return (count == 1) ? unq : null;</span>
+    }
+
+    /**
+     * Add existing unique constraints and indexes to the given field's join.
+     */
+    public void addJoinConstraints(FieldMapping field) {
+<span class="nc" id="L1097">        ForeignKey fk = field.getJoinForeignKey();</span>
+<span class="nc bnc" id="L1098" title="All 2 branches missed.">        if (fk == null)</span>
+<span class="nc" id="L1099">            return;</span>
+
+<span class="nc" id="L1101">        Index idx = findIndex(fk.getColumns());</span>
+<span class="nc bnc" id="L1102" title="All 2 branches missed.">        if (idx != null)</span>
+<span class="nc" id="L1103">            field.setJoinIndex(idx);</span>
+<span class="nc" id="L1104">        Unique unq = findUnique(fk.getColumns());</span>
+<span class="nc bnc" id="L1105" title="All 2 branches missed.">        if (unq != null)</span>
+<span class="nc" id="L1106">            field.setJoinUnique(unq);</span>
+<span class="nc" id="L1107">    }</span>
+
+    /**
+     * Add existing unique constraints and indexes to the given value.
+     */
+    public void addConstraints(ValueMapping vm) {
+<span class="nc bnc" id="L1113" title="All 2 branches missed.">        Column[] cols = (vm.getForeignKey() != null)</span>
+<span class="nc" id="L1114">            ? vm.getForeignKey().getColumns() : vm.getColumns();</span>
+<span class="nc" id="L1115">        Index idx = findIndex(cols);</span>
+<span class="nc bnc" id="L1116" title="All 2 branches missed.">        if (idx != null)</span>
+<span class="nc" id="L1117">            vm.setValueIndex(idx);</span>
+<span class="nc" id="L1118">        Unique unq = findUnique(cols);</span>
+<span class="nc bnc" id="L1119" title="All 2 branches missed.">        if (unq != null)</span>
+<span class="nc" id="L1120">            vm.setValueUnique(unq);</span>
+<span class="nc" id="L1121">    }</span>
+
+    /**
+     * Return the index with the given columns.
+     */
+    private Index findIndex(Column[] cols) {
+<span class="nc bnc" id="L1127" title="All 4 branches missed.">        if (cols == null || cols.length == 0)</span>
+<span class="nc" id="L1128">            return null;</span>
+
+<span class="nc" id="L1130">        Table table = cols[0].getTable();</span>
+<span class="nc" id="L1131">        Index[] idxs = table.getIndexes();</span>
+<span class="nc bnc" id="L1132" title="All 2 branches missed.">        for (int i = 0; i &lt; idxs.length; i++)</span>
+<span class="nc bnc" id="L1133" title="All 2 branches missed.">            if (idxs[i].columnsMatch(cols))</span>
+<span class="nc" id="L1134">                return idxs[i];</span>
+<span class="nc" id="L1135">        return null;</span>
+    }
+
+    /**
+     * Return the unique constriant with the given columns.
+     */
+    private Unique findUnique(Column[] cols) {
+<span class="nc bnc" id="L1142" title="All 4 branches missed.">        if (cols == null || cols.length == 0)</span>
+<span class="nc" id="L1143">            return null;</span>
+
+<span class="nc" id="L1145">        Table table = cols[0].getTable();</span>
+<span class="nc" id="L1146">        Unique[] unqs = table.getUniques();</span>
+<span class="nc bnc" id="L1147" title="All 2 branches missed.">        for (int i = 0; i &lt; unqs.length; i++)</span>
+<span class="nc bnc" id="L1148" title="All 2 branches missed.">            if (unqs[i].columnsMatch(cols))</span>
+<span class="nc" id="L1149">                return unqs[i];</span>
+<span class="nc" id="L1150">        return null;</span>
+    }
+
+    /////////////
+    // Utilities
+    /////////////
+
+    /**
+     * Return whether the given table is a base class table.
+     */
+    public boolean isBaseTable(Table table) {
+<span class="nc bnc" id="L1161" title="All 2 branches missed.">        if (table.getPrimaryKey() == null)</span>
+<span class="nc" id="L1162">            return false;</span>
+<span class="nc" id="L1163">        int type = getSecondaryType(table, true);</span>
+<span class="nc bnc" id="L1164" title="All 2 branches missed.">        if (type != -1)</span>
+<span class="nc bnc" id="L1165" title="All 2 branches missed.">            return type == TABLE_BASE;</span>
+<span class="nc bnc" id="L1166" title="All 2 branches missed.">        if (_custom != null)</span>
+<span class="nc bnc" id="L1167" title="All 2 branches missed.">            return _custom.getTableType(table, TABLE_BASE) == TABLE_BASE;</span>
+<span class="nc" id="L1168">        return true;</span>
+    }
+
+    /**
+     * Calculate the type of the secondary given table.
+     */
+    private int getSecondaryType(Table table, boolean maybeBase) {
+        int type;
+<span class="nc" id="L1176">        ForeignKey[] fks = table.getForeignKeys();</span>
+<span class="nc bnc" id="L1177" title="All 2 branches missed.">        if (fks.length == 2</span>
+<span class="nc bnc" id="L1178" title="All 4 branches missed.">            &amp;&amp; (table.getPrimaryKey() == null || _pkOnJoin)</span>
+<span class="nc" id="L1179">            &amp;&amp; fks[0].getColumns().length + fks[1].getColumns().length</span>
+<span class="nc bnc" id="L1180" title="All 2 branches missed.">            == table.getColumns().length</span>
+<span class="nc bnc" id="L1181" title="All 4 branches missed.">            &amp;&amp; (!isUnique(fks[0]) || !isUnique(fks[1])))</span>
+<span class="nc" id="L1182">            type = TABLE_ASSOCIATION;</span>
+<span class="nc bnc" id="L1183" title="All 4 branches missed.">        else if (maybeBase &amp;&amp; table.getPrimaryKey() != null)</span>
+<span class="nc" id="L1184">            type = -1;</span>
+<span class="nc bnc" id="L1185" title="All 2 branches missed.">        else if (getUniqueForeignKey(table) != null)</span>
+<span class="nc" id="L1186">            type = TABLE_SECONDARY;</span>
+<span class="nc bnc" id="L1187" title="All 2 branches missed.">        else if (fks.length == 1)</span>
+<span class="nc" id="L1188">            type = TABLE_NONE;</span>
+        else
+<span class="nc" id="L1190">            type = -1;</span>
+
+<span class="nc bnc" id="L1192" title="All 4 branches missed.">        if (_custom != null &amp;&amp; type != -1)</span>
+<span class="nc" id="L1193">            type = _custom.getTableType(table, type);</span>
+<span class="nc" id="L1194">        return type;</span>
+    }
+
+    /**
+     * Attempt to create a base class from the given table.
+     */
+    private void mapBaseClass(Table table) {
+<span class="nc" id="L1201">        ClassMapping cls = newClassMapping(table, null);</span>
+<span class="nc bnc" id="L1202" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L1203">            return;</span>
+
+        // check for datastore identity and builtin identity; for now
+        // we assume that any non-datastore single primary key column will use
+        // builtin identity; if we discover that the primary key field is
+        // not compatible with builtin identity later, then we'll assign
+        // an application identity class
+<span class="nc" id="L1210">        Column[] pks = table.getPrimaryKey().getColumns();</span>
+<span class="nc" id="L1211">        cls.setPrimaryKeyColumns(pks);</span>
+<span class="nc bnc" id="L1212" title="All 4 branches missed.">        if (pks.length == 1 &amp;&amp; _datastore</span>
+<span class="nc bnc" id="L1213" title="All 2 branches missed.">            &amp;&amp; pks[0].isCompatible(Types.BIGINT, null, 0, 0)) {</span>
+<span class="nc" id="L1214">            cls.setObjectIdType(null, false);</span>
+<span class="nc" id="L1215">            cls.setIdentityType(ClassMetaData.ID_DATASTORE);</span>
+<span class="nc bnc" id="L1216" title="All 4 branches missed.">        } else if (pks.length == 1 &amp;&amp; _builtin)</span>
+<span class="nc" id="L1217">            cls.setObjectIdType(null, false);</span>
+<span class="nc" id="L1218">        cls.setStrategy(new FullClassStrategy(), null);</span>
+<span class="nc bnc" id="L1219" title="All 2 branches missed.">        if (_custom != null)</span>
+<span class="nc" id="L1220">            _custom.customize(cls);</span>
+<span class="nc" id="L1221">    }</span>
+
+    /**
+     * Attempt to create a vertical subclasses from the given tables.
+     */
+    private void mapSubclasses(Set tables) {
+        // loop through tables until either all are mapped or none link to
+        // a mapped base class table
+        ClassMapping base, sub;
+<span class="nc" id="L1230">        Table table = null;</span>
+<span class="nc" id="L1231">        ForeignKey fk = null;</span>
+<span class="nc bnc" id="L1232" title="All 2 branches missed.">        while (!tables.isEmpty()) {</span>
+            // find a table with a foreign key linking to a mapped table
+<span class="nc" id="L1234">            base = null;</span>
+<span class="nc bnc" id="L1235" title="All 2 branches missed.">            for (Iterator itr = tables.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L1236">                table = (Table) itr.next();</span>
+<span class="nc" id="L1237">                fk = getUniqueForeignKey(table);</span>
+<span class="nc bnc" id="L1238" title="All 4 branches missed.">                if (fk == null &amp;&amp; table.getForeignKeys().length == 1)</span>
+<span class="nc" id="L1239">                    fk = table.getForeignKeys()[0];</span>
+<span class="nc bnc" id="L1240" title="All 2 branches missed.">                else if (fk == null)</span>
+<span class="nc" id="L1241">                    itr.remove();</span>
+                else {
+<span class="nc" id="L1243">                    base = (ClassMapping) _tables.get(fk.getPrimaryKeyTable());</span>
+<span class="nc bnc" id="L1244" title="All 2 branches missed.">                    if (base != null) {</span>
+<span class="nc" id="L1245">                        itr.remove();</span>
+<span class="nc" id="L1246">                        break;</span>
+                    }
+                }
+            }
+            // if no tables link to a base table, nothing left to do
+<span class="nc bnc" id="L1251" title="All 2 branches missed.">            if (base == null)</span>
+<span class="nc" id="L1252">                return;</span>
+
+<span class="nc" id="L1254">            sub = newClassMapping(table, base.getDescribedType());</span>
+<span class="nc" id="L1255">            sub.setJoinForeignKey(fk);</span>
+<span class="nc" id="L1256">            sub.setPrimaryKeyColumns(fk.getColumns());</span>
+<span class="nc" id="L1257">            sub.setIdentityType(base.getIdentityType());</span>
+<span class="nc" id="L1258">            sub.setStrategy(new VerticalClassStrategy(), null);</span>
+<span class="nc bnc" id="L1259" title="All 2 branches missed.">            if (_custom != null)</span>
+<span class="nc" id="L1260">                _custom.customize(sub);</span>
+        }
+<span class="nc" id="L1262">    }</span>
+
+    /**
+     * Attempt to reverse map the given table as an association table.
+     */
+    private void mapAssociationTable(Table table) {
+<span class="nc" id="L1268">        ForeignKey[] fks = table.getForeignKeys();</span>
+<span class="nc bnc" id="L1269" title="All 2 branches missed.">        if (fks.length != 2)</span>
+<span class="nc" id="L1270">            return;</span>
+
+<span class="nc" id="L1272">        ClassMapping cls1 = (ClassMapping) _tables.get</span>
+<span class="nc" id="L1273">            (fks[0].getPrimaryKeyTable());</span>
+<span class="nc" id="L1274">        ClassMapping cls2 = (ClassMapping) _tables.get</span>
+<span class="nc" id="L1275">            (fks[1].getPrimaryKeyTable());</span>
+<span class="nc bnc" id="L1276" title="All 4 branches missed.">        if (cls1 == null || cls2 == null)</span>
+<span class="nc" id="L1277">            return;</span>
+
+        // add a relation from each class to the other through the
+        // association table
+<span class="nc" id="L1281">        String name = getRelationName(cls2.getDescribedType(), true, fks[1],</span>
+            false, cls1);
+<span class="nc" id="L1283">        FieldMapping field1 = newFieldMapping(name, Set.class, null, fks[1],</span>
+            cls1);
+<span class="nc bnc" id="L1285" title="All 2 branches missed.">        if (field1 != null) {</span>
+<span class="nc" id="L1286">            field1.setJoinForeignKey(fks[0]);</span>
+<span class="nc" id="L1287">            addJoinConstraints(field1);</span>
+<span class="nc" id="L1288">            ValueMapping vm = field1.getElementMapping();</span>
+<span class="nc" id="L1289">            vm.setDeclaredType(cls2.getDescribedType());</span>
+<span class="nc" id="L1290">            vm.setForeignKey(fks[1]);</span>
+<span class="nc" id="L1291">            addConstraints(vm);</span>
+<span class="nc" id="L1292">            field1.setStrategy(new RelationCollectionTableFieldStrategy(),</span>
+                null);
+<span class="nc bnc" id="L1294" title="All 2 branches missed.">            if (_custom != null)</span>
+<span class="nc" id="L1295">                _custom.customize(field1);</span>
+        }
+
+<span class="nc" id="L1298">        name = getRelationName(cls1.getDescribedType(), true, fks[0],</span>
+            false, cls2);
+<span class="nc" id="L1300">        FieldMapping field2 = newFieldMapping(name, Set.class, null, fks[0],</span>
+            cls2);
+<span class="nc bnc" id="L1302" title="All 2 branches missed.">        if (field2 == null)</span>
+<span class="nc" id="L1303">            return;</span>
+
+<span class="nc" id="L1305">        field2.setJoinForeignKey(fks[1]);</span>
+<span class="nc" id="L1306">        addJoinConstraints(field2);</span>
+<span class="nc" id="L1307">        ValueMapping vm = field2.getElementMapping();</span>
+<span class="nc" id="L1308">        vm.setDeclaredType(cls1.getDescribedType());</span>
+<span class="nc" id="L1309">        vm.setForeignKey(fks[0]);</span>
+<span class="nc" id="L1310">        addConstraints(vm);</span>
+<span class="nc bnc" id="L1311" title="All 4 branches missed.">        if (field1 != null &amp;&amp; field1.getMappedBy() == null)</span>
+<span class="nc" id="L1312">            field2.setMappedBy(field1.getName());</span>
+<span class="nc" id="L1313">        field2.setStrategy(new RelationCollectionTableFieldStrategy(), null);</span>
+<span class="nc bnc" id="L1314" title="All 2 branches missed.">        if (_custom != null)</span>
+<span class="nc" id="L1315">            _custom.customize(field2);</span>
+<span class="nc" id="L1316">    }</span>
+
+    /**
+     * Attempt to reverse map the given table as a secondary table.
+     */
+    private void mapSecondaryTable(Table table, boolean outer) {
+<span class="nc" id="L1322">        ForeignKey fk = getUniqueForeignKey(table);</span>
+<span class="nc bnc" id="L1323" title="All 4 branches missed.">        if (fk == null &amp;&amp; table.getForeignKeys().length == 1)</span>
+<span class="nc" id="L1324">            fk = table.getForeignKeys()[0];</span>
+<span class="nc bnc" id="L1325" title="All 2 branches missed.">        else if (fk == null)</span>
+<span class="nc" id="L1326">            return;</span>
+<span class="nc" id="L1327">        ClassMapping cls = (ClassMapping) _tables.get(fk.getPrimaryKeyTable());</span>
+<span class="nc bnc" id="L1328" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L1329">            return;</span>
+<span class="nc" id="L1330">        mapColumns(cls, table, fk, outer);</span>
+<span class="nc" id="L1331">    }</span>
+
+    /**
+     * Map the columns of the given table to fields of the given type.
+     */
+    private void mapColumns(ClassMapping cls, Table table, ForeignKey join,
+        boolean outer) {
+        // first map foreign keys to relations
+<span class="nc" id="L1339">        ForeignKey[] fks = table.getForeignKeys();</span>
+<span class="nc bnc" id="L1340" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++)</span>
+<span class="nc bnc" id="L1341" title="All 4 branches missed.">            if (fks[i] != join &amp;&amp; fks[i] != cls.getJoinForeignKey())</span>
+<span class="nc" id="L1342">                mapForeignKey(cls, fks[i], join, outer);</span>
+
+        // map any columns not controlled by foreign keys; also force primary
+        // key cols to get mapped to simple fields even if the columns are
+        // also foreign key columns
+<span class="nc bnc" id="L1347" title="All 2 branches missed.">        PrimaryKey pk = (join != null) ? null : table.getPrimaryKey();</span>
+        boolean pkcol;
+<span class="nc" id="L1349">        Column[] cols = table.getColumns();</span>
+<span class="nc bnc" id="L1350" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L1351" title="All 4 branches missed.">            pkcol = pk != null &amp;&amp; pk.containsColumn(cols[i]);</span>
+<span class="nc bnc" id="L1352" title="All 4 branches missed.">            if (pkcol &amp;&amp; cls.getIdentityType() == ClassMetaData.ID_DATASTORE)</span>
+<span class="nc" id="L1353">                continue;</span>
+<span class="nc bnc" id="L1354" title="All 4 branches missed.">            if ((cls.getPCSuperclass() == null &amp;&amp; pkcol)</span>
+<span class="nc bnc" id="L1355" title="All 2 branches missed.">                || !isForeignKeyColumn(cols[i]))</span>
+<span class="nc" id="L1356">                mapColumn(cls, cols[i], join, outer);</span>
+        }
+<span class="nc" id="L1358">    }</span>
+
+    /**
+     * Whether the given column appears in any foreign keys.
+     */
+    private static boolean isForeignKeyColumn(Column col) {
+<span class="nc" id="L1364">        ForeignKey[] fks = col.getTable().getForeignKeys();</span>
+<span class="nc bnc" id="L1365" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++)</span>
+<span class="nc bnc" id="L1366" title="All 2 branches missed.">            if (fks[i].containsColumn(col))</span>
+<span class="nc" id="L1367">                return true;</span>
+<span class="nc" id="L1368">        return false;</span>
+    }
+
+    /**
+     * Map a foreign key to a relation.
+     */
+    private void mapForeignKey(ClassMapping cls, ForeignKey fk,
+        ForeignKey join, boolean outer) {
+<span class="nc" id="L1376">        ClassMapping rel = (ClassMapping) _tables.get(fk.getPrimaryKeyTable());</span>
+<span class="nc bnc" id="L1377" title="All 2 branches missed.">        if (rel == null)</span>
+<span class="nc" id="L1378">            return;</span>
+
+<span class="nc" id="L1380">        String name = getRelationName(rel.getDescribedType(), false, fk,</span>
+            false, cls);
+<span class="nc" id="L1382">        FieldMapping field1 = newFieldMapping(name, rel.getDescribedType(),</span>
+            null, fk, cls);
+<span class="nc bnc" id="L1384" title="All 2 branches missed.">        if (field1 != null) {</span>
+<span class="nc" id="L1385">            field1.setJoinForeignKey(join);</span>
+<span class="nc" id="L1386">            field1.setJoinOuter(outer);</span>
+<span class="nc" id="L1387">            addJoinConstraints(field1);</span>
+<span class="nc" id="L1388">            field1.setForeignKey(fk);</span>
+<span class="nc" id="L1389">            addConstraints(field1);</span>
+<span class="nc" id="L1390">            field1.setStrategy(new RelationFieldStrategy(), null);</span>
+<span class="nc bnc" id="L1391" title="All 2 branches missed.">            if (_custom != null)</span>
+<span class="nc" id="L1392">                _custom.customize(field1);</span>
+        }
+<span class="nc bnc" id="L1394" title="All 4 branches missed.">        if (!_inverse || join != null)</span>
+<span class="nc" id="L1395">            return;</span>
+
+        // create inverse relation
+<span class="nc" id="L1398">        boolean unq = isUnique(fk);</span>
+<span class="nc bnc" id="L1399" title="All 2 branches missed.">        name = getRelationName(cls.getDescribedType(), !unq, fk, true, rel);</span>
+<span class="nc bnc" id="L1400" title="All 2 branches missed.">        Class type = (unq) ? cls.getDescribedType() : Set.class;</span>
+<span class="nc" id="L1401">        FieldMapping field2 = newFieldMapping(name, type, null, fk, rel);</span>
+<span class="nc bnc" id="L1402" title="All 2 branches missed.">        if (field2 == null)</span>
+<span class="nc" id="L1403">            return;</span>
+<span class="nc bnc" id="L1404" title="All 2 branches missed.">        if (field1 != null)</span>
+<span class="nc" id="L1405">            field2.setMappedBy(field1.getName());</span>
+<span class="nc bnc" id="L1406" title="All 2 branches missed.">        if (unq) {</span>
+<span class="nc" id="L1407">            field2.setForeignKey(fk);</span>
+<span class="nc" id="L1408">            field2.setJoinDirection(ValueMapping.JOIN_INVERSE);</span>
+<span class="nc" id="L1409">            field2.setStrategy(new RelationFieldStrategy(), null);</span>
+        } else {
+<span class="nc" id="L1411">            ValueMapping vm = field2.getElementMapping();</span>
+<span class="nc" id="L1412">            vm.setDeclaredType(cls.getDescribedType());</span>
+<span class="nc" id="L1413">            vm.setForeignKey(fk);</span>
+<span class="nc" id="L1414">            vm.setJoinDirection(ValueMapping.JOIN_EXPECTED_INVERSE);</span>
+<span class="nc" id="L1415">            field2.setStrategy(new RelationCollectionInverseKeyFieldStrategy(),</span>
+                null);
+        }
+<span class="nc bnc" id="L1418" title="All 2 branches missed.">        if (_custom != null)</span>
+<span class="nc" id="L1419">            _custom.customize(field2);</span>
+<span class="nc" id="L1420">    }</span>
+
+    /**
+     * Map a column to a simple field.
+     */
+    private void mapColumn(ClassMapping cls, Column col, ForeignKey join,
+        boolean outer) {
+<span class="nc" id="L1427">        String name = getFieldName(col.getName(), cls);</span>
+<span class="nc" id="L1428">        Class type = getFieldType(col, false);</span>
+<span class="nc" id="L1429">        FieldMapping field = newFieldMapping(name, type, col, null, cls);</span>
+<span class="nc bnc" id="L1430" title="All 2 branches missed.">        field.setSerialized(type == Object.class);</span>
+<span class="nc" id="L1431">        field.setJoinForeignKey(join);</span>
+<span class="nc" id="L1432">        field.setJoinOuter(outer);</span>
+<span class="nc" id="L1433">        addJoinConstraints(field);</span>
+<span class="nc" id="L1434">        field.setColumns(new Column[]{ col });</span>
+<span class="nc" id="L1435">        addConstraints(field);</span>
+<span class="nc bnc" id="L1436" title="All 2 branches missed.">        if (col.isPrimaryKey()</span>
+<span class="nc bnc" id="L1437" title="All 2 branches missed.">            &amp;&amp; cls.getIdentityType() != ClassMetaData.ID_DATASTORE)</span>
+<span class="nc" id="L1438">            field.setPrimaryKey(true);</span>
+
+        FieldStrategy strat;
+<span class="nc bnc" id="L1441" title="All 2 branches missed.">        if (type.isPrimitive())</span>
+<span class="nc" id="L1442">            strat = new PrimitiveFieldStrategy();</span>
+<span class="nc bnc" id="L1443" title="All 2 branches missed.">        else if (col.getType() == Types.CLOB</span>
+<span class="nc bnc" id="L1444" title="All 2 branches missed.">            &amp;&amp; _conf.getDBDictionaryInstance().maxEmbeddedClobSize != -1)</span>
+<span class="nc" id="L1445">            strat = new MaxEmbeddedClobFieldStrategy();</span>
+<span class="nc bnc" id="L1446" title="All 2 branches missed.">        else if (col.isLob()</span>
+<span class="nc bnc" id="L1447" title="All 2 branches missed.">            &amp;&amp; _conf.getDBDictionaryInstance().maxEmbeddedBlobSize != -1)</span>
+<span class="nc" id="L1448">            strat = new MaxEmbeddedBlobFieldStrategy();</span>
+<span class="nc bnc" id="L1449" title="All 2 branches missed.">        else if (type == String.class)</span>
+<span class="nc" id="L1450">            strat = new StringFieldStrategy();</span>
+        else
+<span class="nc" id="L1452">            strat = new HandlerFieldStrategy();</span>
+<span class="nc" id="L1453">        field.setStrategy(strat, null);</span>
+<span class="nc bnc" id="L1454" title="All 2 branches missed.">        if (_custom != null)</span>
+<span class="nc" id="L1455">            _custom.customize(field);</span>
+<span class="nc" id="L1456">    }</span>
+
+    /**
+     * Create a class mapping for the given table, or return null if
+     * customizer rejects.
+     */
+    private ClassMapping newClassMapping(Table table, Class parent) {
+<span class="nc" id="L1463">        String name = getClassName(table);</span>
+<span class="nc bnc" id="L1464" title="All 2 branches missed.">        if (_custom != null)</span>
+<span class="nc" id="L1465">            name = _custom.getClassName(table, name);</span>
+<span class="nc bnc" id="L1466" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L1467">            return null;</span>
+<span class="nc" id="L1468">        return newClassMapping(generateClass(name, parent), table);</span>
+    }
+
+    /**
+     * Create a field mapping for the given info, or return null if
+     * customizer rejects.
+     */
+    public FieldMapping newFieldMapping(String name, Class type, Column col,
+        ForeignKey fk, ClassMapping dec) {
+<span class="nc bnc" id="L1477" title="All 2 branches missed.">        if (_custom != null) {</span>
+<span class="nc bnc" id="L1478" title="All 2 branches missed.">            Column[] cols = (fk == null) ? new Column[]{ col }</span>
+<span class="nc" id="L1479">                : fk.getColumns();</span>
+<span class="nc" id="L1480">            String newName = _custom.getFieldName(dec, cols, fk, name);</span>
+<span class="nc bnc" id="L1481" title="All 4 branches missed.">            if (newName == null || !newName.equals(name)) {</span>
+<span class="nc bnc" id="L1482" title="All 2 branches missed.">                if (_abandonedFieldNames == null)</span>
+<span class="nc" id="L1483">                    _abandonedFieldNames = new HashSet();</span>
+<span class="nc" id="L1484">                _abandonedFieldNames.add(dec.getDescribedType().getName()</span>
+                    + &quot;.&quot; + name);
+<span class="nc bnc" id="L1486" title="All 2 branches missed.">                if (newName == null)</span>
+<span class="nc" id="L1487">                    return null;</span>
+<span class="nc" id="L1488">                name = newName;</span>
+            }
+        }
+
+<span class="nc" id="L1492">        FieldMapping field = dec.addDeclaredFieldMapping(name, type);</span>
+<span class="nc" id="L1493">        field.setExplicit(true);</span>
+<span class="nc" id="L1494">        return field;</span>
+    }
+
+    /**
+     * Return a Java identifier-formatted name for the given table
+     * name, using the default package.
+     */
+    private String getClassName(Table table) {
+<span class="nc" id="L1502">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc bnc" id="L1503" title="All 2 branches missed.">        if (getPackageName() != null)</span>
+<span class="nc" id="L1504">            buf.append(getPackageName()).append(&quot;.&quot;);</span>
+
+        String[] subs;
+<span class="nc" id="L1507">        String name = replaceInvalidCharacters(table.getSchemaName());</span>
+<span class="nc bnc" id="L1508" title="All 4 branches missed.">        if (_useSchema &amp;&amp; name != null) {</span>
+<span class="nc bnc" id="L1509" title="All 2 branches missed.">            if (allUpperCase(name))</span>
+<span class="nc" id="L1510">                name = name.toLowerCase();</span>
+<span class="nc" id="L1511">            subs = StringUtil.split(name, &quot;_&quot;, 0);</span>
+<span class="nc bnc" id="L1512" title="All 2 branches missed.">            for (int i = 0; i &lt; subs.length; i++)</span>
+<span class="nc" id="L1513">                buf.append(StringUtil.capitalize(subs[i]));</span>
+        }
+
+<span class="nc" id="L1516">        name = replaceInvalidCharacters(table.getName());</span>
+<span class="nc bnc" id="L1517" title="All 2 branches missed.">        if (allUpperCase(name))</span>
+<span class="nc" id="L1518">            name = name.toLowerCase();</span>
+<span class="nc" id="L1519">        subs = StringUtil.split(name, &quot;_&quot;, 0);</span>
+<span class="nc bnc" id="L1520" title="All 2 branches missed.">        for (int i = 0; i &lt; subs.length; i++) {</span>
+            // make sure the name can't conflict with generated id class names;
+            // if the name would end in 'Id', make it end in 'Ident'
+<span class="nc bnc" id="L1523" title="All 4 branches missed.">            if (i == subs.length - 1 &amp;&amp; subs[i].equalsIgnoreCase(&quot;id&quot;))</span>
+<span class="nc" id="L1524">                subs[i] = &quot;ident&quot;;</span>
+<span class="nc" id="L1525">            buf.append(StringUtil.capitalize(subs[i]));</span>
+        }
+
+<span class="nc" id="L1528">        return buf.toString();</span>
+    }
+
+    /**
+     * Return a default Java identifier-formatted name for the given
+     * column/table name.
+     */
+    public String getFieldName(String name, ClassMapping dec) {
+<span class="nc" id="L1536">        name = replaceInvalidCharacters(name);</span>
+<span class="nc bnc" id="L1537" title="All 2 branches missed.">        if (allUpperCase(name))</span>
+<span class="nc" id="L1538">            name = name.toLowerCase();</span>
+        else
+<span class="nc" id="L1540">            name = Character.toLowerCase(name.charAt(0)) + name.substring(1);</span>
+
+<span class="nc" id="L1542">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L1543">        String[] subs = StringUtil.split(name, &quot;_&quot;, 0);</span>
+<span class="nc bnc" id="L1544" title="All 2 branches missed.">        for (int i = 0; i &lt; subs.length; i++) {</span>
+<span class="nc bnc" id="L1545" title="All 2 branches missed.">            if (i &gt; 0)</span>
+<span class="nc" id="L1546">                subs[i] = StringUtil.capitalize(subs[i]);</span>
+<span class="nc" id="L1547">            buf.append(subs[i]);</span>
+        }
+<span class="nc" id="L1549">        return getUniqueName(buf.toString(), dec);</span>
+    }
+
+    /**
+     * Return a default java identifier-formatted field relation name
+     * for the given class name.
+     */
+    private String getRelationName(Class fieldType, boolean coll,
+        ForeignKey fk, boolean inverse, ClassMapping dec) {
+<span class="nc bnc" id="L1558" title="All 4 branches missed.">        if (_useFK &amp;&amp; fk.getName() != null) {</span>
+<span class="nc" id="L1559">            String name = getFieldName(fk.getName(), dec);</span>
+<span class="nc bnc" id="L1560" title="All 4 branches missed.">            if (inverse &amp;&amp; coll)</span>
+<span class="nc" id="L1561">                name = name + &quot;Inverses&quot;;</span>
+<span class="nc bnc" id="L1562" title="All 2 branches missed.">            else if (inverse)</span>
+<span class="nc" id="L1563">                name = name + &quot;Inverse&quot;;</span>
+<span class="nc" id="L1564">            return getUniqueName(name, dec);</span>
+        }
+
+        // get just the class name, w/o package
+<span class="nc" id="L1568">        String name = fieldType.getName();</span>
+<span class="nc" id="L1569">        name = name.substring(name.lastIndexOf('.') + 1);</span>
+
+        // make the first character lowercase and pluralize if a collection
+<span class="nc" id="L1572">        name = Character.toLowerCase(name.charAt(0)) + name.substring(1);</span>
+<span class="nc bnc" id="L1573" title="All 4 branches missed.">        if (coll &amp;&amp; !name.endsWith(&quot;s&quot;))</span>
+<span class="nc" id="L1574">            name += &quot;s&quot;;</span>
+
+<span class="nc" id="L1576">        return getUniqueName(name, dec);</span>
+    }
+
+    /**
+     * Return true if the given string is all uppercase letters.
+     */
+    private static boolean allUpperCase(String str) {
+<span class="nc bnc" id="L1583" title="All 2 branches missed.">        for (int i = 0; i &lt; str.length(); i++) {</span>
+<span class="nc bnc" id="L1584" title="All 2 branches missed.">            if (Character.isLetter(str.charAt(i))</span>
+<span class="nc bnc" id="L1585" title="All 2 branches missed.">                &amp;&amp; !Character.isUpperCase(str.charAt(i)))</span>
+<span class="nc" id="L1586">                return false;</span>
+        }
+<span class="nc" id="L1588">        return true;</span>
+    }
+
+    /**
+     * Replace characters not allowed in Java names with an underscore;
+     * package-private for testing.
+     */
+    static String replaceInvalidCharacters(String str) {
+<span class="nc bnc" id="L1596" title="All 2 branches missed.">        if (StringUtil.isEmpty(str))</span>
+<span class="nc" id="L1597">            return str;</span>
+
+<span class="nc" id="L1599">        StringBuilder buf = new StringBuilder(str);</span>
+        char c;
+<span class="nc bnc" id="L1601" title="All 2 branches missed.">        for (int i = 0; i &lt; buf.length(); i++) {</span>
+<span class="nc" id="L1602">            c = buf.charAt(i);</span>
+<span class="nc bnc" id="L1603" title="All 4 branches missed.">            if (c == '$' || !Character.isJavaIdentifierPart(str.charAt(i)))</span>
+<span class="nc" id="L1604">                buf.setCharAt(i, '_');</span>
+        }
+
+        // strip leading and trailing underscores
+<span class="nc" id="L1608">        int start = 0;</span>
+<span class="nc bnc" id="L1609" title="All 4 branches missed.">        while (start &lt; buf.length() &amp;&amp; buf.charAt(start) == '_')</span>
+<span class="nc" id="L1610">            start++;</span>
+<span class="nc" id="L1611">        int end = buf.length() - 1;</span>
+<span class="nc bnc" id="L1612" title="All 4 branches missed.">        while (end &gt;= 0 &amp;&amp; buf.charAt(end) == '_')</span>
+<span class="nc" id="L1613">            end--;</span>
+
+        // possible that all chars in name are invalid
+<span class="nc bnc" id="L1616" title="All 2 branches missed.">        if (start &gt; end)</span>
+<span class="nc" id="L1617">            return &quot;x&quot;;</span>
+<span class="nc" id="L1618">        return buf.substring(start, end + 1);</span>
+    }
+
+    /**
+     * Modifies the given name as necessary to ensure that it isn't already
+     * taken by a field in the given parent.
+     */
+    private String getUniqueName(String name, ClassMapping dec) {
+        // make sure the name isn't a keyword
+<span class="nc bnc" id="L1627" title="All 2 branches missed.">        if (_javaKeywords.containsKey(name))</span>
+<span class="nc" id="L1628">            name = (String) _javaKeywords.get(name);</span>
+
+        // this is the same algorithm used in DBDictionary to get unique names
+<span class="nc" id="L1631">        String prefix = dec.getDescribedType().getName() + &quot;.&quot;;</span>
+<span class="nc" id="L1632">        for (int version = 2, chars = 1;</span>
+<span class="nc bnc" id="L1633" title="All 4 branches missed.">            dec.getDeclaredField(name) != null</span>
+<span class="nc" id="L1634">                || (_abandonedFieldNames != null</span>
+<span class="nc bnc" id="L1635" title="All 2 branches missed.">                &amp;&amp; _abandonedFieldNames.contains(prefix + name)); version++) {</span>
+<span class="nc bnc" id="L1636" title="All 2 branches missed.">            if (version &gt; 2)</span>
+<span class="nc" id="L1637">                name = name.substring(0, name.length() - chars);</span>
+<span class="nc bnc" id="L1638" title="All 2 branches missed.">            if (version &gt;= Math.pow(10, chars))</span>
+<span class="nc" id="L1639">                chars++;</span>
+<span class="nc" id="L1640">            name = name + version;</span>
+        }
+<span class="nc" id="L1642">        return name;</span>
+    }
+
+    /**
+     * Return the default field type for the given column.
+     */
+    public Class getFieldType(Column col, boolean forceObject) {
+        // check the custom type map to see if we've overridden the
+        // default type to create for a raw SQL type name
+<span class="nc" id="L1651">        Class type = null;</span>
+<span class="nc bnc" id="L1652" title="All 2 branches missed.">        if (_typeMap != null) {</span>
+            // first try &quot;TYPE(SIZE,DECIMALS)&quot;, then &quot;TYPE(SIZE), then &quot;TYPE&quot;
+<span class="nc" id="L1654">            String[] propNames = new String[]{</span>
+<span class="nc" id="L1655">                col.getTypeName() + &quot;(&quot; + col.getSize() + &quot;,&quot;</span>
+<span class="nc" id="L1656">                    + col.getDecimalDigits() + &quot;)&quot;,</span>
+<span class="nc" id="L1657">                col.getTypeName() + &quot;(&quot; + col.getSize() + &quot;)&quot;,</span>
+<span class="nc" id="L1658">                col.getTypeName()</span>
+            };
+
+<span class="nc" id="L1661">            String typeName = null;</span>
+<span class="nc" id="L1662">            String typeSpec = null;</span>
+<span class="nc" id="L1663">            int nameIdx = 0;</span>
+<span class="nc bnc" id="L1664" title="All 4 branches missed.">            for (; typeSpec == null &amp;&amp; nameIdx &lt; propNames.length; nameIdx++) {</span>
+<span class="nc bnc" id="L1665" title="All 2 branches missed.">                if (propNames[nameIdx] == null)</span>
+<span class="nc" id="L1666">                    continue;</span>
+
+<span class="nc" id="L1668">                typeSpec = StringUtil.trimToNull(_typeMap.getProperty</span>
+<span class="nc" id="L1669">                    (propNames[nameIdx]));</span>
+<span class="nc bnc" id="L1670" title="All 2 branches missed.">                if (typeSpec != null)</span>
+<span class="nc" id="L1671">                    typeName = propNames[nameIdx];</span>
+            }
+<span class="nc bnc" id="L1673" title="All 2 branches missed.">            if (typeSpec != null)</span>
+<span class="nc" id="L1674">                _log.info(_loc.get(&quot;reverse-type&quot;, typeName, typeSpec));</span>
+            else
+<span class="nc" id="L1676">                _log.trace(_loc.get(&quot;no-reverse-type&quot;,</span>
+                    propNames[propNames.length - 1]));
+
+<span class="nc bnc" id="L1679" title="All 2 branches missed.">            if (typeSpec != null)</span>
+<span class="nc" id="L1680">                type = ClassUtil.toClass(typeSpec, _conf.</span>
+<span class="nc" id="L1681">                    getClassResolverInstance().getClassLoader</span>
+<span class="nc" id="L1682">                    (ReverseMappingTool.class, null));</span>
+        }
+
+<span class="nc bnc" id="L1685" title="All 2 branches missed.">        if (type == null)</span>
+<span class="nc" id="L1686">            type = Schemas.getJavaType(col.getType(), col.getSize(),</span>
+<span class="nc" id="L1687">                col.getDecimalDigits());</span>
+<span class="nc bnc" id="L1688" title="All 2 branches missed.">        if (type == Object.class) {</span>
+<span class="nc bnc" id="L1689" title="All 2 branches missed.">            if (!_blobAsObj)</span>
+<span class="nc" id="L1690">                return byte[].class;</span>
+<span class="nc" id="L1691">            return type;</span>
+        }
+
+        // treat chars specially; if the dictionary has storeCharsAsNumbers
+        // set, then we can't reverse map into a char; use a string and tell
+        // the user why we are doing so
+<span class="nc bnc" id="L1697" title="All 2 branches missed.">        if (type == char.class</span>
+<span class="nc bnc" id="L1698" title="All 2 branches missed.">            &amp;&amp; _conf.getDBDictionaryInstance().storeCharsAsNumbers) {</span>
+<span class="nc" id="L1699">            type = String.class;</span>
+<span class="nc bnc" id="L1700" title="All 2 branches missed.">            if (_log.isWarnEnabled())</span>
+<span class="nc" id="L1701">                _log.warn(_loc.get(&quot;cant-use-char&quot;, col.getFullName()));</span>
+        }
+
+<span class="nc bnc" id="L1704" title="All 2 branches missed.">        if (!type.isPrimitive())</span>
+<span class="nc" id="L1705">            return type;</span>
+<span class="nc bnc" id="L1706" title="All 6 branches missed.">        if (!forceObject &amp;&amp; (col.isNotNull() || !_nullAsObj))</span>
+<span class="nc" id="L1707">            return type;</span>
+
+        // convert the type into the appropriate wrapper class
+<span class="nc bnc" id="L1710" title="All 8 branches missed.">        switch (type.getName().charAt(0)) {</span>
+            case'b':
+<span class="nc bnc" id="L1712" title="All 2 branches missed.">                if (type == boolean.class)</span>
+<span class="nc" id="L1713">                    return Boolean.class;</span>
+<span class="nc" id="L1714">                return Byte.class;</span>
+            case'c':
+<span class="nc" id="L1716">                return Character.class;</span>
+            case'd':
+<span class="nc" id="L1718">                return Double.class;</span>
+            case'f':
+<span class="nc" id="L1720">                return Float.class;</span>
+            case'i':
+<span class="nc" id="L1722">                return Integer.class;</span>
+            case'l':
+<span class="nc" id="L1724">                return Long.class;</span>
+            case's':
+<span class="nc" id="L1726">                return Short.class;</span>
+            default:
+<span class="nc" id="L1728">                throw new InternalException();</span>
+        }
+    }
+
+    /**
+     * Return a new tool with the same settings as this one. Used in workbench.
+     */
+    @Override
+    public Object clone() {
+<span class="nc" id="L1737">        ReverseMappingTool tool = new ReverseMappingTool(_conf);</span>
+<span class="nc" id="L1738">        tool.setSchemaGroup(getSchemaGroup());</span>
+<span class="nc" id="L1739">        tool.setPackageName(getPackageName());</span>
+<span class="nc" id="L1740">        tool.setDirectory(getDirectory());</span>
+<span class="nc" id="L1741">        tool.setUseSchemaName(getUseSchemaName());</span>
+<span class="nc" id="L1742">        tool.setUseForeignKeyName(getUseForeignKeyName());</span>
+<span class="nc" id="L1743">        tool.setNullableAsObject(getNullableAsObject());</span>
+<span class="nc" id="L1744">        tool.setBlobAsObject(getBlobAsObject());</span>
+<span class="nc" id="L1745">        tool.setUseGenericCollections(getUseGenericCollections());</span>
+<span class="nc" id="L1746">        tool.setPrimaryKeyOnJoin(getPrimaryKeyOnJoin());</span>
+<span class="nc" id="L1747">        tool.setUseDataStoreIdentity(getUseDataStoreIdentity());</span>
+<span class="nc" id="L1748">        tool.setUseBuiltinIdentityClass(getUseBuiltinIdentityClass());</span>
+<span class="nc" id="L1749">        tool.setInnerIdentityClasses(getInnerIdentityClasses());</span>
+<span class="nc" id="L1750">        tool.setIdentityClassSuffix(getIdentityClassSuffix());</span>
+<span class="nc" id="L1751">        tool.setInverseRelations(getInverseRelations());</span>
+<span class="nc" id="L1752">        tool.setDetachable(getDetachable());</span>
+<span class="nc" id="L1753">        tool.setGenerateAnnotations(getGenerateAnnotations());</span>
+<span class="nc" id="L1754">        tool.setCustomizer(getCustomizer());</span>
+<span class="nc" id="L1755">        tool.setCodeFormat(getCodeFormat());</span>
+<span class="nc" id="L1756">        tool.setUseSchemaElement(getUseSchemaElement());</span>
+<span class="nc" id="L1757">        return tool;</span>
+    }
+
+    protected static ReverseMappingTool newInstance(JDBCConfiguration conf) {
+<span class="nc" id="L1761">        return new ReverseMappingTool(conf);</span>
+    }
+
+    ////////
+    // Main
+    ////////
+
+    /**
+     * Usage: java org.apache.openjpa.jdbc.meta.ReverseMappingTool
+     * [option]* &amp;lt;.schema file or resource&amp;gt;*
+     *  Where the following options are recognized.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;-properties/-p &amp;lt;properties file or resource&amp;gt;&lt;/i&gt;: The
+     * path or resource name of a OpenJPA properties file containing
+     * information such as the license key	data as outlined in
+     * {@link OpenJPAConfiguration}. Optional.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-&amp;lt;property name&amp;gt; &amp;lt;property value&amp;gt;&lt;/i&gt;: All bean
+     * properties of the OpenJPA {@link JDBCConfiguration} can be set by
+     * using their	names and supplying a value. For example:
+     * &lt;code&gt;-licenseKey adslfja83r3lkadf&lt;/code&gt;&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-schemas/-s &amp;lt;schemas and tables&amp;gt;&lt;/i&gt;: Comma-separated
+     * list of schemas and tables to reverse-map.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-package/-pkg &amp;lt;package name&amp;gt;&lt;/i&gt;: The name of the package
+     * for all generated classes. Defaults to no package.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-directory/-d &amp;lt;output directory&amp;gt;&lt;/i&gt;: The directory where
+     * all generated code should be placed. Defaults to the current
+     * directory.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-useSchemaName/-sn &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set this flag to
+     * true to include the schema name as part of the generated class name
+     * for each table.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-useSchemaElement/-se &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set this
+     * flag to false to exclude the schema name from the @Table annotation
+     * in the generated class for each table. If set to false, the schema
+     * name will also be removed from the corresponding XML mapping files
+     * (orm.xml) that are generated by the tool. The initialized value is
+     * true (in order to preserve backwards compatibility). &lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-useForeignKeyName/-fkn &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set this
+     * flag to true to use the foreign key name to generate fields
+     * representing relations between classes.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-nullableAsObject/-no &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set to true
+     * to make all nullable columns map to object types; columns that would
+     * normally map to a primitive will map to the appropriate wrapper
+     * type instead.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-blobAsObject/-bo &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set to true
+     * to make all binary columns map to Object rather than byte[].&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-useGenericCollections/-gc &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set to
+     * true to use generic collections on OneToMany and ManyToMany relations
+     * (requires JDK 1.5 or higher).&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-typeMap/-typ &amp;lt;types&amp;gt;&lt;/i&gt;: Default mapping of SQL type
+     * names to Java classes.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-primaryKeyOnJoin/-pkj &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set to true
+     * to allow primary keys on join tables.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-useDatastoreIdentity/-ds &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set to
+     * true to use datastore identity where possible.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-useBuiltinIdentityClass/-bic &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set
+     * to false to never use OpenJPA's builtin application identity
+     * classes.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-innerIdentityClasses/-inn &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set to
+     * true to generate the application identity classes as inner classes.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-identityClassSuffix/-is &amp;lt;suffix&amp;gt;&lt;/i&gt;: Suffix to append
+     * to class names to create identity class name, or for inner identity
+     * classes, the inner class name.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-inverseRelations/-ir &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set to
+     * false to prevent the creation of inverse 1-many/1-1 relations for
+     * each encountered many-1/1-1 relation.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-detachable/-det &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set to
+     * true to make generated classes detachable.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-discriminatorStrategy/-ds &amp;lt;strategy&amp;gt;&lt;/i&gt;: The default
+     * discriminator strategy to place on base classes.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-versionStrategy/-vs &amp;lt;strategy&amp;gt;&lt;/i&gt;: The default
+     * version strategy to place on base classes.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-metadata/-md &amp;lt;class | package | none&amp;gt;&lt;/i&gt;: Specify the
+     * level the metadata should be generated at. Defaults to generating a
+     * single package-level metadata file.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-annotations/-ann &amp;lt;true/t | false/f&amp;gt;&lt;/i&gt;: Set to true to
+     * generate JPA annotations in generated code.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-accessType/-access &amp;lt;field | property&amp;gt;&lt;/i&gt;: Change access
+     * type for generated annotations. Defaults to field access.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-customizerClass/-cc &amp;lt;class name&amp;gt;&lt;/i&gt;: The full class
+     * name of a {@link ReverseCustomizer} implementation to use to
+     * customize the reverse mapping process. Optional.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-customizerProperties/-cp &amp;lt;properties file or resource&amp;gt;&lt;/i&gt;
+     * : The path or resource name of a properties file that will be
+     * passed to the reverse customizer on initialization. Optional.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-customizer/-c.&amp;lt;property name&amp;gt; &amp;lt; property value&amp;gt;&lt;/i&gt;
+     * : Arguments like this will be used to configure the bean
+     * properties of the {@link ReverseCustomizer}.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-codeFormat/-cf.&amp;lt;property name&amp;gt; &amp;lt; property value&amp;gt;&lt;/i&gt;
+     * : Arguments like this will be used to configure the bean
+     * properties of the internal {@link CodeFormat}.&lt;/li&gt;
+     * &lt;/ul&gt;
+     *  Each schema given as an argument will be reverse-mapped into
+     * persistent classes and associated metadata. If no arguments are given,
+     * the database schemas defined by the system configuration will be
+     * reverse-mapped.
+     */
+    public static void main(String[] args)
+        throws IOException, SQLException {
+<span class="nc" id="L1859">        Options opts = new Options();</span>
+<span class="nc" id="L1860">        final String[] arguments = opts.setFromCmdLine(args);</span>
+<span class="nc" id="L1861">        boolean ret = Configurations.runAgainstAllAnchors(opts,</span>
+<span class="nc" id="L1862">            new Configurations.Runnable() {</span>
+            @Override
+            public boolean run(Options opts) throws Exception {
+<span class="nc" id="L1865">                JDBCConfiguration conf = new JDBCConfigurationImpl();</span>
+                try {
+<span class="nc" id="L1867">                    return ReverseMappingTool.run(conf, arguments, opts);</span>
+                } finally {
+<span class="nc" id="L1869">                    conf.close();</span>
+                }
+            }
+        });
+<span class="nc bnc" id="L1873" title="All 2 branches missed.">        if (!ret) {</span>
+            // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L1875">            System.out.println(_loc.get(&quot;revtool-usage&quot;));</span>
+            // STOP - ALLOW PRINT STATEMENTS
+        }
+<span class="nc" id="L1878">    }</span>
+
+    /**
+     * Run the tool. Returns false if invalid options were given.
+     *
+     * @see #main
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args, Options opts) throws IOException, SQLException {
+<span class="nc" id="L1886">        return run(conf, args, opts, null);</span>
+    }
+
+    /**
+     * Run the tool and write to the optionally provided map. Returns false if invalid options were given.
+     *
+     * @see #main
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args, Options opts, Map&lt;Class&lt;?&gt;, String&gt; output)
+        throws IOException, SQLException {
+        // flags
+<span class="nc" id="L1897">        Flags flags = new Flags();</span>
+<span class="nc" id="L1898">        flags.packageName = opts.removeProperty</span>
+<span class="nc" id="L1899">            (&quot;package&quot;, &quot;pkg&quot;, flags.packageName);</span>
+<span class="nc" id="L1900">        flags.directory = Files.getFile</span>
+<span class="nc" id="L1901">            (opts.removeProperty(&quot;directory&quot;, &quot;d&quot;, null), null);</span>
+<span class="nc" id="L1902">        flags.useSchemaName = opts.removeBooleanProperty</span>
+<span class="nc" id="L1903">            (&quot;useSchemaName&quot;, &quot;sn&quot;, flags.useSchemaName);</span>
+<span class="nc" id="L1904">        flags.useForeignKeyName = opts.removeBooleanProperty</span>
+<span class="nc" id="L1905">            (&quot;useForeignKeyName&quot;, &quot;fkn&quot;, flags.useForeignKeyName);</span>
+<span class="nc" id="L1906">        flags.nullableAsObject = opts.removeBooleanProperty</span>
+<span class="nc" id="L1907">            (&quot;nullableAsObject&quot;, &quot;no&quot;, flags.nullableAsObject);</span>
+<span class="nc" id="L1908">        flags.blobAsObject = opts.removeBooleanProperty</span>
+<span class="nc" id="L1909">            (&quot;blobAsObject&quot;, &quot;bo&quot;, flags.blobAsObject);</span>
+<span class="nc" id="L1910">        flags.useGenericCollections = opts.removeBooleanProperty</span>
+<span class="nc" id="L1911">            (&quot;useGenericCollections&quot;, &quot;gc&quot;, flags.useGenericCollections);</span>
+<span class="nc" id="L1912">        flags.primaryKeyOnJoin = opts.removeBooleanProperty</span>
+<span class="nc" id="L1913">            (&quot;primaryKeyOnJoin&quot;, &quot;pkj&quot;, flags.primaryKeyOnJoin);</span>
+<span class="nc" id="L1914">        flags.useDataStoreIdentity = opts.removeBooleanProperty</span>
+<span class="nc" id="L1915">            (&quot;useDatastoreIdentity&quot;, &quot;ds&quot;, flags.useDataStoreIdentity);</span>
+<span class="nc" id="L1916">        flags.useBuiltinIdentityClass = opts.removeBooleanProperty</span>
+<span class="nc" id="L1917">            (&quot;useBuiltinIdentityClass&quot;, &quot;bic&quot;, flags.useBuiltinIdentityClass);</span>
+<span class="nc" id="L1918">        flags.innerIdentityClasses = opts.removeBooleanProperty</span>
+<span class="nc" id="L1919">            (&quot;innerIdentityClasses&quot;, &quot;inn&quot;, flags.innerIdentityClasses);</span>
+<span class="nc" id="L1920">        flags.identityClassSuffix = opts.removeProperty</span>
+<span class="nc" id="L1921">            (&quot;identityClassSuffix&quot;, &quot;is&quot;, flags.identityClassSuffix);</span>
+<span class="nc" id="L1922">        flags.inverseRelations = opts.removeBooleanProperty</span>
+<span class="nc" id="L1923">            (&quot;inverseRelations&quot;, &quot;ir&quot;, flags.inverseRelations);</span>
+<span class="nc" id="L1924">        flags.detachable = opts.removeBooleanProperty</span>
+<span class="nc" id="L1925">            (&quot;detachable&quot;, &quot;det&quot;, flags.detachable);</span>
+<span class="nc" id="L1926">        flags.discriminatorStrategy = opts.removeProperty</span>
+<span class="nc" id="L1927">            (&quot;discriminatorStrategy&quot;, &quot;ds&quot;, flags.discriminatorStrategy);</span>
+<span class="nc" id="L1928">        flags.versionStrategy = opts.removeProperty</span>
+<span class="nc" id="L1929">            (&quot;versionStrategy&quot;, &quot;vs&quot;, flags.versionStrategy);</span>
+<span class="nc" id="L1930">        flags.metaDataLevel = opts.removeProperty</span>
+<span class="nc" id="L1931">            (&quot;metadata&quot;, &quot;md&quot;, flags.metaDataLevel);</span>
+<span class="nc" id="L1932">        flags.generateAnnotations = opts.removeBooleanProperty</span>
+<span class="nc" id="L1933">            (&quot;annotations&quot;, &quot;ann&quot;, flags.generateAnnotations);</span>
+<span class="nc" id="L1934">        flags.accessType = opts.removeProperty</span>
+<span class="nc" id="L1935">            (&quot;accessType&quot;, &quot;access&quot;, flags.accessType);</span>
+<span class="nc" id="L1936">        flags.useSchemaElement = opts.removeBooleanProperty</span>
+<span class="nc" id="L1937">        	(&quot;useSchemaElement&quot;, &quot;se&quot;, flags.useSchemaElement);</span>
+
+<span class="nc" id="L1939">        String typeMap = opts.removeProperty(&quot;typeMap&quot;, &quot;typ&quot;, null);</span>
+<span class="nc bnc" id="L1940" title="All 2 branches missed.">        if (typeMap != null)</span>
+<span class="nc" id="L1941">            flags.typeMap = Configurations.parseProperties(typeMap);</span>
+
+        // remap the -s shortcut to the &quot;schemas&quot; property name so that it
+        // gets set into the configuration
+<span class="nc bnc" id="L1945" title="All 2 branches missed.">        if (opts.containsKey(&quot;s&quot;))</span>
+<span class="nc" id="L1946">            opts.put(&quot;schemas&quot;, opts.get(&quot;s&quot;));</span>
+
+        // customizer
+<span class="nc" id="L1949">        String customCls = opts.removeProperty(&quot;customizerClass&quot;, &quot;cc&quot;,</span>
+<span class="nc" id="L1950">            PropertiesReverseCustomizer.class.getName());</span>
+<span class="nc" id="L1951">        File customFile = Files.getFile</span>
+<span class="nc" id="L1952">            (opts.removeProperty(&quot;customizerProperties&quot;, &quot;cp&quot;, null), null);</span>
+<span class="nc" id="L1953">        Properties customProps = new Properties();</span>
+<span class="nc bnc" id="L1954" title="All 2 branches missed.">        if (customFile != null &amp;&amp; (AccessController.doPrivileged(</span>
+<span class="nc bnc" id="L1955" title="All 2 branches missed.">            J2DoPrivHelper.existsAction(customFile))).booleanValue()) {</span>
+<span class="nc" id="L1956">            FileInputStream fis = null;</span>
+            try {
+<span class="nc" id="L1958">                fis = AccessController.doPrivileged(</span>
+<span class="nc" id="L1959">                    J2DoPrivHelper.newFileInputStreamAction(customFile));</span>
+<span class="nc" id="L1960">            } catch (PrivilegedActionException pae) {</span>
+<span class="nc" id="L1961">                 throw (FileNotFoundException) pae.getException();</span>
+<span class="nc" id="L1962">            }</span>
+<span class="nc" id="L1963">            customProps.load(fis);</span>
+        }
+
+        // separate the properties for the customizer and code format
+<span class="nc" id="L1967">        Options customOpts = new Options();</span>
+<span class="nc" id="L1968">        Options formatOpts = new Options();</span>
+        Map.Entry entry;
+        String key;
+<span class="nc bnc" id="L1971" title="All 2 branches missed.">        for (Iterator itr = opts.entrySet().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L1972">            entry = (Map.Entry) itr.next();</span>
+<span class="nc" id="L1973">            key = (String) entry.getKey();</span>
+<span class="nc bnc" id="L1974" title="All 2 branches missed.">            if (key.startsWith(&quot;customizer.&quot;)) {</span>
+<span class="nc" id="L1975">                customOpts.put(key.substring(11), entry.getValue());</span>
+<span class="nc" id="L1976">                itr.remove();</span>
+<span class="nc bnc" id="L1977" title="All 2 branches missed.">            } else if (key.startsWith(&quot;c.&quot;)) {</span>
+<span class="nc" id="L1978">                customOpts.put(key.substring(2), entry.getValue());</span>
+<span class="nc" id="L1979">                itr.remove();</span>
+<span class="nc bnc" id="L1980" title="All 2 branches missed.">            } else if (key.startsWith(&quot;codeFormat.&quot;)) {</span>
+<span class="nc" id="L1981">                formatOpts.put(key.substring(11), entry.getValue());</span>
+<span class="nc" id="L1982">                itr.remove();</span>
+<span class="nc bnc" id="L1983" title="All 2 branches missed.">            } else if (key.startsWith(&quot;cf.&quot;)) {</span>
+<span class="nc" id="L1984">                formatOpts.put(key.substring(3), entry.getValue());</span>
+<span class="nc" id="L1985">                itr.remove();</span>
+            }
+        }
+
+        // code format
+<span class="nc bnc" id="L1990" title="All 2 branches missed.">        if (!formatOpts.isEmpty()) {</span>
+<span class="nc" id="L1991">            flags.format = new CodeFormat();</span>
+<span class="nc" id="L1992">            formatOpts.setInto(flags.format);</span>
+        }
+
+        // setup a configuration instance with cmd-line info
+<span class="nc" id="L1996">        Configurations.populateConfiguration(conf, opts);</span>
+<span class="nc" id="L1997">        ClassLoader loader = conf.getClassResolverInstance().</span>
+<span class="nc" id="L1998">            getClassLoader(ReverseMappingTool.class, null);</span>
+
+        // customizer
+<span class="nc" id="L2001">        flags.customizer = (ReverseCustomizer) Configurations.</span>
+<span class="nc" id="L2002">            newInstance(customCls, loader);</span>
+<span class="nc bnc" id="L2003" title="All 2 branches missed.">        if (flags.customizer != null) {</span>
+<span class="nc" id="L2004">            Configurations.configureInstance(flags.customizer, conf,</span>
+                customOpts);
+<span class="nc" id="L2006">            flags.customizer.setConfiguration(customProps);</span>
+        }
+
+<span class="nc" id="L2009">        run(conf, args, flags, loader, output);</span>
+<span class="nc" id="L2010">        return true;</span>
+    }
+
+    /**
+     * Run the tool.
+     */
+    public static void run(JDBCConfiguration conf, String[] args, Flags flags, ClassLoader loader) throws IOException,
+        SQLException {
+<span class="nc" id="L2018">        run(conf, args, flags, loader, null);</span>
+<span class="nc" id="L2019">    }</span>
+
+    /**
+     * Run the tool and write to the optionally provided map
+     */
+    public static void run(JDBCConfiguration conf, String[] args, Flags flags, ClassLoader loader,
+        Map&lt;Class&lt;?&gt;, String&gt; output) throws IOException, SQLException {
+        // parse the schema to reverse-map
+<span class="nc" id="L2027">        Log log = conf.getLog(OpenJPAConfiguration.LOG_TOOL);</span>
+        SchemaGroup schema;
+<span class="nc bnc" id="L2029" title="All 2 branches missed.">        if (args.length == 0) {</span>
+<span class="nc" id="L2030">            log.info(_loc.get(&quot;revtool-running&quot;));</span>
+<span class="nc" id="L2031">            SchemaGenerator gen = new SchemaGenerator(conf);</span>
+<span class="nc" id="L2032">            gen.generateSchemas();</span>
+<span class="nc" id="L2033">            schema = gen.getSchemaGroup();</span>
+<span class="nc" id="L2034">        } else {</span>
+<span class="nc" id="L2035">            SchemaParser parser = new XMLSchemaParser(conf);</span>
+            File file;
+<span class="nc bnc" id="L2037" title="All 2 branches missed.">            for (int i = 0; i &lt; args.length; i++) {</span>
+<span class="nc" id="L2038">                file = Files.getFile(args[i], loader);</span>
+<span class="nc" id="L2039">                log.info(_loc.get(&quot;revtool-running-file&quot;, file));</span>
+<span class="nc" id="L2040">                parser.parse(file);</span>
+            }
+<span class="nc" id="L2042">            schema = parser.getSchemaGroup();</span>
+        }
+
+        // flags
+<span class="nc" id="L2046">        ReverseMappingTool tool = newInstance(conf);</span>
+<span class="nc" id="L2047">        tool.setSchemaGroup(schema);</span>
+<span class="nc" id="L2048">        tool.setPackageName(flags.packageName);</span>
+<span class="nc" id="L2049">        tool.setDirectory(flags.directory);</span>
+<span class="nc" id="L2050">        tool.setUseSchemaName(flags.useSchemaName);</span>
+<span class="nc" id="L2051">        tool.setUseForeignKeyName(flags.useForeignKeyName);</span>
+<span class="nc" id="L2052">        tool.setNullableAsObject(flags.nullableAsObject);</span>
+<span class="nc" id="L2053">        tool.setBlobAsObject(flags.blobAsObject);</span>
+<span class="nc" id="L2054">        tool.setUseGenericCollections(flags.useGenericCollections);</span>
+<span class="nc" id="L2055">        tool.setTypeMap(flags.typeMap);</span>
+<span class="nc" id="L2056">        tool.setPrimaryKeyOnJoin(flags.primaryKeyOnJoin);</span>
+<span class="nc" id="L2057">        tool.setUseDataStoreIdentity(flags.useDataStoreIdentity);</span>
+<span class="nc" id="L2058">        tool.setUseBuiltinIdentityClass(flags.useBuiltinIdentityClass);</span>
+<span class="nc" id="L2059">        tool.setInnerIdentityClasses(flags.innerIdentityClasses);</span>
+<span class="nc" id="L2060">        tool.setIdentityClassSuffix(flags.identityClassSuffix);</span>
+<span class="nc" id="L2061">        tool.setInverseRelations(flags.inverseRelations);</span>
+<span class="nc" id="L2062">        tool.setDetachable(flags.detachable);</span>
+<span class="nc" id="L2063">        tool.setGenerateAnnotations(flags.generateAnnotations);</span>
+<span class="nc" id="L2064">        tool.setAccessType(flags.accessType);</span>
+<span class="nc" id="L2065">        tool.setCustomizer(flags.customizer);</span>
+<span class="nc" id="L2066">        tool.setCodeFormat(flags.format);</span>
+<span class="nc" id="L2067">        tool.setUseSchemaElement(flags.useSchemaElement);</span>
+
+        // run
+<span class="nc" id="L2070">        log.info(_loc.get(&quot;revtool-map&quot;));</span>
+<span class="nc" id="L2071">        tool.run();</span>
+<span class="nc bnc" id="L2072" title="All 2 branches missed.">        if (flags.generateAnnotations) {</span>
+<span class="nc" id="L2073">            log.info(_loc.get(&quot;revtool-gen-annos&quot;));</span>
+<span class="nc" id="L2074">            tool.buildAnnotations();</span>
+        }
+<span class="nc" id="L2076">        log.info(_loc.get(&quot;revtool-write-code&quot;));</span>
+<span class="nc" id="L2077">        tool.recordCode(output);</span>
+
+<span class="nc bnc" id="L2079" title="All 2 branches missed.">        if (!LEVEL_NONE.equals(flags.metaDataLevel)) {</span>
+<span class="nc" id="L2080">            log.info(_loc.get(&quot;revtool-write-metadata&quot;));</span>
+<span class="nc" id="L2081">            tool.recordMetaData(LEVEL_CLASS.equals(flags.metaDataLevel));</span>
+        }
+<span class="nc" id="L2083">    }</span>
+
+    /**
+     * Holder for run flags.
+     */
+<span class="nc" id="L2088">    public static class Flags {</span>
+
+<span class="nc" id="L2090">        public String packageName = null;</span>
+<span class="nc" id="L2091">        public File directory = null;</span>
+<span class="nc" id="L2092">        public boolean useSchemaName = false;</span>
+<span class="nc" id="L2093">        public boolean useForeignKeyName = false;</span>
+<span class="nc" id="L2094">        public boolean nullableAsObject = false;</span>
+<span class="nc" id="L2095">        public boolean blobAsObject = false;</span>
+<span class="nc" id="L2096">        public boolean useGenericCollections = false;</span>
+<span class="nc" id="L2097">        public Properties typeMap = null;</span>
+<span class="nc" id="L2098">        public boolean primaryKeyOnJoin = false;</span>
+<span class="nc" id="L2099">        public boolean useDataStoreIdentity = false;</span>
+<span class="nc" id="L2100">        public boolean useBuiltinIdentityClass = true;</span>
+<span class="nc" id="L2101">        public boolean innerIdentityClasses = false;</span>
+<span class="nc" id="L2102">        public String identityClassSuffix = &quot;Id&quot;;</span>
+<span class="nc" id="L2103">        public boolean inverseRelations = true;</span>
+<span class="nc" id="L2104">        public boolean detachable = false;</span>
+<span class="nc" id="L2105">        public boolean generateAnnotations = false;</span>
+<span class="nc" id="L2106">        public String accessType = ACCESS_TYPE_FIELD;</span>
+<span class="nc" id="L2107">        public String metaDataLevel = LEVEL_PACKAGE;</span>
+<span class="nc" id="L2108">        public String discriminatorStrategy = null;</span>
+<span class="nc" id="L2109">        public String versionStrategy = null;</span>
+<span class="nc" id="L2110">        public ReverseCustomizer customizer = null;</span>
+<span class="nc" id="L2111">        public CodeFormat format = null;</span>
+<span class="nc" id="L2112">        public boolean useSchemaElement = true;</span>
+    }
+
+    /**
+     * Used to install discriminator and version strategies on
+     * reverse-mapped classes.
+     */
+    private class ReverseStrategyInstaller
+        extends StrategyInstaller {
+
+        
+        private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L2125">        public ReverseStrategyInstaller(MappingRepository repos) {</span>
+<span class="nc" id="L2126">            super(repos);</span>
+<span class="nc" id="L2127">        }</span>
+
+        @Override
+        public void installStrategy(ClassMapping cls) {
+<span class="nc" id="L2131">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void installStrategy(FieldMapping field) {
+<span class="nc" id="L2136">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void installStrategy(Version version) {
+<span class="nc" id="L2141">            ClassMapping cls = version.getClassMapping();</span>
+<span class="nc bnc" id="L2142" title="All 2 branches missed.">            if (cls.getPCSuperclass() != null)</span>
+<span class="nc" id="L2143">                version.setStrategy(new SuperclassVersionStrategy(), null);</span>
+<span class="nc bnc" id="L2144" title="All 2 branches missed.">            else if (_versStrat != null) {</span>
+<span class="nc" id="L2145">                VersionStrategy strat = repos.instantiateVersionStrategy</span>
+<span class="nc" id="L2146">                    (_versStrat, version);</span>
+<span class="nc" id="L2147">                version.setStrategy(strat, null);</span>
+<span class="nc" id="L2148">            } else</span>
+<span class="nc" id="L2149">                version.setStrategy(new StateComparisonVersionStrategy(),</span>
+                    null);
+<span class="nc" id="L2151">        }</span>
+
+        @Override
+        public void installStrategy(Discriminator discrim) {
+<span class="nc" id="L2155">            ClassMapping cls = discrim.getClassMapping();</span>
+<span class="nc bnc" id="L2156" title="All 2 branches missed.">            if (cls.getPCSuperclass() != null) {</span>
+<span class="nc" id="L2157">                discrim.setStrategy(new SuperclassDiscriminatorStrategy(),</span>
+                    null);
+<span class="nc bnc" id="L2159" title="All 2 branches missed.">            } else if (!hasSubclasses(cls)) {</span>
+<span class="nc" id="L2160">                discrim.setStrategy(NoneDiscriminatorStrategy.getInstance(),</span>
+                    null);
+<span class="nc bnc" id="L2162" title="All 2 branches missed.">            } else if (_discStrat != null) {</span>
+<span class="nc" id="L2163">                DiscriminatorStrategy strat = repos.</span>
+<span class="nc" id="L2164">                    instantiateDiscriminatorStrategy(_discStrat, discrim);</span>
+<span class="nc" id="L2165">                discrim.setStrategy(strat, null);</span>
+<span class="nc" id="L2166">            } else</span>
+<span class="nc" id="L2167">                discrim.setStrategy(new SubclassJoinDiscriminatorStrategy(),</span>
+                    null);
+<span class="nc" id="L2169">        }</span>
+
+        /**
+         * Return whether the given class has any mapped persistent subclasses.
+         */
+        private boolean hasSubclasses(ClassMapping cls) {
+<span class="nc" id="L2175">            ClassMetaData[] metas = repos.getMetaDatas();</span>
+<span class="nc bnc" id="L2176" title="All 2 branches missed.">            for (int i = 0; i &lt; metas.length; i++)</span>
+<span class="nc bnc" id="L2177" title="All 2 branches missed.">                if (metas[i].getPCSuperclass() == cls.getDescribedType())</span>
+<span class="nc" id="L2178">                    return true;</span>
+<span class="nc" id="L2179">            return false;</span>
+        }
+    }
+
+    /**
+     * Extension of the {@link CodeGenerator} to allow users to customize
+     * the formatting of their generated classes.
+     */
+    private class ReverseCodeGenerator
+        extends CodeGenerator {
+
+        protected final ClassMapping _mapping;
+        protected final ApplicationIdTool _appid;
+
+        public ReverseCodeGenerator(ClassMapping mapping,
+<span class="nc" id="L2194">            ApplicationIdTool aid) {</span>
+<span class="nc" id="L2195">            super(mapping);</span>
+<span class="nc" id="L2196">            super.setDirectory(_dir);</span>
+<span class="nc" id="L2197">            super.setCodeFormat(_format);</span>
+
+<span class="nc" id="L2199">            _mapping = mapping;</span>
+<span class="nc bnc" id="L2200" title="All 4 branches missed.">            if (aid != null &amp;&amp; aid.isInnerClass())</span>
+<span class="nc" id="L2201">                _appid = aid;</span>
+            else
+<span class="nc" id="L2203">                _appid = null;</span>
+<span class="nc" id="L2204">        }</span>
+
+        /**
+         * If there is an inner application identity class, then
+         * add it to the bottom of the class code.
+         */
+        @Override
+        protected void closeClassBrace(CodeFormat code) {
+<span class="nc bnc" id="L2212" title="All 2 branches missed.">            if (_appid != null) {</span>
+<span class="nc" id="L2213">                code.afterSection();</span>
+<span class="nc" id="L2214">                code.append(_appid.getCode());</span>
+<span class="nc" id="L2215">                code.endl();</span>
+            }
+
+<span class="nc" id="L2218">            super.closeClassBrace(code);</span>
+<span class="nc" id="L2219">        }</span>
+
+        /**
+         * Add the list of imports for any inner app id classes
+         *
+         */
+        @Override
+        public Set getImportPackages() {
+<span class="nc" id="L2227">            Set pkgs = super.getImportPackages();</span>
+<span class="nc bnc" id="L2228" title="All 2 branches missed.">            if (_appid != null)</span>
+<span class="nc" id="L2229">                pkgs.addAll(_appid.getImportPackages());</span>
+<span class="nc" id="L2230">            return pkgs;</span>
+        }
+
+        @Override
+        protected String getClassCode() {
+<span class="nc bnc" id="L2235" title="All 2 branches missed.">            return (_custom == null) ? null : _custom.getClassCode(_mapping);</span>
+        }
+
+        @Override
+        protected String getInitialValue(FieldMetaData field) {
+<span class="nc bnc" id="L2240" title="All 2 branches missed.">            if (_custom == null)</span>
+<span class="nc" id="L2241">                return null;</span>
+<span class="nc" id="L2242">            return _custom.getInitialValue((FieldMapping) field);</span>
+        }
+
+        @Override
+        protected String getDeclaration(FieldMetaData field) {
+<span class="nc bnc" id="L2247" title="All 2 branches missed.">            if (_custom == null)</span>
+<span class="nc" id="L2248">                return null;</span>
+<span class="nc" id="L2249">            return _custom.getDeclaration((FieldMapping) field);</span>
+        }
+
+        @Override
+        protected String getFieldCode(FieldMetaData field) {
+<span class="nc bnc" id="L2254" title="All 2 branches missed.">            if (_custom == null)</span>
+<span class="nc" id="L2255">                return null;</span>
+<span class="nc" id="L2256">            return _custom.getFieldCode((FieldMapping) field);</span>
+        }
+
+        @Override
+        protected boolean useGenericCollections() {
+<span class="nc" id="L2261">            return _useGenericColl;</span>
+        }
+    }
+
+    private class AnnotatedCodeGenerator
+        extends ReverseCodeGenerator {
+
+        public AnnotatedCodeGenerator (ClassMapping mapping,
+<span class="nc" id="L2269">            ApplicationIdTool aid) {</span>
+<span class="nc" id="L2270">            super (mapping, aid);</span>
+<span class="nc" id="L2271">        }</span>
+
+        @Override
+        public Set getImportPackages() {
+<span class="nc" id="L2275">            Set pkgs = super.getImportPackages();</span>
+<span class="nc" id="L2276">            pkgs.add(&quot;javax.persistence&quot;);</span>
+<span class="nc" id="L2277">            return pkgs;</span>
+        }
+
+        @Override
+        protected List getClassAnnotations() {
+<span class="nc" id="L2282">            return getAnnotationsForMeta(_mapping);</span>
+        }
+
+        @Override
+        protected List getFieldAnnotations(FieldMetaData field) {
+<span class="nc" id="L2287">            return getAnnotationsForMeta(field);</span>
+        }
+
+        @Override
+        protected boolean usePropertyBasedAccess () {
+<span class="nc" id="L2292">            return ACCESS_TYPE_PROPERTY.equals(_accessType);</span>
+        }
+
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

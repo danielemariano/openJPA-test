@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SimpleCaseExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">SimpleCaseExpression.java</span></div><h1>SimpleCaseExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Raw;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.kernel.exps.Value;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * Simple case expression.
+ *
+ * @author Catalina Wei
+ */
+public class SimpleCaseExpression
+    extends AbstractVal {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final Val _caseOperand;
+    private final Exp[] _exp;
+    private final Val _val;
+<span class="nc" id="L48">    private ClassMetaData _meta = null;</span>
+<span class="nc" id="L49">    private Class _cast = null;</span>
+<span class="nc" id="L50">    private Value other = null;</span>
+<span class="nc" id="L51">    private ExpState otherState = null;</span>
+
+    /**
+     * Constructor.
+     */
+<span class="nc" id="L56">    public SimpleCaseExpression(Val caseOperand, Exp[] exp, Val val) {</span>
+<span class="nc" id="L57">        _caseOperand = caseOperand;</span>
+<span class="nc" id="L58">        _exp = exp;</span>
+<span class="nc" id="L59">        _val = val;</span>
+<span class="nc" id="L60">    }</span>
+
+    public Val getCaseOperand() {
+<span class="nc" id="L63">        return _caseOperand;</span>
+    }
+
+    public Exp[] getExp() {
+<span class="nc" id="L67">        return _exp;</span>
+    }
+
+    public Val getVal() {
+<span class="nc" id="L71">        return _val;</span>
+    }
+
+    @Override
+    public Class getType() {
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        if (_cast != null)</span>
+<span class="nc" id="L77">            return _cast;</span>
+<span class="nc" id="L78">        Class type = _val.getType();</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        for (int i = 0; i &lt; _exp.length; i++)</span>
+<span class="nc" id="L80">            type = Filters.promote(type,</span>
+<span class="nc" id="L81">                ((WhenScalar) _exp[i]).getVal2().getType());</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        if (type == Raw.class)</span>
+<span class="nc" id="L83">            return String.class;</span>
+<span class="nc" id="L84">        return type;</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L89">        ExpState[] states = new ExpState[_exp.length+2];</span>
+<span class="nc" id="L90">        Joins joins = null;</span>
+
+<span class="nc" id="L92">        states[0] = _caseOperand.initialize(sel, ctx, 0);</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        if (joins == null)</span>
+<span class="nc" id="L94">            joins = states[0].joins;</span>
+        else
+<span class="nc" id="L96">            joins = sel.and(joins, states[0].joins);</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        for (int i = 0; i &lt; _exp.length; i++) {</span>
+<span class="nc" id="L98">            states[i+1] = _exp[i].initialize(sel, ctx, null);</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">            if (joins == null)</span>
+<span class="nc" id="L100">                joins = states[i+1].joins;</span>
+            else
+<span class="nc" id="L102">                joins = sel.and(joins, states[i+1].joins);</span>
+        }
+<span class="nc" id="L104">        states[_exp.length+1] = _val.initialize(sel, ctx, 0);</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if (joins == null)</span>
+<span class="nc" id="L106">            joins = states[_exp.length+1].joins;</span>
+        else
+<span class="nc" id="L108">            joins = sel.and(joins, states[_exp.length+1].joins);</span>
+<span class="nc" id="L109">        return new SimpleCaseExpState(joins, states);</span>
+    }
+
+    private static class SimpleCaseExpState
+        extends ExpState {
+
+        public ExpState[] states;
+
+        public SimpleCaseExpState(Joins joins, ExpState[] states) {
+<span class="nc" id="L118">            super(joins);</span>
+<span class="nc" id="L119">            this.states = states;</span>
+<span class="nc" id="L120">        }</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer buf, int index) {
+<span class="nc" id="L126">        SimpleCaseExpState cstate = (SimpleCaseExpState) state;</span>
+
+<span class="nc" id="L128">        DBDictionary dict = ctx.store.getDBDictionary();</span>
+
+<span class="nc" id="L130">        buf.append(&quot; CASE &quot;);</span>
+
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        for (int i = 0; i &lt; _exp.length; i++) {</span>
+            // if back-end does not support simple case expression,
+            // pushdown sql as general case expression.
+
+<span class="nc bnc" id="L136" title="All 2 branches missed.">            if (!dict.supportsSimpleCaseExpression)</span>
+<span class="nc" id="L137">                buf.append(&quot; WHEN &quot;);</span>
+
+<span class="nc bnc" id="L139" title="All 4 branches missed.">            if (i == 0 || !dict.supportsSimpleCaseExpression)</span>
+<span class="nc" id="L140">                _caseOperand.appendTo(sel, ctx, cstate.states[0], buf, 0);</span>
+
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            if (!dict.supportsSimpleCaseExpression)</span>
+<span class="nc" id="L143">                buf.append(&quot; = &quot;);</span>
+            else
+<span class="nc" id="L145">                buf.append(&quot; WHEN &quot;);</span>
+
+<span class="nc" id="L147">            _exp[i].appendTo(sel, ctx, cstate.states[i+1], buf);</span>
+        }
+<span class="nc" id="L149">        buf.append(&quot; ELSE &quot;);</span>
+<span class="nc" id="L150">        _val.appendTo(sel, ctx, cstate.states[_exp.length+1], buf, 0);</span>
+
+<span class="nc" id="L152">        buf.append(&quot; END &quot;);</span>
+<span class="nc" id="L153">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L158">        SimpleCaseExpState cstate = (SimpleCaseExpState) state;</span>
+
+<span class="nc" id="L160">        _caseOperand.selectColumns(sel, ctx, cstate.states[0], pks);</span>
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        for (int i = 0; i &lt; _exp.length; i++)</span>
+<span class="nc" id="L162">            _exp[i].selectColumns(sel, ctx, cstate.states[i+1], pks);</span>
+<span class="nc" id="L163">        _val.selectColumns(sel, ctx, cstate.states[_exp.length+1], pks);</span>
+<span class="nc" id="L164">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L168">        visitor.enter(this);</span>
+<span class="nc" id="L169">        _caseOperand.acceptVisit(visitor);</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        for (int i = 0; i &lt; _exp.length; i++)</span>
+<span class="nc" id="L171">            _exp[i].acceptVisit(visitor);</span>
+<span class="nc" id="L172">        _val.acceptVisit(visitor);</span>
+<span class="nc" id="L173">        visitor.exit(this);</span>
+<span class="nc" id="L174">    }</span>
+
+    @Override
+    public int getId() {
+<span class="nc" id="L178">        return Val.SIMPLECASE_VAL;</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L184">        SimpleCaseExpState cstate = (SimpleCaseExpState) state;</span>
+<span class="nc" id="L185">        _caseOperand.calculateValue(sel, ctx, cstate.states[0], other,</span>
+            otherState);
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        for (int i = 0; i &lt; _exp.length; i++) {</span>
+<span class="nc" id="L188">            BinaryOpExpState bstate = (BinaryOpExpState) cstate.states[i+1];</span>
+<span class="nc" id="L189">            ((WhenScalar) _exp[i]).getVal1().calculateValue(sel, ctx,</span>
+                bstate.state1, null, null);
+<span class="nc" id="L191">            ((WhenScalar) _exp[i]).getVal2().calculateValue(sel, ctx,</span>
+                bstate.state2, other, otherState);
+        }
+<span class="nc" id="L194">        _val.calculateValue(sel, ctx, cstate.states[_exp.length+1], other,</span>
+            otherState);
+<span class="nc" id="L196">    }</span>
+
+    @Override
+    public void groupBy(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L200">        sel.groupBy(newSQLBuffer(sel, ctx, state));</span>
+<span class="nc" id="L201">    }</span>
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L205">        return 1;</span>
+    }
+
+    private SQLBuffer newSQLBuffer(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L209">        calculateValue(sel, ctx, state, (Val)other, otherState);</span>
+<span class="nc" id="L210">        SQLBuffer buf = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L211">        appendTo(sel, ctx, state, buf, 0);</span>
+<span class="nc" id="L212">        return buf;</span>
+    }
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res)
+        throws SQLException {
+<span class="nc" id="L218">        return Filters.convert(res.getObject(this,</span>
+<span class="nc" id="L219">            JavaSQLTypes.JDBC_DEFAULT, null), getType());</span>
+    }
+
+    @Override
+    public void orderBy(Select sel, ExpContext ctx, ExpState state,
+        boolean asc) {
+<span class="nc" id="L225">        sel.orderBy(newSQLBuffer(sel, ctx, state), asc, false, getSelectAs());</span>
+<span class="nc" id="L226">    }</span>
+
+    @Override
+    public void select(Select sel, ExpContext ctx, ExpState state, boolean pks){
+<span class="nc" id="L230">        sel.select(newSQLBuffer(sel, ctx, state), this);</span>
+<span class="nc" id="L231">    }</span>
+
+    @Override
+    public ClassMetaData getMetaData() {
+<span class="nc" id="L235">        return _meta;</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L240">        _cast = type;</span>
+<span class="nc" id="L241">    }</span>
+
+    @Override
+    public void setMetaData(ClassMetaData meta) {
+<span class="nc" id="L245">        _meta = meta;</span>
+<span class="nc" id="L246">    }</span>
+    public void setOtherPath(Value other) {
+<span class="nc" id="L248">        this.other = other;</span>
+<span class="nc" id="L249">    }</span>
+
+    public Value getOtherPath() {
+<span class="nc" id="L252">        return other;</span>
+    }
+
+    public void setOtherState(ExpState otherState) {
+<span class="nc" id="L256">        this.otherState = otherState;</span>
+<span class="nc" id="L257">    }</span>
+
+    public ExpState getOtherState() {
+<span class="nc" id="L260">        return otherState;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

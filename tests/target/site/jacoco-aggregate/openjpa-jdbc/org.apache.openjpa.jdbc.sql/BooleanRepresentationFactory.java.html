@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>BooleanRepresentationFactory.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">BooleanRepresentationFactory.java</span></div><h1>BooleanRepresentationFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Factory which is being used to create the active {@link org.apache.openjpa.jdbc.sql.BooleanRepresentation}.
+*/
+<span class="nc" id="L34">public class BooleanRepresentationFactory {</span>
+
+<span class="nc" id="L36">    public static BooleanRepresentation INT_10 = new Int10BooleanRepresentation();</span>
+<span class="nc" id="L37">    public static BooleanRepresentation BOOLEAN = new BooleanBooleanRepresentation();</span>
+
+    /**
+     * {@link org.apache.openjpa.jdbc.sql.BooleanRepresentation}s built in by default.
+     * Key is their config name, value is the BooleanRepresentation.
+     */
+    static final Map&lt;String, BooleanRepresentation&lt;?&gt;&gt; BUILTIN_BOOLEAN_REPRESENTATIONS;
+
+    static {
+<span class="nc" id="L46">        BUILTIN_BOOLEAN_REPRESENTATIONS = new HashMap&lt;&gt;();</span>
+
+        /**
+         * Booleans are natively supported by this very database.
+         * The database column is e.g. a NUMBER(1)
+         * OpenJPA will use preparedStatement.setBoolean(..) for it
+         */
+<span class="nc" id="L53">        BUILTIN_BOOLEAN_REPRESENTATIONS.put(&quot;BOOLEAN&quot;, BOOLEAN);</span>
+
+        /**
+         * Booleans are stored as numeric int 1 and int 0 values.
+         * The database column is e.g. a NUMBER(1)
+         * OpenJPA will use preparedStatement.setInt(..) for it
+         */
+<span class="nc" id="L60">        BUILTIN_BOOLEAN_REPRESENTATIONS.put(&quot;INT_10&quot;, INT_10);</span>
+
+        /**
+         * Booleans are stored as String &quot;1&quot; for {@code true}
+         * and String &quot;0&quot; for {@code false}.
+         * The database column is e.g. a CHAR(1) or VARCHAR(1)
+         * OpenJPA will use preparedStatement.setString(..) for it
+         */
+<span class="nc" id="L68">        BUILTIN_BOOLEAN_REPRESENTATIONS.put(&quot;STRING_10&quot;, new StringBooleanRepresentation(&quot;1&quot;, &quot;0&quot;));</span>
+
+        /**
+         * Booleans are stored as String &quot;Y&quot; for {@code true}
+         * and String &quot;N&quot; for {@code false}.
+         * The database column is e.g. a CHAR(1) or VARCHAR(1)
+         * OpenJPA will use preparedStatement.setString(..) for it
+         */
+<span class="nc" id="L76">        BUILTIN_BOOLEAN_REPRESENTATIONS.put(&quot;STRING_YN&quot;, new StringBooleanRepresentation(&quot;Y&quot;, &quot;N&quot;));</span>
+
+        /**
+         * Booleans are stored as String &quot;y&quot; for {@code true}
+         * and String &quot;n&quot; for {@code false}.
+         * The database column is e.g. a CHAR(1) or VARCHAR(1)
+         * OpenJPA will use preparedStatement.setString(..) for it
+         */
+<span class="nc" id="L84">        BUILTIN_BOOLEAN_REPRESENTATIONS.put(&quot;STRING_YN_LOWERCASE&quot;, new StringBooleanRepresentation(&quot;y&quot;, &quot;n&quot;));</span>
+
+        /**
+         * Booleans are stored as String &quot;T&quot; for {@code true}
+         * and String &quot;F&quot; for {@code false}.
+         * The database column is e.g. a CHAR(1) or VARCHAR(1)
+         * OpenJPA will use preparedStatement.setString(..) for it
+         */
+<span class="nc" id="L92">        BUILTIN_BOOLEAN_REPRESENTATIONS.put(&quot;STRING_TF&quot;, new StringBooleanRepresentation(&quot;T&quot;, &quot;F&quot;));</span>
+
+        /**
+         * Booleans are stored as String &quot;t&quot; for {@code true}
+         * and String &quot;f&quot; for {@code false}.
+         * The database column is e.g. a CHAR(1) or VARCHAR(1)
+         * OpenJPA will use preparedStatement.setString(..) for it
+         */
+<span class="nc" id="L100">        BUILTIN_BOOLEAN_REPRESENTATIONS.put(&quot;STRING_TF_LOWERCASE&quot;, new StringBooleanRepresentation(&quot;t&quot;, &quot;f&quot;));</span>
+
+<span class="nc" id="L102">    }</span>
+
+
+    public static BooleanRepresentation valueOf(String booleanRepresentationKey, ClassLoader cl) {
+        // 1st step, try to lookup the BooleanRepresentation from the default ones
+<span class="nc" id="L107">        BooleanRepresentation booleanRepresentation = BUILTIN_BOOLEAN_REPRESENTATIONS.get(booleanRepresentationKey);</span>
+
+<span class="nc bnc" id="L109" title="All 4 branches missed.">        if (booleanRepresentation == null &amp;&amp; booleanRepresentationKey.contains(&quot;/&quot;)) {</span>
+            // if the key contains a '/' then the first value is the key for 'true', the 2nd value is for 'false'
+<span class="nc" id="L111">            String[] vals = booleanRepresentationKey.split(&quot;/&quot;);</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">            if (vals.length == 2) {</span>
+<span class="nc" id="L113">                booleanRepresentation = new StringBooleanRepresentation(vals[0], vals[1]);</span>
+            }
+<span class="nc" id="L115">        }</span>
+        else {
+            // or do a class lookup for a custom BooleanRepresentation
+            try {
+<span class="nc" id="L119">                Class&lt;? extends BooleanRepresentation&gt; booleanRepresentationClass</span>
+<span class="nc" id="L120">                        = (Class&lt;? extends BooleanRepresentation&gt;) cl.loadClass(booleanRepresentationKey);</span>
+<span class="nc" id="L121">                booleanRepresentation = booleanRepresentationClass.newInstance();</span>
+            }
+<span class="nc" id="L123">            catch (Exception e) {</span>
+                // nothing to do
+<span class="nc" id="L125">            }</span>
+        }
+
+<span class="nc bnc" id="L128" title="All 2 branches missed.">        if (booleanRepresentation == null) {</span>
+<span class="nc" id="L129">            Localizer _loc = Localizer.forPackage(BooleanRepresentation.class);</span>
+<span class="nc" id="L130">            throw new UserException(_loc.get(&quot;unknown-booleanRepresentation&quot;,</span>
+                    new Object[]{booleanRepresentationKey,
+<span class="nc" id="L132">                            Arrays.toString(BUILTIN_BOOLEAN_REPRESENTATIONS.keySet().toArray(new String[]{}))}</span>
+            ));
+
+        }
+
+<span class="nc" id="L137">        return booleanRepresentation;</span>
+    }
+
+
+
+    /**
+     * BooleanRepresentation which takes 2 strings for true and false representations
+     * as constructor parameter;
+     */
+    public static class StringBooleanRepresentation implements BooleanRepresentation&lt;String&gt; {
+        private final String trueRepresentation;
+        private final String falseRepresentation;
+
+<span class="nc" id="L150">        public StringBooleanRepresentation(String trueRepresentation, String falseRepresentation) {</span>
+<span class="nc" id="L151">            this.trueRepresentation = trueRepresentation;</span>
+<span class="nc" id="L152">            this.falseRepresentation = falseRepresentation;</span>
+<span class="nc" id="L153">        }</span>
+
+        @Override
+        public void setBoolean(PreparedStatement stmnt, int idx, boolean val) throws SQLException {
+<span class="nc bnc" id="L157" title="All 2 branches missed.">            stmnt.setString(idx, val ? trueRepresentation : falseRepresentation);</span>
+<span class="nc" id="L158">        }</span>
+
+        @Override
+        public boolean getBoolean(ResultSet rs, int columnIndex) throws SQLException {
+<span class="nc" id="L162">            return trueRepresentation.equals(rs.getString(columnIndex));</span>
+        }
+
+        @Override
+        public String getRepresentation(boolean bool) {
+<span class="nc bnc" id="L167" title="All 2 branches missed.">            return bool ? trueRepresentation : falseRepresentation;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L172">            return &quot;StringBooleanRepresentation with the following values for true and false: &quot;</span>
+                    + trueRepresentation + &quot; / &quot; + falseRepresentation;
+        }
+    }
+
+<span class="nc" id="L177">    public static class BooleanBooleanRepresentation implements BooleanRepresentation&lt;Boolean&gt; {</span>
+        @Override
+        public void setBoolean(PreparedStatement stmnt, int idx, boolean val) throws SQLException {
+<span class="nc" id="L180">            stmnt.setBoolean(idx, val);</span>
+<span class="nc" id="L181">        }</span>
+
+        @Override
+        public boolean getBoolean(ResultSet rs, int columnIndex) throws SQLException {
+<span class="nc" id="L185">            return rs.getBoolean(columnIndex);</span>
+        }
+
+        @Override
+        public Boolean getRepresentation(boolean bool) {
+<span class="nc" id="L190">            return bool;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L195">            return &quot;BooleanBooleanRepresentation&quot;;</span>
+        }
+    }
+
+<span class="nc" id="L199">    public static class Int10BooleanRepresentation implements BooleanRepresentation&lt;Integer&gt; {</span>
+        @Override
+        public void setBoolean(PreparedStatement stmnt, int idx, boolean val) throws SQLException{
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            stmnt.setInt(idx, val ? 1 : 0);</span>
+<span class="nc" id="L203">        }</span>
+
+        @Override
+        public boolean getBoolean(ResultSet rs, int columnIndex) throws SQLException {
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            return rs.getInt(columnIndex) &gt; 0;</span>
+        }
+
+        @Override
+        public Integer getRepresentation(boolean bool) {
+<span class="nc bnc" id="L212" title="All 2 branches missed.">            return bool ? 1 : 0;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L217">            return &quot;Int10BooleanRepresentation&quot;;</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>StoredProcedure.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">StoredProcedure.java</span></div><h1>StoredProcedure.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Schemas;
+import org.apache.openjpa.meta.MultiQueryMetaData;
+
+/**
+ * Holds metadata about a Database Stored Procedure.
+ * This is different than {@link MultiQueryMetaData} which holds the metadata
+ * about what the user has specified.
+ * &lt;br&gt;
+ * An instance of this class can be constructed either by reading from database meta data
+ * or by programatic assignment. If an instance if created programmatically, then
+ * its SQL body or parameters can be added.
+ * &lt;br&gt;
+ * This class can generate the SQL statement to create, drop or delete this procedure.
+ *
+ *
+ * @author Pinaki Poddar
+ *
+ */
+public class StoredProcedure {
+    private DBIdentifier _catalog;
+    private DBIdentifier _schema;
+    private DBIdentifier _name;
+<span class="nc" id="L55">    private List&lt;Column&gt; _cols = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L56">    private List&lt;String&gt; _params = new ArrayList&lt;&gt;();</span>
+
+
+<span class="nc" id="L59">    private List&lt;String&gt; _sql = new ArrayList&lt;&gt;();</span>
+    private final boolean _fromDatabase;
+
+    /**
+     * An enumeration on type of parameter for a Stored Procedure.
+     * The enumerted values has the same ordinal numbers as found
+     * in corresponding integer values in {@link DatabaseMetaData}.
+     */
+<span class="nc" id="L67">    public enum PARAM {UNKNOW, IN, INOUT, RESULT, OUT, RETURN}</span>
+
+<span class="nc" id="L69">    public enum SQL {NONE,MODIFY,READ, CONTAINS};</span>
+
+    /**
+     * Create a procedure of the given name.
+     */
+<span class="nc" id="L74">    public StoredProcedure(String name) {</span>
+<span class="nc" id="L75">        _name = DBIdentifier.newProcedure(name);</span>
+<span class="nc" id="L76">        _fromDatabase = false;</span>
+<span class="nc" id="L77">    }</span>
+
+    /**
+     * &lt;pre&gt;
+     *
+     * 	1. PROCEDURE_CAT - String - the procedure catalog name
+     * 	2. PROCEDURE_SCHEM - String - the procedure schema name (possibly null)
+     * 	3. PROCEDURE_NAME - String - the procedure name
+     * 	4. COLUMN_NAME - String - the name of the column
+     * 	5. COLUMN_TYPE - short - the kind of column or parameter, as follows:
+     * 			DatabaseMetaData.procedureColumnUnknown - type unknown
+     * 			DatabaseMetaData.procedureColumnIn - an IN parameter
+     * 			DatabaseMetaData.procedureColumnInOut - an INOUT parameter
+     * 			DatabaseMetaData.procedureColumnOut - an OUT parameter
+     * 			DatabaseMetaData.procedureColumnReturn - a return value
+     * 			DatabaseMetaData.procedureReturnsResult - a result column in a result set
+     * 	6. DATA_TYPE - int - the SQL type of the data, as in java.sql.Types
+     * 	7. TYPE_NAME - String - the SQL type name, for a UDT it is fully qualified
+     * 	8. PRECISION - int - the precision
+     * 	9. LENGTH - int - the length of the data in bytes
+     * 	10.SCALE - short - the scale for numeric types
+     * 	11.RADIX - short - the Radix for numeric data (typically 2 or 10)
+     * 	12.NULLABLE - short - can the data contain null:
+     * 			DatabaseMetaData.procedureNoNulls - NULLs not permitted
+     * 			DatabaseMetaData.procedureNullable - NULLs are permitted
+     * 			DatabaseMetaData.procedureNullableUnknown - NULL status unknown
+     * 	13.REMARKS - String - an explanatory comment about the data item
+     * &lt;/pre&gt;
+     **/
+
+<span class="nc" id="L107">    public StoredProcedure(ResultSet rs) throws SQLException {</span>
+<span class="nc" id="L108">        _fromDatabase = true;</span>
+<span class="nc" id="L109">        int i = 0;</span>
+        do {
+<span class="nc bnc" id="L111" title="All 2 branches missed.">            if (i == 0) {</span>
+                // get stored procedure metadata
+<span class="nc" id="L113">                _catalog = DBIdentifier.newCatalog(rs.getString(1));</span>
+<span class="nc" id="L114">                _schema = DBIdentifier.newSchema(rs.getString(2));</span>
+<span class="nc" id="L115">                _name = DBIdentifier.newIdentifier(rs.getString(3), DBIdentifier.DBIdentifierType.PROCEDURE, false);</span>
+            }
+<span class="nc" id="L117">            Column col = new Column();</span>
+<span class="nc" id="L118">            _cols.add(col);</span>
+<span class="nc" id="L119">            col.setIdentifier(DBIdentifier.newColumn(rs.getString(4)));</span>
+<span class="nc" id="L120">            col.setFlag(rs.getShort(5), true);</span>
+<span class="nc" id="L121">            col.setType(rs.getInt(6));</span>
+<span class="nc" id="L122">            col.setTypeIdentifier(DBIdentifier.newConstant(rs.getString(7)));</span>
+<span class="nc" id="L123">            col.setPrecision(rs.getInt(8));</span>
+<span class="nc" id="L124">            col.setSize(rs.getInt(9));</span>
+<span class="nc" id="L125">            col.setScale(rs.getInt(10));</span>
+<span class="nc" id="L126">            col.setRadix(rs.getShort(11));</span>
+<span class="nc" id="L127">            col.setNullability(rs.getShort(12));</span>
+<span class="nc" id="L128">            col.setComment(rs.getString(13));</span>
+<span class="nc" id="L129">            col.setIndex(i);</span>
+<span class="nc" id="L130">            _params.add(col.getIdentifier().getName() + &quot; &quot; + col.getTypeIdentifier().getName());</span>
+<span class="nc" id="L131">            i++;</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        } while (rs.next());</span>
+<span class="nc" id="L133">    }</span>
+
+    public void setCatalog(DBIdentifier catalog) {
+<span class="nc" id="L136">        this._catalog = catalog;</span>
+<span class="nc" id="L137">    }</span>
+
+    public void setSchema(DBIdentifier schema) {
+<span class="nc" id="L140">        this._schema = schema;</span>
+<span class="nc" id="L141">    }</span>
+
+    public void setName(String name) {
+<span class="nc" id="L144">        this._name = DBIdentifier.newIdentifier(name, DBIdentifier.DBIdentifierType.PROCEDURE, false);</span>
+<span class="nc" id="L145">    }</span>
+
+    public Column[] getInColumns() {
+<span class="nc" id="L148">        return getColumns((short)DatabaseMetaData.procedureColumnIn);</span>
+    }
+
+    public Column[] getInOutColumns() {
+<span class="nc" id="L152">        return getColumns((short)DatabaseMetaData.procedureColumnInOut);</span>
+    }
+
+    public Column[] getOutColumns() {
+<span class="nc" id="L156">        return getColumns((short)DatabaseMetaData.procedureColumnOut);</span>
+    }
+
+    public Column[] getReturnColumns() {
+<span class="nc" id="L160">        return getColumns((short)DatabaseMetaData.procedureColumnReturn);</span>
+    }
+
+    public Column[] getResultColumns() {
+<span class="nc" id="L164">        return getColumns((short)DatabaseMetaData.procedureColumnResult);</span>
+    }
+
+    public Column[] getColumns() {
+<span class="nc" id="L168">        return _cols.toArray(new Column[_cols.size()]);</span>
+    }
+
+    /**
+     * Counts the number of columns with the given flag.
+     * @param flag
+     * @return
+     */
+    int countColumn(short flag) {
+<span class="nc" id="L177">        int count = 0;</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">        for (Column col : _cols) {</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">            if (col.getFlag(flag)) count++;</span>
+<span class="nc" id="L180">        }</span>
+<span class="nc" id="L181">        return count;</span>
+    }
+
+    Column[] getColumns(short flag) { // TODO: cache?
+<span class="nc" id="L185">        List&lt;Column&gt; cols = null;</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        for (Column col : _cols) {</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">            if (col.getFlag(flag)) {</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">                if (cols == null) cols = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L189">                cols.add(col);</span>
+            }
+<span class="nc" id="L191">        }</span>
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        return cols == null ? Schemas.EMPTY_COLUMNS : cols.toArray(new Column[cols.size()]);</span>
+    }
+
+
+    /**
+     * Gets the name of this procedure.
+     */
+    public String getName() {
+<span class="nc" id="L200">        return _name.getName();</span>
+    }
+
+    /**
+     * Adds an {@code IN} parameter of the given name and type.
+     * @param var name of the variable
+     * @param typeName name of the SQL type e.g. {@code VARCAR(32)}
+     * @return this procedure instance
+     */
+    public StoredProcedure addParameter(String var, String typeName) {
+<span class="nc" id="L210">        return addParameter(PARAM.IN, var, typeName);</span>
+    }
+    /**
+     * Adds the given parameter declaration.
+     *
+     * @param param type of parameter.
+     * @param var name of the variable
+     * @param typeName name of the SQL type e.g. {@code VARCAR(32)}
+     * @return this procedure instance
+     */
+    public StoredProcedure addParameter(PARAM param, String var, String typeName) {
+<span class="nc" id="L221">        assertMutable();</span>
+
+<span class="nc" id="L223">        _params.add(param + &quot; &quot; + var + &quot; &quot; + typeName);</span>
+<span class="nc" id="L224">        return this;</span>
+    }
+
+    public StoredProcedure setLanguage(String language) {
+<span class="nc" id="L228">        _sql.add(&quot;LANGUAGE &quot; + language);</span>
+<span class="nc" id="L229">        return this;</span>
+    }
+
+    /**
+     * Gets the SQL for creating this procedure.
+     */
+    public String getCreateSQL() {
+<span class="nc" id="L236">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L237">        buf.append(&quot;CREATE PROCEDURE &quot;);</span>
+<span class="nc" id="L238">        buf.append(_name);</span>
+<span class="nc" id="L239">        buf.append(&quot; (&quot;);</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        for (Iterator&lt;String&gt; p = _params.iterator(); p.hasNext();) {</span>
+<span class="nc" id="L241">            buf.append(p.next());</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">            buf.append(p.hasNext() ? &quot;,&quot; : &quot;&quot;);</span>
+        }
+<span class="nc" id="L244">        buf.append(&quot;) &quot;);</span>
+        //buf.append(&quot;(&quot;);
+<span class="nc bnc" id="L246" title="All 2 branches missed.">        for (String s : _sql) buf.append(s).append(&quot; &quot;);</span>
+        //buf.append(&quot;)&quot;);
+
+<span class="nc" id="L249">        return buf.toString().trim();</span>
+    }
+
+    /**
+     * Gets the SQL for dropping this procedure.
+     */
+    public String getDropSQL() {
+<span class="nc" id="L256">        return &quot;DROP PROCEDURE &quot; + _name;</span>
+    }
+
+    /**
+     * Gets the SQL for calling this procedure.
+     */
+    public String getCallSQL() {
+<span class="nc" id="L263">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L264">        buf.append(&quot;CALL &quot;);</span>
+<span class="nc" id="L265">        buf.append(_name); buf.append(&quot; (&quot;);</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        for (Iterator&lt;String&gt; p = _params.iterator(); p.hasNext();) {</span>
+<span class="nc" id="L267">            p.next();</span>
+<span class="nc" id="L268">            buf.append(&quot;?&quot;);</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">            if (p.hasNext()) buf.append(&quot;,&quot;);</span>
+        }
+<span class="nc" id="L271">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L272">        return buf.toString().trim();</span>
+    }
+
+    /**
+     * Adds a read SQL statement via an external method.
+     */
+    public StoredProcedure setSQL(SQL sql) {
+<span class="nc bnc" id="L279" title="All 5 branches missed.">        switch (sql) {</span>
+<span class="nc" id="L280">            case CONTAINS : _sql.add(&quot;CONTAINS SQL&quot;); break;</span>
+<span class="nc" id="L281">            case NONE     : _sql.add(&quot;NO SQL&quot;); break;</span>
+<span class="nc" id="L282">            case MODIFY   : _sql.add(&quot;MODIFIES SQL DATA&quot;); break;</span>
+<span class="nc" id="L283">            case READ     : _sql.add(&quot;READS SQL DATA&quot;); break;</span>
+        }
+<span class="nc" id="L285">        return this;</span>
+    }
+
+    /**
+     * Sets the language whose parameter passing convention will be used to pass paramater values.
+     * @param lang
+     * @return
+     */
+    public StoredProcedure setParameterStyle(String lang) {
+<span class="nc" id="L294">        _sql.add(&quot;PARAMETER STYLE &quot; + lang);</span>
+<span class="nc" id="L295">        return this;</span>
+    }
+
+    public StoredProcedure setExternalName(Class&lt;?&gt; cls, String method, Class&lt;?&gt;... paramTypes) {
+<span class="nc" id="L299">        assertStaticMethod(cls, method, paramTypes);</span>
+<span class="nc" id="L300">        _sql.add(&quot;EXTERNAL NAME '&quot; + cls.getName() + '.' + method + &quot;'&quot;);</span>
+<span class="nc" id="L301">        return this;</span>
+    }
+
+    public StoredProcedure setResult(int i) {
+<span class="nc" id="L305">        return setResult(i, false);</span>
+    }
+
+    public StoredProcedure setResult(int i, boolean dynamic) {
+<span class="nc" id="L309">        assertMutable();</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">        _sql.add((dynamic ? &quot;DYNAMIC &quot; : &quot;&quot;) + &quot;RESULT SETS &quot; + i);</span>
+<span class="nc" id="L311">        return this;</span>
+    }
+
+    private void assertStaticMethod(Class&lt;?&gt; cls, String method, Class&lt;?&gt;...paramTypes) {
+        try {
+<span class="nc" id="L316">            Method m = cls.getMethod(method, paramTypes);</span>
+<span class="nc bnc" id="L317" title="All 4 branches missed.">            if (m == null || !Modifier.isStatic(m.getModifiers())) {</span>
+<span class="nc" id="L318">                throw new RuntimeException(&quot;No static method &quot; + method + &quot; with arguments &quot;</span>
+<span class="nc" id="L319">                        + Arrays.toString(paramTypes) + &quot; in &quot; + cls);</span>
+            }
+<span class="nc" id="L321">        } catch (Exception ex) {</span>
+<span class="nc" id="L322">            throw new RuntimeException(&quot;No static method &quot; + method + &quot; with arguments &quot;</span>
+<span class="nc" id="L323">                    + Arrays.toString(paramTypes) + &quot; in &quot; + cls, ex);</span>
+<span class="nc" id="L324">        }</span>
+<span class="nc" id="L325">    }</span>
+
+    private void assertMutable() {
+<span class="nc bnc" id="L328" title="All 2 branches missed.">        if (_fromDatabase) {</span>
+<span class="nc" id="L329">            throw new IllegalStateException(this + &quot; is not mutable&quot;);</span>
+        }
+<span class="nc" id="L331">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L335">        return getName();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>RelationStrategies.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">RelationStrategies.java</span></div><h1>RelationStrategies.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.util.List;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.FieldStrategy;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.meta.RelationId;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.meta.ValueMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.kernel.DetachedValueStateManager;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.MetaDataException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Helper methods for relation mappings.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L48">public class RelationStrategies {</span>
+
+<span class="nc" id="L50">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L51">        (RelationStrategies.class);</span>
+
+    /**
+     * Return an exception indicating that we cannot join to the given relation.
+     */
+    public static MetaDataException unjoinable(ValueMapping vm) {
+<span class="nc" id="L57">        return new MetaDataException(_loc.get(&quot;cant-join&quot;, vm));</span>
+    }
+
+    /**
+     * Return an exception indicating that the relation cannot be loaded
+     * because it has independent subclasses and does not represent a full oid.
+     */
+    public static MetaDataException unloadable(ValueMapping vm) {
+<span class="nc" id="L65">        return new MetaDataException(_loc.get(&quot;cant-load&quot;, vm));</span>
+    }
+
+    /**
+     * Return an exception indicating that the relation is invalid
+     * because it has is based on an inverse foreign key and has independent
+     * subclasses.
+     */
+    public static MetaDataException uninversable(ValueMapping vm) {
+<span class="nc" id="L74">        return new MetaDataException(_loc.get(&quot;cant-inverse&quot;, vm));</span>
+    }
+
+    /**
+     * Return the given object as its foreign key values.
+     *
+     * @see FieldStrategy#toDataStoreValue
+     */
+    public static Object toDataStoreValue(ValueMapping vm, Object val,
+        JDBCStore store) {
+        ClassMapping rel;
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (val == null) {</span>
+<span class="nc" id="L86">            ClassMapping[] clss = vm.getIndependentTypeMappings();</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">            rel = (clss.length &gt; 0) ? clss[0] : vm.getTypeMapping();</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">        } else if (val.getClass() == vm.getType())</span>
+<span class="nc" id="L89">            rel = vm.getTypeMapping(); // common case</span>
+        else {
+<span class="nc" id="L91">            rel = vm.getMappingRepository().getMapping(val.getClass(),</span>
+<span class="nc" id="L92">                store.getContext().getClassLoader(), true);</span>
+        }
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if (!rel.isMapped())</span>
+<span class="nc" id="L95">            throw new UserException(_loc.get(&quot;unmapped-datastore-value&quot;,</span>
+<span class="nc" id="L96">                rel.getDescribedType()));</span>
+
+        Column[] cols;
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if (vm.getJoinDirection() == ValueMapping.JOIN_INVERSE)</span>
+<span class="nc" id="L100">            cols = rel.getPrimaryKeyColumns();</span>
+        else
+<span class="nc" id="L102">            cols = vm.getForeignKey(rel).getPrimaryKeyColumns();</span>
+<span class="nc" id="L103">        return rel.toDataStoreValue(val, cols, store);</span>
+    }
+
+    /**
+     * Map a logical foreign key to an unmapped base class relation.
+     */
+    public static void mapRelationToUnmappedPC(ValueMapping vm,
+        String name, boolean adapt) {
+<span class="nc" id="L111">        mapRelationToUnmappedPC(vm, DBIdentifier.newColumn(name), adapt);</span>
+<span class="nc" id="L112">    }</span>
+
+    public static void mapRelationToUnmappedPC(ValueMapping vm,
+        DBIdentifier name, boolean adapt) {
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (vm.getTypeMapping().getIdentityType() == ClassMetaData.ID_UNKNOWN)</span>
+<span class="nc" id="L117">            throw new MetaDataException(_loc.get(&quot;rel-to-unknownid&quot;, vm));</span>
+
+<span class="nc" id="L119">        ValueMappingInfo vinfo = vm.getValueInfo();</span>
+<span class="nc" id="L120">        Column[] tmplates = newUnmappedPCTemplateColumns(vm, name);</span>
+<span class="nc" id="L121">        vm.setColumns(vinfo.getColumns(vm, name, tmplates,</span>
+<span class="nc" id="L122">            vm.getFieldMapping().getTable(), adapt));</span>
+<span class="nc" id="L123">        vm.setColumnIO(vinfo.getColumnIO());</span>
+<span class="nc" id="L124">    }</span>
+
+    /**
+     * Create template columns for a logical foreign key to an unmapped base
+     * class relation.
+     */
+    private static Column[] newUnmappedPCTemplateColumns(ValueMapping vm,
+        DBIdentifier name) {
+<span class="nc" id="L132">        ClassMapping rel = vm.getTypeMapping();</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if (rel.getIdentityType() == ClassMetaData.ID_DATASTORE) {</span>
+<span class="nc" id="L134">            Column col = new Column();</span>
+<span class="nc" id="L135">            col.setIdentifier(name);</span>
+<span class="nc" id="L136">            col.setJavaType(JavaTypes.LONG);</span>
+<span class="nc" id="L137">            col.setRelationId(true);</span>
+<span class="nc" id="L138">            return new Column[]{ col };</span>
+        }
+
+<span class="nc" id="L141">        FieldMapping[] pks = rel.getPrimaryKeyFieldMappings();</span>
+<span class="nc" id="L142">        Column[] cols = new Column[pks.length];</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        for (int i = 0; i &lt; pks.length; i++) {</span>
+<span class="nc" id="L144">            cols[i] = mapPrimaryKey(vm, pks[i]);</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">            if (cols.length == 1)</span>
+<span class="nc" id="L146">                cols[i].setIdentifier(name);</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">            else if (DBIdentifier.isNull(cols[i].getIdentifier())) {</span>
+<span class="nc" id="L148">                DBIdentifier sName = DBIdentifier.combine(cols[i].getIdentifier(), pks[i].getName());</span>
+<span class="nc" id="L149">                cols[i].setIdentifier(sName);</span>
+<span class="nc" id="L150">            }</span>
+            else {
+<span class="nc" id="L152">                DBIdentifier sName = DBIdentifier.combine(cols[i].getIdentifier(), cols[i].getName());</span>
+<span class="nc" id="L153">                cols[i].setIdentifier(sName);</span>
+            }
+<span class="nc" id="L155">            cols[i].setTargetField(pks[i].getName());</span>
+<span class="nc" id="L156">            cols[i].setRelationId(true);</span>
+        }
+<span class="nc" id="L158">        return cols;</span>
+    }
+
+    /**
+     * Create a default column for the given primary key field. Uses the
+     * user's raw mapping info if given. Only supports simple field types.
+     * The column name will be set to the name of the related primary key
+     * column, if any.
+     */
+    private static Column mapPrimaryKey(ValueMapping vm, FieldMapping pk) {
+<span class="nc" id="L168">        List cols = pk.getValueInfo().getColumns();</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (cols.size() &gt; 1)</span>
+<span class="nc" id="L170">            throw new MetaDataException(_loc.get(&quot;bad-unmapped-rel&quot;, vm, pk));</span>
+
+<span class="nc" id="L172">        Column tmplate = null;</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        if (cols.size() == 1)</span>
+<span class="nc" id="L174">            tmplate = (Column) cols.get(0);</span>
+
+<span class="nc" id="L176">        Column col = new Column();</span>
+<span class="nc bnc" id="L177" title="All 3 branches missed.">        switch (pk.getTypeCode()) {</span>
+            case JavaTypes.BOOLEAN:
+            case JavaTypes.BOOLEAN_OBJ:
+            case JavaTypes.BYTE:
+            case JavaTypes.BYTE_OBJ:
+            case JavaTypes.CHAR:
+            case JavaTypes.CHAR_OBJ:
+            case JavaTypes.DOUBLE:
+            case JavaTypes.DOUBLE_OBJ:
+            case JavaTypes.FLOAT:
+            case JavaTypes.FLOAT_OBJ:
+            case JavaTypes.INT:
+            case JavaTypes.INT_OBJ:
+            case JavaTypes.LONG:
+            case JavaTypes.LONG_OBJ:
+            case JavaTypes.NUMBER:
+            case JavaTypes.SHORT:
+            case JavaTypes.SHORT_OBJ:
+            case JavaTypes.STRING:
+            case JavaTypes.BIGINTEGER:
+            case JavaTypes.BIGDECIMAL:
+<span class="nc" id="L198">                col.setJavaType(pk.getTypeCode());</span>
+<span class="nc" id="L199">                break;</span>
+            case JavaTypes.DATE:
+<span class="nc" id="L201">                col.setJavaType(JavaSQLTypes.getDateTypeCode(pk.getType()));</span>
+<span class="nc" id="L202">                break;</span>
+            default:
+<span class="nc" id="L204">                throw new MetaDataException(</span>
+<span class="nc" id="L205">                    _loc.get(&quot;bad-unmapped-rel&quot;, vm, pk));</span>
+        }
+
+<span class="nc bnc" id="L208" title="All 2 branches missed.">        if (tmplate != null) {</span>
+<span class="nc" id="L209">            col.setIdentifier(tmplate.getIdentifier());</span>
+<span class="nc" id="L210">            col.setType(tmplate.getType());</span>
+<span class="nc" id="L211">            col.setTypeName(tmplate.getTypeName());</span>
+<span class="nc" id="L212">            col.setSize(tmplate.getSize());</span>
+<span class="nc" id="L213">            col.setDecimalDigits(tmplate.getDecimalDigits());</span>
+        }
+<span class="nc" id="L215">        return col;</span>
+    }
+
+    /**
+     * Return the state manager for the given instance, using a detached
+     * state manager if the instnace is not managed.
+     */
+    public static OpenJPAStateManager getStateManager(Object obj,
+        StoreContext ctx) {
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        if (obj == null)</span>
+<span class="nc" id="L225">            return null;</span>
+<span class="nc" id="L226">        OpenJPAStateManager sm = ctx.getStateManager(obj);</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (sm == null) // must be detached</span>
+<span class="nc" id="L228">            return new DetachedValueStateManager(obj, ctx);</span>
+<span class="nc" id="L229">        return sm;</span>
+    }
+
+    /**
+     * Affirms if all of the given columns represent a {@linkplain RelationId relationship identifier}.
+     */
+    public static boolean isRelationId(Column[] cols) {
+<span class="nc bnc" id="L236" title="All 4 branches missed.">        if (cols == null || cols.length == 0)</span>
+<span class="nc" id="L237">            return false;</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">            if (!cols[i].isRelationId())</span>
+<span class="nc" id="L240">                return false;</span>
+        }
+<span class="nc" id="L242">        return true;</span>
+    }
+
+    /**
+     * Affirms if all of the foreign key columns represent a {@linkplain RelationId relationship identifier}.
+     */
+    public static boolean isRelationId(ForeignKey fk) {
+<span class="nc bnc" id="L249" title="All 4 branches missed.">        return fk != null &amp;&amp; isRelationId(fk.getColumns());</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

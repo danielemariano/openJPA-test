@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DBCPDriverDataSource.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">DBCPDriverDataSource.java</span></div><h1>DBCPDriverDataSource.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Properties;
+
+import javax.sql.DataSource;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configuration;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.util.Closeable;
+
+/**
+ * Commons DBCP basic pooling driver data source.
+ * The commons-dbcp packages must be on the class path for this plugin to work,
+ * as it WILL NOT fall back to non-DBCP mode if they are missing. For automatic
+ * usage of Commons DBCP when available, use AutoDriverDataSource instead.
+ */
+<span class="nc" id="L41">public class DBCPDriverDataSource</span>
+extends SimpleDriverDataSource implements Configurable, Closeable {
+
+<span class="nc" id="L44">    private static String DBCPPACKAGENAME = &quot;org.apache.commons.dbcp2&quot;;</span>
+<span class="nc" id="L45">    private static String DBCPBASICDATASOURCENAME = &quot;org.apache.commons.dbcp2.BasicDataSource&quot;;</span>
+    private static Class&lt;?&gt; _dbcpClass;
+    private static Boolean _dbcpAvail;
+    private static RuntimeException _dbcpEx;
+
+    protected JDBCConfiguration conf;
+    private DataSource _ds;
+
+    @Override
+    public Connection getConnection(Properties props) throws SQLException {
+<span class="nc" id="L55">        return getDBCPConnection(props);</span>
+    }
+
+    @Override
+    public void close() throws SQLException {
+        try {
+<span class="nc bnc" id="L61" title="All 2 branches missed.">            if (_ds != null) {</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">                if (isDBCPLoaded(getClassLoader())) {</span>
+<span class="nc" id="L63">                    ((org.apache.commons.dbcp2.BasicDataSource)_dbcpClass.cast(_ds)).close();</span>
+                }
+            }
+<span class="nc" id="L66">        } catch (Exception e) {</span>
+            // no-op
+<span class="nc" id="L68">        } catch (Throwable t) {</span>
+            // no-op
+        } finally {
+<span class="nc" id="L71">            _ds = null;</span>
+        }
+<span class="nc" id="L73">    }</span>
+
+    protected Connection getDBCPConnection(Properties props) throws SQLException {
+<span class="nc" id="L76">        Connection con = getDBCPDataSource(props).getConnection();</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        if (con == null) {</span>
+<span class="nc" id="L78">            throw new SQLException(_eloc.get(&quot;dbcp-ds-null&quot;,</span>
+<span class="nc" id="L79">                DBCPBASICDATASOURCENAME, getConnectionDriverName(), getConnectionURL()).getMessage());</span>
+        }
+<span class="nc" id="L81">        return con;</span>
+    }
+
+    protected DataSource getDBCPDataSource(Properties props) {
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (isDBCPLoaded(getClassLoader())) {</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            if (_ds == null) {</span>
+                try {
+<span class="nc" id="L88">                    Properties dbcpProps = updateDBCPProperties(props);</span>
+<span class="nc" id="L89">                    _ds = (DataSource) Configurations.newInstance(DBCPBASICDATASOURCENAME, conf,</span>
+<span class="nc" id="L90">                        dbcpProps, getClassLoader());</span>
+<span class="nc" id="L91">                } catch (Exception e) {</span>
+<span class="nc" id="L92">                    _dbcpEx = new RuntimeException(_eloc.get(&quot;driver-null&quot;, DBCPBASICDATASOURCENAME).getMessage(), e);</span>
+<span class="nc" id="L93">                }</span>
+<span class="nc" id="L94">                return _ds;</span>
+            } else {
+<span class="nc" id="L96">                return _ds;</span>
+            }
+        } else {
+            // user choose DBCP, so fail if it isn't on the classpath
+<span class="nc bnc" id="L100" title="All 2 branches missed.">            if (_dbcpEx == null)</span>
+<span class="nc" id="L101">                _dbcpEx = new RuntimeException(_eloc.get(&quot;driver-null&quot;, DBCPBASICDATASOURCENAME).getMessage());</span>
+<span class="nc" id="L102">            throw _dbcpEx;</span>
+        }
+    }
+
+    /**
+     * This method should not throw an exception, as it is called by
+     * AutoDriverDataSource to determine if user already specified
+     * to use Commons DBCP.
+     * @return true if ConnectionDriverName contains org.apache.commons.dbcp2,
+     *         otherwise false
+     */
+    protected boolean isDBCPDataSource() {
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        return (getConnectionDriverName() != null &amp;&amp;</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">            getConnectionDriverName().toLowerCase(Locale.ENGLISH).indexOf(DBCPPACKAGENAME) &gt;= 0);</span>
+    }
+
+    /**
+     * This method should not throw an exception, as it is called by
+     * AutoDriverDataSource to determine if it should use DBCP or not
+     * based on if org.apache.commons.dbcp2.BasicDataSource can be loaded.
+     * @return true if Commons DBCP was found on the classpath, otherwise false
+     */
+    static protected boolean isDBCPLoaded(ClassLoader cl) {
+<span class="nc bnc" id="L125" title="All 4 branches missed.">        if (Boolean.TRUE.equals(_dbcpAvail) &amp;&amp; (_dbcpClass != null)) {</span>
+<span class="nc" id="L126">            return true;</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">        } else if (Boolean.FALSE.equals(_dbcpAvail)) {</span>
+<span class="nc" id="L128">            return false;</span>
+        } else {
+            // first time checking, so try to load it
+            try {
+<span class="nc" id="L132">                _dbcpClass = Class.forName(DBCPBASICDATASOURCENAME, true, cl);</span>
+<span class="nc" id="L133">                _dbcpAvail = Boolean.TRUE;</span>
+<span class="nc" id="L134">                return true;</span>
+<span class="nc" id="L135">            } catch (Exception e) {</span>
+<span class="nc" id="L136">                _dbcpAvail = Boolean.FALSE;</span>
+                // save exception details for later instead of throwing here
+<span class="nc" id="L138">                _dbcpEx = new RuntimeException(_eloc.get(&quot;driver-null&quot;, DBCPBASICDATASOURCENAME).getMessage(), e);</span>
+            }
+<span class="nc" id="L140">            return _dbcpAvail.booleanValue();</span>
+        }
+    }
+
+    /**
+     * Normalize properties for Commons DBCP.  This should be done for every call from DataSourceFactory,
+     * as we do not have a pre-configured Driver to reuse.
+     * @param props
+     * @return updated properties
+     */
+    private Properties updateDBCPProperties(Properties props) {
+<span class="nc" id="L151">        Properties dbcpProps = mergeConnectionProperties(props);</span>
+
+        // only perform the following check for the first connection attempt (_driverClassName == null),
+        // as multiple connections could be requested (like from SchemaTool) and isDBCPDriver() will be true
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (isDBCPDataSource()) {</span>
+<span class="nc" id="L156">            String propDriver = hasProperty(dbcpProps, &quot;driverClassName&quot;);</span>
+<span class="nc bnc" id="L157" title="All 4 branches missed.">            if (propDriver == null || propDriver.trim().isEmpty()) {</span>
+                // if user specified DBCP for the connectionDriverName, then make sure they supplied a DriverClassName
+<span class="nc" id="L159">                throw new RuntimeException(_eloc.get(&quot;connection-property-invalid&quot;, &quot;DriverClassName&quot;,</span>
+<span class="nc" id="L160">                    propDriver).getMessage());</span>
+            }
+<span class="nc" id="L162">            propDriver = hasProperty(dbcpProps, &quot;url&quot;);</span>
+<span class="nc bnc" id="L163" title="All 4 branches missed.">            if (propDriver == null || propDriver.trim().isEmpty()) {</span>
+                // if user specified DBCP for the connectionDriverName, then make sure they supplied a Url
+<span class="nc" id="L165">                throw new RuntimeException(_eloc.get(&quot;connection-property-invalid&quot;, &quot;URL&quot;,</span>
+<span class="nc" id="L166">                    propDriver).getMessage());</span>
+            }
+<span class="nc" id="L168">        } else {</span>
+            // set Commons DBCP expected DriverClassName to the original connection driver name
+<span class="nc" id="L170">            dbcpProps.setProperty(hasKey(dbcpProps, &quot;driverClassName&quot;, &quot;driverClassName&quot;), getConnectionDriverName());</span>
+            // set Commons DBCP expected URL property
+<span class="nc" id="L172">            dbcpProps.setProperty(hasKey(dbcpProps, &quot;url&quot;, &quot;url&quot;), getConnectionURL());</span>
+        }
+
+        // Commons DBCP requires non-Null username/password values in the connection properties
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        if (hasKey(dbcpProps, &quot;username&quot;) == null) {</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">            if (getConnectionUserName() != null)</span>
+<span class="nc" id="L178">                dbcpProps.setProperty(&quot;username&quot;, getConnectionUserName());</span>
+            else
+<span class="nc" id="L180">                dbcpProps.setProperty(&quot;username&quot;, &quot;&quot;);</span>
+        }
+        // Commons DBCP requires non-Null username/password values in the connection properties
+<span class="nc bnc" id="L183" title="All 2 branches missed.">        if (hasKey(dbcpProps, &quot;password&quot;) == null) {</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">            if (getConnectionPassword() != null)</span>
+<span class="nc" id="L185">                dbcpProps.setProperty(&quot;password&quot;, getConnectionPassword());</span>
+            else
+<span class="nc" id="L187">                dbcpProps.setProperty(&quot;password&quot;, &quot;&quot;);</span>
+        }
+
+        // set some default properties for DBCP
+<span class="nc bnc" id="L191" title="All 2 branches missed.">        if (hasKey(dbcpProps, &quot;maxActive&quot;) == null) {</span>
+<span class="nc" id="L192">            dbcpProps.setProperty(&quot;maxActive&quot;, &quot;10&quot;);</span>
+        }
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if (hasKey(dbcpProps, &quot;maxIdle&quot;) == null) {</span>
+            // by default we set maxIdle to the same value as maxActive.
+<span class="nc" id="L196">            dbcpProps.setProperty(&quot;maxIdle&quot;, dbcpProps.getProperty(&quot;maxActive&quot;));</span>
+        }
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (hasKey(dbcpProps, &quot;minIdle&quot;) == null) {</span>
+<span class="nc" id="L199">            dbcpProps.setProperty(&quot;minIdle&quot;, &quot;0&quot;);</span>
+        }
+
+<span class="nc" id="L202">        return dbcpProps;</span>
+    }
+
+    /**
+     * Merge the passed in properties with a copy of the existing _connectionProperties
+     * @param props
+     * @return Merged properties
+     */
+    private Properties mergeConnectionProperties(final Properties props) {
+<span class="nc" id="L211">        Properties mergedProps = new Properties();</span>
+<span class="nc" id="L212">        mergedProps.putAll(getConnectionProperties());</span>
+
+        // need to map &quot;user&quot; to &quot;username&quot; for Commons DBCP
+<span class="nc" id="L215">        String uid = removeProperty(mergedProps, &quot;user&quot;);</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">        if (uid != null) {</span>
+<span class="nc" id="L217">            mergedProps.setProperty(&quot;username&quot;, uid);</span>
+        }
+
+        // now, merge in any passed in properties
+<span class="nc bnc" id="L221" title="All 4 branches missed.">        if (props != null &amp;&amp; !props.isEmpty()) {</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">            for (Iterator&lt;Object&gt; itr = props.keySet().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L223">                String key = (String)itr.next();</span>
+<span class="nc" id="L224">                String value = props.getProperty(key);</span>
+                // need to map &quot;user&quot; to &quot;username&quot; for Commons DBCP
+<span class="nc bnc" id="L226" title="All 2 branches missed.">                if (&quot;user&quot;.equalsIgnoreCase(key)) {</span>
+<span class="nc" id="L227">                    key = &quot;username&quot;;</span>
+                }
+                // case-insensitive search for existing key
+<span class="nc" id="L230">                String existingKey = hasKey(mergedProps, key);</span>
+<span class="nc bnc" id="L231" title="All 2 branches missed.">                if (existingKey != null) {</span>
+                    // update existing entry
+<span class="nc" id="L233">                    mergedProps.setProperty(existingKey, value);</span>
+                } else {
+                    // add property to the merged set
+<span class="nc" id="L236">                    mergedProps.setProperty(key, value);</span>
+                }
+<span class="nc" id="L238">            }</span>
+        }
+<span class="nc" id="L240">        return mergedProps;</span>
+    }
+
+    /**
+     * Case-insensitive search of the given properties for the given key.
+     * @param props
+     * @param key
+     * @return Key name as found in properties or null if it was not found.
+     */
+    private String hasKey(Properties props, String key) {
+<span class="nc" id="L250">        return hasKey(props, key, null);</span>
+    }
+
+    /**
+     * Case-insensitive search of the given properties for the given key.
+     * @param props
+     * @param key
+     * @param defaultKey
+     * @return Key name as found in properties or the given defaultKey if it was not found.
+     */
+    private String hasKey(Properties props, String key, String defaultKey)
+    {
+<span class="nc bnc" id="L262" title="All 4 branches missed.">        if (props != null &amp;&amp; key != null) {</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">            for (Iterator&lt;Object&gt; itr = props.keySet().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L264">                String entry = (String)itr.next();</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">                if (key.equalsIgnoreCase(entry))</span>
+<span class="nc" id="L266">                    return entry;</span>
+<span class="nc" id="L267">            }</span>
+        }
+<span class="nc" id="L269">        return defaultKey;</span>
+    }
+
+    private String hasProperty(Properties props, String key) {
+<span class="nc bnc" id="L273" title="All 4 branches missed.">        if (props != null &amp;&amp; key != null) {</span>
+<span class="nc" id="L274">            String entry = hasKey(props, key);</span>
+<span class="nc bnc" id="L275" title="All 2 branches missed.">            if (entry != null)</span>
+<span class="nc" id="L276">                return props.getProperty(entry);</span>
+        }
+<span class="nc" id="L278">        return null;</span>
+
+    }
+
+    private String removeProperty(Properties props, String key) {
+<span class="nc bnc" id="L283" title="All 4 branches missed.">        if (props != null &amp;&amp; key != null) {</span>
+<span class="nc" id="L284">            String entry = hasKey(props, key);</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">            if (entry != null)</span>
+<span class="nc" id="L286">                return (String)props.remove(entry);</span>
+        }
+<span class="nc" id="L288">        return null;</span>
+    }
+
+    // Configurable interface methods
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc bnc" id="L294" title="All 2 branches missed.">        if (conf instanceof JDBCConfiguration)</span>
+<span class="nc" id="L295">            this.conf = (JDBCConfiguration)conf;</span>
+<span class="nc" id="L296">    }</span>
+
+    @Override
+    public void startConfiguration() {
+        // no-op
+<span class="nc" id="L301">    }</span>
+
+    @Override
+    public void endConfiguration() {
+        // no-op
+<span class="nc" id="L306">    }</span>
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

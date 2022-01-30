@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PreparedQueryImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">PreparedQueryImpl.java</span></div><h1>PreparedQueryImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.openjpa.jdbc.kernel;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.MappingRepository;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.LogicalUnion;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.SelectExecutor;
+import org.apache.openjpa.jdbc.sql.SelectImpl;
+import org.apache.openjpa.jdbc.sql.Union;
+import org.apache.openjpa.kernel.Broker;
+import org.apache.openjpa.kernel.PreparedQuery;
+import org.apache.openjpa.kernel.PreparedQueryCache.Exclusion;
+import org.apache.openjpa.kernel.Query;
+import org.apache.openjpa.kernel.QueryImpl;
+import org.apache.openjpa.kernel.QueryLanguages;
+import org.apache.openjpa.kernel.StoreQuery;
+import org.apache.openjpa.kernel.exps.Parameter;
+import org.apache.openjpa.kernel.exps.QueryExpressions;
+import org.apache.openjpa.lib.rop.RangeResultObjectProvider;
+import org.apache.openjpa.lib.rop.ResultList;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.util.ImplHelper;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Implements {@link PreparedQuery} for SQL queries.
+ * PreparedQuery holds the post-compilation and post-execution state of a kernel Query.
+ * The post-execution internal state of a query is appended as a &lt;em&gt;user object&lt;/em&gt;
+ * to the user-visible result to maintain the API contract.
+ *
+ * @author Pinaki Poddar
+ *
+ */
+public class PreparedQueryImpl implements PreparedQuery {
+<span class="nc" id="L67">    private static Localizer _loc =</span>
+<span class="nc" id="L68">        Localizer.forPackage(PreparedQueryImpl.class);</span>
+
+    private final String _id;
+    private String _sql;
+    private boolean _initialized;
+
+    // Post-compilation state of an executable query, populated on construction
+    private Class&lt;?&gt; _candidate;
+    private boolean _subclasses;
+
+    // post-execution state of a query
+    private QueryExpressions[] _exps;
+    private Class&lt;?&gt;[] _projTypes;
+
+    // Position of the user defined parameters in the _params list
+    private Map&lt;Object, Integer[]&gt;    _userParamPositions;
+    private Map&lt;Integer, Object&gt; _template;
+    private SelectImpl select;
+
+    /**
+     * Construct.
+     *
+     * @param id an identifier for this query to be used as cache key
+     * @param compiled a compiled query
+     */
+    public PreparedQueryImpl(String id, Query compiled) {
+<span class="nc" id="L94">        this(id, null, compiled);</span>
+<span class="nc" id="L95">    }</span>
+
+    /**
+     * Construct.
+     *
+     * @param id an identifier for this query to be used as cache key
+     * @param corresponding data store language query string
+     * @param compiled a compiled query
+     */
+<span class="nc" id="L104">    public PreparedQueryImpl(String id, String sql, Query compiled) {</span>
+<span class="nc" id="L105">        this._id = id;</span>
+<span class="nc" id="L106">        this._sql = sql;</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (compiled != null) {</span>
+<span class="nc" id="L108">            _candidate    = compiled.getCandidateType();</span>
+<span class="nc" id="L109">            _subclasses   = compiled.hasSubclasses();</span>
+        }
+<span class="nc" id="L111">    }</span>
+
+    @Override
+    public String getIdentifier() {
+<span class="nc" id="L115">        return _id;</span>
+    }
+
+    @Override
+    public String getLanguage() {
+<span class="nc" id="L120">        return QueryLanguages.LANG_PREPARED_SQL;</span>
+    }
+
+    /**
+     * Get the original query string which is same as the identifier of this
+     * receiver.
+     */
+    @Override
+    public String getOriginalQuery() {
+<span class="nc" id="L129">        return getIdentifier();</span>
+    }
+
+    @Override
+    public String getTargetQuery() {
+<span class="nc" id="L134">        return _sql;</span>
+    }
+
+    void setTargetQuery(String sql) {
+<span class="nc" id="L138">        _sql = sql;</span>
+<span class="nc" id="L139">    }</span>
+
+    @Override
+    public boolean isInitialized() {
+<span class="nc" id="L143">        return _initialized;</span>
+    }
+
+    public QueryExpressions[] getQueryExpressions() {
+<span class="nc" id="L147">        return _exps;</span>
+    }
+
+    public Class[] getProjectionTypes() {
+<span class="nc" id="L151">        return _projTypes;</span>
+    }
+
+    /**
+     * Pours the post-compilation state held by this receiver to the given
+     * query.
+     */
+    @Override
+    public void setInto(Query q) {
+<span class="nc" id="L160">    	q.setQuery(_id);</span>
+<span class="nc" id="L161">        q.setCandidateType(_candidate, _subclasses);</span>
+<span class="nc" id="L162">    }</span>
+
+    /**
+     * Initialize this receiver with post-execution result.
+     * The input argument is processed only if it is a {@link ResultList} with
+     * an attached {@link SelectResultObjectProvider} as its
+     * {@link ResultList#getUserObject() user object}.
+     *
+     * @return an exclusion if can not be initialized for some reason.
+     * null if initialization is successful.
+     */
+    @Override
+    public Exclusion initialize(Object result) {
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        if (isInitialized())</span>
+<span class="nc" id="L176">            return null;</span>
+<span class="nc" id="L177">        Object[] extract = extractSelectExecutor(result);</span>
+<span class="nc" id="L178">        SelectExecutor selector = (SelectExecutor)extract[0];</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        if (selector == null)</span>
+<span class="nc" id="L180">            return new PreparedQueryCacheImpl.StrongExclusion(_id, ((Localizer.Message)extract[1]).getMessage());</span>
+<span class="nc bnc" id="L181" title="All 6 branches missed.">        if (selector == null || selector.hasMultipleSelects()</span>
+            || ((selector instanceof Union)
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            &amp;&amp; (((Union)selector).getSelects().length != 1)))</span>
+<span class="nc" id="L184">            return new PreparedQueryCacheImpl.StrongExclusion(_id, _loc.get(&quot;exclude-multi-select&quot;, _id).getMessage());</span>
+<span class="nc" id="L185">        select = extractImplementation(selector);</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (select == null)</span>
+<span class="nc" id="L187">            return new PreparedQueryCacheImpl.StrongExclusion(_id, _loc.get(&quot;exclude-no-select&quot;, _id).getMessage());</span>
+<span class="nc" id="L188">        SQLBuffer buffer = selector.getSQL();</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        if (buffer == null)</span>
+<span class="nc" id="L190">            return new PreparedQueryCacheImpl.StrongExclusion(_id, _loc.get(&quot;exclude-no-sql&quot;, _id).getMessage());;</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">        if (isUsingFieldStrategy())</span>
+<span class="nc" id="L192">            return new PreparedQueryCacheImpl.StrongExclusion(_id,</span>
+<span class="nc" id="L193">                _loc.get(&quot;exclude-user-strategy&quot;, _id).getMessage());;</span>
+
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        if (isPaginated())</span>
+<span class="nc" id="L196">            return new PreparedQueryCacheImpl.StrongExclusion(_id,</span>
+<span class="nc" id="L197">                _loc.get(&quot;exclude-pagination&quot;, _id).getMessage());;</span>
+
+<span class="nc" id="L199">        setTargetQuery(buffer.getSQL());</span>
+<span class="nc" id="L200">        setParameters(buffer.getParameters());</span>
+<span class="nc" id="L201">        setUserParameterPositions(buffer.getUserParameters());</span>
+<span class="nc" id="L202">        _initialized = true;</span>
+
+<span class="nc" id="L204">        return null;</span>
+    }
+
+    /**
+     * Extract the underlying SelectExecutor from the given argument, if possible.
+     *
+     * @return two objects in an array. The element at index 0 is SelectExecutor,
+     * if it can be extracted. The element at index 1 is the reason why it can
+     * not be extracted.
+     */
+    private Object[] extractSelectExecutor(Object result) {
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        if (result instanceof ResultList == false)</span>
+<span class="nc" id="L216">            return new Object[]{null, _loc.get(&quot;exclude-not-result&quot;, _id)};</span>
+<span class="nc" id="L217">        Object userObject = ((ResultList&lt;?&gt;)result).getUserObject();</span>
+<span class="nc bnc" id="L218" title="All 6 branches missed.">        if (userObject == null || !userObject.getClass().isArray() || ((Object[])userObject).length != 2)</span>
+<span class="nc" id="L219">            return new Object[]{null, _loc.get(&quot;exclude-no-user-object&quot;, _id)};</span>
+<span class="nc" id="L220">        Object provider = ((Object[])userObject)[0];</span>
+<span class="nc" id="L221">        Object executor = ((Object[])userObject)[1];</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        if (executor instanceof StoreQuery.Executor == false)</span>
+<span class="nc" id="L223">            return new Object[]{null, _loc.get(&quot;exclude-not-executor&quot;, _id)};</span>
+<span class="nc" id="L224">        _exps = ((StoreQuery.Executor)executor).getQueryExpressions();</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        for (int i = 0; i &lt; _exps.length; i++) {</span>
+<span class="nc" id="L226">            QueryExpressions exp = _exps[i];</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">            if (exp.hasInExpression)</span>
+<span class="nc" id="L228">                return new Object[]{null, _loc.get(&quot;exclude-in-expression&quot;, _id)};</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">            if (isUsingExternalizedParameter(exp)) {</span>
+<span class="nc" id="L230">                return new Object[]{null, _loc.get(&quot;exclude-externalized-param&quot;, _id)};</span>
+            }
+        }
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        if (_exps[0].projections.length == 0) {</span>
+<span class="nc" id="L234">            _projTypes = StoreQuery.EMPTY_CLASSES;</span>
+        } else {
+<span class="nc" id="L236">            _projTypes = new Class[_exps[0].projections.length];</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">            for (int i = 0; i &lt; _exps[0].projections.length; i++) {</span>
+<span class="nc" id="L238">                _projTypes[i] = _exps[0].projections[i].getType();</span>
+            }
+        }
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if (provider instanceof QueryImpl.PackingResultObjectProvider) {</span>
+<span class="nc" id="L242">            provider = ((QueryImpl.PackingResultObjectProvider)provider).getDelegate();</span>
+        }
+<span class="nc bnc" id="L244" title="All 2 branches missed.">        if (provider instanceof RangeResultObjectProvider) {</span>
+<span class="nc" id="L245">            provider = ((RangeResultObjectProvider)provider).getDelegate();</span>
+        }
+<span class="nc bnc" id="L247" title="All 2 branches missed.">        if (provider instanceof SelectResultObjectProvider) {</span>
+<span class="nc" id="L248">            return new Object[]{((SelectResultObjectProvider)provider).getSelect(), null};</span>
+        }
+<span class="nc" id="L250">        return new Object[]{null, _loc.get(&quot;exclude-not-select-rop&quot;, _id, provider.getClass().getName())};</span>
+    }
+
+    private SelectImpl extractImplementation(SelectExecutor selector) {
+<span class="nc bnc" id="L254" title="All 2 branches missed.">        if (selector == null)</span>
+<span class="nc" id="L255">            return null;</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">        if (selector instanceof SelectImpl)</span>
+<span class="nc" id="L257">            return (SelectImpl)selector;</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">        if (selector instanceof LogicalUnion.UnionSelect)</span>
+<span class="nc" id="L259">            return ((LogicalUnion.UnionSelect)selector).getDelegate();</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">        if (selector instanceof Union)</span>
+<span class="nc" id="L261">            return extractImplementation(((Union)selector).getSelects()[0]);</span>
+
+<span class="nc" id="L263">        return null;</span>
+    }
+
+    private boolean isUsingExternalizedParameter(QueryExpressions exp) {
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        if (exp == null)</span>
+<span class="nc" id="L268">            return false;</span>
+<span class="nc" id="L269">        List&lt;FieldMetaData&gt; fmds = exp.getParameterizedFields();</span>
+<span class="nc bnc" id="L270" title="All 4 branches missed.">        if (fmds == null || fmds.isEmpty())</span>
+<span class="nc" id="L271">            return false;</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        for (FieldMetaData fmd : fmds) {</span>
+<span class="nc bnc" id="L273" title="All 2 branches missed.">            if (fmd.isExternalized())</span>
+<span class="nc" id="L274">                return true;</span>
+<span class="nc" id="L275">        }</span>
+<span class="nc" id="L276">        return false;</span>
+    }
+
+    private boolean isPaginated() {
+<span class="nc bnc" id="L280" title="All 2 branches missed.">        if (select instanceof SelectImpl) {</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">            if (((SelectImpl)select).getStartIndex() != 0 ||</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">                ((SelectImpl)select).getEndIndex() != Long.MAX_VALUE)</span>
+<span class="nc" id="L283">                return true;</span>
+        }
+<span class="nc" id="L285">        return false;</span>
+    }
+    private boolean isUsingFieldStrategy() {
+<span class="nc bnc" id="L288" title="All 2 branches missed.">        for (int i = 0; i &lt; _exps.length; i++) {</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">            if (isUsingFieldStrategy(_exps[i])) {</span>
+<span class="nc" id="L290">                return true;</span>
+            }
+        }
+<span class="nc" id="L293">        return false;</span>
+    }
+
+    private boolean isUsingFieldStrategy(QueryExpressions exp) {
+<span class="nc bnc" id="L297" title="All 2 branches missed.">        if (exp == null)</span>
+<span class="nc" id="L298">            return false;</span>
+<span class="nc" id="L299">        List&lt;FieldMetaData&gt; fmds = exp.getParameterizedFields();</span>
+<span class="nc bnc" id="L300" title="All 4 branches missed.">        if (fmds == null || fmds.isEmpty())</span>
+<span class="nc" id="L301">            return false;</span>
+<span class="nc bnc" id="L302" title="All 2 branches missed.">        for (FieldMetaData fmd : fmds) {</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">            if (((FieldMapping)fmd).getMappingInfo().getStrategy() != null)</span>
+<span class="nc" id="L304">                return true;</span>
+<span class="nc" id="L305">        }</span>
+<span class="nc" id="L306">        return false;</span>
+    }
+
+    /**
+     * Merge the given user parameters with its own parameter. The given map
+     * must be compatible with the user parameters extracted during
+     * {@link #initialize(Object) initialization}.
+     *
+     * @return 0-based parameter index mapped to corresponding values.
+     *
+     */
+    @Override
+    public Map&lt;Integer, Object&gt; reparametrize(Map user, Broker broker) {
+<span class="nc bnc" id="L319" title="All 2 branches missed.">        if (!isInitialized())</span>
+<span class="nc" id="L320">            throw new InternalException(&quot;reparameterize() on uninitialized.&quot;);</span>
+<span class="nc bnc" id="L321" title="All 4 branches missed.">        if (user == null || user.isEmpty()) {</span>
+<span class="nc bnc" id="L322" title="All 2 branches missed.">            if (!_userParamPositions.isEmpty()) {</span>
+<span class="nc" id="L323">                throw new UserException(_loc.get(&quot;uparam-null&quot;,</span>
+<span class="nc" id="L324">                    _userParamPositions.keySet(), this));</span>
+            } else {
+<span class="nc" id="L326">                return _template;</span>
+            }
+        }
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if (!_userParamPositions.keySet().equals(user.keySet())) {</span>
+<span class="nc" id="L330">            throw new UserException(_loc.get(&quot;uparam-mismatch&quot;,</span>
+<span class="nc" id="L331">                _userParamPositions.keySet(), user.keySet(), this));</span>
+        }
+<span class="nc" id="L333">        Map&lt;Integer, Object&gt; result = new HashMap&lt;&gt;(_template);</span>
+
+<span class="nc" id="L335">        Set&lt;Map.Entry&lt;Object,Object&gt;&gt; userSet = user.entrySet();</span>
+<span class="nc bnc" id="L336" title="All 2 branches missed.">        for (Map.Entry&lt;Object,Object&gt; userEntry : userSet) {</span>
+<span class="nc" id="L337">            Object key = userEntry.getKey();</span>
+<span class="nc" id="L338">            Integer[] indices = _userParamPositions.get(key);</span>
+<span class="nc bnc" id="L339" title="All 4 branches missed.">            if (indices == null || indices.length == 0)</span>
+<span class="nc" id="L340">                throw new UserException(_loc.get(&quot;uparam-no-pos&quot;, key, this));</span>
+<span class="nc" id="L341">            Object val = userEntry.getValue();</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">            if (ImplHelper.isManageable(val)) {</span>
+<span class="nc" id="L343">                setPersistenceCapableParameter(result, val, indices, broker);</span>
+<span class="nc bnc" id="L344" title="All 2 branches missed.">            } else if (val instanceof Collection) {</span>
+<span class="nc" id="L345">                setCollectionValuedParameter(result, (Collection)val, indices,</span>
+                    key, broker);
+            } else {
+<span class="nc bnc" id="L348" title="All 2 branches missed.">                for (int j : indices) {</span>
+<span class="nc bnc" id="L349" title="All 2 branches missed.">                    if (val instanceof Enum) {</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">                        if (_template.get(j) instanceof Integer) {</span>
+<span class="nc" id="L351">                            val = ((Enum)val).ordinal();</span>
+                        } else {
+<span class="nc" id="L353">                            val = ((Enum)val).name();</span>
+                        }
+                    }
+<span class="nc" id="L356">                    result.put(j, val);</span>
+                }
+            }
+<span class="nc" id="L359">        }</span>
+<span class="nc" id="L360">        return result;</span>
+    }
+
+    /**
+     * Calculate primary key identity value(s) of the given manageable instance
+     * and fill in the given map.
+     *
+     * @param values a map of integer parameter index to parameter value
+     * @param pc a manageable instance
+     * @param indices the indices of the column values
+     * @param broker used to obtain the primary key values
+     */
+    private void setPersistenceCapableParameter(Map&lt;Integer,Object&gt; result,
+        Object pc, Integer[] indices, Broker broker) {
+<span class="nc" id="L374">        JDBCStore store = (JDBCStore)broker.getStoreManager()</span>
+<span class="nc" id="L375">            .getInnermostDelegate();</span>
+<span class="nc" id="L376">        MappingRepository repos = store.getConfiguration()</span>
+<span class="nc" id="L377">            .getMappingRepositoryInstance();</span>
+<span class="nc" id="L378">        ClassMapping mapping = repos.getMapping(pc.getClass(),</span>
+<span class="nc" id="L379">            broker.getClassLoader(), true);</span>
+<span class="nc" id="L380">        Column[] pks = mapping.getPrimaryKeyColumns();</span>
+<span class="nc" id="L381">        Object cols = mapping.toDataStoreValue(pc, pks, store);</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">        if (cols instanceof Object[]) {</span>
+<span class="nc" id="L383">            Object[] array = (Object[])cols;</span>
+<span class="nc" id="L384">            int n = array.length;</span>
+<span class="nc bnc" id="L385" title="All 4 branches missed.">            if (n &gt; indices.length || indices.length%n != 0)</span>
+<span class="nc" id="L386">                throw new UserException(_loc.get(&quot;uparam-pc-key&quot;,</span>
+<span class="nc" id="L387">                    pc.getClass(), n, Arrays.toString(indices)));</span>
+<span class="nc" id="L388">            int k = 0;</span>
+<span class="nc bnc" id="L389" title="All 2 branches missed.">            for (int j : indices) {</span>
+<span class="nc" id="L390">                result.put(j, array[k%n]);</span>
+<span class="nc" id="L391">                k++;</span>
+            }
+<span class="nc" id="L393">        } else {</span>
+<span class="nc bnc" id="L394" title="All 2 branches missed.">            for (int j : indices) {</span>
+<span class="nc" id="L395">                result.put(j, cols);</span>
+            }
+        }
+<span class="nc" id="L398">    }</span>
+
+    private void setCollectionValuedParameter(Map&lt;Integer,Object&gt; result,
+        Collection values, Integer[] indices, Object param, Broker broker) {
+<span class="nc" id="L402">        int n = values.size();</span>
+<span class="nc" id="L403">        Object[] array = values.toArray();</span>
+<span class="nc bnc" id="L404" title="All 6 branches missed.">        if (n == 0 || n &gt; indices.length || indices.length%n != 0) {</span>
+<span class="nc" id="L405">            throw new UserException(_loc.get(&quot;uparam-coll-size&quot;, param, values,</span>
+<span class="nc" id="L406">                Arrays.toString(indices)));</span>
+        }
+<span class="nc" id="L408">        int k = 0;</span>
+<span class="nc bnc" id="L409" title="All 2 branches missed.">        for (int j : indices) {</span>
+<span class="nc" id="L410">            Object val = array[k%n];</span>
+<span class="nc bnc" id="L411" title="All 2 branches missed.">            if (ImplHelper.isManageable(val))</span>
+<span class="nc" id="L412">                setPersistenceCapableParameter(result, val, indices, broker);</span>
+            else
+<span class="nc" id="L414">                result.put(j, val);</span>
+<span class="nc" id="L415">            k++;</span>
+        }
+
+<span class="nc" id="L418">    }</span>
+    /**
+     * Marks the positions and keys of user parameters.
+     *
+     * @param list even elements are numbers representing the position of a
+     * user parameter in the _param list. Odd elements are the user parameter
+     * key. A user parameter key may appear more than once.
+     */
+    void setUserParameterPositions(List list) {
+<span class="nc" id="L427">        _userParamPositions = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L428">        List&lt;Integer&gt; positions = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L429" title="All 4 branches missed.">        for (int i = 1; list != null &amp;&amp; i &lt; list.size(); i += 2) {</span>
+<span class="nc" id="L430">            Object key = ((Parameter)list.get(i)).getParameterKey();</span>
+<span class="nc" id="L431">            positions.clear();</span>
+<span class="nc bnc" id="L432" title="All 2 branches missed.">            for (int j = 1; j &lt; list.size(); j += 2) {</span>
+<span class="nc" id="L433">                Object other = ((Parameter)list.get(j)).getParameterKey();</span>
+<span class="nc bnc" id="L434" title="All 2 branches missed.">                if (key.equals(other))</span>
+<span class="nc" id="L435">                    positions.add((Integer)list.get(j-1));</span>
+            }
+<span class="nc" id="L437">            _userParamPositions.put(key, positions.toArray(new Integer[positions.size()]));</span>
+        }
+<span class="nc" id="L439">    }</span>
+
+    void setParameters(List list) {
+<span class="nc" id="L442">        Map&lt;Integer, Object&gt; tmp = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L443" title="All 4 branches missed.">        for (int i = 0; list != null &amp;&amp; i &lt; list.size(); i++) {</span>
+<span class="nc" id="L444">            tmp.put(i, list.get(i));</span>
+        }
+<span class="nc" id="L446">        _template = Collections.unmodifiableMap(tmp);</span>
+<span class="nc" id="L447">    }</span>
+
+    SelectImpl getSelect() {
+<span class="nc" id="L450">        return select;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L455">        return &quot;PreparedQuery: [&quot; + getOriginalQuery() + &quot;] --&gt; [&quot; +</span>
+<span class="nc" id="L456">               getTargetQuery() + &quot;]&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

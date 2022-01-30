@@ -1,0 +1,6 @@
+org/apache/openjpa/enhance/stats/FetchStatsCollector$Shutdown.class
+org/apache/openjpa/enhance/stats/FetchStatisticsAuxEnhancer.class
+org/apache/openjpa/enhance/stats/FetchStatsCollector$1.class
+org/apache/openjpa/enhance/stats/FetchStatsCollector.class
+org/apache/openjpa/enhance/stats/FetchStatsCollector$1$1.class
+org/apache/openjpa/enhance/stats/FetchStatsCollector$Container.class

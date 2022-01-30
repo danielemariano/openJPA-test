@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EqualExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">EqualExpression.java</span></div><h1>EqualExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+
+/**
+ * Compares two values.
+ *
+ * @author Abe White
+ */
+class EqualExpression
+    extends CompareEqualExpression {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Constructor. Supply values to compare.
+     */
+    public EqualExpression(Val val1, Val val2) {
+<span class="nc" id="L41">        super(val1, val2);</span>
+<span class="nc" id="L42">    }</span>
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, BinaryOpExpState bstate,
+        SQLBuffer buf, boolean val1Null, boolean val2Null) {
+<span class="nc bnc" id="L47" title="All 4 branches missed.">        if (val1Null &amp;&amp; val2Null)</span>
+<span class="nc" id="L48">            buf.append(&quot;1 = 1&quot;);</span>
+<span class="nc bnc" id="L49" title="All 4 branches missed.">        else if (val1Null || val2Null) {</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">            Val val = (val1Null) ? getValue2() : getValue1();</span>
+<span class="nc bnc" id="L51" title="All 2 branches missed.">            ExpState state = (val1Null) ? bstate.state2 : bstate.state1;</span>
+<span class="nc bnc" id="L52" title="All 2 branches missed.">            if (!isDirectComparison()) {</span>
+<span class="nc" id="L53">                int len = val.length(sel, ctx, state);</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">                for (int i = 0; i &lt; len; i++) {</span>
+<span class="nc bnc" id="L55" title="All 2 branches missed.">                    if (i &gt; 0)</span>
+<span class="nc" id="L56">                        buf.append(&quot; AND &quot;);</span>
+<span class="nc" id="L57">                    val.appendTo(sel, ctx, state, buf, i);</span>
+<span class="nc" id="L58">                    buf.append(&quot; IS &quot;).appendValue(null);</span>
+                }
+<span class="nc" id="L60">            } else</span>
+<span class="nc" id="L61">                val.appendIsNull(sel, ctx, state, buf);</span>
+<span class="nc" id="L62">        } else {</span>
+<span class="nc" id="L63">            Val val1 = getValue1();</span>
+<span class="nc" id="L64">            Val val2 = getValue2();</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">            if (val1.length(sel, ctx, bstate.state1) == 1</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">                &amp;&amp; val2.length(sel, ctx, bstate.state2) == 1) {</span>
+<span class="nc" id="L67">                ctx.store.getDBDictionary().comparison(buf, &quot;=&quot;,</span>
+                    new FilterValueImpl(sel, ctx, bstate.state1, val1),
+                    new FilterValueImpl(sel, ctx, bstate.state2, val2));
+            } else {
+<span class="nc" id="L71">                int lenVal1 = val1.length(sel, ctx, bstate.state1);</span>
+<span class="nc" id="L72">                int lenVal2 = val2.length(sel, ctx, bstate.state2);</span>
+<span class="nc" id="L73">                int len = java.lang.Math.min(lenVal1, lenVal2);</span>
+
+                // OPENJPA-2631: Detect and handle slightly differently the
+                // case where a composite PK is in use. When an equals comparison
+                // is created by CriteriaBuilder, and the comparison is done against
+                // an entity with a composite PK, 'val2' can be either a:
+                // 1) Lit - in this case a Lit is hard coded to return a length of 1.
+                // 2) Param - in this case the metadata is null so length will return 1.
+                // Given this, first look to see if lenVal1 is greater than lenVal2.
+<span class="nc bnc" id="L82" title="All 2 branches missed.">                if (lenVal1 &gt; lenVal2) {</span>
+                    // If here, lets get the metadata from val1 and see if its PK
+                    // is an embeddable. If so, the length (val1Len) will be the
+                    // size of the number of colunns in the PK. Use this length
+                    // in order to create an equal expression with the right number
+                    // of 'AND' statementes.
+<span class="nc" id="L88">                    ClassMapping cm = (ClassMapping) val1.getMetaData();</span>
+<span class="nc" id="L89">                    FieldMapping[] fmsPK = cm.getPrimaryKeyFieldMappings();</span>
+
+<span class="nc bnc" id="L91" title="All 2 branches missed.">                    if (fmsPK[0].isEmbedded()) {</span>
+<span class="nc" id="L92">                        len = lenVal1;</span>
+                    }
+                }
+
+<span class="nc bnc" id="L96" title="All 2 branches missed.">                for (int i = 0; i &lt; len; i++) {</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">                    if (i &gt; 0)</span>
+<span class="nc" id="L98">                        buf.append(&quot; AND &quot;);</span>
+
+<span class="nc" id="L100">                    val1.appendTo(sel, ctx, bstate.state1, buf, i);</span>
+<span class="nc" id="L101">                    buf.append(&quot; = &quot;);</span>
+<span class="nc" id="L102">                    val2.appendTo(sel, ctx, bstate.state2, buf, i);</span>
+                }
+            }
+        }
+<span class="nc" id="L106">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

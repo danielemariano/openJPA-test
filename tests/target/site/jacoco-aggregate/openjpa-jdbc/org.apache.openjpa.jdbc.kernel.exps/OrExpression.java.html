@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>OrExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">OrExpression.java</span></div><h1>OrExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+
+/**
+ * Combines two expressions.
+ *
+ * @author Abe White
+ */
+class OrExpression
+    implements Exp {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final Exp _exp1;
+    private final Exp _exp2;
+
+    /**
+     * Constructor. Supply the expressions to combine.
+     */
+<span class="nc" id="L45">    public OrExpression(Exp exp1, Exp exp2) {</span>
+<span class="nc" id="L46">        _exp1 = exp1;</span>
+<span class="nc" id="L47">        _exp2 = exp2;</span>
+<span class="nc" id="L48">    }</span>
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, Map contains) {
+        // when OR'ing expressions each expression gets its own copy of the
+        // contains counts, cause it's OK for each to use the same aliases
+<span class="nc" id="L54">        Map contains2 = null;</span>
+<span class="nc bnc" id="L55" title="All 2 branches missed.">        if (contains != null)</span>
+<span class="nc" id="L56">            contains2 = new HashMap(contains);</span>
+
+<span class="nc" id="L58">        ExpState s1 = _exp1.initialize(sel, ctx, contains);</span>
+<span class="nc" id="L59">        ExpState s2 = _exp2.initialize(sel, ctx, contains2);</span>
+<span class="nc" id="L60">        ExpState ret = new BinaryOpExpState(sel.or(s1.joins, s2.joins), s1, s2);</span>
+<span class="nc bnc" id="L61" title="All 2 branches missed.">        if (contains == null)</span>
+<span class="nc" id="L62">            return ret;</span>
+
+        // combine the contains counts from the copy into the main map
+        Map.Entry entry;
+        Integer val1, val2;
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        for (Iterator itr = contains2.entrySet().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L68">            entry = (Map.Entry) itr.next();</span>
+<span class="nc" id="L69">            val2 = (Integer) entry.getValue();</span>
+<span class="nc" id="L70">            val1 = (Integer) contains.get(entry.getKey());</span>
+<span class="nc bnc" id="L71" title="All 4 branches missed.">            if (val1 == null || val2.intValue() &gt; val1.intValue())</span>
+<span class="nc" id="L72">                contains.put(entry.getKey(), val2);</span>
+        }
+<span class="nc" id="L74">        return ret;</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer buf) {
+<span class="nc" id="L80">        BinaryOpExpState bstate = (BinaryOpExpState) state;</span>
+<span class="nc bnc" id="L81" title="All 4 branches missed.">        boolean paren = bstate.joins != null &amp;&amp; !bstate.joins.isEmpty();</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        if (paren)</span>
+<span class="nc" id="L83">            buf.append(&quot;(&quot;);</span>
+
+<span class="nc" id="L85">        _exp1.appendTo(sel, ctx, bstate.state1, buf);</span>
+<span class="nc" id="L86">        buf.append(&quot; OR &quot;);</span>
+<span class="nc" id="L87">        _exp2.appendTo(sel, ctx, bstate.state2, buf);</span>
+
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        if (paren)</span>
+<span class="nc" id="L90">            buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L91">        sel.append(buf, bstate.joins);</span>
+<span class="nc" id="L92">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L97">        BinaryOpExpState bstate = (BinaryOpExpState) state;</span>
+<span class="nc" id="L98">        _exp1.selectColumns(sel, ctx, bstate.state1, pks);</span>
+<span class="nc" id="L99">        _exp2.selectColumns(sel, ctx, bstate.state2, pks);</span>
+<span class="nc" id="L100">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L104">        visitor.enter(this);</span>
+<span class="nc" id="L105">        _exp1.acceptVisit(visitor);</span>
+<span class="nc" id="L106">        _exp2.acceptVisit(visitor);</span>
+<span class="nc" id="L107">        visitor.exit(this);</span>
+<span class="nc" id="L108">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ObjectIdValueHandler.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">ObjectIdValueHandler.java</span></div><h1>ObjectIdValueHandler.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.kernel.ObjectIdStateManager;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * Handler for embedded object id fields.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+<span class="nc" id="L43">public class ObjectIdValueHandler</span>
+    extends EmbedValueHandler {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L48">    private Object[] _args = null;</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Column[] map(ValueMapping vm, String name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L57">        DBDictionary dict = vm.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">        DBIdentifier colName = DBIdentifier.newColumn(name, dict != null ? dict.delimitAll() : false);</span>
+<span class="nc" id="L59">        return map(vm, colName, io, adapt);</span>
+    }
+
+    public Column[] map(ValueMapping vm, DBIdentifier name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L64">        List cols = new ArrayList();</span>
+<span class="nc" id="L65">        List args = new ArrayList();</span>
+<span class="nc" id="L66">        setMapsIdCol(vm);</span>
+<span class="nc" id="L67">        super.map(vm, name, io, adapt, cols, args);</span>
+
+<span class="nc" id="L69">        vm.setColumns((Column[]) cols.toArray(new Column[cols.size()]));</span>
+<span class="nc" id="L70">        _args = args.toArray();</span>
+<span class="nc" id="L71">        return vm.getColumns();</span>
+    }
+
+    private void setMapsIdCol(ValueMapping vm) {
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if (!(vm instanceof FieldMapping))</span>
+<span class="nc" id="L76">            return;</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        if (!((FieldMapping)vm).hasMapsIdCols())</span>
+<span class="nc" id="L78">            return;</span>
+<span class="nc" id="L79">        ClassMapping embeddedMeta = (ClassMapping)((FieldMapping)vm).getValue().getEmbeddedMetaData();</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">        if (embeddedMeta == null)</span>
+<span class="nc" id="L81">            return;</span>
+<span class="nc" id="L82">        List mapsIdColList = ((FieldMapping)vm).getValueInfo().getMapsIdColumns();</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if (mapsIdColList.size() &gt; 0 ) {</span>
+<span class="nc" id="L84">            setMapsIdCols(mapsIdColList, embeddedMeta);</span>
+<span class="nc" id="L85">            return;</span>
+        }
+
+<span class="nc" id="L88">        FieldMapping[] fmds = embeddedMeta.getFieldMappings();</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        for (int i = 0; i &lt; fmds.length; i++) {</span>
+<span class="nc" id="L90">            mapsIdColList = fmds[i].getValueInfo().getMapsIdColumns();</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">            if (mapsIdColList.size() == 0)</span>
+<span class="nc" id="L92">                continue;</span>
+<span class="nc" id="L93">            ClassMapping embeddedMeta1 = (ClassMapping)fmds[i].getEmbeddedMetaData();</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">            if (embeddedMeta1 != null)</span>
+<span class="nc" id="L95">                setMapsIdCols(mapsIdColList, embeddedMeta1);</span>
+            else
+<span class="nc" id="L97">                setMapsIdCols(mapsIdColList, fmds[i]);</span>
+        }
+<span class="nc" id="L99">    }</span>
+
+    private void setMapsIdCols(List cols, ClassMapping cm) {
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.size(); i++) {</span>
+<span class="nc" id="L103">            DBIdentifier refColName = ((Column)cols.get(i)).getTargetIdentifier();</span>
+<span class="nc" id="L104">            FieldMapping fm = getReferenceField(cm, refColName);</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">            if (fm != null) {</span>
+<span class="nc" id="L106">                List colList1 = new ArrayList();</span>
+<span class="nc" id="L107">                colList1.add(cols.get(i));</span>
+<span class="nc" id="L108">                fm.setMapsIdCols(true);</span>
+<span class="nc" id="L109">                fm.getValueInfo().setMapsIdColumns(colList1);</span>
+            }
+        }
+<span class="nc" id="L112">    }</span>
+
+    private void setMapsIdCols(List cols, FieldMapping fm) {
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        if (cols.size() == 1) {</span>
+<span class="nc" id="L116">            fm.setMapsIdCols(true);</span>
+<span class="nc" id="L117">            fm.getValueInfo().setMapsIdColumns(cols);</span>
+<span class="nc" id="L118">            return;</span>
+        }
+
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.size(); i++) {</span>
+<span class="nc" id="L122">            DBIdentifier refColName = ((Column)cols.get(i)).getTargetIdentifier();</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">            if (isReferenceField(fm, refColName)) {</span>
+<span class="nc" id="L124">                List colList1 = new ArrayList();</span>
+<span class="nc" id="L125">                colList1.add(cols.get(i));</span>
+<span class="nc" id="L126">                fm.setMapsIdCols(true);</span>
+<span class="nc" id="L127">                fm.getValueInfo().setMapsIdColumns(colList1);</span>
+            }
+        }
+<span class="nc" id="L130">    }</span>
+
+    private FieldMapping getReferenceField(ClassMapping cm, DBIdentifier refColName) {
+<span class="nc" id="L133">        FieldMapping[] fmds = cm.getFieldMappings();</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        for (int i = 0; i &lt; fmds.length; i++) {</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">            if (isReferenceField(fmds[i], refColName))</span>
+<span class="nc" id="L136">                return fmds[i];</span>
+        }
+<span class="nc" id="L138">        return null;</span>
+    }
+
+    private boolean isReferenceField(FieldMapping fm, DBIdentifier refColName) {
+<span class="nc" id="L142">        List cols = fm.getValueInfo().getColumns();</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        if (cols.size() == 0) {</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">            if (fm.getName().equals(refColName.getName()))</span>
+<span class="nc" id="L145">                return true;</span>
+        } else {
+<span class="nc bnc" id="L147" title="All 2 branches missed.">            if (((Column)cols.get(0)).getIdentifier().equals(refColName))</span>
+<span class="nc" id="L148">                return true;</span>
+        }
+<span class="nc" id="L150">        return false;</span>
+    }
+
+    @Override
+    public Object getResultArgument(ValueMapping vm) {
+<span class="nc" id="L155">        return _args;</span>
+    }
+
+    @Override
+    public Object toDataStoreValue(ValueMapping vm, Object val,
+        JDBCStore store) {
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        OpenJPAStateManager sm = (val == null) ? null</span>
+<span class="nc" id="L162">            : new ObjectIdStateManager(val, null, vm);</span>
+<span class="nc" id="L163">        Column[] cols = vm.getColumns();</span>
+<span class="nc" id="L164">        Object rval = null;</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        if (cols.length &gt; 1)</span>
+<span class="nc" id="L166">            rval = new Object[cols.length];</span>
+<span class="nc" id="L167">        return super.toDataStoreValue(sm, vm, store, cols, rval, 0);</span>
+    }
+
+    @Override
+    public Object toObjectValue(ValueMapping vm, Object val) {
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L173">            return null;</span>
+
+<span class="nc" id="L175">        OpenJPAStateManager sm = new ObjectIdStateManager(null, null, vm);</span>
+        try {
+<span class="nc" id="L177">            super.toObjectValue(sm, vm, val, null, null, vm.getColumns(), 0);</span>
+<span class="nc" id="L178">        } catch (SQLException se) {</span>
+            // shouldn't be possible
+<span class="nc" id="L180">            throw new InternalException(se);</span>
+<span class="nc" id="L181">        }</span>
+<span class="nc" id="L182">        return sm.getManagedInstance();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

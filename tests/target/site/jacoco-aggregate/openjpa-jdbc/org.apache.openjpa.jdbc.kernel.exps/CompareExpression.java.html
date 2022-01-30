@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompareExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">CompareExpression.java</span></div><h1>CompareExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.sql.Raw;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Compares two values.
+ *
+ * @author Abe White
+ */
+class CompareExpression
+    implements Exp {
+
+    
+    private static final long serialVersionUID = 1L;
+    public static final String LESS = &quot;&lt;&quot;;
+    public static final String GREATER = &quot;&gt;&quot;;
+    public static final String LESS_EQUAL = &quot;&lt;=&quot;;
+    public static final String GREATER_EQUAL = &quot;&gt;=&quot;;
+
+<span class="nc" id="L46">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L47">        (CompareExpression.class);</span>
+
+    private final Val _val1;
+    private final Val _val2;
+    private final String _op;
+
+    /**
+     * Constructor. Supply values and operator.
+     */
+<span class="nc" id="L56">    public CompareExpression(Val val1, Val val2, String op) {</span>
+<span class="nc" id="L57">        _val1 = val1;</span>
+<span class="nc" id="L58">        _val2 = val2;</span>
+<span class="nc" id="L59">        _op = op;</span>
+<span class="nc" id="L60">    }</span>
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, Map contains) {
+<span class="nc" id="L64">        ExpState s1 = _val1.initialize(sel, ctx, 0);</span>
+<span class="nc" id="L65">        ExpState s2 = _val2.initialize(sel, ctx, 0);</span>
+<span class="nc" id="L66">        return new BinaryOpExpState(sel.and(s1.joins, s2.joins), s1, s2);</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer buf) {
+<span class="nc" id="L72">        BinaryOpExpState bstate = (BinaryOpExpState) state;</span>
+<span class="nc" id="L73">        _val1.calculateValue(sel, ctx, bstate.state1, _val2, bstate.state2);</span>
+<span class="nc" id="L74">        _val2.calculateValue(sel, ctx, bstate.state2, _val1, bstate.state1);</span>
+<span class="nc" id="L75">        Class val1Type = _val1.getType();</span>
+<span class="nc" id="L76">        Class val2Type = _val2.getType();</span>
+        // For purposes of the 'canConvert', when dealing with a Lit with Raw
+        // use a String type since Raw contains a String.
+<span class="nc bnc" id="L79" title="All 4 branches missed.">        if (_val1 instanceof Lit &amp;&amp; val1Type.isAssignableFrom(Raw.class)){</span>
+<span class="nc" id="L80">            val1Type = String.class;</span>
+        }
+<span class="nc bnc" id="L82" title="All 4 branches missed.">        if (_val2 instanceof Lit &amp;&amp; val2Type.isAssignableFrom(Raw.class)){</span>
+<span class="nc" id="L83">            val2Type = String.class;</span>
+        }
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (!Filters.canConvert(val1Type, val2Type, false)</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            &amp;&amp; !Filters.canConvert(val2Type, val1Type, false))</span>
+<span class="nc" id="L87">            throw new UserException(_loc.get(&quot;cant-convert&quot;, val1Type, val2Type));</span>
+
+<span class="nc" id="L89">        ctx.store.getDBDictionary().comparison(buf, _op,</span>
+            new FilterValueImpl(sel, ctx, bstate.state1, _val1),
+            new FilterValueImpl(sel, ctx, bstate.state2, _val2));
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if (sel != null)</span>
+<span class="nc" id="L93">            sel.append(buf, state.joins);</span>
+<span class="nc" id="L94">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L99">        BinaryOpExpState bstate = (BinaryOpExpState) state;</span>
+<span class="nc" id="L100">        _val1.selectColumns(sel, ctx, bstate.state1, true);</span>
+<span class="nc" id="L101">        _val2.selectColumns(sel, ctx, bstate.state2, true);</span>
+<span class="nc" id="L102">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L106">        visitor.enter(this);</span>
+<span class="nc" id="L107">        _val1.acceptVisit(visitor);</span>
+<span class="nc" id="L108">        _val2.acceptVisit(visitor);</span>
+<span class="nc" id="L109">        visitor.exit(this);</span>
+<span class="nc" id="L110">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

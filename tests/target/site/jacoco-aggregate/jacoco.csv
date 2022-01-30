@@ -1,0 +1,693 @@
+GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,MaxDBDictionary,3,0,0,0,1,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,AbstractResult,1410,0,104,0,261,0,183,0,131,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,LogicalUnion,521,0,56,0,113,0,60,0,32,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SybaseDictionary.SybaseConnection,33,0,4,0,14,0,5,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,RowManagerImpl.Key,55,0,12,0,11,0,9,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SelectImpl.SelectResult.CachedColumnAliasKey,94,0,22,0,27,0,14,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,HSQLDictionary,837,0,92,0,180,0,70,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SolidDBDictionary,1144,0,156,0,254,0,103,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,FirebirdDictionary,1372,0,82,0,209,0,61,0,20,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,PointbaseDictionary,222,0,14,0,58,0,14,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,DerbyDictionary,1228,0,37,0,71,0,26,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,JDataStoreDictionary,202,0,10,0,55,0,9,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,JoinSet,730,0,114,0,152,0,80,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SelectImpl.Selects,337,0,60,0,75,0,44,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,Join,264,0,20,0,68,0,35,0,25,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,AbstractSQLServerDictionary,319,0,12,0,66,0,12,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,DBDictionary.DateMillisecondBehaviors,21,0,0,0,1,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,Sized,9,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SelectImpl,4675,0,743,0,1056,0,584,0,212,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SQLErrorCodeReader,252,0,30,0,67,0,20,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,LogicalUnion.UnionSelect,868,0,20,0,212,0,145,0,135,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SelectImpl.SelectResult,663,0,112,0,137,0,92,0,36,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,MySQLDictionary,1627,0,136,0,223,0,91,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,PostgresDictionary.PostgresConnection,31,0,0,0,5,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,DBDictionary,10579,0,1465,0,2368,0,1130,0,344,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,CacheDictionary,33,0,0,0,12,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,BooleanRepresentationFactory.StringBooleanRepresentation,50,0,4,0,9,0,7,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,IngresDictionary,417,0,44,0,115,0,31,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SelectImpl.Selects.new AbstractList() {...},145,0,28,0,24,0,17,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SQLExceptions,153,0,14,0,29,0,22,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,MariaDBDictionary,1577,0,118,0,213,0,83,0,24,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,StoredProcedure.PARAM,39,0,0,0,1,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,StoredProcedure.SQL,27,0,0,0,1,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,OracleDictionary,3536,0,429,0,733,0,278,0,63,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,ResultSetResult,919,0,78,0,180,0,112,0,57,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,EmpressDictionary,308,0,28,0,65,0,20,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SQLFactoryImpl,36,0,0,0,10,0,8,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SQLServerDictionary,696,0,104,0,179,0,77,0,25,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,PostgresDictionary.PostgresPreparedStatement,50,0,6,0,17,0,6,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SecondaryRow,390,0,78,0,83,0,50,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,AbstractDB2Dictionary,221,0,8,0,60,0,7,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,BooleanRepresentationFactory.BooleanBooleanRepresentation,17,0,0,0,6,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SelectImpl.SelectJoins,746,0,126,0,182,0,84,0,21,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,DBDictionaryFactory,1436,0,116,0,514,0,67,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SybaseDictionary,1118,0,62,0,149,0,50,0,19,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SQLBuffer.Subselect,36,0,4,0,9,0,3,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,PrimaryRow,1073,0,208,0,219,0,141,0,36,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,PostgresDictionary,2225,0,190,0,415,0,144,0,49,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,BooleanRepresentationFactory.Int10BooleanRepresentation,29,0,6,0,6,0,8,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,RowManagerImpl,370,0,79,0,95,0,55,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,JoinSet.new Iterator() {...},87,0,16,0,19,0,12,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,Calendard,9,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,AccessDictionary,117,0,4,0,36,0,4,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SelectImpl.Key,92,0,22,0,17,0,16,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,AbstractResult.NoOpJoins,26,0,0,0,14,0,14,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SelectImpl.PathJoinsImpl,175,0,10,0,55,0,30,0,25,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,DBDictionary.SerializedData,6,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,FoxProDictionary,219,0,21,0,64,0,21,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,Raw,9,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,JoinSet.Node,96,0,12,0,21,0,11,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,LogicalUnion.ResultComparator,215,0,36,0,41,0,22,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,RowImpl,1824,0,221,0,407,0,218,0,107,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,H2Dictionary,634,0,48,0,113,0,49,0,25,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,InformixDictionary,753,0,90,0,180,0,68,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,StoredProcedure,603,0,39,0,110,0,49,0,28,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,HerdDBDictionary,36,0,0,0,13,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,SQLBuffer,1332,0,234,0,276,0,157,0,40,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,DB2Dictionary,3093,0,334,0,554,0,224,0,55,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,MergedResult,951,0,37,0,146,0,110,0,91,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,InterbaseDictionary,206,0,22,0,49,0,21,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.sql,BooleanRepresentationFactory,140,0,8,0,28,0,7,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Abs,34,0,12,0,8,0,10,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ToLowerCase,74,0,4,0,14,0,5,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,UnaryOp,249,0,18,0,62,0,31,0,22,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,MapEntry.Entry,75,0,18,0,15,0,15,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,FilterValueImpl,174,0,20,0,27,0,27,0,17,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,InSubQExpression.InSubQExpState,10,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ContainsExpression,53,0,6,0,14,0,6,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,InValueExpression,19,0,2,0,4,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Extension.ExtensionExpState,10,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,GetMapValue.GetMapValueExpState,10,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,SubQ,501,0,40,0,106,0,48,0,28,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ExpState,14,0,0,0,6,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,CurrentDate,111,0,12,0,23,0,12,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,StartsWithExpression.ZeroFilterValue,63,0,0,0,22,0,17,0,17,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Extension,365,0,34,0,81,0,39,0,22,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Index,37,0,0,0,9,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Variable,128,0,14,0,49,0,33,0,26,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,EqualTypeExpression,335,0,56,0,72,0,33,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Sqrt,10,0,0,0,5,0,4,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,StringLength,70,0,4,0,18,0,7,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,BinaryOpExpState,13,0,0,0,6,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,StringFunction,122,0,0,0,32,0,16,0,16,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,GetObjectId,236,0,20,0,59,0,28,0,18,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,PCPath,2539,0,440,0,594,0,288,0,66,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,GetMapValue,401,0,30,0,81,0,32,0,17,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,GeneralCaseExpression,388,0,20,0,84,0,33,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,GeneralCaseExpression.GeneralCaseExpState,7,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,MatchesExpression,331,0,28,0,66,0,20,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,SQLExpression,5,0,0,0,2,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Null,14,0,0,0,7,0,6,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,NotContainsExpression,116,0,2,0,26,0,6,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,DatastoreFunction,59,0,4,0,13,0,5,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,StartsWithExpression.StringLengthFilterValue,100,0,0,0,27,0,17,0,17,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,CompareExpression,182,0,14,0,35,0,13,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,MapKey,137,0,0,0,37,0,15,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Max,8,0,0,0,4,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ToUpperCase,74,0,4,0,14,0,5,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,MapKey.KeyExpState,6,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Count,127,0,26,0,26,0,20,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,CoalesceExpression,314,0,20,0,70,0,32,0,22,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,SelectConstructor.ProjectionExpressionVisitor,68,0,14,0,16,0,11,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,GetColumn,65,0,4,0,16,0,10,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Concat,279,0,2,0,60,0,20,0,19,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,All,7,0,0,0,3,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Math,239,0,2,0,53,0,21,0,20,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Args.ArgsExpState,7,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,TypeLit,139,0,10,0,33,0,16,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,InSubQExpression,110,0,0,0,23,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Param,295,0,34,0,66,0,32,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,SelectConstructor,941,0,162,0,178,0,91,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,MapEntry.EntryExpState,9,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ConstGetObjectId.ConstGetObjectIdExpState,12,0,0,0,5,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,SQLEmbed,47,0,2,0,12,0,9,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,NotExpression.NotExpState,7,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,SimpleCaseExpression.SimpleCaseExpState,7,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,EndsWithExpression.StringLengthDifferenceFilterValue,114,0,0,0,29,0,17,0,17,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,EqualExpression,191,0,30,0,37,0,17,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,TypeLit.LitExpState,12,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,InExpression,457,0,58,0,90,0,40,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ExpContext,27,0,0,0,9,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ConstInstanceofExpression,63,0,2,0,16,0,6,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,SQLValue,5,0,0,0,2,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,CollectionParam.ParamExpState,84,0,4,0,20,0,3,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Min,8,0,0,0,4,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,InstanceofExpression.InstanceofExpState,16,0,0,0,6,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,EndsWithExpression,256,0,16,0,48,0,13,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Sum,24,0,6,0,8,0,7,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,PCPath.PathExpState,19,0,0,0,7,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Substring,234,0,2,0,53,0,20,0,19,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,PCPath.Action,68,0,10,0,16,0,9,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,InstanceofExpression,213,0,29,0,58,0,20,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,QueryExpressionsState,22,0,0,0,7,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,JDBCWildcardMatch,53,0,4,0,12,0,5,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,BindVariableExpression,40,0,2,0,15,0,7,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ContainsKeyExpression,20,0,2,0,6,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,EmptyExpression,14,0,0,0,7,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,InExpression.InExpState,10,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,NullableAggregateUnaryOp,29,0,8,0,7,0,7,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,BindVariableAndExpression,86,0,4,0,21,0,7,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Size,37,0,0,0,9,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,IndexOf,246,0,4,0,57,0,21,0,19,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Lit,257,0,38,0,55,0,32,0,13,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,CompareEqualExpression,291,0,42,0,58,0,30,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Any,7,0,0,0,3,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,WhenScalar,108,0,0,0,25,0,9,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,MapEntry,131,0,4,0,35,0,16,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Param.ParamExpState,18,0,0,0,6,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,JDBCStringContains,53,0,4,0,11,0,5,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,AndExpression,131,0,8,0,32,0,9,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ConstPath,289,0,28,0,85,0,34,0,20,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Type,163,0,16,0,32,0,18,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,IsNotEmptyExpression,53,0,0,0,14,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,StartsWithExpression,261,0,16,0,49,0,13,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Trim.TrimExpState,10,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,NotEqualTypeExpression,354,0,56,0,79,0,33,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,InKeyExpression,19,0,2,0,4,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ConstGetObjectId,133,0,6,0,29,0,12,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,CollectionParam,360,0,36,0,73,0,32,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,OrExpression,172,0,18,0,39,0,14,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,SimpleCaseExpression,530,0,30,0,99,0,39,0,24,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Const,266,0,34,0,64,0,37,0,20,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,AbstractVal,94,0,2,0,32,0,20,0,19,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Distinct,62,0,6,0,16,0,7,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Args,332,0,26,0,71,0,41,0,28,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,NotEqualExpression,178,0,26,0,33,0,15,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,NullIfExpression,265,0,4,0,66,0,25,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Trim,366,0,24,0,79,0,32,0,20,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Avg,8,0,0,0,4,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,IsEmptyExpression,53,0,0,0,14,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,WhenCondition,111,0,0,0,26,0,9,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,HasContainsExpressionVisitor,35,0,8,0,10,0,7,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Const.ConstExpState,21,0,4,0,3,0,4,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,ConstPath.ConstPathExpState,15,0,0,0,6,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,NotContainsExpression.NotContainsExpState,6,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,NotExpression,62,0,0,0,15,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,JDBCExpressionFactory,1260,0,124,0,218,0,149,0,87,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,CoalesceExpression.CoalesceExpState,7,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel.exps,Aggregate,233,0,18,0,58,0,28,0,19,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,FieldMappingInfo,776,0,118,0,186,0,91,0,32,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,Version,470,0,44,0,129,0,66,0,44,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ClassMappingInfo.new MappingInfo.ForeignKeyDefaults() {...},33,0,0,0,6,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ClassMappingInfo.new MappingInfo.TableDefaults() {...},27,0,0,0,5,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ReverseMappingTool,3776,0,525,0,904,0,368,0,102,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,JDBCRelatedFieldOrder,134,0,18,0,35,0,18,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ReverseMappingTool.Flags,72,0,0,0,24,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,MappingTool.new Configurations.Runnable() {...},21,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,QueryResultMapping.FetchInfo,37,0,4,0,8,0,3,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ReverseMappingTool.ReverseCodeGenerator,119,0,16,0,30,0,16,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,NoneStrategyInstaller,36,0,0,0,15,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ReverseMappingTool.AnnotatedCodeGenerator,35,0,0,0,9,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,MappingInfo,4267,0,866,0,919,0,494,0,61,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,FieldMappingInfo.new MappingInfo.ForeignKeyDefaults() {...},33,0,0,0,6,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,FieldMappingInfo.new MappingInfo.TableDefaults() {...},27,0,0,0,5,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,JavaSQLTypes,129,0,32,0,49,0,31,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ValueMappingInfo,660,0,102,0,153,0,77,0,26,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,RuntimeStrategyInstaller,175,0,34,0,50,0,24,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,MappingTool,1953,0,248,0,465,0,179,0,54,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,Embeddable,5,0,0,0,1,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,RefreshStrategyInstaller,226,0,18,0,64,0,17,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,JDBCValueOrder,55,0,4,0,14,0,10,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,MappingDefaultsImpl,1149,0,161,0,308,0,185,0,104,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,QueryResultMapping.SingleColumnMap,13,0,0,0,5,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,FieldMapping,2203,0,304,0,575,0,301,0,145,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,Discriminator,532,0,60,0,151,0,79,0,49,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,MetaDataPlusMappingFactory,199,0,22,0,52,0,26,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,MappingStrategyInstaller,84,0,8,0,24,0,10,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,MappingTool.Flags,57,0,0,0,19,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,PropertiesReverseCustomizer,466,0,64,0,88,0,48,0,16,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,DelegatingJoinable,160,0,12,0,35,0,16,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,SequenceMapping,269,0,22,0,61,0,40,0,29,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ValueMappingImpl,1249,0,202,0,292,0,152,0,50,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,StrategyInstaller,8,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,DiscriminatorMappingInfo,223,0,45,0,58,0,32,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,MappingRepository,2725,0,610,0,745,0,395,0,85,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,NoneMappingDefaults,90,0,0,0,41,0,41,0,41,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,QueryResultMapping.PCResult,649,0,84,0,140,0,58,0,16,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,QueryResultMapping,231,0,16,0,70,0,33,0,25,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ClassMappingInfo,1145,0,164,0,259,0,135,0,53,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,QueryResultMapping.MultiColumnMap,55,0,4,0,11,0,6,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ReverseMappingTool.ReverseStrategyInstaller,121,0,14,0,32,0,13,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,VersionMappingInfo,322,0,44,0,68,0,30,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ClassMapping,1832,0,268,0,425,0,221,0,87,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ValueMappingInfo.new MappingInfo.ForeignKeyDefaults() {...},42,0,0,0,6,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ValueMappingInfo.new MappingInfo.ForeignKeyDefaults() {...},50,0,4,0,6,0,5,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,ReverseMappingTool.new Configurations.Runnable() {...},20,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta,JDBCColumnOrder,65,0,8,0,17,0,15,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.ant,MappingToolTask.Action,5,0,0,0,2,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.ant,SchemaToolTask.Action,5,0,0,0,2,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.ant,MappingToolTask,213,0,10,0,66,0,28,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.ant,ReverseMappingToolTask.Level,18,0,0,0,2,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.ant,ReverseMappingToolTask,243,0,10,0,83,0,32,0,27,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.ant,SchemaToolTask,112,0,4,0,36,0,17,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.ant,ReverseMappingToolTask.AccessType,14,0,0,0,2,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.ant,MappingToolTask.SchemaAction,25,0,0,0,5,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,IdentityJoinable,65,0,8,0,19,0,11,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,MaxEmbeddedClobFieldStrategy,119,0,14,0,26,0,16,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,NoneVersionStrategy,10,0,0,0,4,0,4,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationFieldStrategy.new Union.Selector() {...},149,0,4,0,16,0,4,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationFieldStrategy.new Union.Selector() {...},33,0,0,0,3,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ValueMapDiscriminatorStrategy,310,0,38,0,69,0,28,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationHandlerMapTableFieldStrategy,614,0,46,0,128,0,42,0,19,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,EmbedFieldStrategy,1411,0,210,0,304,0,143,0,37,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyMap.new Union.Selector() {...},192,0,18,0,25,0,11,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyMap.new Union.Selector() {...},200,0,18,0,25,0,11,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,AbstractDiscriminatorStrategy,60,0,4,0,19,0,10,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyMap.new Union.Selector() {...},44,0,2,0,6,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyMap.new Union.Selector() {...},190,0,20,0,28,0,12,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyCollection.ResultIterator,95,0,6,0,25,0,8,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ContainerFieldStrategy,248,0,18,0,53,0,19,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,PrimitiveWrapperArrays,139,0,24,0,31,0,17,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationHandlerMapTableFieldStrategy.new Union.Selector() {...},81,0,2,0,10,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,NumberVersionStrategy,93,0,8,0,19,0,11,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationToManyTableFieldStrategy,644,0,80,0,140,0,56,0,16,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,EmbedValueHandler,644,0,82,0,133,0,53,0,12,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,MapTableFieldStrategy,619,0,72,0,142,0,60,0,24,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,MaxEmbeddedByteArrayFieldStrategy,134,0,16,0,31,0,18,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,MaxEmbeddedLobFieldStrategy,423,0,38,0,102,0,37,0,18,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LobFieldStrategy,501,0,54,0,107,0,42,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,AbstractValueHandler,15,0,0,0,7,0,7,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,AbstractStrategy,21,0,0,0,13,0,13,0,13,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationRelationMapTableFieldStrategy.new Union.Selector() {...},118,0,4,0,18,0,4,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationRelationMapTableFieldStrategy.new Union.Selector() {...},136,0,4,0,16,0,4,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ClassNameDiscriminatorStrategy,171,0,12,0,48,0,14,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,MultiColumnVersionStrategy,173,0,16,0,35,0,17,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ElementEmbedValueHandler,329,0,36,0,76,0,29,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,NoneFieldStrategy,10,0,0,0,4,0,4,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,BlobValueHandler,50,0,2,0,11,0,6,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationRelationMapTableFieldStrategy,1233,0,156,0,282,0,102,0,24,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationMapInverseKeyFieldStrategy,298,0,24,0,64,0,35,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,FlatClassStrategy,92,0,8,0,20,0,9,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,NanoPrecisionTimestampVersionStrategy,7,0,0,0,3,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyMap,455,0,42,0,104,0,32,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationCollectionInverseKeyFieldStrategy,76,0,4,0,18,0,14,0,12,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,EmbedFieldStrategy.EmbeddedRowManager,114,0,12,0,24,0,20,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationMapInverseKeyFieldStrategy.new Union.Selector() {...},45,0,0,0,3,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,EmbedFieldStrategy.EmbeddedRow,458,0,4,0,144,0,76,0,74,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ObjectIdValueHandler,338,0,42,0,82,0,32,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,AbstractVersionStrategy,27,0,2,0,11,0,10,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,HandlerRelationMapTableFieldStrategy,1052,0,128,0,220,0,88,0,24,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ClobValueHandler,50,0,2,0,11,0,6,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,StoreCollectionFieldStrategy,1212,0,182,0,282,0,112,0,21,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationMapTableFieldStrategy,300,0,24,0,64,0,35,0,23,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,TimestampVersionStrategy,43,0,2,0,10,0,6,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationMapTableFieldStrategy.new Union.Selector() {...},45,0,0,0,3,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,PrimitiveFieldStrategy,829,0,111,0,189,0,94,0,28,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,CharArrayValueHandler,67,0,6,0,16,0,10,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationFieldStrategy,2605,0,406,0,575,0,249,0,45,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,SuperclassVersionStrategy,38,0,0,0,10,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,StoreCollectionFieldStrategy.new Union.Selector() {...},40,0,0,0,3,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,StoreCollectionFieldStrategy.new Union.Selector() {...},49,0,2,0,4,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,NoneDiscriminatorStrategy,13,0,0,0,5,0,4,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,HandlerFieldStrategy,1079,0,168,0,205,0,114,0,30,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,StateComparisonVersionStrategy.CustomUpdate,139,0,10,0,35,0,23,0,18,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,SubclassJoinDiscriminatorStrategy,255,0,44,0,66,0,30,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ObjectIdClassStrategy,48,0,6,0,11,0,6,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,VerticalClassStrategy,273,0,24,0,58,0,23,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,FullClassStrategy,251,0,28,0,56,0,23,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,MaxEmbeddedCharArrayFieldStrategy,167,0,20,0,41,0,20,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,EmbedFieldStrategy.NullEmbeddedStateManager,535,0,10,0,152,0,143,0,138,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,EmbeddedClassStrategy,169,0,26,0,41,0,19,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyMap.Entry,10,0,0,0,3,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,XMLValueHandler,147,0,10,0,37,0,10,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,NoneClassStrategy,38,0,0,0,16,0,8,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,HandlerCollectionTableFieldStrategy,651,0,72,0,137,0,58,0,22,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,CharArrayStreamValueHandler,100,0,8,0,25,0,11,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,EnumValueHandler,158,0,14,0,37,0,16,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationCollectionTableFieldStrategy,108,0,10,0,27,0,20,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,HandlerRelationMapTableFieldStrategy.new Union.Selector() {...},122,0,4,0,15,0,4,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ColumnVersionStrategy,793,0,118,0,166,0,76,0,17,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,HandlerStrategies,550,0,92,0,117,0,59,0,13,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyCollection,203,0,8,0,50,0,11,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,AbstractFieldStrategy,100,0,4,0,43,0,32,0,30,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,UntypedPCValueHandler,170,0,14,0,44,0,17,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyMap.ResultIterator,210,0,24,0,41,0,17,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyCollection.new Union.Selector() {...},136,0,14,0,20,0,9,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyCollection.new Union.Selector() {...},44,0,2,0,6,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,LRSProxyCollection.new Union.Selector() {...},92,0,2,0,9,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ImmutableValueHandler,92,0,12,0,24,0,13,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,ByteArrayValueHandler,58,0,2,0,13,0,8,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationToManyInverseKeyFieldStrategy,897,0,152,0,203,0,94,0,18,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,InValueDiscriminatorStrategy,344,0,56,0,68,0,37,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,StateComparisonVersionStrategy,354,0,62,0,79,0,42,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,StringFieldStrategy,496,0,52,0,100,0,53,0,27,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,AbstractClassStrategy,22,0,0,0,10,0,8,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,SuperclassDiscriminatorStrategy,77,0,6,0,19,0,9,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,HandlerHandlerMapTableFieldStrategy,542,0,34,0,109,0,35,0,18,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,RelationStrategies,381,0,45,0,86,0,36,0,13,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.meta.strats,MaxEmbeddedBlobFieldStrategy,199,0,20,0,42,0,19,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.conf,MappingRepositoryValue,55,0,2,0,15,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.conf,JDBCProductDerivation,72,0,2,0,22,0,7,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.conf,JDBCConfigurationImpl,2144,0,136,0,469,0,156,0,88,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.conf,FetchModeValue,59,0,0,0,10,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.conf,MappingFactoryValue,239,0,42,0,58,0,27,0,6,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.conf,JDBCSeqValue,93,0,0,0,14,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCBrokerFactory,400,0,46,0,100,0,38,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedStatementManagerImpl,454,0,62,0,117,0,52,0,21,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,FinderCacheImpl,621,0,100,0,144,0,81,0,31,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedQueryCacheImpl.StrongExclusion,6,0,0,0,2,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreManager.RefCountConnection,119,0,12,0,31,0,16,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedQueryCacheImpl.WeakExclusion,6,0,0,0,2,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreQuery,2647,0,339,0,522,0,230,0,51,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,BatchingPreparedStatementManagerImpl,596,0,89,0,159,0,62,0,16,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBC3SavepointManager,50,0,0,0,18,0,4,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreQuery.ThreadLocalContext,2,0,0,0,1,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,ValueTableJDBCSeq.new Configurations.Runnable() {...},20,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedProjectionResultObjectProvider,24,0,0,0,8,0,4,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedQueryCacheImpl,691,0,104,0,159,0,83,0,31,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,SQLProjectionResultObjectProvider,163,0,18,0,38,0,19,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,BatchingOperationOrderUpdateManager,44,0,0,0,12,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreManager.ClientConnection,19,0,2,0,9,0,4,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,AbstractUpdateManager.CustomMapping,36,0,4,0,12,0,5,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,StoredProcedureQuery.StoredProcedureQueryExecutor,303,0,18,0,49,0,13,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCFetchConfigurationImpl,839,0,162,0,192,0,118,0,37,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,OperationOrderUpdateManager,350,0,56,0,85,0,36,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreManager.new Union.Selector() {...},35,0,0,0,3,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreManager.new Union.Selector() {...},46,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,DelegatingJDBCFetchConfiguration,321,0,0,0,108,0,32,0,32,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,TableJDBCSeq.new Configurations.Runnable() {...},20,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,InstanceResultObjectProvider,40,0,6,0,11,0,5,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PessimisticLockManager,374,0,46,0,92,0,37,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,NativeJDBCSeq,596,0,54,0,164,0,55,0,28,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,ConnectionInfo,12,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,BatchingConstraintUpdateManager,44,0,0,0,12,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,TableJDBCSeq.AllocateSequenceRunnable,150,0,10,0,37,0,7,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,StoredProcedureQuery,122,0,16,0,32,0,19,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreManager.CancelStatement,159,0,0,0,35,0,11,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCFetchConfigurationImpl.JDBCConfigurationState,33,0,0,0,11,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,SQLStoreQuery,140,0,13,0,38,0,16,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,XROP,180,0,14,0,46,0,22,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,AbstractJDBCSavepointManager.ConnectionSavepoint,43,0,0,0,14,0,7,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedSQLStoreQuery.PreparedSQLExecutor,234,0,16,0,46,0,13,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,AbstractUpdateManager,791,0,110,0,177,0,71,0,16,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,ConstraintUpdateManager,868,0,122,0,200,0,81,0,20,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PagingResultObjectProvider,952,0,146,0,190,0,89,0,16,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,MixedLockManager,178,0,20,0,43,0,17,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedResultObjectProvider,11,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,SQLStoreQuery.SQLExecutor,520,0,62,0,120,0,44,0,13,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,TableJDBCSeq.Status,9,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,FinderQueryImpl,362,0,44,0,69,0,32,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,ValueTableJDBCSeq,236,0,22,0,61,0,20,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedQueryCacheImpl.ExclusionPattern,124,0,22,0,26,0,20,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,TableJDBCSeq,1322,0,122,0,319,0,109,0,48,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,MappedQueryResultObjectProvider,170,0,20,0,35,0,20,0,10,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,ClassTableJDBCSeq.new Configurations.Runnable() {...},20,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedSQLStoreQuery,35,0,2,0,8,0,5,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreQuery.new Union.Selector() {...},82,0,2,0,5,0,3,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,ProjectionResultObjectProvider,87,0,2,0,14,0,4,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,MappedQueryResultObjectProvider.MappingResult,639,0,70,0,128,0,83,0,48,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,NativeJDBCSeq.new Configurations.Runnable() {...},20,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,SelectResultObjectProvider,173,0,23,0,50,0,26,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreManager.CancelPreparedStatement,197,0,0,0,44,0,14,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,TableJDBCSeq.CurrentSequenceRunnable,56,0,4,0,16,0,4,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,JDBCStoreManager,3181,0,548,0,701,0,360,0,86,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,AbstractJDBCSeq,178,0,16,0,61,0,21,0,13,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,GenericResultObjectProvider,105,0,8,0,28,0,15,0,11,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,PreparedQueryImpl,1022,0,144,0,199,0,98,0,26,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,AbstractJDBCSavepointManager,40,0,2,0,13,0,9,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.kernel,ClassTableJDBCSeq,347,0,40,0,95,0,34,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,SchemaTool.new Configurations.Runnable() {...},20,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,Schema,557,0,72,0,142,0,63,0,27,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,Table,1690,0,230,0,406,0,202,0,87,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,NameSet,105,0,20,0,29,0,18,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,Constraint,263,0,22,0,68,0,38,0,27,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,AutoDriverDataSource,26,0,8,0,5,0,6,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,FileSchemaFactory,99,0,2,0,33,0,10,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,PrimaryKey,84,0,10,0,25,0,13,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,ColumnIO,430,0,74,0,66,0,69,0,32,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,LocalConstraint,292,0,50,0,72,0,40,0,15,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,DBCPDriverDataSource,444,0,80,0,110,0,57,0,17,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,TableSchemaFactory,844,0,58,0,229,0,53,0,24,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,SchemaTool.Flags,39,0,0,0,13,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,XMLSchemaParser.ForeignKeyInfo,39,0,0,0,9,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,ForeignKey.FKMapKey,95,0,22,0,22,0,15,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,DynamicSchemaFactory.DynamicColumn,56,0,10,0,17,0,8,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,DynamicSchemaFactory.DynamicTable,94,0,12,0,24,0,14,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,SchemaGenerator.Event,10,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,ForeignKey,1726,0,282,0,384,0,206,0,63,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,Unique,27,0,0,0,12,0,7,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,Index,67,0,8,0,22,0,13,0,9,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,Schemas,357,0,117,0,123,0,84,0,7,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,SchemaGenerator,1993,0,326,0,465,0,206,0,43,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,ReferenceCounter,23,0,0,0,7,0,4,0,4,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,Sequence,277,0,20,0,80,0,43,0,33,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,LazySchemaFactory,261,0,30,0,84,0,34,0,19,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,DynamicSchemaFactory,141,0,18,0,38,0,23,0,14,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,TableSchemaFactory.new Configurations.Runnable() {...},20,0,0,0,4,0,2,0,2,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,SchemaGroup,979,0,156,0,209,0,128,0,50,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,XMLSchemaParser.PrimaryKeyInfo,11,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,ColumnIO.new ColumnIO() {...},19,0,0,0,5,0,5,0,5,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,SchemaTool,3184,0,490,0,692,0,319,0,74,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,DataSourceFactory.DefaultsDataSource,22,0,0,0,6,0,3,0,3,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,XMLSchemaParser.IndexInfo,11,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,SimpleDriverDataSource,239,0,26,0,82,0,43,0,30,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,XMLSchemaParser,1204,0,119,0,285,0,101,0,35,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,XMLSchemaSerializer,945,0,136,0,232,0,96,0,28,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,Column,1406,0,219,0,344,0,208,0,89,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,XMLSchemaParser.UniqueInfo,11,0,0,0,3,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.schema,DataSourceFactory,472,0,60,0,134,0,38,0,8,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.identifier,DBIdentifier,827,351,142,26,218,91,127,35,49,28
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.identifier,DBIdentifier.DBIdentifierType,0,87,0,0,0,15,0,1,0,1
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.identifier,QualifiedDBIdentifier,219,241,51,35,56,64,37,31,11,14
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.identifier,ColumnDefIdentifierRule,10,0,0,0,4,0,1,0,1,0
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.identifier,DBIdentifierUtilImpl,974,7,160,0,214,3,108,1,27,1
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.identifier,DefaultIdentifierConfiguration,19,44,0,0,8,10,8,5,8,5
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.identifier,Normalizer,215,35,32,2,49,8,37,4,20,4
+Tests/openjpa-jdbc,org.apache.openjpa.jdbc.identifier,DBIdentifierRule,10,18,0,0,4,7,1,1,1,1
+Tests/openjpa-lib,org.apache.openjpa.lib.instrumentation,InstrumentationLevel,27,0,0,0,5,0,1,0,1,0
+Tests/openjpa-lib,org.apache.openjpa.lib.instrumentation,AbstractInstrument,41,0,0,0,18,0,11,0,11,0
+Tests/openjpa-lib,org.apache.openjpa.lib.instrumentation,AbstractInstrumentationProvider,228,0,22,0,67,0,33,0,22,0
+Tests/openjpa-lib,org.apache.openjpa.lib.ant,AbstractTask,306,0,28,0,79,0,29,0,15,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.git,GitUtils,33,0,6,0,9,0,6,0,3,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,BooleanValue,49,0,4,0,18,0,9,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,ProductDerivations,920,0,108,0,225,0,75,0,21,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,Value,800,0,144,0,178,0,120,0,48,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,AbstractProductDerivation,29,0,0,0,15,0,15,0,15,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,ObjectValue,122,0,12,0,39,0,21,0,15,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,MapConfigurationProvider,86,0,16,0,25,0,16,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,Configurations,1419,0,240,0,338,0,154,0,34,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,StringListValue,200,0,28,0,50,0,24,0,10,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,ClassListValue,100,0,6,0,25,0,13,0,10,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,ProductDerivations.ProductDerivationComparator,21,0,2,0,6,0,2,0,1,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,PluginValue,267,0,40,0,69,0,37,0,17,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,FileValue,47,0,4,0,16,0,9,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,BootstrapException,36,0,0,0,12,0,6,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,PluginListValue,358,0,44,0,92,0,36,0,13,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,DoubleValue,53,0,6,0,19,0,10,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,StringValue,48,0,6,0,17,0,10,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,ConfigurationImpl,2063,0,268,0,489,0,203,0,69,0
+Tests/openjpa-lib,org.apache.openjpa.lib.conf,IntValue,52,0,6,0,19,0,10,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,NoneLogFactory,5,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,NoneLogFactory.NoneLog,30,0,0,0,18,0,18,0,18,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,LogFactoryImpl.LogImpl,139,0,10,0,34,0,14,0,9,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,Log4JLogFactory.LogAdapter,84,0,0,0,29,0,17,0,17,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,SLF4JLogFactory.LogAdapter,131,0,2,0,37,0,22,0,21,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,AbstractLog,155,0,16,0,42,0,27,0,19,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,Log4JLogFactory,10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,CommonsLogFactory,15,0,0,0,4,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,LogFactoryImpl,350,0,40,0,92,0,41,0,19,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,LogOutputStream,78,0,12,0,29,0,12,0,4,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,LogFactoryAdapter,28,0,2,0,7,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,CommonsLogFactory.LogAdapter,84,0,0,0,29,0,17,0,17,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,MultiLogFactory.MultiLog,269,0,40,0,54,0,37,0,17,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,MultiLogFactory,102,0,6,0,21,0,10,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.log,SLF4JLogFactory,10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.identifier,IdentifierRule,78,144,16,12,30,43,27,15,14,14
+Tests/openjpa-lib,org.apache.openjpa.lib.identifier,IdentifierUtilImpl,931,271,118,34,182,57,124,20,54,14
+Tests/openjpa-lib,org.apache.openjpa.lib.identifier,IdentifierImpl,60,13,16,0,17,5,13,3,5,3
+Tests/openjpa-lib,org.apache.openjpa.lib.xml,Commentable,4,0,0,0,1,0,1,0,1,0
+Tests/openjpa-lib,org.apache.openjpa.lib.xml,ValidatingErrorHandler,9,0,0,0,4,0,4,0,4,0
+Tests/openjpa-lib,org.apache.openjpa.lib.xml,XMLWriter,238,0,54,0,52,0,33,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.xml,DocTypeReader,430,0,68,0,108,0,50,0,16,0
+Tests/openjpa-lib,org.apache.openjpa.lib.xml,Location,85,0,4,0,23,0,11,0,9,0
+Tests/openjpa-lib,org.apache.openjpa.lib.xml,XMLFactory,161,0,24,0,46,0,18,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,CFMetaDataParser,508,0,100,0,132,0,77,0,27,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,ResourceMetaDataIterator,168,0,22,0,37,0,18,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,ZipStreamMetaDataIterator,162,0,26,0,44,0,21,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,CFMetaDataSerializer,113,0,16,0,25,0,14,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,JarFileURLMetaDataIterator,297,0,40,0,70,0,28,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,XMLMetaDataSerializer,486,0,60,0,134,0,54,0,24,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,ZipStreamMetaDataIterator.NoCloseInputStream,25,0,0,0,5,0,5,0,5,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,MetaDataIteratorChain,159,0,22,0,41,0,19,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,ClassMetaDataIterator,434,0,48,0,85,0,31,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,SuffixMetaDataFilter,20,0,4,0,5,0,4,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,FileMetaDataIterator,187,0,24,0,51,0,21,0,9,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,SourceTrackers,79,0,6,0,17,0,6,0,3,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,ZipFileMetaDataIterator,238,0,36,0,62,0,27,0,9,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,XMLVersionParser,44,0,2,0,14,0,6,0,5,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,XMLMetaDataParser,1112,0,184,0,292,0,160,0,68,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,ClassArgParser,1195,0,206,0,298,0,128,0,23,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,ClasspathMetaDataIterator,113,0,18,0,30,0,12,0,3,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,ClassAnnotationMetaDataFilter,359,0,39,0,87,0,31,0,10,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,URLMetaDataIterator,86,0,16,0,25,0,14,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.meta,FileMetaDataIterator.FileResource,102,0,10,0,25,0,9,0,4,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,UUIDGenerator,275,0,20,0,72,0,22,0,12,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,JavaVendors,78,0,8,0,19,0,10,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,ReferenceHashSet.new Serializable() {...},13,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,FormatPreservingProperties.DuplicateKeyException,10,0,0,0,2,0,1,0,1,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},19,0,2,0,2,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},14,0,2,0,2,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},11,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,Files,510,0,82,0,150,0,53,0,12,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},14,0,2,0,2,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},14,0,2,0,2,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},14,0,2,0,2,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},5,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,ReferenceHashSet,107,0,6,0,26,0,20,0,17,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},15,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},15,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},11,0,0,0,3,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},17,0,2,0,4,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,Options.EmptyOptions,8,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},33,0,2,0,7,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},15,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},12,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},7,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},22,0,0,0,4,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},12,0,0,0,3,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},6,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},12,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,Localizer,148,118,11,5,20,25,20,4,12,4
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},15,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},5,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},12,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},12,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},12,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},17,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},17,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,TimestampHelper,45,0,0,0,11,0,3,0,3,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,StringUtil,674,41,180,4,145,10,107,3,15,3
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},12,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},5,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},20,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,ParameterTemplate,272,0,20,0,71,0,33,0,23,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},19,0,2,0,3,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,ReferenceHashMap.AccessibleEntry,48,0,4,0,13,0,8,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},15,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},12,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},17,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},7,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},15,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},15,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},15,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,StreamResourceBundleProvider,38,3,4,0,12,1,3,1,1,1
+Tests/openjpa-lib,org.apache.openjpa.lib.util,JavaVersions,143,0,26,0,43,0,19,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,MultiClassLoader,356,0,52,0,103,0,47,0,21,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,FormatPreservingProperties.LineEndingStream,60,0,10,0,10,0,8,0,3,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,Base16Encoder,181,0,22,0,21,0,15,0,4,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,OrderedMap,100,0,4,0,27,0,17,0,15,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,SimpleResourceBundleProvider,21,3,4,0,10,1,3,1,1,1
+Tests/openjpa-lib,org.apache.openjpa.lib.util,Localizer.Message,112,0,16,0,29,0,14,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,Options,1227,0,192,0,236,0,121,0,25,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,Services,269,0,36,0,79,0,29,0,11,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,FormatPreservingProperties.PropertyLine,139,0,24,0,33,0,19,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,ClassUtil,63,414,14,46,16,59,11,27,4,4
+Tests/openjpa-lib,org.apache.openjpa.lib.util,ReferenceHashMap,111,0,10,0,31,0,19,0,14,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper,339,10,4,0,69,3,65,2,63,2
+Tests/openjpa-lib,org.apache.openjpa.lib.util,ZipResourceBundleProvider,59,3,8,0,19,1,5,1,1,1
+Tests/openjpa-lib,org.apache.openjpa.lib.util,FormatPreservingProperties.PropertyLineReader,31,0,2,0,8,0,3,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,FormatPreservingProperties,876,0,160,0,217,0,111,0,29,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,TypedProperties,273,0,42,0,64,0,51,0,30,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,CodeFormat,710,0,58,0,163,0,90,0,61,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,LRUMap,111,0,10,0,28,0,17,0,12,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,StringDistance,236,0,36,0,56,0,27,0,9,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,SimpleRegex,166,0,32,0,48,0,19,0,3,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,TemporaryClassLoader,167,0,26,0,38,0,18,0,5,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,ParseException,27,0,0,0,12,0,6,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,Bytes,274,0,22,0,44,0,18,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},10,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},20,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},0,10,0,0,0,2,0,2,0,2
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},15,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,FormatPreservingProperties.PropertySource,6,0,0,0,2,0,1,0,1,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},16,0,0,0,3,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedExceptionAction() {...},20,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},6,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util,J2DoPrivHelper.new PrivilegedAction() {...},6,0,0,0,2,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,LoggingConnectionDecorator.LoggingConnection.LoggingResultSet,157,0,0,0,60,0,10,0,10,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,DelegatingDataSource,186,0,22,0,48,0,29,0,18,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,JDBCEventConnectionDecorator,91,0,17,0,36,0,18,0,4,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,ConfiguringConnectionDecorator,62,0,10,0,18,0,13,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,DelegatingResultSet,1123,0,14,0,311,0,205,0,198,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,LoggingConnectionDecorator.LoggingConnection,701,0,55,0,211,0,60,0,30,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,AbstractJDBCListener,60,0,0,0,30,0,16,0,16,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,DataSourceLogs,158,0,22,0,41,0,25,0,14,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,LoggingConnectionDecorator.LoggingConnection.LoggingPreparedStatement,1304,0,82,0,334,0,104,0,63,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,LoggingConnectionDecorator.LoggingConnection.LoggingStatement,430,0,10,0,109,0,19,0,14,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,LoggingConnectionDecorator.LoggingConnection.LoggingCallableStatement,1279,0,80,0,329,0,102,0,62,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,SQLFormatter,535,0,46,0,117,0,41,0,18,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,DelegatingCallableStatement,1331,0,22,0,367,0,234,0,223,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,JDBCEvent,38,0,0,0,13,0,7,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,JDBCEventConnectionDecorator.EventConnection,219,0,0,0,38,0,8,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,DelegatingPreparedStatement,692,0,22,0,204,0,122,0,111,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,ConfiguringConnectionDecorator.ConfiguringConnection,157,0,26,0,40,0,21,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,DecoratingDataSource,72,0,6,0,21,0,12,0,9,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,JDBCEventConnectionDecorator.EventPreparedStatement,385,0,0,0,65,0,13,0,13,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,LoggingConnectionDecorator.LoggingConnection.LoggingDatabaseMetaData,568,0,36,0,57,0,37,0,19,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,DelegatingDatabaseMetaData,869,0,8,0,197,0,186,0,182,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,JDBCEventConnectionDecorator.EventStatement,288,0,0,0,49,0,10,0,10,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,ReportingSQLException,119,0,4,0,27,0,10,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,DelegatingConnection,700,0,64,0,168,0,106,0,74,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,LoggingConnectionDecorator,189,0,12,0,53,0,26,0,20,0
+Tests/openjpa-lib,org.apache.openjpa.lib.jdbc,DelegatingStatement,338,0,20,0,93,0,65,0,55,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentHashMap,1159,0,160,0,225,0,122,0,42,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentHashMap.HashIterator,196,0,26,0,41,0,17,0,4,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentHashMap.EntrySet,60,0,8,0,10,0,10,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentReferenceHashMap,1150,0,179,0,246,0,127,0,37,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentReferenceHashMap.HashIterator,196,0,26,0,42,0,17,0,4,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentReferenceHashMap.HardEntry,125,0,16,0,25,0,19,0,11,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentReferenceHashMap.SoftEntry,142,0,18,0,25,0,20,0,11,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentHashMap.Entry,115,0,18,0,25,0,17,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentReferenceHashMap.new AbstractSet() {...},158,0,18,0,33,0,15,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentReferenceHashMap.new AbstractCollection() {...},32,0,0,0,6,0,5,0,5,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentReferenceHashMap.new AbstractSet() {...},41,0,2,0,7,0,7,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentHashMap.KeySet,41,0,2,0,7,0,7,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentReferenceHashMap.WeakEntry,142,0,18,0,25,0,20,0,11,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentHashMap.Values,32,0,0,0,6,0,5,0,5,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,AbstractConcurrentEventManager,109,0,14,0,32,0,18,0,11,0
+Tests/openjpa-lib,org.apache.openjpa.lib.util.concurrent,ConcurrentReferenceHashSet,109,0,6,0,26,0,20,0,17,0
+Tests/openjpa-lib,org.apache.openjpa.lib.graph,Edge,183,0,20,0,47,0,30,0,20,0
+Tests/openjpa-lib,org.apache.openjpa.lib.graph,BreadthFirstWalk,203,0,18,0,48,0,17,0,8,0
+Tests/openjpa-lib,org.apache.openjpa.lib.graph,Graph,315,0,48,0,73,0,37,0,13,0
+Tests/openjpa-lib,org.apache.openjpa.lib.graph,DepthFirstAnalysis.NodeInfoComparator,35,0,4,0,9,0,4,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.graph,DepthFirstAnalysis.NodeList,16,0,0,0,5,0,3,0,3,0
+Tests/openjpa-lib,org.apache.openjpa.lib.graph,NodeInfo,9,0,0,0,3,0,1,0,1,0
+Tests/openjpa-lib,org.apache.openjpa.lib.graph,DepthFirstAnalysis,500,0,74,0,111,0,49,0,12,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,AbstractListIterator,31,0,0,0,9,0,5,0,5,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,MergedResultObjectProvider,404,0,60,0,95,0,44,0,13,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,AbstractResultList,64,0,2,0,21,0,17,0,16,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,ListResultList,116,0,0,0,34,0,20,0,20,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,RandomAccessResultList,329,0,40,0,96,0,34,0,14,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,AbstractSequentialResultList,162,0,22,0,41,0,23,0,12,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,AbstractNonSequentialResultList.Itr,79,0,8,0,17,0,11,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,LazyForwardResultList.Itr,96,0,12,0,20,0,13,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,ListResultObjectProvider,66,0,6,0,22,0,14,0,11,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,WindowResultList,293,0,56,0,84,0,37,0,9,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,SimpleResultList,129,0,12,0,49,0,13,0,7,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,ResultListIterator,58,0,4,0,16,0,11,0,9,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,ResultObjectProviderIterator,116,0,14,0,45,0,13,0,6,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,EagerResultList,29,0,2,0,12,0,2,0,1,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,AbstractNonSequentialResultList,191,0,24,0,59,0,26,0,14,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,LazyForwardResultList,217,0,26,0,68,0,26,0,13,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,SoftRandomAccessResultList,8,0,0,0,3,0,2,0,2,0
+Tests/openjpa-lib,org.apache.openjpa.lib.rop,RangeResultObjectProvider,195,0,26,0,48,0,25,0,12,0

@@ -1,0 +1,1022 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Column.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">Column.java</span></div><h1>Column.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.DatabaseMetaData;
+import java.sql.Date;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.meta.VersionStrategy;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * Represents a database column. Closely aligned with the column
+ * information available from {@link DatabaseMetaData}.
+ *
+ * @author Abe White
+ * @author Stephen Kim
+ */
+public class Column extends ReferenceCounter {
+    private static final long serialVersionUID = 1L;
+    public static final int FLAG_UNINSERTABLE = 2 &lt;&lt; 0;
+    public static final int FLAG_UNUPDATABLE = 2 &lt;&lt; 1;
+    public static final int FLAG_DIRECT_INSERT = 2 &lt;&lt; 2;
+    public static final int FLAG_DIRECT_UPDATE = 2 &lt;&lt; 3;
+    public static final int FLAG_FK_INSERT = 2 &lt;&lt; 4;
+    public static final int FLAG_FK_UPDATE = 2 &lt;&lt; 5;
+    public static final int FLAG_PK_JOIN = 2 &lt;&lt; 6;
+
+<span class="nc" id="L56">    private DBIdentifier _name = DBIdentifier.NULL;</span>
+<span class="nc" id="L57">    private Table _table = null;</span>
+<span class="nc" id="L58">    private DBIdentifier _tableName = DBIdentifier.NULL;</span>
+<span class="nc" id="L59">    private DBIdentifier _schemaName = DBIdentifier.NULL;</span>
+<span class="nc" id="L60">    private int _type = Types.OTHER;</span>
+<span class="nc" id="L61">    private DBIdentifier _typeName = DBIdentifier.NULL;</span>
+<span class="nc" id="L62">    private int _javaType = JavaTypes.OBJECT;</span>
+<span class="nc" id="L63">    private int _size = 0;</span>
+<span class="nc" id="L64">    private int _precision = -1;</span>
+<span class="nc" id="L65">    private int _scale     = -1;</span>
+<span class="nc" id="L66">    private int _radix     = 10;</span>
+<span class="nc" id="L67">    private int _decimals = 0;</span>
+<span class="nc" id="L68">    private String _defaultStr = null;</span>
+<span class="nc" id="L69">    private Object _default = null;</span>
+<span class="nc" id="L70">    private Boolean _notNull = null;</span>
+<span class="nc" id="L71">    private boolean _autoAssign = false;</span>
+<span class="nc" id="L72">    private boolean _rel = false;</span>
+<span class="nc" id="L73">    private boolean _implicitRelation = false;</span>
+<span class="nc" id="L74">    private DBIdentifier _target = DBIdentifier.NULL;</span>
+<span class="nc" id="L75">    private String _targetField = null;</span>
+<span class="nc" id="L76">    private int _flags = 0;</span>
+<span class="nc" id="L77">    private QualifiedDBIdentifier _fullPath = null;</span>
+
+<span class="nc" id="L79">    private int _index = 0;</span>
+<span class="nc" id="L80">    private boolean _pk = false;</span>
+<span class="nc" id="L81">    private VersionStrategy _versionStrategy = null;</span>
+<span class="nc" id="L82">    private String _comment = null;</span>
+<span class="nc" id="L83">    private boolean _XML = false;</span>
+<span class="nc" id="L84">    private boolean _isUni1MFK = false;</span>
+<span class="nc" id="L85">    private Set&lt;Constraint&gt; _constraints = new HashSet&lt;&gt;();</span>
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L90">    public Column() {</span>
+<span class="nc" id="L91">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param name the name of the column
+     * @param table the column's table
+     * @deprecated
+     */
+    @Deprecated
+    public Column(String name, Table table) {
+<span class="nc" id="L102">        this(DBIdentifier.newColumn(name), table);</span>
+<span class="nc" id="L103">    }</span>
+
+<span class="nc" id="L105">    public Column(DBIdentifier name, Table table) {</span>
+<span class="nc" id="L106">        setIdentifier(name);</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (table != null) {</span>
+<span class="nc" id="L108">            setTableIdentifier(table.getIdentifier());</span>
+<span class="nc" id="L109">            setSchemaIdentifier(table.getSchemaIdentifier());</span>
+        }
+<span class="nc" id="L111">        _table = table;</span>
+<span class="nc" id="L112">    }</span>
+
+    /**
+     * Called when the column is removed from its table. Removes the column
+     * from all table constraints and indexes, then invalidates it.
+     */
+    void remove() {
+<span class="nc" id="L119">        Table table = getTable();</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        if (table == null)</span>
+<span class="nc" id="L121">            return;</span>
+
+<span class="nc" id="L123">        Schema schema = table.getSchema();</span>
+<span class="nc bnc" id="L124" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null) {</span>
+<span class="nc" id="L125">            Schema[] schemas = schema.getSchemaGroup().getSchemas();</span>
+            Table[] tabs;
+            ForeignKey[] fks;
+            Column[] cols;
+            Column[] pks;
+<span class="nc bnc" id="L130" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L131">                tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">                for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc" id="L133">                    fks = tabs[j].getForeignKeys();</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">                    for (int k = 0; k &lt; fks.length; k++) {</span>
+<span class="nc" id="L135">                        cols = fks[k].getColumns();</span>
+<span class="nc" id="L136">                        pks = fks[k].getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                        for (int l = 0; l &lt; cols.length; l++)</span>
+<span class="nc bnc" id="L138" title="All 4 branches missed.">                            if (this.equals(cols[l]) || this.equals(pks[l]))</span>
+<span class="nc" id="L139">                                fks[k].removeJoin(cols[l]);</span>
+
+<span class="nc" id="L141">                        cols = fks[k].getConstantColumns();</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">                        for (int l = 0; l &lt; cols.length; l++)</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">                            if (this.equals(cols[l]))</span>
+<span class="nc" id="L144">                                fks[k].removeJoin(cols[l]);</span>
+
+<span class="nc" id="L146">                        pks = fks[k].getConstantPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">                        for (int l = 0; l &lt; pks.length; l++)</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">                            if (this.equals(pks[l]))</span>
+<span class="nc" id="L149">                                fks[k].removeJoin(pks[l]);</span>
+
+<span class="nc bnc" id="L151" title="All 2 branches missed.">                        if (fks[k].getColumns().length == 0</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">                            &amp;&amp; fks[k].getConstantColumns().length == 0)</span>
+<span class="nc" id="L153">                            tabs[j].removeForeignKey(fks[k]);</span>
+                    }
+                }
+            }
+        }
+
+<span class="nc" id="L159">        Index[] idxs = table.getIndexes();</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        for (int i = 0; i &lt; idxs.length; i++)</span>
+<span class="nc bnc" id="L161" title="All 4 branches missed.">            if (idxs[i].removeColumn(this) &amp;&amp; idxs[i].getColumns().length == 0)</span>
+<span class="nc" id="L162">                table.removeIndex(idxs[i]);</span>
+
+<span class="nc" id="L164">        Unique[] unqs = table.getUniques();</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        for (int i = 0; i &lt; unqs.length; i++)</span>
+<span class="nc bnc" id="L166" title="All 4 branches missed.">            if (unqs[i].removeColumn(this) &amp;&amp; unqs[i].getColumns().length == 0)</span>
+<span class="nc" id="L167">                table.removeUnique(unqs[i]);</span>
+
+<span class="nc" id="L169">        PrimaryKey pk = table.getPrimaryKey();</span>
+<span class="nc bnc" id="L170" title="All 6 branches missed.">        if (pk != null &amp;&amp; pk.removeColumn(this) &amp;&amp; pk.getColumns().length == 0)</span>
+<span class="nc" id="L171">            table.removePrimaryKey();</span>
+
+<span class="nc" id="L173">        _table = null;</span>
+<span class="nc" id="L174">    }</span>
+
+    /**
+     * Return the table for the column.
+     */
+    public Table getTable() {
+<span class="nc" id="L180">        return _table;</span>
+    }
+
+    /**
+     * The column's table name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getTableName() {
+<span class="nc" id="L189">        return getTableIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getTableIdentifier() {
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        return _tableName == null ? DBIdentifier.NULL : _tableName;</span>
+    }
+
+    /**
+     * The column's table name. You can only call this method on columns
+     * whose table object is not set.
+     * @deprecated
+     */
+    @Deprecated
+    public void setTableName(String name) {
+<span class="nc" id="L203">        setTableIdentifier(DBIdentifier.newTable(name));</span>
+<span class="nc" id="L204">    }</span>
+
+    public void setTableIdentifier(DBIdentifier name) {
+<span class="nc bnc" id="L207" title="All 2 branches missed.">      if (getTable() != null)</span>
+<span class="nc" id="L208">          throw new IllegalStateException();</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">      _tableName = name == null ? DBIdentifier.NULL : name;</span>
+<span class="nc" id="L210">      _fullPath = null;</span>
+<span class="nc" id="L211">    }</span>
+
+    /**
+     * Reset the table name with the fully qualified table name which
+     * includes the schema name
+     * @deprecated
+     */
+    @Deprecated
+    public void resetTableName(String name) {
+<span class="nc" id="L220">        _tableName = DBIdentifier.newTable(name);</span>
+<span class="nc" id="L221">    }</span>
+
+    public void resetTableIdentifier(DBIdentifier table) {
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        _tableName = table == null ? DBIdentifier.NULL : table;</span>
+<span class="nc" id="L225">    }</span>
+
+    /**
+     * The column's schema name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getSchemaName() {
+<span class="nc" id="L233">        return getSchemaIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getSchemaIdentifier() {
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        return _schemaName == null ? DBIdentifier.NULL : _schemaName;</span>
+    }
+
+    /**
+     * The column's schema name. You can only call this method on columns
+     * whose table object is not set.
+     * @deprecated use setSchemaIdentifier(DBIdentifier name)
+     */
+    @Deprecated
+    public void setSchemaName(String name) {
+<span class="nc" id="L247">        setSchemaIdentifier(DBIdentifier.newSchema(name));</span>
+<span class="nc" id="L248">    }</span>
+
+    public void setSchemaIdentifier(DBIdentifier name) {
+<span class="nc bnc" id="L251" title="All 2 branches missed.">        if (getTable() != null)</span>
+<span class="nc" id="L252">            throw new IllegalStateException();</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        _schemaName = name == null ? DBIdentifier.NULL : name;</span>
+<span class="nc" id="L254">    }</span>
+
+    /**
+     * Return the column's name.
+     * @deprecated use getIdentifier()
+     */
+    @Deprecated
+    public String getName() {
+<span class="nc" id="L262">        return getIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getIdentifier() {
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        return _name == null ? DBIdentifier.NULL : _name;</span>
+    }
+
+
+    /**
+     * Set the column's name. You can only call this method on columns
+     * whose table object is not set.
+     * @deprecated use setIdentifier(DBIdentifier name)
+     */
+    @Deprecated
+    public void setName(String name) {
+<span class="nc" id="L277">        setIdentifier(DBIdentifier.newColumn(name));</span>
+<span class="nc" id="L278">    }</span>
+
+    public void setIdentifier(DBIdentifier name) {
+<span class="nc bnc" id="L281" title="All 2 branches missed.">        if (getTable() != null)</span>
+<span class="nc" id="L282">            throw new IllegalStateException();</span>
+<span class="nc bnc" id="L283" title="All 2 branches missed.">        _name = name == null ? DBIdentifier.NULL : name;</span>
+<span class="nc" id="L284">        _fullPath = null;</span>
+<span class="nc" id="L285">    }</span>
+
+    /**
+     * Return the column's full name, in the form &amp;lt;table&amp;gt;.&amp;lt;name&amp;gt;.
+     * @deprecated use getFullDBIdentifier()
+     */
+    @Deprecated
+    public String getFullName() {
+<span class="nc" id="L293">        return getFullDBIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getFullDBIdentifier() {
+<span class="nc" id="L297">        return getQualifiedPath().getIdentifier();</span>
+    }
+
+    public QualifiedDBIdentifier getQualifiedPath() {
+<span class="nc bnc" id="L301" title="All 2 branches missed.">        if (_fullPath  == null) {</span>
+<span class="nc" id="L302">            _fullPath = QualifiedDBIdentifier.newPath(getTableIdentifier(), getIdentifier() );</span>
+        }
+<span class="nc" id="L304">        return _fullPath;</span>
+    }
+
+    /**
+     * Return the column's SQL type. This will be one of the type constants
+     * defined in {@link Types}.
+     */
+    public int getType() {
+<span class="nc" id="L312">        return _type;</span>
+    }
+
+    /**
+     * Set the column's SQL type. This should be one of the type constants
+     * defined in {@link Types}.
+     */
+    public void setType(int sqlType) {
+<span class="nc" id="L320">        _type = sqlType;</span>
+<span class="nc" id="L321">    }</span>
+
+    /**
+     * The database-specific SQL type of this column.
+     * @deprecated
+     */
+    @Deprecated
+    public String getTypeName() {
+<span class="nc" id="L329">        return getTypeIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getTypeIdentifier() {
+<span class="nc bnc" id="L333" title="All 2 branches missed.">        return _typeName == null ? DBIdentifier.NULL : _typeName ;</span>
+    }
+
+    /**
+     * The database-specific SQL type of this column.
+     * @deprecated
+     */
+    @Deprecated
+    public void setTypeName(String typeName) {
+<span class="nc" id="L342">        setTypeIdentifier(DBIdentifier.newColumnDefinition(typeName));</span>
+<span class="nc" id="L343">    }</span>
+
+    public void setTypeIdentifier(DBIdentifier typeName) {
+<span class="nc bnc" id="L346" title="All 2 branches missed.">        _typeName = typeName == null ? DBIdentifier.NULL : typeName;</span>
+<span class="nc" id="L347">    }</span>
+
+    /**
+     * The Java type the data in this column is treated as, from
+     * {@link JavaTypes} or {@link JavaSQLTypes}.
+     */
+    public int getJavaType() {
+<span class="nc" id="L354">        return _javaType;</span>
+    }
+
+    /**
+     * The Java type the data in this column is treated as, from
+     * {@link JavaTypes} or {@link JavaSQLTypes}.
+     */
+    public void setJavaType(int type) {
+<span class="nc" id="L362">        _javaType = type;</span>
+<span class="nc" id="L363">    }</span>
+
+    /**
+     * Return the column's size.
+     */
+    public int getSize() {
+<span class="nc" id="L369">        return _size;</span>
+    }
+
+    /**
+     * Set the column's size.
+     */
+    public void setSize(int size) {
+<span class="nc" id="L376">        _size = size;</span>
+<span class="nc" id="L377">    }</span>
+
+    /**
+     * Return the number of decimal digits for the column, if applicable.
+     */
+    public int getDecimalDigits() {
+<span class="nc" id="L383">        return _decimals;</span>
+    }
+
+    /**
+     * Set the number of decimal digits for the column.
+     */
+    public void setDecimalDigits(int digits) {
+<span class="nc" id="L390">        _decimals = digits;</span>
+<span class="nc" id="L391">    }</span>
+
+    public int getPrecision() {
+<span class="nc" id="L394">        return _precision;</span>
+    }
+
+    public void setPrecision(int p) {
+<span class="nc" id="L398">        _precision = p;</span>
+<span class="nc" id="L399">    }</span>
+
+    public int getScale() {
+<span class="nc" id="L402">        return _scale;</span>
+    }
+
+    public void setScale(int s) {
+<span class="nc" id="L406">        _scale = s;</span>
+<span class="nc" id="L407">    }</span>
+    public int getRadix() {
+<span class="nc" id="L409">        return _radix;</span>
+    }
+
+    public void setRadix(int r) {
+<span class="nc" id="L413">        _radix = r;</span>
+<span class="nc" id="L414">    }</span>
+
+    /**
+     * Return the default value set for the column, if any.
+     */
+    public String getDefaultString() {
+<span class="nc" id="L420">        return _defaultStr;</span>
+    }
+
+    /**
+     * Set the default value for the column.
+     */
+    public void setDefaultString(String def) {
+<span class="nc" id="L427">        _defaultStr = def;</span>
+<span class="nc" id="L428">        _default = null;</span>
+<span class="nc" id="L429">    }</span>
+
+    /**
+     * Return the default value set for this column, if any. If only a default
+     * string has been set, attempts to convert it to the right type based
+     * on the Java type set for this column.
+     */
+    public Object getDefault() {
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        if (_default != null)</span>
+<span class="nc" id="L438">            return _default;</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">        if (_defaultStr == null)</span>
+<span class="nc" id="L440">            return null;</span>
+
+<span class="nc bnc" id="L442" title="All 15 branches missed.">        switch (_javaType) {</span>
+            case JavaTypes.BOOLEAN:
+            case JavaTypes.BOOLEAN_OBJ:
+<span class="nc bnc" id="L445" title="All 2 branches missed.">                _default = (&quot;true&quot;.equals(_defaultStr)) ? Boolean.TRUE</span>
+<span class="nc" id="L446">                    : Boolean.FALSE;</span>
+<span class="nc" id="L447">                break;</span>
+            case JavaTypes.BYTE:
+            case JavaTypes.BYTE_OBJ:
+<span class="nc" id="L450">                _default = new Byte(_defaultStr);</span>
+<span class="nc" id="L451">                break;</span>
+            case JavaTypes.CHAR:
+            case JavaTypes.CHAR_OBJ:
+<span class="nc" id="L454">                _default = Character.valueOf(_defaultStr.charAt(0));</span>
+<span class="nc" id="L455">                break;</span>
+            case JavaTypes.DOUBLE:
+            case JavaTypes.DOUBLE_OBJ:
+<span class="nc" id="L458">                _default = new Double(_defaultStr);</span>
+<span class="nc" id="L459">                break;</span>
+            case JavaTypes.FLOAT:
+            case JavaTypes.FLOAT_OBJ:
+<span class="nc" id="L462">                _default = new Float(_defaultStr);</span>
+<span class="nc" id="L463">                break;</span>
+            case JavaTypes.INT:
+            case JavaTypes.INT_OBJ:
+<span class="nc" id="L466">                _default = Integer.parseInt(_defaultStr);</span>
+<span class="nc" id="L467">                break;</span>
+            case JavaTypes.LONG:
+            case JavaTypes.LONG_OBJ:
+<span class="nc" id="L470">                _default = Long.parseLong(_defaultStr);</span>
+<span class="nc" id="L471">                break;</span>
+            case JavaTypes.NUMBER:
+            case JavaTypes.BIGDECIMAL:
+<span class="nc" id="L474">                _default = new BigDecimal(_defaultStr);</span>
+<span class="nc" id="L475">                break;</span>
+            case JavaTypes.SHORT:
+            case JavaTypes.SHORT_OBJ:
+<span class="nc" id="L478">                _default = new Short(_defaultStr);</span>
+<span class="nc" id="L479">                break;</span>
+            case JavaTypes.DATE:
+<span class="nc" id="L481">                _default = new java.util.Date(_defaultStr);</span>
+<span class="nc" id="L482">                break;</span>
+            case JavaTypes.BIGINTEGER:
+<span class="nc" id="L484">                _default = new BigInteger(_defaultStr);</span>
+<span class="nc" id="L485">                break;</span>
+            case JavaSQLTypes.SQL_DATE:
+<span class="nc" id="L487">                _default = Date.valueOf(_defaultStr);</span>
+<span class="nc" id="L488">                break;</span>
+            case JavaSQLTypes.TIMESTAMP:
+<span class="nc" id="L490">                _default = Timestamp.valueOf(_defaultStr);</span>
+<span class="nc" id="L491">                break;</span>
+            case JavaSQLTypes.TIME:
+<span class="nc" id="L493">                _default = Time.valueOf(_defaultStr);</span>
+<span class="nc" id="L494">                break;</span>
+            default:
+<span class="nc" id="L496">                _default = _defaultStr;</span>
+        }
+<span class="nc" id="L498">        return _default;</span>
+    }
+
+    /**
+     * Set the default value for the column.
+     */
+    public void setDefault(Object def) {
+<span class="nc" id="L505">        _default = def;</span>
+<span class="nc bnc" id="L506" title="All 2 branches missed.">        _defaultStr = (def == null) ? null : def.toString();</span>
+<span class="nc" id="L507">    }</span>
+
+    /**
+     * Return true if this is a NOT NULL column.
+     */
+    public boolean isNotNull() {
+<span class="nc" id="L513">        return Boolean.TRUE.equals(_notNull);</span>
+    }
+
+    /**
+     * Set whether this is a NOT NULL column.
+     */
+    public void setNotNull(boolean notNull) {
+<span class="nc bnc" id="L520" title="All 2 branches missed.">        _notNull = (notNull) ? Boolean.TRUE : Boolean.FALSE;</span>
+<span class="nc" id="L521">    }</span>
+
+    /**
+     * Whether the not-null property has been set.
+     */
+    public boolean isNotNullExplicit() {
+<span class="nc bnc" id="L527" title="All 2 branches missed.">        return _notNull != null;</span>
+    }
+
+    /**
+     * Sets nullability of this receiver by the given flag.
+     * @param flag one of the JDBC nullability flag namely
+     * &lt;LI&gt; {@link DatabaseMetaData#columnNullableUnknown} : not known if the column can be set to null value
+     * &lt;LI&gt; {@link DatabaseMetaData#columnNullable} : the column can be set to null value
+     * &lt;LI&gt; {@link DatabaseMetaData#columnNoNulls} : the column can not be set to null value
+     */
+    public void setNullability(short flag) {
+<span class="nc bnc" id="L538" title="All 4 branches missed.">        switch (flag) {</span>
+<span class="nc" id="L539">            case DatabaseMetaData.columnNullableUnknown : _notNull = null; break;</span>
+<span class="nc" id="L540">            case DatabaseMetaData.columnNullable : _notNull = false; break;</span>
+<span class="nc" id="L541">            case DatabaseMetaData.columnNoNulls : _notNull = true; break;</span>
+
+        }
+<span class="nc" id="L544">    }</span>
+
+    /**
+     * Whether this column is auto-assigned a value on insert.
+     */
+    public boolean isAutoAssigned() {
+<span class="nc" id="L550">        return _autoAssign;</span>
+    }
+
+    /**
+     * Whether this column is auto-incrementing.
+     */
+    public void setAutoAssigned(boolean autoAssign) {
+<span class="nc bnc" id="L557" title="All 4 branches missed.">        if (autoAssign != _autoAssign &amp;&amp; getTable() != null)</span>
+<span class="nc" id="L558">            getTable().changeAutoAssigned(this);</span>
+<span class="nc" id="L559">        _autoAssign = autoAssign;</span>
+<span class="nc" id="L560">    }</span>
+
+    /**
+     * Whether this column stores some form of serialized identity value for
+     * a related record. This makes the column dependent on the knowing the
+     * final identity of the relation before the column value is set.
+     */
+    public boolean isRelationId() {
+<span class="nc" id="L568">        return _rel;</span>
+    }
+
+    /**
+     * Whether this column stores some form of serialized identity value for
+     * a related record. This makes the column dependent on the knowing the
+     * final identity of the relation before the column value is set.
+     */
+    public void setRelationId(boolean rel) {
+<span class="nc bnc" id="L577" title="All 4 branches missed.">        if (rel != _rel &amp;&amp; getTable() != null)</span>
+<span class="nc" id="L578">            getTable().changeRelationId(this);</span>
+<span class="nc" id="L579">        _rel = rel;</span>
+<span class="nc" id="L580">    }</span>
+
+    /**
+     * The name of the column this column joins to, if any. Used for mapping.
+     * @deprecated use getTargetIdentifier()
+     */
+    @Deprecated
+    public String getTarget() {
+<span class="nc" id="L588">        return getTargetIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getTargetIdentifier() {
+<span class="nc bnc" id="L592" title="All 2 branches missed.">        return _target == null ? DBIdentifier.NULL : _target;</span>
+    }
+
+    /**
+     * The name of the column this column joins to, if any. Used for mapping.
+     * @deprecated use setTargetIdentifier(DBIdentifier target)
+     */
+    @Deprecated
+    public void setTarget(String target) {
+<span class="nc" id="L601">        setTargetIdentifier(DBIdentifier.newColumn(StringUtil.trimToNull(target)));</span>
+<span class="nc" id="L602">    }</span>
+
+    public void setTargetIdentifier(DBIdentifier target) {
+<span class="nc bnc" id="L605" title="All 2 branches missed.">        _target = target == null ? DBIdentifier.NULL : DBIdentifier.trimToNull(target);</span>
+<span class="nc" id="L606">    }</span>
+
+    /**
+     * The name of the field this column joins to, if any. Used for mapping.
+     */
+    public String getTargetField() {
+<span class="nc" id="L612">        return _targetField;</span>
+    }
+
+    /**
+     * The name of the field this column joins to, if any. Used for mapping.
+     */
+    public void setTargetField(String target) {
+<span class="nc bnc" id="L619" title="All 4 branches missed.">        if (target != null &amp;&amp; target.length() == 0)</span>
+<span class="nc" id="L620">            target = null;</span>
+<span class="nc" id="L621">        _targetField = target;</span>
+<span class="nc" id="L622">    }</span>
+
+    /**
+     * Flags are used for bookkeeping information. They are ignored at runtime.
+     */
+    public boolean getFlag(int flag) {
+<span class="nc bnc" id="L628" title="All 2 branches missed.">        return (_flags &amp; flag) != 0;</span>
+    }
+
+    /**
+     * Flags are used for bookkeeping information. They are ignored at runtime.
+     */
+    public void setFlag(int flag, boolean on) {
+<span class="nc bnc" id="L635" title="All 2 branches missed.">        if (on)</span>
+<span class="nc" id="L636">            _flags |= flag;</span>
+        else
+<span class="nc" id="L638">            _flags &amp;= ~flag;</span>
+<span class="nc" id="L639">    }</span>
+
+    /**
+     * Return true if this column belongs to the table's primary key.
+     */
+    public boolean isPrimaryKey() {
+<span class="nc" id="L645">        return _pk;</span>
+    }
+
+    /**
+     * Set whether this column belongs to the table's primary key.
+     */
+    void setPrimaryKey(boolean pk) {
+<span class="nc" id="L652">        _pk = pk;</span>
+<span class="nc" id="L653">    }</span>
+
+    /**
+     * Return the column's 0-based index in the owning table.
+     */
+    public int getIndex() {
+<span class="nc bnc" id="L659" title="All 2 branches missed.">        if (getTable() != null)</span>
+<span class="nc" id="L660">            getTable().indexColumns();</span>
+<span class="nc" id="L661">        return _index;</span>
+    }
+
+    /**
+     * Set the column's 0-based index in the owning table.
+     */
+    public void setIndex(int index) {
+<span class="nc" id="L668">        _index = index;</span>
+<span class="nc" id="L669">    }</span>
+
+    /**
+     * Whether this column is a LOB.
+     */
+    public boolean isLob() {
+<span class="nc bnc" id="L675" title="All 2 branches missed.">        switch (_type) {</span>
+            case Types.BINARY:
+            case Types.BLOB:
+            case Types.LONGVARBINARY:
+            case Types.VARBINARY:
+            case Types.CLOB:
+<span class="nc" id="L681">                return true;</span>
+            default:
+<span class="nc" id="L683">                return false;</span>
+        }
+    }
+
+    /**
+     * Return true if this column is compatible with the given JDBC type
+     * from {@link Types} and size.
+     */
+    public boolean isCompatible(int type, String typeName, int size,
+        int decimals) {
+<span class="nc bnc" id="L693" title="All 4 branches missed.">        if (type == Types.OTHER || getType() == Types.OTHER)</span>
+<span class="nc" id="L694">            return true;</span>
+
+        // note that the given size is currently ignored, but may be useful
+        // to dynamically-populating subclasses
+<span class="nc bnc" id="L698" title="All 6 branches missed.">        switch (getType()) {</span>
+            case Types.BIT:
+            case Types.TINYINT:
+            case Types.BIGINT:
+            case Types.INTEGER:
+            case Types.NUMERIC:
+            case Types.SMALLINT:
+            case Types.DECIMAL:
+            case Types.DOUBLE:
+            case Types.FLOAT:
+            case Types.REAL:
+<span class="nc bnc" id="L709" title="All 2 branches missed.">                switch (type) {</span>
+                    case Types.BIT:
+                    case Types.TINYINT:
+                    case Types.BIGINT:
+                    case Types.INTEGER:
+                    case Types.NUMERIC:
+                    case Types.SMALLINT:
+                    case Types.DECIMAL:
+                    case Types.DOUBLE:
+                    case Types.FLOAT:
+                    case Types.REAL:
+<span class="nc" id="L720">                        return true;</span>
+                    default:
+<span class="nc" id="L722">                        return false;</span>
+                }
+            case Types.BINARY:
+            case Types.BLOB:
+            case Types.LONGVARBINARY:
+            case Types.VARBINARY:
+            case Types.OTHER:
+<span class="nc bnc" id="L729" title="All 2 branches missed.">                switch (type) {</span>
+                    case Types.BINARY:
+                    case Types.BLOB:
+                    case Types.LONGVARBINARY:
+                    case Types.VARBINARY:
+                    case Types.OTHER:
+<span class="nc" id="L735">                        return true;</span>
+                    default:
+<span class="nc" id="L737">                        return false;</span>
+                }
+            case Types.CLOB:
+            case Types.CHAR:
+            case Types.LONGVARCHAR:
+            case Types.VARCHAR:
+<span class="nc bnc" id="L743" title="All 2 branches missed.">                switch (type) {</span>
+                    case Types.CLOB:
+                    case Types.CHAR:
+                    case Types.LONGVARCHAR:
+                    case Types.VARCHAR:
+                    case Types.DATE:
+                    case Types.TIME:
+                    case Types.TIMESTAMP:
+<span class="nc" id="L751">                        return true;</span>
+                    default:
+<span class="nc" id="L753">                        return false;</span>
+                }
+            case Types.DATE:
+            case Types.TIME:
+            case Types.TIMESTAMP:
+<span class="nc bnc" id="L758" title="All 2 branches missed.">                switch (type) {</span>
+                    case Types.LONGVARCHAR:
+                    case Types.CLOB:
+                    case Types.VARCHAR:
+                    case Types.DATE:
+                    case Types.TIME:
+                    case Types.TIMESTAMP:
+<span class="nc" id="L765">                        return true;</span>
+                    default:
+<span class="nc" id="L767">                        return false;</span>
+                }
+            case Types.SQLXML:  // All XML Types
+            case 2007:          // Oracle-defined opaque type code for XMLType treated the same way
+<span class="nc bnc" id="L771" title="All 2 branches missed.">                switch (type) {</span>
+                    case Types.CHAR:
+                    case Types.LONGVARCHAR:
+                    case Types.VARCHAR:
+                    case Types.CLOB:
+                    case Types.BLOB:
+<span class="nc" id="L777">                        return true;</span>
+                     default:
+<span class="nc" id="L779">                         return false;</span>
+                }
+
+
+
+            default:
+<span class="nc bnc" id="L785" title="All 2 branches missed.">                return type == getType();</span>
+        }
+    }
+
+    /**
+     * Returns the column name.
+     */
+    @Override
+    public String toString() {
+<span class="nc" id="L794">        return getIdentifier().getName();</span>
+    }
+
+    /**
+     * Useful for debugging.
+     */
+    public String getDescription() {
+<span class="nc" id="L801">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L802">        buf.append(&quot;Full Name: &quot;).append(getFullName()).append(&quot;\n&quot;);</span>
+<span class="nc" id="L803">        buf.append(&quot;Type: &quot;).append(Schemas.getJDBCName(getType())).</span>
+<span class="nc" id="L804">            append(&quot;\n&quot;);</span>
+<span class="nc" id="L805">        buf.append(&quot;Size: &quot;).append(getSize()).append(&quot;\n&quot;);</span>
+<span class="nc" id="L806">        buf.append(&quot;Default: &quot;).append(getDefaultString()).append(&quot;\n&quot;);</span>
+<span class="nc" id="L807">        buf.append(&quot;Not Null: &quot;).append(isNotNull()).append(&quot;\n&quot;);</span>
+<span class="nc" id="L808">        return buf.toString();</span>
+    }
+
+    /**
+     * Tests compatibility.
+     */
+    public boolean equalsColumn(DBDictionary dict, Column col) {
+<span class="nc bnc" id="L815" title="All 2 branches missed.">        if (col == this)</span>
+<span class="nc" id="L816">            return true;</span>
+<span class="nc bnc" id="L817" title="All 2 branches missed.">        if (col == null)</span>
+<span class="nc" id="L818">            return false;</span>
+
+<span class="nc bnc" id="L820" title="All 2 branches missed.">        if (!getQualifiedPath().equals(col.getQualifiedPath()))</span>
+<span class="nc" id="L821">            return false;</span>
+<span class="nc bnc" id="L822" title="All 2 branches missed.">        if (!isCompatible(col.getType(), col.getTypeIdentifier().getName(), col.getSize(),</span>
+<span class="nc" id="L823">            col.getDecimalDigits())) {</span>
+            // do an additional lookup in case the java.sql.Types are different but
+            // they map to the same representation in the DB
+<span class="nc bnc" id="L826" title="All 2 branches missed.">            if (dict.getTypeName(this).equals(dict.getTypeName(col))) {</span>
+<span class="nc" id="L827">                return true;</span>
+            }
+<span class="nc" id="L829">            return false;</span>
+        }
+<span class="nc bnc" id="L831" title="All 6 branches missed.">        if (getType() == Types.VARCHAR &amp;&amp; getSize() &gt; 0 &amp;&amp; col.getSize() &gt; 0</span>
+<span class="nc bnc" id="L832" title="All 2 branches missed.">            &amp;&amp; getSize() != col.getSize())</span>
+<span class="nc" id="L833">            return false;</span>
+<span class="nc" id="L834">        return true;</span>
+    }
+
+    /**
+     * Copy information from the given column to this one.
+     */
+    public void copy(Column from) {
+<span class="nc bnc" id="L841" title="All 2 branches missed.">        if (from == null)</span>
+<span class="nc" id="L842">            return;</span>
+<span class="nc bnc" id="L843" title="All 2 branches missed.">        if (DBIdentifier.isNull(getIdentifier()))</span>
+<span class="nc" id="L844">            setIdentifier(from.getIdentifier());</span>
+<span class="nc bnc" id="L845" title="All 2 branches missed.">        if (getType() == Types.OTHER)</span>
+<span class="nc" id="L846">            setType(from.getType());</span>
+<span class="nc bnc" id="L847" title="All 2 branches missed.">        if (DBIdentifier.isNull(getTypeIdentifier()))</span>
+<span class="nc" id="L848">            setTypeIdentifier(from.getTypeIdentifier());</span>
+<span class="nc bnc" id="L849" title="All 2 branches missed.">        if (getJavaType() == JavaTypes.OBJECT)</span>
+<span class="nc" id="L850">            setJavaType(from.getJavaType());</span>
+<span class="nc bnc" id="L851" title="All 2 branches missed.">        if (getSize() == 0)</span>
+<span class="nc" id="L852">            setSize(from.getSize());</span>
+<span class="nc bnc" id="L853" title="All 2 branches missed.">        if (getDecimalDigits() == 0)</span>
+<span class="nc" id="L854">            setDecimalDigits(from.getDecimalDigits());</span>
+<span class="nc bnc" id="L855" title="All 2 branches missed.">        if (getDefaultString() == null)</span>
+<span class="nc" id="L856">            setDefaultString(from.getDefaultString());</span>
+<span class="nc bnc" id="L857" title="All 4 branches missed.">        if (!isNotNullExplicit() &amp;&amp; from.isNotNullExplicit())</span>
+<span class="nc" id="L858">            setNotNull(from.isNotNull());</span>
+<span class="nc bnc" id="L859" title="All 2 branches missed.">        if (!isAutoAssigned())</span>
+<span class="nc" id="L860">            setAutoAssigned(from.isAutoAssigned());</span>
+<span class="nc bnc" id="L861" title="All 2 branches missed.">        if (!isRelationId())</span>
+<span class="nc" id="L862">            setRelationId(from.isRelationId());</span>
+<span class="nc bnc" id="L863" title="All 2 branches missed.">        if (!isImplicitRelation())</span>
+<span class="nc" id="L864">        	setImplicitRelation(from.isRelationId());</span>
+<span class="nc bnc" id="L865" title="All 2 branches missed.">        if (DBIdentifier.isNull(getTargetIdentifier()))</span>
+<span class="nc" id="L866">            setTargetIdentifier(from.getTargetIdentifier());</span>
+<span class="nc bnc" id="L867" title="All 2 branches missed.">        if (getTargetField() == null)</span>
+<span class="nc" id="L868">            setTargetField(from.getTargetField());</span>
+<span class="nc bnc" id="L869" title="All 2 branches missed.">        if (_flags == 0)</span>
+<span class="nc" id="L870">            _flags = from._flags;</span>
+<span class="nc bnc" id="L871" title="All 2 branches missed.">        if (!isXML())</span>
+<span class="nc" id="L872">            setXML(from.isXML());</span>
+<span class="nc bnc" id="L873" title="All 2 branches missed.">        if (!isUni1MFK())</span>
+<span class="nc" id="L874">            setUni1MFK(from.isUni1MFK());</span>
+<span class="nc bnc" id="L875" title="All 2 branches missed.">        for (Constraint c : _constraints) {</span>
+<span class="nc" id="L876">            addConstraint(c);</span>
+<span class="nc" id="L877">        }</span>
+<span class="nc" id="L878">    }</span>
+
+    /**
+     * Whether this column is of XML type.
+     */
+    public boolean isXML() {
+<span class="nc" id="L884">        return _XML;</span>
+    }
+
+    /**
+     * Whether this column is of XML type.
+     */
+    public void setXML(boolean xml) {
+<span class="nc" id="L891">        _XML = xml;</span>
+<span class="nc" id="L892">    }</span>
+
+    public VersionStrategy getVersionStrategy() {
+<span class="nc" id="L895">        return _versionStrategy;</span>
+    }
+
+    public void setVersionStrategy(VersionStrategy strategy) {
+<span class="nc" id="L899">        this._versionStrategy = strategy;</span>
+<span class="nc" id="L900">    }</span>
+
+    public boolean hasComment() {
+<span class="nc bnc" id="L903" title="All 4 branches missed.">        return _comment != null &amp;&amp; !_comment.equalsIgnoreCase(_name.toString());</span>
+    }
+
+    public String getComment() {
+<span class="nc" id="L907">        return _comment;</span>
+    }
+
+    public void setComment(String comment) {
+<span class="nc" id="L911">        _comment = comment;</span>
+<span class="nc" id="L912">    }</span>
+
+    /**
+     *  Affirms if this instance represents an implicit relation. For example, a
+     *  relation expressed as the value of primary key of the related class and
+	 *  not as object reference.
+     *
+     * @since 1.3.0
+     */
+    public boolean isImplicitRelation() {
+<span class="nc" id="L922">    	return _implicitRelation;</span>
+    }
+
+    /**
+     * Sets a marker to imply a logical relation that can not have any physical
+     * manifest in the database. For example, a relation expressed as the value
+     * of primary key of the related class and not as object reference.
+     * Populated from @ForeignKey(implicit=true) annotation.
+     * The mutator can only transit from false to true but not vice versa.
+     *
+     * @since 1.3.0
+     */
+    public void setImplicitRelation(boolean flag) {
+<span class="nc" id="L935">    	_implicitRelation |= flag;</span>
+<span class="nc" id="L936">    }</span>
+
+    /**
+     * Sets a marker to indicate that this instance represents a uni-directional
+     * one to many relation using the foreign key strategy. This non-default
+     * mapping of uni-directional one-to-many is supported in JPA 2.0.
+     *
+     * @since 2.0
+     */
+    public boolean isUni1MFK() {
+<span class="nc" id="L946">        return _isUni1MFK;</span>
+    }
+
+    /**
+     *  Affirms if this instance represents a uni-directional one to many relation
+     *  using the foreign key strategy. This non-default mapping of uni-directional
+     *  one-to-many is supported in JPA 2.0.
+     *
+     * @since 2.0
+     */
+    public void setUni1MFK(boolean isUni1MFK) {
+<span class="nc" id="L957">        _isUni1MFK = isUni1MFK;</span>
+<span class="nc" id="L958">    }</span>
+
+    /**
+     * Adds the given constraint to this column.
+     */
+    public void addConstraint(Constraint c) {
+<span class="nc" id="L964">        _constraints.add(c);</span>
+<span class="nc" id="L965">    }</span>
+
+    /**
+     * Removes the given constraint from this column.
+     */
+    public void removeConstraint(Constraint c) {
+<span class="nc" id="L971">        _constraints.remove(c);</span>
+<span class="nc" id="L972">    }</span>
+
+    /**
+     * Affirms if this column has any constraint of given type.
+     */
+    public boolean hasConstraint(Class&lt;? extends Constraint&gt; type) {
+<span class="nc bnc" id="L978" title="All 2 branches missed.">        return !getConstraints(type).isEmpty();</span>
+    }
+
+    /**
+     * Gets all constrains attached this column.
+     */
+    public Set&lt;Constraint&gt; getConstraints() {
+<span class="nc" id="L985">        return _constraints;</span>
+    }
+
+    /**
+     * Gets all constrains of the given type attached to this column.
+     */
+    public &lt;T extends Constraint&gt; Set&lt;T&gt; getConstraints(Class&lt;T&gt; type) {
+<span class="nc" id="L992">        Set&lt;T&gt; result = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L993" title="All 2 branches missed.">        for (Constraint c : _constraints) {</span>
+<span class="nc bnc" id="L994" title="All 2 branches missed.">            if (c.getClass() == type) {</span>
+<span class="nc" id="L995">                result.add((T)c);</span>
+            }
+<span class="nc" id="L997">        }</span>
+<span class="nc" id="L998">        return result;</span>
+    }
+
+    /**
+     * Affirms if any unique constraint is attached to this column.
+     */
+    public boolean isUniqueConstraint() {
+<span class="nc" id="L1005">        return hasConstraint(Unique.class);</span>
+    }
+
+    /**
+     * Affirms if any index constraint is attached to this column.
+     */
+    public boolean isIndex() {
+<span class="nc" id="L1012">        return hasConstraint(Index.class);</span>
+    }
+
+    /**
+     * Affirms if any foreign key constraint is attached to this column.
+     */
+    public boolean isForeignKey() {
+<span class="nc" id="L1019">        return hasConstraint(ForeignKey.class);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

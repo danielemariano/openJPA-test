@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MaxEmbeddedLobFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">MaxEmbeddedLobFieldStrategy.java</span></div><h1>MaxEmbeddedLobFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.EagerFetchModes;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.meta.ValueMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * Base class for LOBs on databases that limit the max embedded LOB size.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+<span class="nc" id="L49">abstract class MaxEmbeddedLobFieldStrategy</span>
+    extends HandlerFieldStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Return the expected type of the field from {@link JavaTypes} or
+     * {@link JavaSQLTypes}.
+     */
+    protected abstract int getExpectedJavaType();
+
+    /**
+     * Set the value of the owning field into the given row.
+     */
+    protected abstract void update(OpenJPAStateManager sm, Row row)
+        throws SQLException;
+
+    /**
+     * Return whether this is a custom insert/update.
+     */
+    protected abstract Boolean isCustom(OpenJPAStateManager sm,
+        JDBCStore store);
+
+    /**
+     * Set the data from the given state manager into the result set.
+     */
+    protected abstract void putData(OpenJPAStateManager sm, ResultSet rs,
+        DBDictionary dict)
+        throws SQLException;
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc" id="L82">        assertNotMappedBy();</span>
+
+        // map join key, if any
+<span class="nc" id="L85">        field.mapJoin(adapt, false);</span>
+<span class="nc" id="L86">        field.getKeyMapping().getValueInfo().assertNoSchemaComponents</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">            (field.getKey(), !adapt);</span>
+<span class="nc" id="L88">        field.getElementMapping().getValueInfo().assertNoSchemaComponents</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">            (field.getElement(), !adapt);</span>
+
+<span class="nc" id="L91">        ValueMappingInfo vinfo = field.getValueInfo();</span>
+<span class="nc" id="L92">        vinfo.assertNoJoin(field, true);</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        vinfo.assertNoForeignKey(field, !adapt);</span>
+
+<span class="nc" id="L95">        DBDictionary dict = field.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        DBIdentifier fieldName = DBIdentifier.newColumn(field.getName(), dict != null ? dict.delimitAll() : false);</span>
+
+        // get value columns
+<span class="nc" id="L99">        Column tmpCol = new Column();</span>
+<span class="nc" id="L100">        tmpCol.setIdentifier(fieldName);</span>
+<span class="nc" id="L101">        tmpCol.setJavaType(getExpectedJavaType());</span>
+<span class="nc" id="L102">        tmpCol.setSize(-1);</span>
+<span class="nc" id="L103">        _cols = vinfo.getColumns(field, fieldName,</span>
+<span class="nc" id="L104">            new Column[]{ tmpCol }, field.getTable(), adapt);</span>
+<span class="nc" id="L105">        _io = vinfo.getColumnIO();</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        if (_io == null)</span>
+<span class="nc" id="L107">            _io = field.getColumnIO();</span>
+<span class="nc" id="L108">        field.setColumns(_cols);</span>
+<span class="nc" id="L109">        field.setColumnIO(_io);</span>
+<span class="nc" id="L110">        field.mapConstraints(fieldName, adapt);</span>
+<span class="nc" id="L111">        field.mapPrimaryKey(adapt);</span>
+<span class="nc" id="L112">    }</span>
+
+    @Override
+    public Boolean isCustomInsert(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (!field.getColumnIO().isInsertable(0, false))</span>
+<span class="nc" id="L117">            return Boolean.FALSE;</span>
+<span class="nc" id="L118">        return isCustom(sm, store);</span>
+    }
+
+    @Override
+    public Boolean isCustomUpdate(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (!field.getColumnIO().isUpdatable(0, false))</span>
+<span class="nc" id="L124">            return Boolean.FALSE;</span>
+<span class="nc" id="L125">        return isCustom(sm, store);</span>
+    }
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if (!field.getColumnIO().isInsertable(0, false))</span>
+<span class="nc" id="L132">            return;</span>
+<span class="nc" id="L133">        Row row = field.getRow(sm, store, rm, Row.ACTION_INSERT);</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (row != null)</span>
+<span class="nc" id="L135">            update(sm, row);</span>
+<span class="nc" id="L136">    }</span>
+
+    @Override
+    public void update(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        if (!field.getColumnIO().isUpdatable(0, false))</span>
+<span class="nc" id="L142">            return;</span>
+<span class="nc" id="L143">        Row row = field.getRow(sm, store, rm, Row.ACTION_UPDATE);</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        if (row != null)</span>
+<span class="nc" id="L145">            update(sm, row);</span>
+<span class="nc" id="L146">    }</span>
+
+    @Override
+    public void delete(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L151">        field.deleteRow(sm, store, rm);</span>
+<span class="nc" id="L152">    }</span>
+
+    @Override
+    public void customInsert(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L157">        customUpdate(sm, store);</span>
+<span class="nc" id="L158">    }</span>
+
+    @Override
+    public void customUpdate(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L163">        JDBCFetchConfiguration fetch = store.getFetchConfiguration();</span>
+        // select existing value for update
+<span class="nc" id="L165">        Column col = field.getColumns()[0];</span>
+<span class="nc" id="L166">        Select sel = store.getSQLFactory().newSelect();</span>
+<span class="nc" id="L167">        sel.select(col);</span>
+<span class="nc" id="L168">        field.wherePrimaryKey(sel, sm, store);</span>
+<span class="nc" id="L169">        SQLBuffer sql = sel.toSelect(true, fetch);</span>
+
+<span class="nc" id="L171">        Connection conn = store.getConnection();</span>
+<span class="nc" id="L172">        DBDictionary dict = store.getDBDictionary();</span>
+<span class="nc" id="L173">        PreparedStatement stmnt = null;</span>
+<span class="nc" id="L174">        ResultSet rs = null;</span>
+        try {
+<span class="nc" id="L176">            stmnt = sql.prepareStatement(conn,</span>
+                ResultSet.TYPE_SCROLL_INSENSITIVE,
+                ResultSet.CONCUR_UPDATABLE);
+<span class="nc" id="L179">            dict.setTimeouts(stmnt, fetch, true);</span>
+<span class="nc" id="L180">            rs = stmnt.executeQuery();</span>
+<span class="nc" id="L181">            rs.next();</span>
+
+<span class="nc" id="L183">            putData(sm, rs, store.getDBDictionary());</span>
+        } finally {
+<span class="nc bnc" id="L185" title="All 2 branches missed.">            if (rs != null)</span>
+                try {
+<span class="nc" id="L187">                    rs.close();</span>
+<span class="nc" id="L188">                } catch (SQLException se) {</span>
+<span class="nc" id="L189">                }</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">            if (stmnt != null)</span>
+                try {
+<span class="nc" id="L192">                    stmnt.close();</span>
+<span class="nc" id="L193">                } catch (SQLException se) {</span>
+<span class="nc" id="L194">                }</span>
+            try {
+<span class="nc" id="L196">                conn.close();</span>
+<span class="nc" id="L197">            } catch (SQLException se) {</span>
+<span class="nc" id="L198">            }</span>
+        }
+<span class="nc" id="L200">    }</span>
+
+    @Override
+    public int supportsSelect(Select sel, int type, OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch) {
+<span class="nc bnc" id="L205" title="All 4 branches missed.">        if (type == Select.TYPE_JOINLESS &amp;&amp; sel.isSelected(field.getTable()))</span>
+<span class="nc" id="L206">            return 1;</span>
+<span class="nc" id="L207">        return 0;</span>
+    }
+
+    @Override
+    public int select(Select sel, OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, int eagerMode) {
+<span class="nc bnc" id="L213" title="All 4 branches missed.">        if (sel.isDistinct() ||</span>
+            eagerMode == EagerFetchModes.EAGER_NONE)
+<span class="nc" id="L215">            return -1;</span>
+<span class="nc" id="L216">        sel.select(field.getColumns()[0], field.join(sel));</span>
+<span class="nc" id="L217">        return 1;</span>
+    }
+
+    @Override
+    public void load(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Result res)
+        throws SQLException {
+<span class="nc" id="L224">        Column col = field.getColumns()[0];</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (res.contains(col))</span>
+<span class="nc" id="L226">            sm.store(field.getIndex(), load(col, res, null));</span>
+<span class="nc" id="L227">    }</span>
+
+    @Override
+    public void load(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch)
+        throws SQLException {
+<span class="nc" id="L233">        Column col = field.getColumns()[0];</span>
+<span class="nc" id="L234">        Select sel = store.getSQLFactory().newSelect();</span>
+<span class="nc" id="L235">        sel.select(col);</span>
+<span class="nc" id="L236">        field.wherePrimaryKey(sel, sm, store);</span>
+
+<span class="nc" id="L238">        Result res = sel.execute(store, fetch);</span>
+<span class="nc" id="L239">        Object val = null;</span>
+        try {
+<span class="nc bnc" id="L241" title="All 2 branches missed.">            if (res.next())</span>
+<span class="nc" id="L242">                val = load(col, res, null);</span>
+        } finally {
+<span class="nc" id="L244">            res.close();</span>
+        }
+<span class="nc" id="L246">        sm.store(field.getIndex(), val);</span>
+<span class="nc" id="L247">    }</span>
+
+    /**
+     * Load this value from the given result.
+     */
+    protected Object load(Column col, Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L254">        return res.getObject(col, null, joins);</span>
+    }
+
+    @Override
+    public Joins join(Joins joins, boolean forceOuter) {
+<span class="nc" id="L259">        return field.join(joins, forceOuter, false);</span>
+    }
+
+    @Override
+    public Object loadProjection(JDBCStore store, JDBCFetchConfiguration fetch,
+        Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L266">        return load(field.getColumns()[0], res, joins);</span>
+    }
+
+    @Override
+    public boolean isVersionable() {
+<span class="nc" id="L271">        return false;</span>
+    }
+
+    @Override
+    public void where(OpenJPAStateManager sm, JDBCStore store, RowManager rm,
+        Object prevValue)
+        throws SQLException {
+<span class="nc" id="L278">    }</span>
+
+    protected abstract Object getValue(OpenJPAStateManager sm);
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

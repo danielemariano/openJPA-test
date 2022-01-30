@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ConstPath.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">ConstPath.java</span></div><h1>ConstPath.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Broker;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.exps.Context;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.XMLMetaData;
+import org.apache.openjpa.util.ImplHelper;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * A field traversal starting with a constant filter parameter.
+ *
+ * @author Abe White
+ */
+class ConstPath
+    extends Const
+    implements JDBCPath {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final Const _constant;
+<span class="nc" id="L50">    private final LinkedList _actions = new LinkedList();</span>
+
+    /**
+     * Constructor. Supply constant to traverse.
+     */
+<span class="nc" id="L55">    public ConstPath(Const constant) {</span>
+<span class="nc" id="L56">        _constant = constant;</span>
+<span class="nc" id="L57">    }</span>
+
+    @Override
+    public Class getType() {
+<span class="nc bnc" id="L61" title="All 2 branches missed.">        if (_actions.isEmpty()) {</span>
+<span class="nc" id="L62">            ClassMetaData meta = getMetaData();</span>
+<span class="nc bnc" id="L63" title="All 2 branches missed.">            if (meta == null)</span>
+<span class="nc" id="L64">                return Object.class;</span>
+<span class="nc" id="L65">            return meta.getDescribedType();</span>
+        }
+
+<span class="nc" id="L68">        Object last = _actions.getLast();</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        if (last instanceof Class)</span>
+<span class="nc" id="L70">            return (Class) last;</span>
+<span class="nc" id="L71">        FieldMetaData fmd = (FieldMetaData) last;</span>
+<span class="nc" id="L72">        return fmd.getDeclaredType();</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L77">        _actions.add(type);</span>
+<span class="nc" id="L78">    }</span>
+
+    @Override
+    public void get(FieldMetaData field, boolean nullTraversal) {
+<span class="nc" id="L82">        _actions.add(field);</span>
+<span class="nc" id="L83">    }</span>
+
+    @Override
+    public void getKey() {
+<span class="nc" id="L87">    }</span>
+
+    @Override
+    public FieldMetaData last() {
+<span class="nc" id="L91">        ListIterator itr = _actions.listIterator(_actions.size());</span>
+        Object prev;
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        while (itr.hasPrevious()) {</span>
+<span class="nc" id="L94">            prev = itr.previous();</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">            if (prev instanceof FieldMetaData)</span>
+<span class="nc" id="L96">                return (FieldMetaData) prev;</span>
+        }
+<span class="nc" id="L98">        return null;</span>
+    }
+
+    @Override
+    public Object getValue(Object[] params) {
+<span class="nc" id="L103">        throw new InternalException();</span>
+    }
+
+    @Override
+    public Object getValue(ExpContext ctx, ExpState state) {
+<span class="nc" id="L108">        return ((ConstPathExpState) state).value;</span>
+    }
+
+    @Override
+    public Object getSQLValue(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L113">        return ((ConstPathExpState) state).sqlValue;</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L118">        return new ConstPathExpState(_constant.initialize(sel, ctx, 0));</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L124">        super.calculateValue(sel, ctx, state, other, otherState);</span>
+<span class="nc" id="L125">        ConstPathExpState cstate = (ConstPathExpState) state;</span>
+<span class="nc" id="L126">        _constant.calculateValue(sel, ctx, cstate.constantState, null, null);</span>
+<span class="nc" id="L127">        cstate.value = _constant.getValue(ctx, cstate.constantState);</span>
+<span class="nc" id="L128">        boolean failed = false;</span>
+
+        // copied from org.apache.openjpa.query.InMemoryPath
+        Object action;
+        OpenJPAStateManager sm;
+<span class="nc" id="L133">        Broker tmpBroker = null;</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        for (Iterator itr = _actions.iterator(); itr.hasNext();) {</span>
+            // fail on null value
+<span class="nc bnc" id="L136" title="All 2 branches missed.">            if (cstate.value == null) {</span>
+<span class="nc" id="L137">                failed = true;</span>
+<span class="nc" id="L138">                break;</span>
+            }
+
+<span class="nc" id="L141">            action = itr.next();</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            if (action instanceof Class) {</span>
+                try {
+<span class="nc" id="L144">                    cstate.value = Filters.convert(cstate.value,</span>
+                        (Class) action);
+<span class="nc" id="L146">                    continue;</span>
+<span class="nc" id="L147">                } catch (ClassCastException cce) {</span>
+<span class="nc" id="L148">                    failed = true;</span>
+<span class="nc" id="L149">                    break;</span>
+                }
+            }
+
+            // make sure we can access the instance; even non-pc vals might
+            // be proxyable
+<span class="nc" id="L155">            sm = null;</span>
+<span class="nc" id="L156">            tmpBroker = null;</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">            if (ImplHelper.isManageable(cstate.value))</span>
+<span class="nc" id="L158">                sm = (OpenJPAStateManager) (ImplHelper.toPersistenceCapable(</span>
+                    cstate.value,
+<span class="nc" id="L160">                    this.getMetaData().getRepository().getConfiguration())).</span>
+<span class="nc" id="L161">                    pcGetStateManager();</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            if (sm == null) {</span>
+<span class="nc" id="L163">                tmpBroker = ctx.store.getContext().getBroker();</span>
+<span class="nc" id="L164">                tmpBroker.transactional(cstate.value, false, null);</span>
+<span class="nc" id="L165">                sm = tmpBroker.getStateManager(cstate.value);</span>
+            }
+
+            try {
+                // get the specified field value and switch candidate
+<span class="nc" id="L170">                cstate.value = sm.fetchField(((FieldMetaData) action).</span>
+<span class="nc" id="L171">                    getIndex(), true);</span>
+            } finally {
+                // setTransactional does not clear the state, which is
+                // important since tmpVal might be also managed by
+                // another broker if it's a proxied non-pc instance
+<span class="nc bnc" id="L176" title="All 2 branches missed.">                if (tmpBroker != null)</span>
+<span class="nc" id="L177">                    tmpBroker.nontransactional(sm.getManagedInstance(), null);</span>
+<span class="nc" id="L178">            }</span>
+        }
+
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (failed)</span>
+<span class="nc" id="L182">            cstate.value = null;</span>
+
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (other != null) {</span>
+<span class="nc" id="L185">            cstate.sqlValue = other.toDataStoreValue(sel, ctx, otherState,</span>
+                cstate.value);
+<span class="nc" id="L187">            cstate.otherLength = other.length(sel, ctx, otherState);</span>
+        } else
+<span class="nc" id="L189">            cstate.sqlValue = cstate.value;</span>
+<span class="nc" id="L190">    }</span>
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L195">        ConstPathExpState cstate = (ConstPathExpState) state;</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        if (cstate.otherLength &gt; 1)</span>
+<span class="nc" id="L197">            sql.appendValue(((Object[]) cstate.sqlValue)[index],</span>
+<span class="nc" id="L198">                cstate.getColumn(index));</span>
+        else
+<span class="nc" id="L200">            sql.appendValue(cstate.sqlValue, cstate.getColumn(index));</span>
+<span class="nc" id="L201">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L205">        visitor.enter(this);</span>
+<span class="nc" id="L206">        _constant.acceptVisit(visitor);</span>
+<span class="nc" id="L207">        visitor.exit(this);</span>
+<span class="nc" id="L208">    }</span>
+
+    /**
+     * Expression state.
+     */
+    private static class ConstPathExpState
+        extends ConstExpState {
+
+        public final ExpState constantState;
+<span class="nc" id="L217">        public Object value = null;</span>
+<span class="nc" id="L218">        public Object sqlValue = null;</span>
+<span class="nc" id="L219">        public int otherLength = 0;</span>
+
+<span class="nc" id="L221">        public ConstPathExpState(ExpState constantState) {</span>
+<span class="nc" id="L222">            this.constantState = constantState;</span>
+<span class="nc" id="L223">        }</span>
+    }
+
+    @Override
+    public void get(FieldMetaData fmd, XMLMetaData meta) {
+<span class="nc" id="L228">    }</span>
+
+    @Override
+    public void get(XMLMetaData meta, String name) {
+<span class="nc" id="L232">    }</span>
+
+    @Override
+    public XMLMetaData getXmlMapping() {
+<span class="nc" id="L236">        return null;</span>
+    }
+
+    @Override
+    public void setSchemaAlias(String schemaAlias) {
+<span class="nc" id="L241">    }</span>
+
+    @Override
+    public String getSchemaAlias() {
+<span class="nc" id="L245">        return null;</span>
+    }
+
+    @Override
+    public void setSubqueryContext(Context conext, String correlationVar) {
+<span class="nc" id="L250">    }</span>
+
+    @Override
+    public String getCorrelationVar() {
+<span class="nc" id="L254">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

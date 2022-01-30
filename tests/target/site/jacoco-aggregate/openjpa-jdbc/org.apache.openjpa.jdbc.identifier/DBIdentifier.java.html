@@ -1,0 +1,948 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DBIdentifier.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.identifier</a> &gt; <span class="el_source">DBIdentifier.java</span></div><h1>DBIdentifier.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.identifier;
+
+import java.io.Serializable;
+
+import org.apache.openjpa.lib.identifier.Identifier;
+import org.apache.openjpa.lib.identifier.IdentifierImpl;
+import org.apache.openjpa.lib.util.StringUtil;
+
+/**
+ * Encapsulates a database identifier.  With a few exceptions, this class is
+ * intended to treated as immutable.
+ */
+public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifier, Serializable {
+
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Database identifier types.
+     */
+<span class="fc" id="L39">    public enum DBIdentifierType {</span>
+<span class="fc" id="L40">        DEFAULT,</span>
+<span class="fc" id="L41">        TABLE,</span>
+<span class="fc" id="L42">        SCHEMA,</span>
+<span class="fc" id="L43">        CATALOG,</span>
+<span class="fc" id="L44">        DATABASE,</span>
+<span class="fc" id="L45">        COLUMN,</span>
+<span class="fc" id="L46">        COLUMN_DEFINITION,</span>
+<span class="fc" id="L47">        SEQUENCE,</span>
+<span class="fc" id="L48">        CONSTRAINT,</span>
+<span class="fc" id="L49">        INDEX,</span>
+<span class="fc" id="L50">        FOREIGN_KEY,</span>
+<span class="fc" id="L51">        CONSTANT,</span>
+<span class="fc" id="L52">        PROCEDURE,</span>
+<span class="fc" id="L53">        NULL</span>
+    }
+
+    // Array for quick compound identifier determination.  Compound identifiers
+    // can have multi-part names, such as {schema, table} and should be stored
+    // as a QualifiedDBIdentifier.
+<span class="fc" id="L59">    private static boolean _compoundIdentifier[] = new boolean[DBIdentifierType.values().length];</span>
+
+    static {
+<span class="fc" id="L62">        _compoundIdentifier[DBIdentifierType.TABLE.ordinal()] = true;</span>
+<span class="fc" id="L63">        _compoundIdentifier[DBIdentifierType.COLUMN.ordinal()] = true;</span>
+<span class="fc" id="L64">        _compoundIdentifier[DBIdentifierType.SEQUENCE.ordinal()] = true;</span>
+<span class="fc" id="L65">        _compoundIdentifier[DBIdentifierType.CONSTRAINT.ordinal()] = true;</span>
+<span class="fc" id="L66">        _compoundIdentifier[DBIdentifierType.INDEX.ordinal()] = true;</span>
+    }
+
+<span class="pc" id="L69">    private DBIdentifierType _type = DBIdentifierType.DEFAULT;</span>
+
+    /**
+     * Special NULL indicator for db identifiers.
+     */
+<span class="fc" id="L74">    public static final DBIdentifier NULL = new DBIdentifier(DBIdentifierType.NULL);</span>
+
+<span class="pc" id="L76">    public boolean _ignoreCase = false;</span>
+
+    // All constructors are protected or private.  Static factory operations
+    // should be used to construct new identifiers.
+<span class="fc" id="L80">    protected DBIdentifier() {</span>
+<span class="fc" id="L81">    }</span>
+
+    /**
+     * Returns whether case is ignored during equality operations.
+     */
+    public boolean getIgnoreCase() {
+<span class="fc" id="L87">        return _ignoreCase;</span>
+    }
+
+    public void setIgnoreCase(boolean ignoreCase) {
+<span class="fc" id="L91">        _ignoreCase = ignoreCase;</span>
+<span class="fc" id="L92">    }</span>
+
+<span class="fc" id="L94">    private DBIdentifier(DBIdentifierType type) {</span>
+<span class="fc" id="L95">        setType(type);</span>
+<span class="fc" id="L96">    }</span>
+
+<span class="fc" id="L98">    protected DBIdentifier(String name, DBIdentifierType type) {</span>
+<span class="fc" id="L99">        setType(type);</span>
+<span class="fc" id="L100">        setName(name);</span>
+<span class="fc" id="L101">    }</span>
+
+<span class="fc" id="L103">    protected DBIdentifier(String name, DBIdentifierType type, boolean delimit) {</span>
+<span class="fc" id="L104">        setType(type);</span>
+<span class="fc" id="L105">        setName(name, delimit);</span>
+<span class="fc" id="L106">    }</span>
+
+<span class="nc" id="L108">    protected DBIdentifier(String name, boolean delimit) {</span>
+<span class="nc" id="L109">        setName(name, delimit);</span>
+<span class="nc" id="L110">    }</span>
+
+
+    /**
+     * Set the name of the identifier.
+     */
+    @Override
+    public void setName(String name) {
+<span class="fc" id="L118">        setName(name, false);</span>
+<span class="fc" id="L119">    }</span>
+
+    /**
+     * Set the name of this identifier based upon a given identifier.
+     */
+    public void setName(DBIdentifier name) {
+<span class="fc" id="L125">        assertNotNull();</span>
+<span class="fc bfc" id="L126" title="All 2 branches covered.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="fc" id="L127">            setNameInternal(null);</span>
+<span class="fc" id="L128">            setType(name.getType());</span>
+<span class="fc" id="L129">            return;</span>
+        }
+<span class="fc" id="L131">        setNameInternal(name.getNameInternal());</span>
+<span class="fc" id="L132">        setType(name.getType());</span>
+<span class="fc" id="L133">    }</span>
+
+    /**
+     * Set the name of the identifier and optionally force delimiting of the identifier.
+     */
+    public void setName(String name, boolean delimit) {
+<span class="fc" id="L139">        assertNotNull();</span>
+
+        // Normalize the name, if necessary.  Do not normalize constants or column definitions.
+<span class="pc bpc" id="L142" title="2 of 4 branches missed.">        if (DBIdentifierType.CONSTANT != getType() &amp;&amp; DBIdentifierType.COLUMN_DEFINITION != getType()) {</span>
+<span class="pc bpc" id="L143" title="1 of 2 branches missed.">            if (delimit) {</span>
+<span class="nc" id="L144">                name = Normalizer.delimit(name, true);</span>
+             } else {
+<span class="fc" id="L146">                 name = Normalizer.normalizeString(name);</span>
+             }
+        }
+<span class="fc" id="L149">        super.setName(name);</span>
+<span class="fc" id="L150">    }</span>
+
+    /**
+     * Set the type of the identifier
+     * @param type
+     */
+    protected void setType(DBIdentifierType type) {
+<span class="fc" id="L157">        _type = type;</span>
+<span class="fc" id="L158">    }</span>
+
+    /**
+     * Get the identifier type
+     * @return the identifier type
+     */
+    public DBIdentifierType getType() {
+<span class="fc" id="L165">        return _type;</span>
+    }
+
+
+    /**
+     * Splits a string delimited by the specified delimiter of a given name type
+     * into an array of DBIdentifier objects.
+     * Example:  COL1|&quot;COL 2&quot;|COL3  delim=| --&gt; DBIdentifier[]{ COL1, &quot;COL 2&quot;, COL3 }
+     * @param name
+     * @param id
+     * @param delim
+     */
+    public static DBIdentifier[] split(String name, DBIdentifierType id, String delim) {
+
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        if (!Normalizer.canSplit(name, delim)) {</span>
+<span class="nc" id="L180">            return new DBIdentifier[] { new DBIdentifier(name, id) };</span>
+        }
+
+<span class="nc" id="L183">        String[] names = Normalizer.splitName(name, delim);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (names.length == 0) {</span>
+<span class="nc" id="L185">            return new DBIdentifier[] { };</span>
+        }
+<span class="nc" id="L187">        DBIdentifier[] sNames = new DBIdentifier[names.length];</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        for (int i = 0; i &lt; names.length ; i++) {</span>
+<span class="nc" id="L189">            sNames[i] = new DBIdentifier(names[i], id);</span>
+        }
+<span class="nc" id="L191">        return sNames;</span>
+    }
+
+    /**
+     * Joins the list of identifiers using the appropriate delimiters and
+     * returns a string based identifier.
+     * @param resultId
+     * @param names
+     */
+    public static String join(DBIdentifier...names) {
+<span class="pc bpc" id="L201" title="2 of 4 branches missed.">        if (names == null || names.length == 0) {</span>
+<span class="nc" id="L202">            return null;</span>
+        }
+<span class="fc" id="L204">        String[] strNames = new String[names.length];</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">        for (int i = 0; i &lt; names.length; i++) {</span>
+<span class="fc" id="L206">            strNames[i] = names[i].getNameInternal();</span>
+        }
+<span class="fc" id="L208">        return Normalizer.joinNames(strNames);</span>
+    }
+    /**
+     * Splits a given DBIdentifier into multiple DBIdentifiers.  Uses the base name
+     * type and heuristics to determine the types and placement of the resulting
+     * components.
+     * @param name
+     */
+    public static DBIdentifier[] split(DBIdentifierType resultType, String name) {
+
+<span class="fc" id="L218">        String[] names = Normalizer.splitName(name);</span>
+<span class="pc bpc" id="L219" title="2 of 4 branches missed.">        switch (names.length) {</span>
+            case 2:
+<span class="fc" id="L221">                return getTwoPartIdentifier(names, resultType);</span>
+            case 3:
+<span class="nc" id="L223">                return getThreePartIdentifier(names, resultType);</span>
+            case 4:
+<span class="nc" id="L225">                return getFourPartIdentifier(names, resultType);</span>
+            default:
+<span class="fc" id="L227">                return new DBIdentifier[] { new DBIdentifier(name, resultType) };</span>
+        }
+    }
+
+    /*
+     * Returns a two-part identifier based upon the base identifier type.
+     */
+    private static DBIdentifier[] getTwoPartIdentifier(String[] names, DBIdentifierType baseId) {
+<span class="fc" id="L235">        DBIdentifier[] sNames = new DBIdentifier[2];</span>
+<span class="fc" id="L236">        DBIdentifierType id0 = DBIdentifierType.DEFAULT;</span>
+<span class="fc" id="L237">        DBIdentifierType id1 = baseId;</span>
+<span class="pc bpc" id="L238" title="2 of 4 branches missed.">        if (baseId != DBIdentifierType.COLUMN &amp;&amp;</span>
+                baseId != DBIdentifierType.SCHEMA) {
+<span class="fc" id="L240">            id0 = DBIdentifierType.SCHEMA;</span>
+        }
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        else if (baseId == DBIdentifierType.COLUMN) {</span>
+            // Length 2, base name column
+<span class="nc" id="L244">            id0 = DBIdentifierType.TABLE;</span>
+        }
+<span class="nc bnc" id="L246" title="All 2 branches missed.">        else if (baseId == DBIdentifierType.SCHEMA) {</span>
+<span class="nc" id="L247">            id0 = DBIdentifierType.DATABASE;</span>
+        }
+<span class="fc" id="L249">        sNames[0] = new DBIdentifier(names[0], id0);</span>
+<span class="fc" id="L250">        sNames[1] = new DBIdentifier(names[1], id1);</span>
+<span class="fc" id="L251">        return sNames;</span>
+    }
+
+    /*
+     * Returns a three-part identifier based upon the base identifier type.
+     */
+    private static DBIdentifier[] getThreePartIdentifier(String[] names, DBIdentifierType baseId) {
+<span class="nc" id="L258">        DBIdentifier[] sNames = new DBIdentifier[3];</span>
+<span class="nc" id="L259">        DBIdentifierType id0 = DBIdentifierType.DEFAULT;</span>
+<span class="nc" id="L260">        DBIdentifierType id1 = DBIdentifierType.DEFAULT;</span>
+<span class="nc" id="L261">        DBIdentifierType id2 = baseId;</span>
+<span class="nc bnc" id="L262" title="All 4 branches missed.">        if (baseId != DBIdentifierType.SCHEMA &amp;&amp;</span>
+            baseId != DBIdentifierType.COLUMN) {
+<span class="nc" id="L264">            id0 = DBIdentifierType.DATABASE;</span>
+<span class="nc" id="L265">            id1 = DBIdentifierType.SCHEMA;</span>
+        }
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        else if (baseId == DBIdentifierType.COLUMN) {</span>
+            // Length 2, base name column
+<span class="nc" id="L269">            id0 = DBIdentifierType.SCHEMA;</span>
+<span class="nc" id="L270">            id1 = DBIdentifierType.TABLE;</span>
+        }
+<span class="nc" id="L272">        sNames[0] = new DBIdentifier(names[0], id0);</span>
+<span class="nc" id="L273">        sNames[1] = new DBIdentifier(names[1], id1);</span>
+<span class="nc" id="L274">        sNames[2] = new DBIdentifier(names[2], id2);</span>
+<span class="nc" id="L275">        return sNames;</span>
+    }
+
+    /*
+     * Returns a four-part identifier based upon the base identifier type.
+     */
+    private static DBIdentifier[] getFourPartIdentifier(String[] names, DBIdentifierType baseId) {
+<span class="nc" id="L282">        DBIdentifier[] sNames = new DBIdentifier[4];</span>
+<span class="nc" id="L283">        DBIdentifierType id0 = DBIdentifierType.DEFAULT;</span>
+<span class="nc" id="L284">        DBIdentifierType id1 = DBIdentifierType.DEFAULT;</span>
+<span class="nc" id="L285">        DBIdentifierType id2 = DBIdentifierType.DEFAULT;</span>
+<span class="nc" id="L286">        DBIdentifierType id3 = baseId;</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        if (baseId == DBIdentifierType.COLUMN) {</span>
+<span class="nc" id="L288">            id0 = DBIdentifierType.DATABASE;</span>
+<span class="nc" id="L289">            id1 = DBIdentifierType.SCHEMA;</span>
+<span class="nc" id="L290">            id2 = DBIdentifierType.TABLE;</span>
+        }
+<span class="nc" id="L292">        sNames[0] = new DBIdentifier(names[0], id0);</span>
+<span class="nc" id="L293">        sNames[1] = new DBIdentifier(names[1], id1);</span>
+<span class="nc" id="L294">        sNames[2] = new DBIdentifier(names[2], id2);</span>
+<span class="nc" id="L295">        sNames[3] = new DBIdentifier(names[3], id3);</span>
+<span class="nc" id="L296">        return sNames;</span>
+    }
+
+    /**
+     * Returns true if the identifier is null or the name is null or empty.
+     * @param name
+     */
+    public static boolean isEmpty(DBIdentifier name) {
+<span class="fc bfc" id="L304" title="All 2 branches covered.">        if (isNull(name)) {</span>
+<span class="fc" id="L305">            return true;</span>
+        }
+<span class="fc" id="L307">        return StringUtil.isEmpty(name.getName());</span>
+    }
+
+
+    /**
+     * Returns true if the identifier is null.
+     * @param name
+     */
+    public static boolean isNull(DBIdentifier name) {
+<span class="fc bfc" id="L316" title="All 4 branches covered.">        return (name == null || name.getType() == DBIdentifierType.NULL);</span>
+    }
+
+    /**
+     * Clones an identifier using deep copy.
+     */
+    @Override
+    public DBIdentifier clone() {
+<span class="fc" id="L324">        DBIdentifier sName = new DBIdentifier();</span>
+<span class="fc" id="L325">        sName.setNameInternal(getNameInternal());</span>
+<span class="fc" id="L326">        sName.setType(getType());</span>
+<span class="fc" id="L327">        sName.setIgnoreCase(getIgnoreCase());</span>
+<span class="fc" id="L328">        return sName;</span>
+    }
+
+    /*
+     * Internal method to set the base name and avoid normalizing an already
+     * normalized name.
+     * @param name
+     */
+    private void setNameInternal(String name) {
+<span class="fc" id="L337">        super.setName(name);</span>
+<span class="fc" id="L338">    }</span>
+
+    /*
+     * Internal method to get the base name.
+     * normalized name.
+     * @param name
+     */
+    private String getNameInternal() {
+<span class="fc" id="L346">        return super.getName();</span>
+    }
+
+    /**
+     * Returns a copy of an identifier with name trimmed to null.
+     * @param name
+     */
+    public static DBIdentifier trimToNull(DBIdentifier name) {
+<span class="nc bnc" id="L354" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L355">            return name;</span>
+        }
+<span class="nc" id="L357">        DBIdentifier sName = name.clone();</span>
+<span class="nc" id="L358">        sName.setNameInternal(StringUtil.trimToNull(sName.getNameInternal()));</span>
+<span class="nc" id="L359">        return sName;</span>
+    }
+
+    /**
+     * Equality operation for identifiers.  Supports comparison with strings
+     * and objects of this type.
+     */
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L368" title="All 2 branches missed.">        if (obj == null) {</span>
+<span class="nc" id="L369">            return false;</span>
+        }
+<span class="nc bnc" id="L371" title="All 2 branches missed.">        if (obj == this) {</span>
+<span class="nc" id="L372">            return true;</span>
+        }
+<span class="nc bnc" id="L374" title="All 2 branches missed.">        if (obj instanceof DBIdentifier) {</span>
+<span class="nc" id="L375">            DBIdentifier sName = (DBIdentifier)obj;</span>
+<span class="nc bnc" id="L376" title="All 4 branches missed.">            return this.equals(sName, getIgnoreCase() || sName.getIgnoreCase());</span>
+<span class="nc bnc" id="L377" title="All 2 branches missed.">        } else if (obj instanceof String) {</span>
+<span class="nc" id="L378">            return obj.equals(this.getNameInternal());</span>
+        }
+<span class="nc" id="L380">        throw new IllegalArgumentException(&quot;Unsupported type comparison: &quot; + obj.getClass().getName());</span>
+    }
+
+    /**
+     * Returns true if this object is NULL or has a null name component.
+     */
+    public boolean isNull() {
+<span class="nc bnc" id="L387" title="All 4 branches missed.">        return (_type == DBIdentifierType.NULL || getName() == null);</span>
+    }
+
+    /**
+     * Comparison operator for identifiers.
+     */
+    @Override
+    public int compareTo(Identifier o) {
+<span class="nc bnc" id="L395" title="All 2 branches missed.">        if (o instanceof DBIdentifier) {</span>
+<span class="nc bnc" id="L396" title="All 6 branches missed.">            if (this == DBIdentifier.NULL &amp;&amp; (o == null || o == DBIdentifier.NULL)) {</span>
+<span class="nc" id="L397">                return 0;</span>
+            }
+<span class="nc bnc" id="L399" title="All 2 branches missed.">            if (this == DBIdentifier.NULL)</span>
+<span class="nc" id="L400">                return 1;</span>
+<span class="nc bnc" id="L401" title="All 4 branches missed.">            if (o == null || o == DBIdentifier.NULL)</span>
+<span class="nc" id="L402">                return -1;</span>
+        }
+<span class="nc" id="L404">        return super.compareTo(o);</span>
+    }
+
+
+    /**
+     * Converts the provided set of names to an array of identifiers of the
+     * provided type
+     * @param columnNames
+     * @param id
+     */
+    public static DBIdentifier[] toArray(String[] columnNames, DBIdentifierType id) {
+<span class="nc" id="L415">        return toArray(columnNames, id, false);</span>
+    }
+
+    /**
+     * Converts the provided set of names to an array of identifiers of the
+     * provided type, optionally delimiting the names.
+     * @param names columnNames or other DB identifier names
+     * @param id
+     */
+    public static DBIdentifier[] toArray(String[] names, DBIdentifierType id, boolean delimit) {
+<span class="nc bnc" id="L425" title="All 2 branches missed.">        if (names == null) {</span>
+<span class="nc" id="L426">            return null;</span>
+        }
+<span class="nc" id="L428">        DBIdentifier[] sNames = new DBIdentifier[names.length];</span>
+<span class="nc bnc" id="L429" title="All 2 branches missed.">        for (int i = 0; i &lt; names.length; i++) {</span>
+<span class="nc" id="L430">            sNames[i] = new DBIdentifier(names[i].trim(), id, delimit);</span>
+        }
+<span class="nc" id="L432">        return sNames;</span>
+    }
+
+    /**
+     * Returns a string array of names based upon the provided set of identifiers.
+     * @param sNames
+     */
+    public static String[] toStringArray(DBIdentifier[] sNames) {
+<span class="nc bnc" id="L440" title="All 2 branches missed.">        if (sNames == null) {</span>
+<span class="nc" id="L441">            return null;</span>
+        }
+<span class="nc" id="L443">        String[] names = new String[sNames.length];</span>
+<span class="nc bnc" id="L444" title="All 2 branches missed.">        for (int i = 0; i &lt; sNames.length; i++) {</span>
+<span class="nc" id="L445">            names[i] = sNames[i].getName();</span>
+        }
+<span class="nc" id="L447">        return names;</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Catalog.
+     */
+    public static DBIdentifier newCatalog(String name) {
+<span class="fc" id="L454">        return newIdentifier(name, DBIdentifierType.CATALOG);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Catalog ,optionally delimiting
+     * the name.
+     */
+    public static DBIdentifier newCatalog(String name, boolean delimit) {
+<span class="nc" id="L462">        return newIdentifier(name, DBIdentifierType.CATALOG, false, delimit);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Table.
+     */
+    public static DBIdentifier newTable(String name) {
+<span class="fc" id="L469">        return newIdentifier(name, DBIdentifierType.TABLE);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Table, optionally delimiting
+     * the name.
+     */
+    public static DBIdentifier newTable(String name, boolean delimit) {
+<span class="nc" id="L477">        return newIdentifier(name, DBIdentifierType.TABLE, false, delimit);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Column.
+     */
+    public static DBIdentifier newColumn(String name) {
+<span class="fc" id="L484">        return newIdentifier(name, DBIdentifierType.COLUMN);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Column,optionally delimiting
+     * the name.
+     */
+    public static DBIdentifier newColumn(String name, boolean delimit) {
+<span class="nc" id="L492">        return newIdentifier(name, DBIdentifierType.COLUMN, false, delimit);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Schema.
+     */
+    public static DBIdentifier newSchema(String name) {
+<span class="fc" id="L499">        return newIdentifier(name, DBIdentifierType.SCHEMA);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Schema, optionally delimiting
+     * the name.
+     */
+    public static DBIdentifier newSchema(String name, boolean delimit) {
+<span class="nc" id="L507">        return newIdentifier(name, DBIdentifierType.SCHEMA, false, delimit);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Index.
+     */
+    public static DBIdentifier newIndex(String name) {
+<span class="nc" id="L514">        return newIdentifier(name, DBIdentifierType.INDEX);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Index, optionally delimiting
+     * the name.
+     */
+    public static DBIdentifier newIndex(String name, boolean delimit) {
+<span class="nc" id="L522">        return newIdentifier(name, DBIdentifierType.INDEX, false, delimit);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Sequence.
+     */
+    public static DBIdentifier newSequence(String name) {
+<span class="nc" id="L529">        return newIdentifier(name, DBIdentifierType.SEQUENCE);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Sequence, optionally delimiting
+     * the name.
+     */
+    public static DBIdentifier newSequence(String name, boolean delimit) {
+<span class="nc" id="L537">        return newIdentifier(name, DBIdentifierType.SEQUENCE, false, delimit);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type ForeignKey.
+     */
+    public static DBIdentifier newForeignKey(String name) {
+<span class="nc" id="L544">        return newIdentifier(name, DBIdentifierType.FOREIGN_KEY);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type ForeignKey, optionally delimiting
+     * the name.
+     */
+    public static DBIdentifier newForeignKey(String name, boolean delimit) {
+<span class="nc" id="L552">        return newIdentifier(name, DBIdentifierType.FOREIGN_KEY, false, delimit);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Constraint.
+     */
+    public static DBIdentifier newConstraint(String name) {
+<span class="nc" id="L559">        return newIdentifier(name, DBIdentifierType.CONSTRAINT);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Constraint, optionally delimiting
+     * the name.
+     */
+    public static DBIdentifier newConstraint(String name, boolean delimit) {
+<span class="nc" id="L567">        return newIdentifier(name, DBIdentifierType.CONSTRAINT, false, delimit);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Constant.
+     */
+    public static DBIdentifier newConstant(String name) {
+<span class="nc" id="L574">        return newIdentifier(name, DBIdentifierType.CONSTANT);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Column Definition.
+     */
+    public static DBIdentifier newColumnDefinition(String name) {
+<span class="nc" id="L581">        return newIdentifier(name, DBIdentifierType.COLUMN_DEFINITION);</span>
+    }
+
+    /**
+     * Constructs a new identifier of type Default.
+     */
+    public static DBIdentifier newDefault(String name) {
+<span class="nc" id="L588">        return newIdentifier(name, DBIdentifierType.DEFAULT);</span>
+    }
+
+    /**
+     * Constructs a new identifier with the provided name and type
+     */
+    protected static DBIdentifier newIdentifier(String name, DBIdentifierType id) {
+<span class="fc" id="L595">        return newIdentifier(name, id, false, false);</span>
+    }
+
+    /**
+     * Constructs a new identifier with the provided name an type. Optionally,
+     * converting the name to upper case.
+     */
+    public static DBIdentifier newIdentifier(String name, DBIdentifierType id, boolean toUpper) {
+<span class="nc" id="L603">        return newIdentifier(name, id, toUpper, false );</span>
+    }
+
+    /**
+     * Constructs a new identifier (potentially a compound QualifiedDBIdentifier) with the provided
+     * name an type. Optionally, converting the name to upper case and delimiting it.
+     */
+    protected static DBIdentifier newIdentifier(String name, DBIdentifierType id, boolean toUpper, boolean delimit) {
+<span class="fc" id="L611">        return newIdentifier(name,id, toUpper, delimit, false);</span>
+    }
+
+    public static DBIdentifier newProcedure(String name) {
+<span class="nc" id="L615">        return newIdentifier(name, DBIdentifierType.PROCEDURE);</span>
+    }
+
+    /**
+     * Constructs a new identifier (potentially a compound QualifiedDBIdentifier) with the provided
+     * name an type. Optionally, converting the name to upper case and delimiting it.
+     */
+    protected static DBIdentifier newIdentifier(String name, DBIdentifierType id, boolean toUpper, boolean delimit,
+        boolean ignoreCase) {
+<span class="pc bpc" id="L624" title="1 of 2 branches missed.">        if (name == null) {</span>
+<span class="nc" id="L625">            return DBIdentifier.NULL;</span>
+        }
+
+<span class="fc" id="L628">        DBIdentifier dbId = DBIdentifier.NULL;</span>
+        // Create a DBIDentifier for single component names.  Otherwise, create a QualifiedDBIdentifier.
+<span class="pc bpc" id="L630" title="1 of 4 branches missed.">        if (!_compoundIdentifier[id.ordinal()] || delimit) {</span>
+<span class="fc" id="L631">            dbId = new DBIdentifier(name, id, delimit);</span>
+<span class="fc" id="L632">            dbId.setIgnoreCase(ignoreCase);</span>
+<span class="pc bpc" id="L633" title="1 of 2 branches missed.">            if (toUpper) {</span>
+<span class="nc" id="L634">                return toUpper(dbId);</span>
+            }
+        } else {
+            // Name can be split. Break it up into components and return a path
+<span class="fc" id="L638">            DBIdentifier[] sNames = DBIdentifier.split(id, name);</span>
+<span class="fc" id="L639">            dbId = new QualifiedDBIdentifier(sNames);</span>
+<span class="fc" id="L640">            dbId.setIgnoreCase(ignoreCase);</span>
+        }
+<span class="fc" id="L642">        return dbId;</span>
+    }
+
+    /**
+     * Static equality method for comparing two identifiers.
+     * @param name1
+     * @param name2
+     */
+    public static boolean equal(DBIdentifier name1, DBIdentifier name2) {
+<span class="nc" id="L651">        boolean name1Null = DBIdentifier.isNull(name1);</span>
+<span class="nc bnc" id="L652" title="All 4 branches missed.">        if (name1Null &amp;&amp; DBIdentifier.isNull(name2)) {</span>
+<span class="nc" id="L653">            return true;</span>
+        }
+<span class="nc bnc" id="L655" title="All 2 branches missed.">        if (name1Null) {</span>
+<span class="nc" id="L656">            return false;</span>
+        }
+<span class="nc" id="L658">        return ((DBIdentifier)name1).equals(name2, false);</span>
+    }
+
+
+    private void assertNotNull() {
+<span class="pc bpc" id="L663" title="2 of 4 branches missed.">        if (this == DBIdentifier.NULL || getType() == DBIdentifierType.NULL) {</span>
+<span class="nc" id="L664">            throw new IllegalStateException(&quot;Cannot modify NULL instance&quot;);</span>
+        }
+<span class="fc" id="L666">    }</span>
+
+    /**
+     * Returns a new DBIdentifier truncated to length
+     * @param name
+     * @param length
+     */
+    public static DBIdentifier truncate(DBIdentifier name, int length) {
+<span class="nc" id="L674">        DBIdentifier sName = name.clone();</span>
+<span class="nc" id="L675">        String strName = sName.getNameInternal();</span>
+<span class="nc bnc" id="L676" title="All 2 branches missed.">        if (StringUtil.isEmpty(strName)) {</span>
+<span class="nc" id="L677">            return sName;</span>
+        }
+<span class="nc" id="L679">        strName = Normalizer.truncate(strName, length);</span>
+<span class="nc" id="L680">        sName.setNameInternal(strName);</span>
+<span class="nc" id="L681">        return sName;</span>
+    }
+
+    /**
+     * Returns a new DBIdentifier with the given string appended.
+     * @param name
+     * @param length
+     */
+    public static DBIdentifier append(DBIdentifier name, String str) {
+<span class="nc" id="L690">        DBIdentifier sName = name.clone();</span>
+<span class="nc" id="L691">        String strName = sName.getNameInternal();</span>
+<span class="nc" id="L692">        strName = Normalizer.append(strName, str);</span>
+<span class="nc" id="L693">        sName.setNameInternal(strName);</span>
+<span class="nc" id="L694">        return sName;</span>
+    }
+
+    /**
+     * Returns a new DBIdentifier with the given string combined using
+     * delimiting rules and appropriate separators.
+     * @param name
+     * @param length
+     */
+    public static DBIdentifier combine(DBIdentifier name, String str) {
+<span class="nc" id="L704">        DBIdentifier sName = name.clone();</span>
+<span class="nc" id="L705">        String strName = sName.getNameInternal();</span>
+<span class="nc" id="L706">        strName = Normalizer.combine(strName, str);</span>
+<span class="nc" id="L707">        sName.setNameInternal(strName);</span>
+<span class="nc" id="L708">        return sName;</span>
+    }
+
+    /**
+     * Returns a new DBIdentifier converted to lower case - if not delimited.
+     * @param name
+     */
+    public static DBIdentifier toLower(DBIdentifier name) {
+<span class="nc" id="L716">        return toLower(name, false);</span>
+    }
+
+    /**
+     * Returns a new DBIdentifier converted to lower case.  If delimited,
+     * force to lower case using force option.
+     * @param name
+     */
+    public static DBIdentifier toLower(DBIdentifier name, boolean force) {
+<span class="nc bnc" id="L725" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L726">            return name;</span>
+        }
+<span class="nc" id="L728">        DBIdentifier sName = name.clone();</span>
+<span class="nc bnc" id="L729" title="All 2 branches missed.">        if (sName.getNameInternal() == null) {</span>
+<span class="nc" id="L730">            return sName;</span>
+        }
+        // Do not convert delimited names to lower case.  They may have
+        // been delimited to preserve case.
+<span class="nc bnc" id="L734" title="All 4 branches missed.">        if (force || !Normalizer.isDelimited(sName.getNameInternal())) {</span>
+<span class="nc" id="L735">            sName.setNameInternal(sName.getNameInternal().toLowerCase());</span>
+        }
+<span class="nc" id="L737">        return sName;</span>
+    }
+
+    /**
+     * Returns a new DBIdentifier converted to upper case - if not delimited.
+     * @param name
+     */
+    public static DBIdentifier toUpper(DBIdentifier name) {
+<span class="nc" id="L745">        return toUpper(name, false);</span>
+    }
+
+    /**
+     * Returns a new DBIdentifier converted to upper case.  If delimited,
+     * force to upper case using force option.
+     * @param name
+     */
+    public static DBIdentifier toUpper(DBIdentifier name, boolean force) {
+<span class="nc bnc" id="L754" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L755">            return name;</span>
+        }
+<span class="nc bnc" id="L757" title="All 2 branches missed.">        if (name.getNameInternal() == null) {</span>
+<span class="nc" id="L758">            return name;</span>
+        }
+        // Do not convert delimited names to upper case.  They may have
+        // been delimited to preserve case.
+<span class="nc bnc" id="L762" title="All 4 branches missed.">        if (force || !Normalizer.isDelimited(name.getNameInternal())) {</span>
+<span class="nc" id="L763">            DBIdentifier sName = name.clone();</span>
+<span class="nc" id="L764">            sName.setNameInternal(sName.getNameInternal().toUpperCase());</span>
+<span class="nc" id="L765">            return sName;</span>
+        }
+<span class="nc" id="L767">        return name;</span>
+    }
+
+    /**
+     * Returns a new DBIdentifier with the specified leading string removed.
+     * @param name
+     */
+    public static DBIdentifier removeLeading(DBIdentifier name, String leadingStr) {
+<span class="nc" id="L775">        DBIdentifier sName = name.clone();</span>
+<span class="nc bnc" id="L776" title="All 2 branches missed.">        if (isEmpty(sName)) {</span>
+<span class="nc" id="L777">            return sName;</span>
+        }
+<span class="nc" id="L779">        String strName = sName.getNameInternal();</span>
+<span class="nc" id="L780">        int leadingLen = leadingStr.length();</span>
+<span class="nc bnc" id="L781" title="All 2 branches missed.">        while (strName.startsWith(leadingStr)) {</span>
+<span class="nc" id="L782">            strName = strName.substring(leadingLen);</span>
+        }
+<span class="nc" id="L784">        sName.setNameInternal(strName);</span>
+<span class="nc" id="L785">        return sName;</span>
+    }
+
+    /**
+     * Returns a new DBIdentifier with Hungarian notation removed.
+     * @param name
+     */
+    public static DBIdentifier removeHungarianNotation(DBIdentifier name) {
+<span class="nc" id="L793">        DBIdentifier hName = name.clone();</span>
+<span class="nc bnc" id="L794" title="All 2 branches missed.">        if (isEmpty(hName)) {</span>
+<span class="nc" id="L795">            return hName;</span>
+        }
+<span class="nc" id="L797">        String strName = hName.getNameInternal();</span>
+<span class="nc" id="L798">        strName = Normalizer.removeHungarianNotation(strName);</span>
+<span class="nc" id="L799">        hName.setNameInternal(strName);</span>
+<span class="nc" id="L800">        return hName;</span>
+    }
+
+    /**
+     * Equality operator which ignores case.
+     * @param name
+     */
+   public boolean equalsIgnoreCase(DBIdentifier name) {
+<span class="nc" id="L808">       return equals(name, true);</span>
+   }
+
+   /**
+    * Static equality operator which ignores case.
+    * @param name
+    * @return
+    */
+    public static boolean equalsIgnoreCase(DBIdentifier name1, DBIdentifier name2) {
+<span class="nc" id="L817">        boolean name1Null = DBIdentifier.isNull(name1);</span>
+<span class="nc bnc" id="L818" title="All 4 branches missed.">        if (name1Null &amp;&amp; DBIdentifier.isNull(name2)) {</span>
+<span class="nc" id="L819">            return true;</span>
+        }
+<span class="nc bnc" id="L821" title="All 2 branches missed.">        if (name1Null) {</span>
+<span class="nc" id="L822">            return false;</span>
+        }
+<span class="nc" id="L824">        return name1.equals(name2, true);</span>
+    }
+
+    private boolean equals(DBIdentifier sName, boolean ignoreCase) {
+<span class="nc bnc" id="L828" title="All 4 branches missed.">        if (sName.getNameInternal() == null &amp;&amp; getNameInternal() == null) {</span>
+<span class="nc" id="L829">            return true;</span>
+        }
+<span class="nc bnc" id="L831" title="All 2 branches missed.">        if (getNameInternal() == null) {</span>
+<span class="nc" id="L832">            return false;</span>
+        }
+<span class="nc bnc" id="L834" title="All 6 branches missed.">        if (getIgnoreCase() || sName.getIgnoreCase() ||</span>
+<span class="nc bnc" id="L835" title="All 2 branches missed.">            ignoreCase || !Normalizer.isDelimited(getNameInternal())) {</span>
+<span class="nc" id="L836">            return getNameInternal().equalsIgnoreCase(sName.getNameInternal());</span>
+        }
+<span class="nc" id="L838">        return getNameInternal().equals(sName.getNameInternal());</span>
+    }
+
+    /**
+     * Returns a new identifier with a combined prefix and name using the standard name
+     * concatenation character ('_').
+     * @param prefix
+     */
+    public static DBIdentifier preCombine(DBIdentifier name, String prefix) {
+<span class="nc bnc" id="L847" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L848">            return name;</span>
+        }
+<span class="nc" id="L850">        DBIdentifier sName = name.clone();</span>
+<span class="nc" id="L851">        String strName = sName.getNameInternal();</span>
+<span class="nc" id="L852">        strName = Normalizer.combine(prefix, strName);</span>
+<span class="nc" id="L853">        sName.setNameInternal(strName);</span>
+<span class="nc" id="L854">        return sName;</span>
+    }
+
+    /**
+     * Returns a new identifier with delimiters removed.
+     * @param name
+     */
+    public static DBIdentifier removeDelimiters(DBIdentifier name) {
+<span class="nc bnc" id="L862" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L863">            return name;</span>
+        }
+<span class="nc bnc" id="L865" title="All 2 branches missed.">        if (!name.isDelimited()) {</span>
+<span class="nc" id="L866">            return name;</span>
+        }
+<span class="nc" id="L868">        String strName = Normalizer.removeDelimiters(name.getNameInternal());</span>
+<span class="nc" id="L869">        DBIdentifier sName = name.clone();</span>
+<span class="nc" id="L870">        sName.setNameInternal(strName);</span>
+<span class="nc" id="L871">        return sName;</span>
+    }
+
+    /**
+     * Combine {@link #removeDelimiters(org.apache.openjpa.jdbc.identifier.DBIdentifier) }
+     * with {@link #toUpper(org.apache.openjpa.jdbc.identifier.DBIdentifier, boolean) }
+     * in order to save allocations and CPU cycles.
+     * @param name
+     * @return
+     */
+    public static DBIdentifier removeDelimitersAndMakeUpper(DBIdentifier name) {
+<span class="nc bnc" id="L882" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) || name.getNameInternal() == null) {</span>
+<span class="nc" id="L883">            return name;</span>
+        }
+<span class="nc bnc" id="L885" title="All 2 branches missed.">        if (!name.isDelimited()) {</span>
+<span class="nc" id="L886">            return toUpper(name, true);</span>
+        }
+<span class="nc" id="L888">        String strName = Normalizer.removeDelimiters(name.getNameInternal());</span>
+<span class="nc" id="L889">        DBIdentifier sName = name.clone();</span>
+<span class="nc" id="L890">        sName.setNameInternal(strName.toUpperCase());</span>
+<span class="nc" id="L891">        return sName;</span>
+    }
+
+    /**
+     * Returns a new delimiter with leading and trailing spaces removed.
+     * @param name
+     */
+    public static DBIdentifier trim(DBIdentifier name) {
+<span class="nc bnc" id="L899" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L900">            return name;</span>
+        }
+<span class="nc" id="L902">        DBIdentifier sName = name.clone();</span>
+<span class="nc bnc" id="L903" title="All 2 branches missed.">        if (isEmpty(sName)) {</span>
+<span class="nc" id="L904">            return sName;</span>
+        }
+<span class="nc" id="L906">        String strName = sName.getNameInternal();</span>
+<span class="nc" id="L907">        strName = strName.trim();</span>
+<span class="nc" id="L908">        sName.setNameInternal(strName);</span>
+<span class="nc" id="L909">        return sName;</span>
+    }
+
+    /**
+     * The length of the name, including delimiting characters.
+     */
+    @Override
+    public int length() {
+<span class="nc bnc" id="L917" title="All 2 branches missed.">        if (DBIdentifier.isNull(this)) {</span>
+<span class="nc" id="L918">            return 0;</span>
+        }
+<span class="nc" id="L920">        return super.length();</span>
+    }
+
+    /**
+     * Returns true if the identifier is delimited.
+     */
+    public boolean isDelimited() {
+<span class="nc bnc" id="L927" title="All 2 branches missed.">        if (DBIdentifier.isEmpty(this)) {</span>
+<span class="nc" id="L928">            return false;</span>
+        }
+<span class="nc" id="L930">        return Normalizer.isDelimited(getNameInternal());</span>
+    }
+
+    /**
+     * Combines an array of names names using standard combining rules and
+     * returns an identifier of the specified type.
+     */
+    public static DBIdentifier combine(DBIdentifierType id, String...names) {
+<span class="nc" id="L938">        return newIdentifier(Normalizer.combine(names), id);</span>
+    }
+
+    /**
+     * Returns the unqualified name of this identifier.
+     */
+    public DBIdentifier getUnqualifiedName() {
+<span class="nc" id="L945">        return this;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

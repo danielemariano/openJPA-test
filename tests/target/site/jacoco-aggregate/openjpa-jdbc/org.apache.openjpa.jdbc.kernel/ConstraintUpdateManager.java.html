@@ -1,0 +1,560 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ConstraintUpdateManager.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">ConstraintUpdateManager.java</span></div><h1>ConstraintUpdateManager.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.sql.PrimaryRow;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowImpl;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.RowManagerImpl;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.graph.DepthFirstAnalysis;
+import org.apache.openjpa.lib.graph.Edge;
+import org.apache.openjpa.lib.graph.Graph;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.OpenJPAException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * &lt;p&gt;Standard update manager, capable of foreign key constraint evaluation.&lt;/p&gt;
+ *
+ * @since 1.0.0
+ */
+<span class="nc bnc" id="L54" title="All 2 branches missed.">public class ConstraintUpdateManager</span>
+    extends AbstractUpdateManager {
+
+<span class="nc" id="L57">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L58">        (ConstraintUpdateManager.class);</span>
+
+    @Override
+    public boolean orderDirty() {
+<span class="nc" id="L62">        return true;</span>
+    }
+
+    @Override
+    protected PreparedStatementManager newPreparedStatementManager
+        (JDBCStore store, Connection conn) {
+<span class="nc" id="L68">        return new PreparedStatementManagerImpl(store, conn);</span>
+    }
+
+    @Override
+    protected RowManager newRowManager() {
+<span class="nc" id="L73">        return new RowManagerImpl(false);</span>
+    }
+
+    @Override
+    protected Collection flush(RowManager rowMgr,
+        PreparedStatementManager psMgr, Collection exceps) {
+<span class="nc" id="L79">        RowManagerImpl rmimpl = (RowManagerImpl) rowMgr;</span>
+
+        // first take care of all secondary table deletes and 'all row' deletes
+        // (which are probably secondary table deletes), since no foreign
+        // keys ever rely on secondary table pks
+<span class="nc" id="L84">        flush(rmimpl.getAllRowDeletes(), psMgr);</span>
+<span class="nc" id="L85">        flush(rmimpl.getSecondaryDeletes(), psMgr);</span>
+
+        // now do any 'all row' updates
+<span class="nc" id="L88">        flush(rmimpl.getAllRowUpdates(), psMgr);</span>
+
+        // analyze foreign keys
+<span class="nc" id="L91">        Collection&lt;PrimaryRow&gt; inserts = rmimpl.getInserts();</span>
+<span class="nc" id="L92">        Collection&lt;PrimaryRow&gt; updates = rmimpl.getUpdates();</span>
+<span class="nc" id="L93">        Collection&lt;PrimaryRow&gt; deletes = rmimpl.getDeletes();</span>
+
+<span class="nc" id="L95">        Graph[] graphs = new Graph[2];    // insert graph, delete graph</span>
+<span class="nc" id="L96">        analyzeForeignKeys(inserts, updates, deletes, rmimpl, graphs);</span>
+
+        // flush insert graph, if any
+<span class="nc" id="L99">        boolean autoAssign = rmimpl.hasAutoAssignConstraints();</span>
+        try {
+<span class="nc" id="L101">            flushGraph(graphs[0], psMgr, autoAssign);</span>
+<span class="nc" id="L102">        } catch (SQLException se) {</span>
+<span class="nc" id="L103">            exceps = addException(exceps, SQLExceptions.getStore(se, dict));</span>
+<span class="nc" id="L104">        } catch (OpenJPAException ke) {</span>
+<span class="nc" id="L105">            exceps = addException(exceps, ke);</span>
+<span class="nc" id="L106">        }</span>
+
+        // flush the rest of the inserts and updates; inserts before updates
+        // because some update fks might reference pks that have to be inserted
+<span class="nc" id="L110">        flush(inserts, psMgr);</span>
+<span class="nc" id="L111">        flush(updates, psMgr);</span>
+
+        // flush the delete graph, if any
+        try {
+<span class="nc" id="L115">            flushGraph(graphs[1], psMgr, autoAssign);</span>
+<span class="nc" id="L116">        } catch (SQLException se) {</span>
+<span class="nc" id="L117">            exceps = addException(exceps, SQLExceptions.getStore(se, dict));</span>
+<span class="nc" id="L118">        } catch (OpenJPAException ke) {</span>
+<span class="nc" id="L119">            exceps = addException(exceps, ke);</span>
+<span class="nc" id="L120">        }</span>
+
+        // put the remainder of the deletes after updates because some updates
+        // may be nulling fks to rows that are going to be deleted
+<span class="nc" id="L124">        flush(deletes, psMgr);</span>
+
+        // take care of all secondary table inserts and updates last, since
+        // they may rely on previous inserts or updates, but nothing relies
+        // on them
+<span class="nc" id="L129">        flush(rmimpl.getSecondaryUpdates(), psMgr);</span>
+
+        // flush any left over prepared statements
+<span class="nc" id="L132">        psMgr.flush();</span>
+<span class="nc" id="L133">        return exceps;</span>
+    }
+
+    /**
+     * Analyze foreign key dependencies on the given rows
+     * and create an insert and a delete graph to execute.  The insert
+     * graph will be flushed before all other rows, and the delete graph will
+     * be flushed after them.
+     */
+    private void analyzeForeignKeys(Collection inserts, Collection updates,
+        Collection deletes, RowManagerImpl rowMgr, Graph[] graphs) {
+        // if there are any deletes, we have to map the insert objects on their
+        // oids so we'll be able to detect delete-then-insert-same-pk cases
+<span class="nc" id="L146">        Map insertMap = null;</span>
+        OpenJPAStateManager sm;
+<span class="nc bnc" id="L148" title="All 4 branches missed.">        if (!deletes.isEmpty() &amp;&amp; !inserts.isEmpty()) {</span>
+<span class="nc" id="L149">            insertMap = new HashMap((int) (inserts.size() * 1.33 + 1));</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">            for (Iterator itr = inserts.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L151">                sm = ((Row) itr.next()).getPrimaryKey();</span>
+<span class="nc bnc" id="L152" title="All 4 branches missed.">                if (sm != null &amp;&amp; sm.getObjectId() != null)</span>
+<span class="nc" id="L153">                    insertMap.put(sm.getObjectId(), sm);</span>
+            }
+        }
+
+        // first construct the graph for deletes; this may expand to include
+        // inserts and updates as well if there are any inserts that rely on
+        // deletes (delete-then-insert-same-pk cases)
+        PrimaryRow row;
+        Row row2;
+        ForeignKey[] fks;
+        OpenJPAStateManager fkVal;
+<span class="nc" id="L164">        boolean ignoreUpdates = true;</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        for (Iterator itr = deletes.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L166">            row = (PrimaryRow) itr.next();</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">            if (!row.isValid())</span>
+<span class="nc" id="L168">                continue;</span>
+
+<span class="nc" id="L170">            row2 = getInsertRow(insertMap, rowMgr, row);</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">            if (row2 != null) {</span>
+<span class="nc" id="L172">                ignoreUpdates = false;</span>
+<span class="nc" id="L173">                graphs[1] = addEdge(graphs[1], (PrimaryRow) row2, row, null);</span>
+            }
+
+            // now check this row's fks against other deletes
+<span class="nc" id="L177">            fks = row.getTable().getForeignKeys();</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            for (int j = 0; j &lt; fks.length; j++) {</span>
+                // when deleting ref fks they'll just set a where value, so
+                // check both for fk updates (relation fks) and wheres (ref fks)
+<span class="nc" id="L181">                fkVal = row.getForeignKeySet(fks[j]);</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">                if (fkVal == null)</span>
+<span class="nc" id="L183">                    fkVal = row.getForeignKeyWhere(fks[j]);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">                if (fkVal == null)</span>
+<span class="nc" id="L185">                    continue;</span>
+
+<span class="nc" id="L187">                row2 = rowMgr.getRow(fks[j].getPrimaryKeyTable(),</span>
+                    Row.ACTION_DELETE, fkVal, false);
+<span class="nc bnc" id="L189" title="All 6 branches missed.">                if (row2 != null &amp;&amp; row2.isValid() &amp;&amp; row2 != row)</span>
+<span class="nc" id="L190">                    graphs[1] = addEdge(graphs[1], (PrimaryRow) row2, row,</span>
+                        fks[j]);
+            }
+        }
+
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        if (ignoreUpdates)</span>
+<span class="nc" id="L196">            graphs[0] = analyzeAgainstInserts(inserts, rowMgr, graphs[0]);</span>
+        else {
+            // put inserts *and updates* in the delete graph; they all rely
+            // on each other
+<span class="nc" id="L200">            graphs[1] = analyzeAgainstInserts(updates, rowMgr, graphs[1]);</span>
+<span class="nc" id="L201">            graphs[1] = analyzeAgainstInserts(inserts, rowMgr, graphs[1]);</span>
+        }
+<span class="nc" id="L203">    }</span>
+
+    /**
+     * Check to see if there is an insert for for the same table and primary
+     * key values as the given delete row.
+     */
+    private Row getInsertRow(Map insertMap, RowManagerImpl rowMgr, Row row) {
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (insertMap == null)</span>
+<span class="nc" id="L211">            return null;</span>
+
+<span class="nc" id="L213">        OpenJPAStateManager sm = row.getPrimaryKey();</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (sm == null)</span>
+<span class="nc" id="L215">            return null;</span>
+
+        // look for a new object whose insert id is the same as this delete one
+<span class="nc" id="L218">        Object oid = sm.getObjectId();</span>
+<span class="nc" id="L219">        OpenJPAStateManager nsm = (OpenJPAStateManager) insertMap.get(oid);</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">        if (nsm == null)</span>
+<span class="nc" id="L221">            return null;</span>
+
+        // found new object; get its row
+<span class="nc" id="L224">        row = rowMgr.getRow(row.getTable(), Row.ACTION_INSERT, nsm, false);</span>
+<span class="nc bnc" id="L225" title="All 4 branches missed.">        return (row == null || row.isValid()) ? row : null;</span>
+    }
+
+    /**
+     * Analyze the given rows against the inserts, placing dependencies
+     * in the given graph.
+     */
+    private Graph analyzeAgainstInserts(Collection rows, RowManagerImpl rowMgr,
+        Graph graph) {
+        PrimaryRow row;
+        Row row2;
+        ForeignKey[] fks;
+        Column[] cols;
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        for (Iterator itr = rows.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L239">            row = (PrimaryRow) itr.next();</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">            if (!row.isValid())</span>
+<span class="nc" id="L241">                continue;</span>
+
+            // check this row's fks against inserts; a logical fk to an auto-inc
+            // column is treated just as actual database fk because the result
+            // is the same: the pk row has to be inserted before the fk row
+<span class="nc" id="L246">            fks = row.getTable().getForeignKeys();</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">            for (int j = 0; j &lt; fks.length; j++) {</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">                if (row.getForeignKeySet(fks[j]) == null)</span>
+<span class="nc" id="L249">                    continue;</span>
+
+                // see if this row is dependent on another.  if it's only
+                // depenent on itself, see if the fk is logical or deferred, in
+                // which case it must be an auto-inc because otherwise we
+                // wouldn't have recorded it
+<span class="nc" id="L255">                row2 = rowMgr.getRow(fks[j].getPrimaryKeyTable(),</span>
+<span class="nc" id="L256">                    Row.ACTION_INSERT, row.getForeignKeySet(fks[j]), false);</span>
+<span class="nc bnc" id="L257" title="All 6 branches missed.">                if (row2 != null &amp;&amp; row2.isValid() &amp;&amp; (row2 != row</span>
+<span class="nc bnc" id="L258" title="All 4 branches missed.">                    || fks[j].isDeferred() || fks[j].isLogical()))</span>
+<span class="nc" id="L259">                    graph = addEdge(graph, row, (PrimaryRow) row2, fks[j]);</span>
+            }
+
+            // see if there are any relation id columns dependent on
+            // auto-inc objects
+<span class="nc" id="L264">            cols = row.getTable().getRelationIdColumns();</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">            for (int j = 0; j &lt; cols.length; j++) {</span>
+<span class="nc" id="L266">                OpenJPAStateManager sm = row.getRelationIdSet(cols[j]);</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">                if (sm == null)</span>
+<span class="nc" id="L268">                    continue;</span>
+
+<span class="nc" id="L270">                row2 = rowMgr.getRow(getBaseTable(sm), Row.ACTION_INSERT,</span>
+                    sm, false);
+<span class="nc bnc" id="L272" title="All 4 branches missed.">                if (row2 != null &amp;&amp; row2.isValid())</span>
+<span class="nc" id="L273">                    graph = addEdge(graph, row, (PrimaryRow) row2, cols[j]);</span>
+            }
+        }
+<span class="nc" id="L276">        return graph;</span>
+    }
+
+    /**
+     * Return the base table for the given instance.
+     */
+    private static Table getBaseTable(OpenJPAStateManager sm) {
+<span class="nc" id="L283">        ClassMapping cls = (ClassMapping) sm.getMetaData();</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">        while (cls.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L285">            cls = cls.getJoinablePCSuperclassMapping();</span>
+<span class="nc" id="L286">        return cls.getTable();</span>
+    }
+
+    /**
+     * Add an edge between the given rows in the given foreign key graph.
+     */
+    private Graph addEdge(Graph graph, PrimaryRow row1, PrimaryRow row2,
+        Object fk) {
+        // delay creation of the graph
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (graph == null)</span>
+<span class="nc" id="L296">            graph = new Graph();</span>
+
+<span class="nc" id="L298">        row1.setDependent(true);</span>
+<span class="nc" id="L299">        row2.setDependent(true);</span>
+<span class="nc" id="L300">        graph.addNode(row1);</span>
+<span class="nc" id="L301">        graph.addNode(row2);</span>
+
+        // add an edge from row1 to row2, and set the fk causing the
+        // dependency as the user object so we can retrieve it when resolving
+        // circular constraints
+<span class="nc" id="L306">        Edge edge = new Edge(row1, row2, true);</span>
+<span class="nc" id="L307">        edge.setUserObject(fk);</span>
+<span class="nc" id="L308">        graph.addEdge(edge);</span>
+
+<span class="nc" id="L310">        return graph;</span>
+    }
+
+    /**
+     * Flush the given graph of rows in the proper order.
+     * @param graph The graph of statements to be walked
+     * @param psMgr The prepared statement manager to use to issue the
+     * statements
+     * @param autoAssign Whether any of the rows in the graph have any
+     * auto-assign constraints
+     */
+    protected void flushGraph(Graph graph, PreparedStatementManager psMgr,
+        boolean autoAssign)
+        throws SQLException {
+<span class="nc bnc" id="L324" title="All 2 branches missed.">        if (graph == null)</span>
+<span class="nc" id="L325">            return;</span>
+
+<span class="nc" id="L327">        DepthFirstAnalysis dfa = newDepthFirstAnalysis(graph, autoAssign);</span>
+<span class="nc" id="L328">        Collection insertUpdates = new LinkedList();</span>
+<span class="nc" id="L329">        Collection deleteUpdates = new LinkedList();</span>
+        boolean recalculate;
+
+        // Handle circular constraints:
+        // - if deleted row A has a ciricular fk to deleted row B,
+        //   then use an update statement to null A's fk to B before flushing,
+        //   and then flush
+        // - if inserted row A has a circular fk to updated/inserted row B,
+        //   then null the fk in the B row object, then flush,
+        //   and after flushing, use an update to set the fk back to A
+        // Depending on where circular dependencies are broken, the
+        // topological order of the graph nodes has to be re-calculated.
+<span class="nc" id="L341">        recalculate = resolveCycles(graph, dfa.getEdges(Edge.TYPE_BACK),</span>
+                deleteUpdates, insertUpdates);
+<span class="nc" id="L343">        recalculate |= resolveCycles(graph, dfa.getEdges(Edge.TYPE_FORWARD),</span>
+                deleteUpdates, insertUpdates);
+
+<span class="nc bnc" id="L346" title="All 2 branches missed.">        if (recalculate) {</span>
+<span class="nc" id="L347">            dfa = recalculateDepthFirstAnalysis(graph, autoAssign);</span>
+        }
+
+        // flush delete updates to null fks, then all rows in order, then
+        // the insert updates to set circular fk values
+<span class="nc" id="L352">        Collection nodes = dfa.getSortedNodes();</span>
+<span class="nc" id="L353">        flush(deleteUpdates, nodes, psMgr);</span>
+<span class="nc" id="L354">        flush(insertUpdates, psMgr);</span>
+<span class="nc" id="L355">    }</span>
+
+    protected void flush(Collection deleteUpdates, Collection nodes,
+    	PreparedStatementManager psMgr) {
+<span class="nc" id="L359">        flush(deleteUpdates, psMgr);</span>
+<span class="nc bnc" id="L360" title="All 2 branches missed.">        for (Iterator itr = nodes.iterator(); itr.hasNext();)</span>
+<span class="nc" id="L361">            psMgr.flush((RowImpl) itr.next());</span>
+<span class="nc" id="L362">    }</span>
+
+    /**
+     * Break a circular dependency caused by delete operations.
+     * If deleted row A has a ciricular fk to deleted row B, then use an update
+     * statement to null A's fk to B before deleting B, then delete A.
+     * @param edge Edge in the dependency graph corresponding to a foreign key
+     * constraint. This dependency is broken by nullifying the foreign key.
+     * @param deleteUpdates Collection of update statements that are executed
+     * before the delete operations are flushed
+     */
+    private void addDeleteUpdate(Edge edge, Collection deleteUpdates)
+        throws SQLException {
+        PrimaryRow row;
+        RowImpl update;
+        ForeignKey fk;
+
+        // copy where conditions into new update that nulls the fk
+<span class="nc" id="L380">        row = (PrimaryRow) edge.getTo();</span>
+<span class="nc" id="L381">        update = new PrimaryRow(row.getTable(), Row.ACTION_UPDATE, null);</span>
+<span class="nc" id="L382">        row.copyInto(update, true);</span>
+<span class="nc bnc" id="L383" title="All 2 branches missed.">        if (edge.getUserObject() instanceof ForeignKey) {</span>
+<span class="nc" id="L384">            fk = (ForeignKey) edge.getUserObject();</span>
+<span class="nc" id="L385">            update.setForeignKey(fk, row.getForeignKeyIO(fk), null);</span>
+        } else
+<span class="nc" id="L387">            update.setNull((Column) edge.getUserObject());</span>
+
+<span class="nc" id="L389">        deleteUpdates.add(update);</span>
+<span class="nc" id="L390">    }</span>
+
+    /**
+     * Break a circular dependency caused by insert operations.
+     * If inserted row A has a circular fk to updated/inserted row B,
+     * then null the fk in the B row object, then flush,
+     * and after flushing, use an update to set the fk back to A.
+     * @param row Row to be flushed
+     * @param edge Edge in the dependency graph corresponding to a foreign key
+     * constraint. This dependency is broken by nullifying the foreign key.
+     * @param insertUpdates Collection of update statements that are executed
+     * after the insert/update operations are flushed
+     */
+    private void addInsertUpdate(PrimaryRow row, Edge edge,
+        Collection insertUpdates) throws SQLException {
+        RowImpl update;
+        ForeignKey fk;
+        Column col;
+
+        // copy where conditions into new update that sets the fk
+<span class="nc" id="L410">        update = new PrimaryRow(row.getTable(), Row.ACTION_UPDATE, null);</span>
+<span class="nc bnc" id="L411" title="All 2 branches missed.">        if (row.getAction() == Row.ACTION_INSERT) {</span>
+<span class="nc bnc" id="L412" title="All 2 branches missed.">            if (row.getPrimaryKey() == null)</span>
+<span class="nc" id="L413">                throw new InternalException(_loc.get(&quot;ref-cycle&quot;));</span>
+<span class="nc" id="L414">            update.wherePrimaryKey(row.getPrimaryKey());</span>
+        } else {
+            // Row.ACTION_UPDATE
+<span class="nc" id="L417">            row.copyInto(update, true);</span>
+        }
+<span class="nc bnc" id="L419" title="All 2 branches missed.">        if (edge.getUserObject() instanceof ForeignKey) {</span>
+<span class="nc" id="L420">            fk = (ForeignKey) edge.getUserObject();</span>
+<span class="nc" id="L421">            update.setForeignKey(fk, row.getForeignKeyIO(fk),</span>
+<span class="nc" id="L422">                row.getForeignKeySet(fk));</span>
+<span class="nc" id="L423">            row.clearForeignKey(fk);</span>
+        } else {
+<span class="nc" id="L425">            col = (Column) edge.getUserObject();</span>
+<span class="nc" id="L426">            update.setRelationId(col, row.getRelationIdSet(col),</span>
+<span class="nc" id="L427">                row.getRelationIdCallback(col));</span>
+<span class="nc" id="L428">            row.clearRelationId(col);</span>
+        }
+
+<span class="nc" id="L431">        insertUpdates.add(update);</span>
+<span class="nc" id="L432">    }</span>
+
+    /**
+     * Finds a nullable foreign key by walking the dependency cycle.
+     * Circular dependencies can be broken at this point.
+     * @param cycle Cycle in the dependency graph.
+     * @return Edge corresponding to a nullable foreign key.
+     */
+    private Edge findBreakableLink(List cycle) {
+<span class="nc" id="L441">        Edge breakableLink = null;</span>
+<span class="nc bnc" id="L442" title="All 2 branches missed.">        for (Iterator iter = cycle.iterator(); iter.hasNext(); ) {</span>
+<span class="nc" id="L443">            Edge edge = (Edge) iter.next();</span>
+<span class="nc" id="L444">            Object userObject = edge.getUserObject();</span>
+<span class="nc bnc" id="L445" title="All 2 branches missed.">            if (userObject instanceof ForeignKey) {</span>
+<span class="nc bnc" id="L446" title="All 2 branches missed.">                 if (!((ForeignKey) userObject).hasNotNullColumns()) {</span>
+<span class="nc" id="L447">                     breakableLink = edge;</span>
+<span class="nc" id="L448">                     break;</span>
+                 }
+<span class="nc bnc" id="L450" title="All 2 branches missed.">            } else if (userObject instanceof Column) {</span>
+<span class="nc bnc" id="L451" title="All 2 branches missed.">                if (!((Column) userObject).isNotNull()) {</span>
+<span class="nc" id="L452">                    breakableLink = edge;</span>
+<span class="nc" id="L453">                    break;</span>
+                }
+            }
+<span class="nc" id="L456">        }</span>
+<span class="nc" id="L457">        return breakableLink;</span>
+    }
+
+    /**
+     * Re-calculates the DepthFirstSearch analysis of the graph
+     * after some of the edges have been removed. Ensures
+     * that the dependency graph is cycle free.
+     * @param graph The graph of statements to be walked
+     * @param autoAssign Whether any of the rows in the graph have any
+     * auto-assign constraints
+     */
+    private DepthFirstAnalysis recalculateDepthFirstAnalysis(Graph graph,
+        boolean autoAssign) {
+        DepthFirstAnalysis dfa;
+        // clear previous traversal data
+<span class="nc" id="L472">        graph.clearTraversal();</span>
+<span class="nc" id="L473">        dfa = newDepthFirstAnalysis(graph, autoAssign);</span>
+        // make sure that the graph is non-cyclic now
+<span class="nc bnc" id="L475" title="All 4 branches missed.">        assert (dfa.hasNoCycles()): _loc.get(&quot;graph-not-cycle-free&quot;);</span>
+<span class="nc" id="L476">        return dfa;</span>
+    }
+
+    /**
+     * Resolve circular dependencies by identifying and breaking
+     * a nullable foreign key.
+     * @param graph Dependency graph.
+     * @param edges Collection of edges. Each edge indicates a possible
+     * circular dependency
+     * @param deleteUpdates Collection of update operations (nullifying
+     * foreign keys) to be filled. These updates will be executed before
+     * the rows in the dependency graph are flushed
+     * @param insertUpdates CCollection of update operations (nullifying
+     * foreign keys) to be filled. These updates will be executed after
+     * the rows in the dependency graph are flushed
+     * @return Depending on where circular dependencies are broken, the
+     * topological order of the graph nodes has to be re-calculated.
+     */
+    private boolean resolveCycles(Graph graph, Collection edges,
+        Collection deleteUpdates, Collection insertUpdates)
+        throws SQLException {
+<span class="nc" id="L497">        boolean recalculate = false;</span>
+<span class="nc bnc" id="L498" title="All 2 branches missed.">        for (Iterator itr = edges.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L499">            Edge edge = (Edge) itr.next();</span>
+<span class="nc" id="L500">            List cycle = edge.getCycle();</span>
+
+<span class="nc bnc" id="L502" title="All 2 branches missed.">            if (cycle != null) {</span>
+                // find a nullable foreign key
+<span class="nc" id="L504">                Edge breakableLink = findBreakableLink(cycle);</span>
+<span class="nc bnc" id="L505" title="All 2 branches missed.">                if (breakableLink == null) {</span>
+<span class="nc" id="L506">                    throw new UserException(_loc.get(&quot;no-nullable-fk&quot;));</span>
+                }
+
+                // topologic node order must be re-calculated,  if the
+                // breakable link is different from the edge where
+                // the circular dependency was originally detected
+<span class="nc bnc" id="L512" title="All 2 branches missed.">                if (edge != breakableLink) {</span>
+<span class="nc" id="L513">                    recalculate = true;</span>
+                }
+
+<span class="nc bnc" id="L516" title="All 2 branches missed.">                if (!breakableLink.isRemovedFromGraph()) {</span>
+
+                    // use a primary row update to prevent setting pk and fk
+                    // values until after flush, to get latest auto-increment
+                    // values
+<span class="nc" id="L521">                    PrimaryRow row = (PrimaryRow) breakableLink.getFrom();</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">                    if (row.getAction() == Row.ACTION_DELETE) {</span>
+<span class="nc" id="L523">                        addDeleteUpdate(breakableLink, deleteUpdates);</span>
+                    } else {
+<span class="nc" id="L525">                        addInsertUpdate(row, breakableLink, insertUpdates);</span>
+                    }
+<span class="nc" id="L527">                    graph.removeEdge(breakableLink);</span>
+                }
+            }
+<span class="nc" id="L530">        }</span>
+<span class="nc" id="L531">        return recalculate;</span>
+    }
+
+    /**
+     * Create a new {@link DepthFirstAnalysis} suitable for the given graph
+     * and auto-assign settings.
+     */
+    protected DepthFirstAnalysis newDepthFirstAnalysis(Graph graph,
+        boolean autoAssign) {
+<span class="nc" id="L540">        return new DepthFirstAnalysis(graph);</span>
+    }
+
+    /**
+     * Flush the given collection of secondary rows.
+     */
+    protected void flush(Collection rows, PreparedStatementManager psMgr) {
+<span class="nc bnc" id="L547" title="All 2 branches missed.">        if (rows.size() == 0)</span>
+<span class="nc" id="L548">            return;</span>
+
+        RowImpl row;
+<span class="nc bnc" id="L551" title="All 2 branches missed.">        for (Iterator itr = rows.iterator(); itr.hasNext(); ) {</span>
+<span class="nc" id="L552">            row = (RowImpl) itr.next();</span>
+<span class="nc bnc" id="L553" title="All 6 branches missed.">            if (!row.isFlushed() &amp;&amp; row.isValid() &amp;&amp; !row.isDependent()) {</span>
+<span class="nc" id="L554">                psMgr.flush(row);</span>
+<span class="nc" id="L555">                row.setFlushed(true);</span>
+            }
+        }
+<span class="nc" id="L558">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

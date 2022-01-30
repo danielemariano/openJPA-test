@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>NameSet.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">NameSet.java</span></div><h1>NameSet.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.io.Serializable;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+
+/**
+ * Name sets track what names have been taken, ignoring case.
+ * {@link SchemaGroup}s implement this interface for tables, indexes, and
+ * constraints; {@link Table}s implement it for their columns.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L37">public class NameSet implements Serializable {</span>
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L40">    private static final Localizer _loc = Localizer.forPackage(NameSet.class);</span>
+
+<span class="nc" id="L42">    private Set&lt;DBIdentifier&gt; _names = null;</span>
+
+    /**
+     * Return true if the given name is in use already.
+     * @deprecated
+     */
+    @Deprecated
+    public boolean isNameTaken(String name) {
+<span class="nc" id="L50">        return isNameTaken(DBIdentifier.toUpper(DBIdentifier.newDefault(name)));</span>
+    }
+
+    public boolean isNameTaken(DBIdentifier name) {
+<span class="nc bnc" id="L54" title="All 2 branches missed.">        if (DBIdentifier.isEmpty(name)) {</span>
+<span class="nc" id="L55">            return true;</span>
+        }
+<span class="nc bnc" id="L57" title="All 2 branches missed.">        if (_names == null) {</span>
+<span class="nc" id="L58">            return false;</span>
+        }
+<span class="nc" id="L60">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L61">        return _names.contains(sName);</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    protected void addName(String name, boolean validate) {
+<span class="nc" id="L69">        addName(DBIdentifier.newIdentifier(name, DBIdentifierType.DEFAULT, true), validate);</span>
+<span class="nc" id="L70">    }</span>
+    /**
+     * Attempt to add the given name to the set.
+     *
+     * @param name the name to add
+     * @param validate if true, null or empty names will not be accepted
+     */
+    protected void addName(DBIdentifier name, boolean validate) {
+<span class="nc bnc" id="L78" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) || StringUtil.isEmpty(name.getName())) {</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">            if (validate)</span>
+<span class="nc" id="L80">                throw new IllegalArgumentException(_loc.get(&quot;bad-name&quot;, name)</span>
+<span class="nc" id="L81">                    .getMessage());</span>
+<span class="nc" id="L82">            return;</span>
+        }
+
+        // unfortunately, we can't check for duplicate names, because different
+        // DBs use different namespaces for components, and it would be
+        // difficult to find a scheme that fits all and is still useful
+<span class="nc bnc" id="L88" title="All 2 branches missed.">        if (_names == null)</span>
+<span class="nc" id="L89">            _names = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L90">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L91">        _names.add(sName);</span>
+<span class="nc" id="L92">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    protected void removeName(String name) {
+<span class="nc bnc" id="L99" title="All 4 branches missed.">        if (name != null &amp;&amp; _names != null) {</span>
+<span class="nc" id="L100">            removeName(DBIdentifier.newIdentifier(name, DBIdentifierType.DEFAULT, true));</span>
+        }
+<span class="nc" id="L102">    }</span>
+    /**
+     * Remove the given name from the table.
+     */
+    protected void removeName(DBIdentifier name) {
+<span class="nc bnc" id="L107" title="All 4 branches missed.">        if (!DBIdentifier.isNull(name) &amp;&amp; _names != null) {</span>
+<span class="nc" id="L108">            DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L109">            _names.remove(sName);</span>
+        }
+<span class="nc" id="L111">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

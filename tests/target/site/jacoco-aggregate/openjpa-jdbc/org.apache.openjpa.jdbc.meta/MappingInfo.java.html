@@ -1,0 +1,1922 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MappingInfo.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">MappingInfo.java</span></div><h1>MappingInfo.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.io.Serializable;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.jdbc.identifier.Normalizer;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.Schemas;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.ClassUtil;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Localizer.Message;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.MetaDataContext;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Base class storing raw mapping information; defines utility methods for
+ * converting raw mapping information to full mapping to the schema.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L58">public abstract class MappingInfo implements Serializable {</span>
+    private static final long serialVersionUID = 1L;
+    public static final int JOIN_NONE = 0;
+    public static final int JOIN_FORWARD = 1;
+    public static final int JOIN_INVERSE = 2;
+
+<span class="nc" id="L64">    private static final Object NULL = new Object();</span>
+
+<span class="nc" id="L66">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L67">        (MappingInfo.class);</span>
+
+<span class="nc" id="L69">    private String _strategy = null;</span>
+<span class="nc" id="L70">    private List&lt;Column&gt; _cols = null;</span>
+<span class="nc" id="L71">    private Index _idx = null;</span>
+<span class="nc" id="L72">    private Unique _unq = null;</span>
+<span class="nc" id="L73">    private ForeignKey _fk = null;</span>
+<span class="nc" id="L74">    private boolean _canIdx = true;</span>
+<span class="nc" id="L75">    private boolean _canUnq = true;</span>
+<span class="nc" id="L76">    private boolean _canFK = true;</span>
+<span class="nc" id="L77">    private boolean _implicitRelation = false;</span>
+<span class="nc" id="L78">    private int _join = JOIN_NONE;</span>
+<span class="nc" id="L79">    private ColumnIO _io = null;</span>
+
+    /**
+     * Mapping strategy name.
+     */
+    public String getStrategy() {
+<span class="nc" id="L85">        return _strategy;</span>
+    }
+
+    /**
+     * Mapping strategy name.
+     */
+    public void setStrategy(String strategy) {
+<span class="nc" id="L92">        _strategy = strategy;</span>
+<span class="nc" id="L93">    }</span>
+
+    /**
+     * Raw column data.
+     */
+    public List&lt;Column&gt; getColumns() {
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if (_cols == null) {</span>
+<span class="nc" id="L100">            return Collections.emptyList();</span>
+        }
+<span class="nc" id="L102">        return _cols;</span>
+    }
+
+    /**
+     * Gets the columns whose table name matches the given table name.
+     * @deprecated
+     */
+    @Deprecated
+    public List&lt;Column&gt; getColumns(String tableName) {
+<span class="nc" id="L111">        return getColumns(DBIdentifier.newTable(tableName));</span>
+    }
+
+    /**
+     * Gets the columns whose table name matches the given table name.
+     */
+    public List&lt;Column&gt; getColumns(DBIdentifier tableName) {
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        if (_cols == null)</span>
+<span class="nc" id="L119">        	return Collections.emptyList();</span>
+<span class="nc" id="L120">        List&lt;Column&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        for (Column col : _cols) {</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        	if (DBIdentifier.equal(col.getTableIdentifier(),</span>
+        			tableName))
+<span class="nc" id="L124">        		result.add(col);</span>
+<span class="nc" id="L125">        }</span>
+<span class="nc" id="L126">        return result;</span>
+    }
+
+    /**
+     * Raw column data.
+     */
+    public void setColumns(List&lt;Column&gt; cols) {
+<span class="nc" id="L133">        _cols = cols;</span>
+<span class="nc" id="L134">    }</span>
+
+    /**
+     * Raw index.
+     */
+    public Index getIndex() {
+<span class="nc" id="L140">        return _idx;</span>
+    }
+
+    /**
+     * Raw index.
+     */
+    public void setIndex(Index idx) {
+<span class="nc" id="L147">        _idx = idx;</span>
+<span class="nc" id="L148">    }</span>
+
+    /**
+     * The user can mark columns as explicitly non-indexable.
+     */
+    public boolean canIndex() {
+<span class="nc" id="L154">        return _canIdx;</span>
+    }
+
+    /**
+     * The user can mark columns as explicitly non-indexable.
+     */
+    public void setCanIndex(boolean indexable) {
+<span class="nc" id="L161">        _canIdx = indexable;</span>
+<span class="nc" id="L162">    }</span>
+
+    /**
+     *  Affirms if this instance represents an implicit relation. For example, a
+     *  relation expressed as the value of primary key of the related class and
+	 *  not as object reference.
+     *
+     * @since 1.3.0
+     */
+    public boolean isImplicitRelation() {
+<span class="nc" id="L172">    	return _implicitRelation;</span>
+    }
+
+    /**
+     * Sets a marker to imply a logical relation that can not have any physical
+     * manifest in the database. For example, a relation expressed as the value
+     * of primary key of the related class and not as object reference.
+     * Populated from @ForeignKey(implicit=true) annotation.
+     * The mutator can only transit from false to true but not vice versa.
+     *
+     * @since 1.3.0
+     */
+    public void setImplicitRelation(boolean flag) {
+<span class="nc" id="L185">    	_implicitRelation |= flag;</span>
+<span class="nc" id="L186">    }</span>
+
+    /**
+     * Raw foreign key information.
+     */
+    public ForeignKey getForeignKey() {
+<span class="nc" id="L192">        return _fk;</span>
+    }
+
+    /**
+     * Raw foreign key information.
+     */
+    public void setForeignKey(ForeignKey fk) {
+<span class="nc" id="L199">        _fk = fk;</span>
+<span class="nc bnc" id="L200" title="All 4 branches missed.">        if (fk != null &amp;&amp; _join == JOIN_NONE)</span>
+<span class="nc" id="L201">            _join = JOIN_FORWARD;</span>
+<span class="nc" id="L202">    }</span>
+
+    /**
+     * The user can mark columns as explicitly not having a foreign key.
+     */
+    public boolean canForeignKey() {
+<span class="nc" id="L208">        return _canFK;</span>
+    }
+
+    /**
+     * The user can mark columns as explicitly not having a foreign key.
+     */
+    public void setCanForeignKey(boolean fkable) {
+<span class="nc" id="L215">        _canFK = fkable;</span>
+<span class="nc" id="L216">    }</span>
+
+    /**
+     * Raw unique constraint information.
+     */
+    public Unique getUnique() {
+<span class="nc" id="L222">        return _unq;</span>
+    }
+
+    /**
+     * Raw unique constraint information.
+     */
+    public void setUnique(Unique unq) {
+<span class="nc" id="L229">        _unq = unq;</span>
+<span class="nc" id="L230">    }</span>
+
+    /**
+     * The user can mark columns as explicitly not having a unique constraint.
+     */
+    public boolean canUnique() {
+<span class="nc" id="L236">        return _canUnq;</span>
+    }
+
+    /**
+     * The user can mark columns as explicitly not having a unique constraint.
+     */
+    public void setCanUnique(boolean uniquable) {
+<span class="nc" id="L243">        _canUnq = uniquable;</span>
+<span class="nc" id="L244">    }</span>
+
+    /**
+     * I/O for the columns created by the last call to {@link #createColumns},
+     * or for the foreign key created by the last call to
+     * {@link #createForeignKey}. This is also expected to be set correctly
+     * prior to calls to {@link #syncColumns} and {@link #syncForeignKey}.
+     */
+    public ColumnIO getColumnIO() {
+<span class="nc" id="L253">        return _io;</span>
+    }
+
+    /**
+     * I/O for the columns created by the last call to {@link #createColumns},
+     * or for the foreign key created by the last call to
+     * {@link #createForeignKey}. This is also expected to be set correctly
+     * prior to calls to {@link #syncColumns} and {@link #syncForeignKey}.
+     */
+    public void setColumnIO(ColumnIO io) {
+<span class="nc" id="L263">        _io = io;</span>
+<span class="nc" id="L264">    }</span>
+
+    /**
+     * Direction of the join that the columns of this mapping info form. This
+     * is usually automatically set by {@link #createForeignKey}. This flag
+     * is also expected to be set correctly prior to calls to
+     * {@link #syncForeignKey} if the join is inversed.
+     */
+    public int getJoinDirection() {
+<span class="nc" id="L273">        return _join;</span>
+    }
+
+    /**
+     * Direction of the join that the columns of this mapping info form. This
+     * is usually automatically set by {@link #createForeignKey}. This flag
+     * is also expected to be set correctly prior to calls to
+     * {@link #syncForeignKey} if the join is inversed.
+     */
+    public void setJoinDirection(int join) {
+<span class="nc" id="L283">        _join = join;</span>
+<span class="nc" id="L284">    }</span>
+
+    /**
+     * Clear all mapping information.
+     */
+    public void clear() {
+<span class="nc" id="L290">        clear(true);</span>
+<span class="nc" id="L291">    }</span>
+
+    /**
+     * Clear mapping information.
+     *
+     * @param canFlags whether to clear information about whether we
+     * can place indexed, foreign keys, etc on this mapping
+     */
+    protected void clear(boolean canFlags) {
+<span class="nc" id="L300">        _strategy = null;</span>
+<span class="nc" id="L301">        _cols = null;</span>
+<span class="nc" id="L302">        _io = null;</span>
+<span class="nc" id="L303">        _idx = null;</span>
+<span class="nc" id="L304">        _unq = null;</span>
+<span class="nc" id="L305">        _fk = null;</span>
+<span class="nc" id="L306">        _join = JOIN_NONE;</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">        if (canFlags) {</span>
+<span class="nc" id="L308">            _canIdx = true;</span>
+<span class="nc" id="L309">            _canFK = true;</span>
+<span class="nc" id="L310">            _canUnq = true;</span>
+        }
+<span class="nc" id="L312">    }</span>
+
+    /**
+     * Copy missing info from the instance to this one.
+     */
+    public void copy(MappingInfo info) {
+<span class="nc bnc" id="L318" title="All 2 branches missed.">        if (_strategy == null)</span>
+<span class="nc" id="L319">            _strategy = info.getStrategy();</span>
+<span class="nc bnc" id="L320" title="All 4 branches missed.">        if (_canIdx &amp;&amp; _idx == null) {</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">            if (info.getIndex() != null)</span>
+<span class="nc" id="L322">                _idx = info.getIndex();</span>
+            else
+<span class="nc" id="L324">                _canIdx = info.canIndex();</span>
+        }
+<span class="nc bnc" id="L326" title="All 4 branches missed.">        if (_canUnq &amp;&amp; _unq == null) {</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">            if (info.getUnique() != null)</span>
+<span class="nc" id="L328">                _unq = info.getUnique();</span>
+            else
+<span class="nc" id="L330">                _canUnq = info.canUnique();</span>
+        }
+<span class="nc bnc" id="L332" title="All 4 branches missed.">        if (_canFK &amp;&amp; _fk == null) {</span>
+<span class="nc bnc" id="L333" title="All 2 branches missed.">            if (info.getForeignKey() != null)</span>
+<span class="nc" id="L334">                _fk = info.getForeignKey();</span>
+            else
+<span class="nc" id="L336">                _canFK = info.canForeignKey();</span>
+        }
+<span class="nc" id="L338">        _implicitRelation = info.isImplicitRelation();</span>
+<span class="nc" id="L339">        List&lt;Column&gt; cols = getColumns();</span>
+<span class="nc" id="L340">        List&lt;Column&gt; icols = info.getColumns();</span>
+<span class="nc bnc" id="L341" title="All 4 branches missed.">        if (!icols.isEmpty() &amp;&amp; (cols.isEmpty()</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">            || cols.size() == icols.size())) {</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">            if (cols.isEmpty())</span>
+<span class="nc" id="L344">                cols = new ArrayList&lt;&gt;(icols.size());</span>
+<span class="nc bnc" id="L345" title="All 2 branches missed.">            for (int i = 0; i &lt; icols.size(); i++) {</span>
+<span class="nc bnc" id="L346" title="All 2 branches missed.">                if (cols.size() == i)</span>
+<span class="nc" id="L347">                    cols.add(new Column());</span>
+<span class="nc" id="L348">                cols.get(i).copy(icols.get(i));</span>
+            }
+<span class="nc" id="L350">            setColumns(cols);</span>
+        }
+<span class="nc" id="L352">    }</span>
+
+    /**
+     * Return true if this info has columns, foreign key information, index
+     * information, etc.
+     */
+    public boolean hasSchemaComponents() {
+<span class="nc bnc" id="L359" title="All 16 branches missed.">        return (_cols != null &amp;&amp; !_cols.isEmpty())</span>
+            || _idx != null
+            || _unq != null
+            || _fk != null
+            || !_canIdx
+            || !_canFK
+            || !_canUnq;
+    }
+
+    /**
+     * Assert that the user did not supply any columns, index, unique
+     * constraint, or foreign key for this mapping.
+     */
+    public void assertNoSchemaComponents(MetaDataContext context, boolean die) {
+<span class="nc bnc" id="L373" title="All 4 branches missed.">        if (_cols == null || _cols.isEmpty()) {</span>
+<span class="nc" id="L374">            assertNoIndex(context, die);</span>
+<span class="nc" id="L375">            assertNoUnique(context, die);</span>
+<span class="nc" id="L376">            assertNoForeignKey(context, die);</span>
+<span class="nc" id="L377">            return;</span>
+        }
+
+<span class="nc" id="L380">        Message msg = _loc.get(&quot;unexpected-cols&quot;, context);</span>
+<span class="nc bnc" id="L381" title="All 2 branches missed.">        if (die)</span>
+<span class="nc" id="L382">            throw new MetaDataException(msg);</span>
+<span class="nc" id="L383">        context.getRepository().getLog().warn(msg);</span>
+<span class="nc" id="L384">    }</span>
+
+    /**
+     * Assert that this info has the given strategy or no strategy.
+     */
+    public void assertStrategy(MetaDataContext context, Object contextStrat,
+        Object expected, boolean die) {
+<span class="nc bnc" id="L391" title="All 2 branches missed.">        if (contextStrat == expected)</span>
+<span class="nc" id="L392">            return;</span>
+
+        String strat;
+<span class="nc bnc" id="L395" title="All 2 branches missed.">        if (contextStrat == null) {</span>
+<span class="nc bnc" id="L396" title="All 2 branches missed.">            if (_strategy == null)</span>
+<span class="nc" id="L397">                return;</span>
+<span class="nc bnc" id="L398" title="All 2 branches missed.">            if (_strategy.equals(expected.getClass().getName()))</span>
+<span class="nc" id="L399">                return;</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">            if (expected instanceof Strategy</span>
+<span class="nc bnc" id="L401" title="All 2 branches missed.">                &amp;&amp; _strategy.equals(((Strategy) expected).getAlias()))</span>
+<span class="nc" id="L402">                return;</span>
+<span class="nc" id="L403">            strat = _strategy;</span>
+<span class="nc bnc" id="L404" title="All 2 branches missed.">        } else if (contextStrat instanceof Strategy)</span>
+<span class="nc" id="L405">            strat = ((Strategy) contextStrat).getAlias();</span>
+        else
+<span class="nc" id="L407">            strat = contextStrat.getClass().getName();</span>
+
+<span class="nc" id="L409">        Message msg = _loc.get(&quot;unexpected-strategy&quot;, context, expected,</span>
+            strat);
+<span class="nc bnc" id="L411" title="All 2 branches missed.">        if (die)</span>
+<span class="nc" id="L412">            throw new MetaDataException(msg);</span>
+<span class="nc" id="L413">        context.getRepository().getLog().warn(msg);</span>
+<span class="nc" id="L414">    }</span>
+
+    /**
+     * Assert that the user did not try to place an index on this mapping.
+     */
+    public void assertNoIndex(MetaDataContext context, boolean die) {
+<span class="nc bnc" id="L420" title="All 2 branches missed.">        if (_idx == null)</span>
+<span class="nc" id="L421">            return;</span>
+
+<span class="nc" id="L423">        Message msg = _loc.get(&quot;unexpected-index&quot;, context);</span>
+<span class="nc bnc" id="L424" title="All 2 branches missed.">        if (die)</span>
+<span class="nc" id="L425">            throw new MetaDataException(msg);</span>
+<span class="nc" id="L426">        context.getRepository().getLog().warn(msg);</span>
+<span class="nc" id="L427">    }</span>
+
+    /**
+     * Assert that the user did not try to place a unique constraint on this
+     * mapping.
+     */
+    public void assertNoUnique(MetaDataContext context, boolean die) {
+<span class="nc bnc" id="L434" title="All 2 branches missed.">        if (_unq == null)</span>
+<span class="nc" id="L435">            return;</span>
+
+<span class="nc" id="L437">        Message msg = _loc.get(&quot;unexpected-unique&quot;, context);</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">        if (die)</span>
+<span class="nc" id="L439">            throw new MetaDataException(msg);</span>
+<span class="nc" id="L440">        context.getRepository().getLog().warn(msg);</span>
+<span class="nc" id="L441">    }</span>
+
+    /**
+     * Assert that the user did not try to place a foreign key on this mapping
+     * or placed an implicit foreign key.
+     */
+    public void assertNoForeignKey(MetaDataContext context, boolean die) {
+<span class="nc bnc" id="L448" title="All 4 branches missed.">        if (_fk == null || isImplicitRelation())</span>
+<span class="nc" id="L449">            return;</span>
+
+<span class="nc" id="L451">        Message msg = _loc.get(&quot;unexpected-fk&quot;, context);</span>
+<span class="nc bnc" id="L452" title="All 2 branches missed.">        if (die)</span>
+<span class="nc" id="L453">            throw new MetaDataException(msg);</span>
+<span class="nc" id="L454">        context.getRepository().getLog().warn(msg);</span>
+<span class="nc" id="L455">    }</span>
+
+    /**
+     * Assert that the user did not try to join.
+     */
+    public void assertNoJoin(MetaDataContext context, boolean die) {
+<span class="nc" id="L461">        boolean join = false;</span>
+<span class="nc bnc" id="L462" title="All 2 branches missed.">        if (_cols != null) {</span>
+            Column col;
+<span class="nc bnc" id="L464" title="All 4 branches missed.">            for (int i = 0; !join &amp;&amp; i &lt; _cols.size(); i++) {</span>
+<span class="nc" id="L465">                col = _cols.get(i);</span>
+<span class="nc bnc" id="L466" title="All 2 branches missed.">                if (!DBIdentifier.isNull(col.getTargetIdentifier()))</span>
+<span class="nc" id="L467">                    join = true;</span>
+            }
+        }
+<span class="nc bnc" id="L470" title="All 2 branches missed.">        if (!join)</span>
+<span class="nc" id="L471">            return;</span>
+
+<span class="nc" id="L473">        Message msg = _loc.get(&quot;unexpected-join&quot;, context);</span>
+<span class="nc bnc" id="L474" title="All 2 branches missed.">        if (die)</span>
+<span class="nc" id="L475">            throw new MetaDataException(msg);</span>
+<span class="nc" id="L476">        context.getRepository().getLog().warn(msg);</span>
+<span class="nc" id="L477">    }</span>
+
+    /**
+     * Find or generate a table for a mapping.
+     *
+     * @param context the mapping that uses the table
+     * @param def default table name provider
+     * @param schemaName default schema if known, or null
+     * @param given given table name
+     * @param adapt whether we can alter the schema or mappings
+     * @deprecated
+     */
+    @Deprecated
+    public Table createTable(MetaDataContext context, TableDefaults def,
+        String schemaName, String given, boolean adapt) {
+<span class="nc" id="L492">        return createTable(context, def, DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L493">            DBIdentifier.newTable(given), adapt);</span>
+    }
+
+    public Table createTable(MetaDataContext context, TableDefaults def,
+        DBIdentifier schemaName, DBIdentifier given, boolean adapt) {
+<span class="nc" id="L498">        MappingRepository repos = (MappingRepository) context.getRepository();</span>
+<span class="nc bnc" id="L499" title="All 6 branches missed.">        if (DBIdentifier.isNull(given) &amp;&amp; (def == null || (!adapt</span>
+<span class="nc bnc" id="L500" title="All 2 branches missed.">            &amp;&amp; !repos.getMappingDefaults().defaultMissingInfo())))</span>
+<span class="nc" id="L501">            throw new MetaDataException(_loc.get(&quot;no-table&quot;, context));</span>
+
+<span class="nc bnc" id="L503" title="All 2 branches missed.">        if (DBIdentifier.isNull(schemaName)) {</span>
+            //Check the configuration first for a set Schema to use
+<span class="nc" id="L505">            schemaName = Schemas.getNewTableSchemaIdentifier((JDBCConfiguration)</span>
+<span class="nc" id="L506">                repos.getConfiguration());</span>
+
+            // If the schemaName is still NULL type then check for a system default schema name
+            // and if available use it.
+<span class="nc bnc" id="L510" title="All 4 branches missed.">            if (schemaName != null &amp;&amp; (schemaName.getType() == DBIdentifierType.NULL)) {</span>
+<span class="nc" id="L511">                String name = repos.getMetaDataFactory().getDefaults().getDefaultSchema();</span>
+<span class="nc bnc" id="L512" title="All 2 branches missed.">                schemaName = (name != null ? DBIdentifier.newSchema(name) : schemaName);</span>
+            }
+        }
+
+        // if no given and adapting or defaulting missing info, use template
+<span class="nc" id="L517">        SchemaGroup group = repos.getSchemaGroup();</span>
+<span class="nc" id="L518">        Schema schema = null;</span>
+<span class="nc bnc" id="L519" title="All 2 branches missed.">        if (DBIdentifier.isNull(given)) {</span>
+<span class="nc" id="L520">            schema = group.getSchema(schemaName);</span>
+<span class="nc bnc" id="L521" title="All 2 branches missed.">            if (schema == null)</span>
+<span class="nc" id="L522">                schema = group.addSchema(schemaName);</span>
+<span class="nc" id="L523">            given = def.getIdentifier(schema);</span>
+        }
+
+<span class="nc" id="L526">        QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(given);</span>
+<span class="nc bnc" id="L527" title="All 2 branches missed.">        if (DBIdentifier.isNull(path.getSchemaName())) {</span>
+<span class="nc bnc" id="L528" title="All 2 branches missed.">            if (!DBIdentifier.isNull(schemaName)) {</span>
+<span class="nc" id="L529">                path.setSchemaName(schemaName);</span>
+            }
+        } else {
+<span class="nc" id="L532">            schemaName = path.getSchemaName();</span>
+<span class="nc" id="L533">            schema = null;</span>
+        }
+
+        // look for named table using full name and findTable, which allows
+        // the dynamic schema factory to create the table if needed
+<span class="nc" id="L538">        Table table = group.findTable(path);</span>
+<span class="nc bnc" id="L539" title="All 2 branches missed.">        if (table != null)</span>
+<span class="nc" id="L540">            return table;</span>
+<span class="nc bnc" id="L541" title="All 2 branches missed.">        if (!adapt)</span>
+<span class="nc" id="L542">            throw new MetaDataException(_loc.get(&quot;bad-table&quot;, given, context));</span>
+
+        // named table doesn't exist; create it
+<span class="nc bnc" id="L545" title="All 2 branches missed.">        if (schema == null) {</span>
+<span class="nc" id="L546">            schema = group.getSchema(schemaName);</span>
+<span class="nc bnc" id="L547" title="All 2 branches missed.">            if (schema == null)</span>
+<span class="nc" id="L548">                schema = group.addSchema(schemaName);</span>
+        }
+<span class="nc" id="L550">        table = schema.getTable(given);</span>
+<span class="nc bnc" id="L551" title="All 2 branches missed.">        if (table == null)</span>
+<span class="nc" id="L552">            table = schema.addTable(given);</span>
+<span class="nc" id="L553">        return table;</span>
+    }
+
+    /**
+     * Retrieve/create columns on the given table by merging the given
+     * template information with any user-provided information.
+     *
+     * @param context the mapping we're retrieving columns for
+     * @param prefix localized error message key prefix
+     * @param tmplates template columns
+     * @param table the table for the columns
+     * @param adapt whether we can modify the existing mapping or schema
+     */
+    protected Column[] createColumns(MetaDataContext context, String prefix,
+        Column[] tmplates, Table table, boolean adapt) {
+<span class="nc" id="L568">        assertTable(context, table);</span>
+<span class="nc bnc" id="L569" title="All 2 branches missed.">        if (prefix == null)</span>
+<span class="nc" id="L570">            prefix = &quot;generic&quot;;</span>
+
+        // the user has to give the right number of expected columns for this
+        // mapping, or none at all if we're adapting.  can't just given one of
+        // n columns because we don't know which of the n columns the info
+        // applies to
+<span class="nc" id="L576">        List&lt;Column&gt; given = getColumns();</span>
+
+<span class="nc bnc" id="L578" title="All 4 branches missed.">        if (context instanceof FieldMapping &amp;&amp; ((FieldMapping)context).hasMapsIdCols())</span>
+<span class="nc" id="L579">            given = ((FieldMapping)context).getValueInfo().getMapsIdColumns();</span>
+
+<span class="nc" id="L581">        boolean fill = ((MappingRepository) context.getRepository()).</span>
+<span class="nc" id="L582">            getMappingDefaults().defaultMissingInfo();</span>
+<span class="nc bnc" id="L583" title="All 6 branches missed.">        if ((!given.isEmpty() || (!adapt &amp;&amp; !fill))</span>
+<span class="nc bnc" id="L584" title="All 2 branches missed.">            &amp;&amp; given.size() != tmplates.length) {</span>
+            // also consider when this info has columns from multiple tables
+<span class="nc" id="L586">            given = getColumns(table.getIdentifier());</span>
+<span class="nc bnc" id="L587" title="All 6 branches missed.">            if ((!adapt &amp;&amp; !fill) &amp;&amp; given.size() != tmplates.length) {</span>
+                // try default table
+<span class="nc" id="L589">                given = getColumns(&quot;&quot;);</span>
+<span class="nc bnc" id="L590" title="All 6 branches missed.">                if ((!adapt &amp;&amp; !fill) &amp;&amp; given.size() != tmplates.length) {</span>
+<span class="nc" id="L591">                    throw new MetaDataException(_loc.get(prefix + &quot;-num-cols&quot;,</span>
+<span class="nc" id="L592">                            context, String.valueOf(tmplates.length),</span>
+<span class="nc" id="L593">                            String.valueOf(given.size())));</span>
+                }
+            }
+        }
+
+<span class="nc" id="L598">        Column[] cols = new Column[tmplates.length];</span>
+<span class="nc" id="L599">        _io = null;</span>
+        Column col;
+<span class="nc bnc" id="L601" title="All 2 branches missed.">        for (int i = 0; i &lt; tmplates.length; i++) {</span>
+<span class="nc bnc" id="L602" title="All 2 branches missed.">            col = (given.isEmpty()) ? null : (Column) given.get(i);</span>
+<span class="nc" id="L603">            cols[i] = mergeColumn(context, prefix, tmplates[i], true, col,</span>
+                table, adapt, fill);
+<span class="nc" id="L605">            setIOFromColumnFlags(col, i);</span>
+        }
+<span class="nc" id="L607">        return cols;</span>
+    }
+
+    /**
+     * Set the proper internal column I/O metadata for the given column's flags.
+     */
+    private void setIOFromColumnFlags(Column col, int i) {
+<span class="nc bnc" id="L614" title="All 4 branches missed.">        if (col == null || (!col.getFlag(Column.FLAG_UNINSERTABLE)</span>
+<span class="nc bnc" id="L615" title="All 2 branches missed.">            &amp;&amp; !col.getFlag(Column.FLAG_UNUPDATABLE)</span>
+<span class="nc bnc" id="L616" title="All 2 branches missed.">            &amp;&amp; !col.isNotNull()))</span>
+<span class="nc" id="L617">            return;</span>
+
+<span class="nc bnc" id="L619" title="All 2 branches missed.">        if (_io == null)</span>
+<span class="nc" id="L620">            _io = new ColumnIO();</span>
+<span class="nc bnc" id="L621" title="All 2 branches missed.">        _io.setInsertable(i, !col.getFlag(Column.FLAG_UNINSERTABLE));</span>
+<span class="nc bnc" id="L622" title="All 2 branches missed.">        _io.setUpdatable(i, !col.getFlag(Column.FLAG_UNUPDATABLE));</span>
+<span class="nc bnc" id="L623" title="All 2 branches missed.">        _io.setNullInsertable(i, !col.isNotNull());</span>
+<span class="nc bnc" id="L624" title="All 2 branches missed.">        _io.setNullUpdatable(i, !col.isNotNull());</span>
+<span class="nc" id="L625">    }</span>
+
+    /**
+     * Assert that the given table is non-null.
+     */
+    private static void assertTable(MetaDataContext context, Table table) {
+<span class="nc bnc" id="L631" title="All 2 branches missed.">        if (table == null)</span>
+<span class="nc" id="L632">            throw new MetaDataException(_loc.get(&quot;unmapped&quot;, context));</span>
+<span class="nc" id="L633">    }</span>
+
+    /**
+     * Merge the given columns if possible.
+     *
+     * @param context the mapping we're retrieving columns for
+     * @param prefix localized error message key prefix
+     * @param tmplate template for expected column information
+     * @param compat whether the existing column type must be compatible
+     * with the type of the template column
+     * @param given the given column information from mapping info
+     * @param table the table for the columns
+     * @param adapt whether we can modify the existing mapping or schema
+     * @param fill whether to default missing column information
+     */
+    protected static Column mergeColumn(MetaDataContext context, String prefix,
+        Column tmplate, boolean compat, Column given, Table table,
+        boolean adapt, boolean fill) {
+<span class="nc" id="L651">        assertTable(context, table);</span>
+
+        // if not adapting must provide column name at a minimum
+<span class="nc bnc" id="L654" title="All 2 branches missed.">        DBIdentifier colName = (given == null) ? DBIdentifier.NULL : given.getIdentifier();</span>
+<span class="nc bnc" id="L655" title="All 6 branches missed.">        if (DBIdentifier.isNull(colName) &amp;&amp; !adapt &amp;&amp; !fill)</span>
+<span class="nc" id="L656">            throw new MetaDataException(_loc.get(prefix + &quot;-no-col-name&quot;,</span>
+                context));
+
+<span class="nc" id="L659">        MappingRepository repos = (MappingRepository) context.getRepository();</span>
+<span class="nc" id="L660">        DBDictionary dict = repos.getDBDictionary();</span>
+
+        // determine the column name based on given info, or template if none;
+        // also make sure that if the user gave a column name, he didn't try
+        // to put the column in an unexpected table
+<span class="nc bnc" id="L665" title="All 2 branches missed.">        if (DBIdentifier.isNull(colName))</span>
+<span class="nc" id="L666">            colName = tmplate.getIdentifier();</span>
+<span class="nc" id="L667">        QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(colName);</span>
+<span class="nc bnc" id="L668" title="All 2 branches missed.">        if (path.isUnqualifiedColumn()) {</span>
+<span class="nc" id="L669">            colName = path.getIdentifier();</span>
+<span class="nc bnc" id="L670" title="All 2 branches missed.">        } else if (!DBIdentifier.isNull(path.getObjectTableName())) {</span>
+<span class="nc" id="L671">            findTable(context, path.getObjectTableName(), table,</span>
+                null, null);
+<span class="nc" id="L673">            colName = path.getUnqualifiedName();</span>
+        }
+
+        // find existing column
+<span class="nc" id="L677">        Column col = table.getColumn(colName);</span>
+<span class="nc bnc" id="L678" title="All 4 branches missed.">        if (col == null &amp;&amp; !adapt) {</span>
+            //
+            // See if column name has already been validated in a dynamic table.
+            // If so then want to use that validated column name instead. This
+            // should seldom if ever occur as long as the database dictionaries
+            // are kept up-to-date.
+            //
+<span class="nc bnc" id="L685" title="All 2 branches missed.">            if ((colName.getName().length() &gt; dict.maxColumnNameLength) ||</span>
+<span class="nc bnc" id="L686" title="All 2 branches missed.">               dict.getInvalidColumnWordSet().contains(DBIdentifier.toUpper(colName).getName()) &amp;&amp;</span>
+<span class="nc bnc" id="L687" title="All 2 branches missed.">              !(table.getClass().getName().contains(&quot;DynamicTable&quot;))) {</span>
+<span class="nc" id="L688">                colName=dict.getValidColumnName(colName, new Table());</span>
+<span class="nc" id="L689">                col = table.getColumn(colName);</span>
+<span class="nc bnc" id="L690" title="All 4 branches missed.">                if (col == null &amp;&amp; !adapt) {</span>
+<span class="nc" id="L691">                    throw new MetaDataException(_loc.</span>
+<span class="nc" id="L692">                        get(prefix + &quot;-bad-col-name&quot;, context, colName, table));</span>
+                }
+            }
+            else {
+<span class="nc" id="L696">                throw new MetaDataException(_loc.</span>
+<span class="nc" id="L697">                    get(prefix + &quot;-bad-col-name&quot;, context, colName, table));</span>
+            }
+        }
+
+        // use information from template column by default, allowing any
+        // user-given specifics to override it
+<span class="nc" id="L703">        int type = tmplate.getType();</span>
+<span class="nc" id="L704">        int size = tmplate.getSize();</span>
+<span class="nc bnc" id="L705" title="All 2 branches missed.">        if (type == Types.OTHER) {</span>
+<span class="nc" id="L706">            int precis = 0;</span>
+<span class="nc" id="L707">            int scale = 0;</span>
+<span class="nc bnc" id="L708" title="All 2 branches missed.">            if(given != null) {</span>
+<span class="nc" id="L709">                precis = given.getSize();</span>
+<span class="nc" id="L710">                scale = given.getDecimalDigits();</span>
+            }
+<span class="nc" id="L712">            type =</span>
+<span class="nc bnc" id="L713" title="All 2 branches missed.">                dict.getJDBCType(tmplate.getJavaType(), size == -1, precis,</span>
+<span class="nc" id="L714">                    scale, tmplate.isXML());</span>
+        }
+
+<span class="nc" id="L717">        boolean ttype = true;</span>
+<span class="nc" id="L718">        int otype = type;</span>
+<span class="nc" id="L719">        String typeName = tmplate.getTypeName();</span>
+<span class="nc" id="L720">        Boolean notNull = null;</span>
+<span class="nc bnc" id="L721" title="All 2 branches missed.">        if (tmplate.isNotNullExplicit())</span>
+<span class="nc bnc" id="L722" title="All 2 branches missed.">            notNull = (tmplate.isNotNull()) ? Boolean.TRUE : Boolean.FALSE;</span>
+<span class="nc" id="L723">        int decimals = tmplate.getDecimalDigits();</span>
+<span class="nc" id="L724">        String defStr = tmplate.getDefaultString();</span>
+<span class="nc" id="L725">        boolean autoAssign = tmplate.isAutoAssigned();</span>
+<span class="nc" id="L726">        boolean relationId = tmplate.isRelationId();</span>
+<span class="nc" id="L727">        boolean implicitRelation = tmplate.isImplicitRelation();</span>
+<span class="nc" id="L728">        String targetField = tmplate.getTargetField();</span>
+<span class="nc bnc" id="L729" title="All 2 branches missed.">        if (given != null) {</span>
+            // use given type if provided, but warn if it isn't compatible with
+            // the expected column type
+<span class="nc bnc" id="L732" title="All 2 branches missed.">            if (given.getType() != Types.OTHER) {</span>
+<span class="nc" id="L733">                ttype = false;</span>
+<span class="nc bnc" id="L734" title="All 4 branches missed.">                if (compat &amp;&amp; !given.isCompatible(type, typeName, size,</span>
+                    decimals)) {
+<span class="nc" id="L736">                    Log log = repos.getLog();</span>
+<span class="nc bnc" id="L737" title="All 2 branches missed.">                    if (log.isWarnEnabled())</span>
+<span class="nc" id="L738">                        log.warn(_loc.get(prefix + &quot;-incompat-col&quot;,</span>
+<span class="nc" id="L739">                            context, colName, Schemas.getJDBCName(type)));</span>
+                }
+<span class="nc" id="L741">                otype = given.getType();</span>
+<span class="nc" id="L742">                type = dict.getPreferredType(otype);</span>
+            }
+<span class="nc" id="L744">            typeName = given.getTypeName();</span>
+<span class="nc bnc" id="L745" title="All 2 branches missed.">            if (given.getSize() &gt; 0)</span>
+<span class="nc" id="L746">                size = given.getSize();</span>
+<span class="nc" id="L747">            decimals = given.getDecimalDigits();</span>
+
+            // leave this info as the template defaults unless the user
+            // explicitly turns it on in the given column
+<span class="nc bnc" id="L751" title="All 2 branches missed.">            if (given.isNotNullExplicit())</span>
+<span class="nc bnc" id="L752" title="All 2 branches missed.">                notNull = (given.isNotNull()) ? Boolean.TRUE : Boolean.FALSE;</span>
+<span class="nc bnc" id="L753" title="All 2 branches missed.">            if (given.getDefaultString() != null)</span>
+<span class="nc" id="L754">                defStr = given.getDefaultString();</span>
+<span class="nc bnc" id="L755" title="All 2 branches missed.">            if (given.isAutoAssigned())</span>
+<span class="nc" id="L756">                autoAssign = true;</span>
+<span class="nc bnc" id="L757" title="All 2 branches missed.">            if (given.isRelationId())</span>
+<span class="nc" id="L758">                relationId = true;</span>
+<span class="nc bnc" id="L759" title="All 2 branches missed.">            if (given.isImplicitRelation())</span>
+<span class="nc" id="L760">                implicitRelation = true;</span>
+        }
+
+        // default char column size if original type is char (test original
+        // type rather than final type because orig might be clob, translated
+        // to an unsized varchar, which is supported by some dbs)
+<span class="nc bnc" id="L766" title="All 6 branches missed.">        if (size == 0 &amp;&amp; (otype == Types.VARCHAR || otype == Types.CHAR))</span>
+<span class="nc" id="L767">            size = dict.characterColumnSize;</span>
+
+        // create column, or make sure existing column matches expected type
+<span class="nc bnc" id="L770" title="All 2 branches missed.">        if (col == null) {</span>
+<span class="nc" id="L771">            col = table.addColumn(colName);</span>
+<span class="nc" id="L772">            col.setType(type);</span>
+<span class="nc bnc" id="L773" title="All 6 branches missed.">        } else if ((compat || !ttype) &amp;&amp; !col.isCompatible(type, typeName,</span>
+            size, decimals)) {
+            // if existing column isn't compatible with desired type, die if
+            // can't adapt, else warn and change the existing column type
+<span class="nc" id="L777">            Message msg = _loc.get(prefix + &quot;-bad-col&quot;, context,</span>
+<span class="nc" id="L778">                Schemas.getJDBCName(type), col.getDescription());</span>
+<span class="nc bnc" id="L779" title="All 4 branches missed.">            if (!adapt &amp;&amp; !dict.disableSchemaFactoryColumnTypeErrors)</span>
+<span class="nc" id="L780">                throw new MetaDataException(msg);</span>
+<span class="nc" id="L781">            Log log = repos.getLog();</span>
+<span class="nc bnc" id="L782" title="All 2 branches missed.">            if (log.isWarnEnabled())</span>
+<span class="nc" id="L783">                log.warn(msg);</span>
+
+<span class="nc" id="L785">            col.setType(type);</span>
+<span class="nc bnc" id="L786" title="All 4 branches missed.">        } else if (given != null &amp;&amp; given.getType() != Types.OTHER) {</span>
+            // as long as types are compatible, set column to expected type
+<span class="nc" id="L788">            col.setType(type);</span>
+        }
+
+        // always set the java type and autoassign to expected values, even on
+        // an existing column, since we don't get this from the DB
+<span class="nc bnc" id="L793" title="All 2 branches missed.">        if (compat)</span>
+<span class="nc" id="L794">            col.setJavaType(tmplate.getJavaType());</span>
+<span class="nc bnc" id="L795" title="All 2 branches missed.">        else if (col.getJavaType() == JavaTypes.OBJECT) {</span>
+<span class="nc bnc" id="L796" title="All 4 branches missed.">            if (given != null &amp;&amp; given.getJavaType() != JavaTypes.OBJECT)</span>
+<span class="nc" id="L797">                col.setJavaType(given.getJavaType());</span>
+            else
+<span class="nc" id="L799">                col.setJavaType(JavaTypes.getTypeCode</span>
+<span class="nc" id="L800">                    (Schemas.getJavaType(col.getType(), col.getSize(),</span>
+<span class="nc" id="L801">                        col.getDecimalDigits())));</span>
+        }
+<span class="nc" id="L803">        col.setAutoAssigned(autoAssign);</span>
+<span class="nc" id="L804">        col.setRelationId(relationId);</span>
+<span class="nc" id="L805">        col.setImplicitRelation(implicitRelation);</span>
+<span class="nc" id="L806">        col.setTargetField(targetField);</span>
+
+        // we need this for runtime, and the dynamic schema factory might
+        // not know it, so set it even if not adapting
+<span class="nc bnc" id="L810" title="All 2 branches missed.">        if (defStr != null)</span>
+<span class="nc" id="L811">            col.setDefaultString(defStr);</span>
+<span class="nc bnc" id="L812" title="All 2 branches missed.">        if (notNull != null)</span>
+<span class="nc" id="L813">            col.setNotNull(notNull.booleanValue());</span>
+
+        // add other details if adapting
+<span class="nc bnc" id="L816" title="All 2 branches missed.">        if (adapt) {</span>
+<span class="nc bnc" id="L817" title="All 2 branches missed.">            if (typeName != null)</span>
+<span class="nc" id="L818">                col.setTypeName(typeName);</span>
+<span class="nc bnc" id="L819" title="All 2 branches missed.">            if (size != 0)</span>
+<span class="nc" id="L820">                col.setSize(size);</span>
+<span class="nc bnc" id="L821" title="All 2 branches missed.">            if (decimals != 0)</span>
+<span class="nc" id="L822">                col.setDecimalDigits(decimals);</span>
+        }
+
+<span class="nc bnc" id="L825" title="All 2 branches missed.">        if (tmplate.hasComment())</span>
+<span class="nc" id="L826">            col.setComment(tmplate.getComment());</span>
+<span class="nc bnc" id="L827" title="All 2 branches missed.">        if (tmplate.isXML())</span>
+<span class="nc" id="L828">            col.setXML(tmplate.isXML());</span>
+<span class="nc" id="L829">        return col;</span>
+    }
+
+    /**
+     * Find the table named by a column or target.
+     *
+     * @param context context for error messages, etc.
+     * @param name the table name, possibly including schema
+     * @param expected the expected table; may be null
+     * @param inverse the possible inverse table; may be null
+     * @param rel if we're finding the target table of a join, the
+     * joined-to type; allows us to also look in its superclass tables
+     */
+    private static Table findTable(MetaDataContext context, DBIdentifier name,
+        Table expected, Table inverse, ClassMapping rel) {
+        // is this the expected table?
+<span class="nc bnc" id="L845" title="All 4 branches missed.">        if (expected == null &amp;&amp; rel != null)</span>
+<span class="nc" id="L846">            expected = rel.getTable();</span>
+<span class="nc bnc" id="L847" title="All 4 branches missed.">        if (expected != null &amp;&amp; isTableName(name, expected))</span>
+<span class="nc" id="L848">            return expected;</span>
+
+        // check for inverse
+<span class="nc bnc" id="L851" title="All 4 branches missed.">        if (inverse != null &amp;&amp; isTableName(name, inverse))</span>
+<span class="nc" id="L852">            return inverse;</span>
+
+        // superclass table?
+<span class="nc bnc" id="L855" title="All 2 branches missed.">        if (rel != null)</span>
+<span class="nc" id="L856">            rel = rel.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L857" title="All 2 branches missed.">        while (rel != null) {</span>
+<span class="nc bnc" id="L858" title="All 2 branches missed.">            if (isTableName(name, rel.getTable()))</span>
+<span class="nc" id="L859">                return rel.getTable();</span>
+<span class="nc" id="L860">            rel = rel.getJoinablePCSuperclassMapping();</span>
+        }
+
+        // none of the possible tables
+<span class="nc" id="L864">        throw new MetaDataException(_loc.get(&quot;col-wrong-table&quot;, context,</span>
+<span class="nc" id="L865">            expected, name.getName()));</span>
+    }
+
+    /**
+     * Return whether the given name matches the given table.
+     */
+    private static boolean isTableName(DBIdentifier name, Table table) {
+<span class="nc bnc" id="L872" title="All 2 branches missed.">        return DBIdentifier.equal(name, table.getIdentifier())</span>
+<span class="nc bnc" id="L873" title="All 2 branches missed.">            || DBIdentifier.equal(name, table.getFullIdentifier());</span>
+    }
+
+    /**
+     * Retrieve/create an index on the given columns by merging the given
+     * template information with any user-provided information.
+     *
+     * @param context the mapping we're retrieving an index for
+     * @param prefix localized error message key prefix
+     * @param tmplate template for expected index information
+     * @param cols the indexed columns
+     * @param adapt whether we can modify the existing mapping or schema
+     */
+    protected Index createIndex(MetaDataContext context, String prefix,
+        Index tmplate, Column[] cols, boolean adapt) {
+<span class="nc bnc" id="L888" title="All 2 branches missed.">        if (prefix == null)</span>
+<span class="nc" id="L889">            prefix = &quot;generic&quot;;</span>
+
+        // can't create an index if there are no cols
+<span class="nc bnc" id="L892" title="All 4 branches missed.">        if (cols == null || cols.length == 0) {</span>
+<span class="nc bnc" id="L893" title="All 2 branches missed.">            if (_idx != null)</span>
+<span class="nc" id="L894">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-no-index-cols&quot;, context));
+<span class="nc" id="L896">            return null;</span>
+        }
+
+        // look for an existing index on these columns
+<span class="nc" id="L900">        Table table = cols[0].getTable();</span>
+<span class="nc" id="L901">        Index[] idxs = table.getIndexes();</span>
+<span class="nc" id="L902">        Index exist = null;</span>
+<span class="nc bnc" id="L903" title="All 2 branches missed.">        for (int i = 0; i &lt; idxs.length; i++) {</span>
+<span class="nc bnc" id="L904" title="All 2 branches missed.">            if (idxs[i].columnsMatch(cols)) {</span>
+<span class="nc" id="L905">                exist = idxs[i];</span>
+<span class="nc" id="L906">                break;</span>
+            }
+        }
+
+        // remove existing index?
+<span class="nc bnc" id="L911" title="All 2 branches missed.">        if (!_canIdx) {</span>
+<span class="nc bnc" id="L912" title="All 2 branches missed.">            if (exist == null)</span>
+<span class="nc" id="L913">                return null;</span>
+<span class="nc bnc" id="L914" title="All 2 branches missed.">            if (!adapt)</span>
+<span class="nc" id="L915">                throw new MetaDataException(_loc.get(prefix + &quot;-index-exists&quot;,</span>
+                    context));
+<span class="nc" id="L917">            table.removeIndex(exist);</span>
+<span class="nc" id="L918">            return null;</span>
+        }
+
+        // if we have an existing index, merge given info into it
+<span class="nc bnc" id="L922" title="All 2 branches missed.">        if (exist != null) {</span>
+<span class="nc bnc" id="L923" title="All 6 branches missed.">            if (_idx != null &amp;&amp; _idx.isUnique() &amp;&amp; !exist.isUnique()) {</span>
+<span class="nc bnc" id="L924" title="All 2 branches missed.">                if (!adapt)</span>
+<span class="nc" id="L925">                    throw new MetaDataException(_loc.get(prefix</span>
+                        + &quot;-index-not-unique&quot;, context));
+<span class="nc" id="L927">                exist.setUnique(true);</span>
+            }
+<span class="nc" id="L929">            return exist;</span>
+        }
+
+        // if no defaults return null
+<span class="nc" id="L933">        MappingRepository repos = (MappingRepository) context.getRepository();</span>
+<span class="nc" id="L934">        boolean fill = repos.getMappingDefaults().defaultMissingInfo();</span>
+<span class="nc bnc" id="L935" title="All 8 branches missed.">        if (_idx == null &amp;&amp; (tmplate == null || (!adapt &amp;&amp; !fill)))</span>
+<span class="nc" id="L936">            return null;</span>
+
+<span class="nc" id="L938">        DBIdentifier name = DBIdentifier.NULL;</span>
+        boolean unq;
+<span class="nc bnc" id="L940" title="All 2 branches missed.">        if (_idx != null) {</span>
+<span class="nc" id="L941">            name = _idx.getIdentifier();</span>
+<span class="nc" id="L942">            unq = _idx.isUnique();</span>
+            // preserve multiple columns if they are specified in the index
+<span class="nc bnc" id="L944" title="All 4 branches missed.">            if (_idx.getColumns() != null &amp;&amp; _idx.getColumns().length &gt; 1)</span>
+<span class="nc" id="L945">                cols = _idx.getColumns();</span>
+        } else
+<span class="nc" id="L947">            unq = tmplate.isUnique();</span>
+
+        // if no name provided by user info, make one
+<span class="nc bnc" id="L950" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc bnc" id="L951" title="All 2 branches missed.">            if (tmplate != null)</span>
+<span class="nc" id="L952">                name = tmplate.getIdentifier();</span>
+            else {
+<span class="nc" id="L954">                name = cols[0].getIdentifier();</span>
+<span class="nc" id="L955">                name = repos.getDBDictionary().getValidIndexName(name, table);</span>
+            }
+        }
+
+<span class="nc" id="L959">        Index idx = table.addIndex(name);</span>
+<span class="nc" id="L960">        idx.setUnique(unq);</span>
+<span class="nc" id="L961">        idx.setColumns(cols);</span>
+<span class="nc" id="L962">        return idx;</span>
+    }
+
+    /**
+     * Retrieve/create a unique constraint on the given columns by merging the
+     * given template information with any user-provided information.
+     *
+     * @param context the mapping we're retrieving a constraint for
+     * @param prefix localized error message key prefix
+     * @param tmplate template for expected unique information
+     * @param cols the constraint columns
+     * @param adapt whether we can modify the existing mapping or schema
+     */
+    protected Unique createUnique(MetaDataContext context, String prefix,
+        Unique tmplate, Column[] cols, boolean adapt) {
+<span class="nc bnc" id="L977" title="All 2 branches missed.">        if (prefix == null)</span>
+<span class="nc" id="L978">            prefix = &quot;generic&quot;;</span>
+
+        // can't create a constraint if there are no cols
+<span class="nc bnc" id="L981" title="All 4 branches missed.">        if (cols == null || cols.length == 0) {</span>
+<span class="nc bnc" id="L982" title="All 4 branches missed.">            if (_unq != null || tmplate != null)</span>
+<span class="nc" id="L983">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-no-unique-cols&quot;, context));
+<span class="nc" id="L985">            return null;</span>
+        }
+
+        // look for an existing constraint on these columns
+<span class="nc" id="L989">        Table table = cols[0].getTable();</span>
+<span class="nc" id="L990">        Unique[] unqs = table.getUniques();</span>
+<span class="nc" id="L991">        Unique exist = null;</span>
+<span class="nc bnc" id="L992" title="All 2 branches missed.">        for (int i = 0; i &lt; unqs.length; i++) {</span>
+<span class="nc bnc" id="L993" title="All 2 branches missed.">            if (unqs[i].columnsMatch(cols)) {</span>
+<span class="nc" id="L994">                exist = unqs[i];</span>
+<span class="nc" id="L995">                break;</span>
+            }
+        }
+
+        // remove existing unique?
+<span class="nc bnc" id="L1000" title="All 2 branches missed.">        if (!_canUnq) {</span>
+<span class="nc bnc" id="L1001" title="All 2 branches missed.">            if (exist == null)</span>
+<span class="nc" id="L1002">                return null;</span>
+<span class="nc bnc" id="L1003" title="All 2 branches missed.">            if (!adapt)</span>
+<span class="nc" id="L1004">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-unique-exists&quot;, context));
+<span class="nc" id="L1006">            table.removeUnique(exist);</span>
+<span class="nc" id="L1007">            return null;</span>
+        }
+
+        // no defaults; return existing constraint (if any)
+<span class="nc bnc" id="L1011" title="All 4 branches missed.">        if (tmplate == null &amp;&amp; _unq == null)</span>
+<span class="nc" id="L1012">            return exist;</span>
+
+<span class="nc" id="L1014">        MappingRepository repos = (MappingRepository) context.getRepository();</span>
+<span class="nc bnc" id="L1015" title="All 2 branches missed.">        if (exist != null) {</span>
+<span class="nc bnc" id="L1016" title="All 6 branches missed.">            if (_unq != null &amp;&amp; _unq.isDeferred() &amp;&amp; !exist.isDeferred()) {</span>
+<span class="nc" id="L1017">                Log log = repos.getLog();</span>
+<span class="nc bnc" id="L1018" title="All 2 branches missed.">                if (log.isWarnEnabled())</span>
+<span class="nc" id="L1019">                    log.warn(_loc.get(prefix + &quot;-defer-unique&quot;, context));</span>
+            }
+<span class="nc" id="L1021">            return exist;</span>
+        }
+
+        // dict can't handle unique constraints?
+<span class="nc" id="L1025">        DBDictionary dict = repos.getDBDictionary();</span>
+<span class="nc bnc" id="L1026" title="All 4 branches missed.">        if (_unq != null &amp;&amp; !dict.supportsUniqueConstraints) {</span>
+<span class="nc" id="L1027">            Log log = repos.getLog();</span>
+<span class="nc bnc" id="L1028" title="All 2 branches missed.">            if (log.isWarnEnabled())</span>
+<span class="nc" id="L1029">                log.warn(_loc.get(prefix + &quot;-unique-support&quot;, context));</span>
+<span class="nc" id="L1030">            return null;</span>
+        }
+
+<span class="nc" id="L1033">        boolean fill = repos.getMappingDefaults().defaultMissingInfo();</span>
+<span class="nc bnc" id="L1034" title="All 6 branches missed.">        if (!adapt &amp;&amp; !fill &amp;&amp; _unq == null)</span>
+<span class="nc" id="L1035">            return null;</span>
+
+<span class="nc" id="L1037">        DBIdentifier name = DBIdentifier.NULL;</span>
+        boolean deferred;
+<span class="nc bnc" id="L1039" title="All 2 branches missed.">        if (_unq != null) {</span>
+<span class="nc" id="L1040">            name = _unq.getIdentifier();</span>
+<span class="nc" id="L1041">            deferred = _unq.isDeferred();</span>
+        } else {
+<span class="nc" id="L1043">            name = tmplate.getIdentifier();</span>
+<span class="nc" id="L1044">            deferred = tmplate.isDeferred();</span>
+        }
+
+<span class="nc bnc" id="L1047" title="All 4 branches missed.">        if (deferred &amp;&amp; !dict.supportsDeferredConstraints) {</span>
+<span class="nc" id="L1048">            Log log = repos.getLog();</span>
+<span class="nc bnc" id="L1049" title="All 2 branches missed.">            if (log.isWarnEnabled())</span>
+<span class="nc" id="L1050">                log.warn(_loc.get(prefix + &quot;-create-defer-unique&quot;,</span>
+                    context, dict.platform));
+<span class="nc" id="L1052">            deferred = false;</span>
+        }
+
+<span class="nc bnc" id="L1055" title="All 2 branches missed.">        if (DBIdentifier.isEmpty(name)) {</span>
+<span class="nc" id="L1056">        	name = cols[0].getIdentifier();</span>
+<span class="nc" id="L1057">        	name = repos.getDBDictionary().getValidUniqueName(name, table);</span>
+        }
+
+<span class="nc" id="L1060">        Unique unq = table.addUnique(name);</span>
+<span class="nc" id="L1061">        unq.setDeferred(deferred);</span>
+<span class="nc" id="L1062">        unq.setColumns(cols);</span>
+<span class="nc" id="L1063">        return unq;</span>
+    }
+
+    /**
+     * Retrieve/create a foreign key (possibly logical) on the given columns
+     * by merging the given template information with any user-provided
+     * information.
+     *
+     * @param context the mapping we're retrieving a key for
+     * @param prefix localized error message key prefix
+     * @param given the columns given by the user
+     * @param def defaults provider
+     * @param table the table for the key
+     * @param cls type we're joining from
+     * @param rel target type we're joining to
+     * @param inversable whether the foreign key can be inversed
+     * @param adapt whether we can modify the existing mapping or schema
+     */
+    protected ForeignKey createForeignKey(MetaDataContext context,
+        String prefix, List&lt;Column&gt; given, ForeignKeyDefaults def, Table table,
+        ClassMapping cls, ClassMapping rel, boolean inversable, boolean adapt) {
+<span class="nc" id="L1084">        assertTable(context, table);</span>
+<span class="nc bnc" id="L1085" title="All 2 branches missed.">        if (prefix == null)</span>
+<span class="nc" id="L1086">            prefix = &quot;generic&quot;;</span>
+
+        // collect the foreign key columns and their targets
+<span class="nc" id="L1089">        Object[][] joins = createJoins(context, prefix, table, cls, rel,</span>
+            given, def, inversable, adapt);
+<span class="nc" id="L1091">        _join = JOIN_FORWARD;</span>
+
+        // establish local table using any join between two columns; if we only
+        // find constant joins, then keep default local table (directionless)
+<span class="nc" id="L1095">        Table local = table;</span>
+<span class="nc" id="L1096">        Table foreign = rel.getTable();</span>
+        Table tmp;
+<span class="nc" id="L1098">        boolean constant = false;</span>
+<span class="nc" id="L1099">        boolean localSet = false;</span>
+<span class="nc bnc" id="L1100" title="All 2 branches missed.">        for (int i = 0; i &lt; joins.length; i++) {</span>
+<span class="nc bnc" id="L1101" title="All 2 branches missed.">            if (joins[i][1]instanceof Column) {</span>
+<span class="nc" id="L1102">                tmp = ((Column) joins[i][0]).getTable();</span>
+<span class="nc bnc" id="L1103" title="All 2 branches missed.">                if (!localSet) {</span>
+<span class="nc" id="L1104">                    local = tmp;</span>
+<span class="nc" id="L1105">                    localSet = true;</span>
+<span class="nc bnc" id="L1106" title="All 2 branches missed.">                } else if (tmp != local)</span>
+<span class="nc" id="L1107">                    throw new MetaDataException(_loc.get(prefix</span>
+                        + &quot;-mult-fk-tables&quot;, context, local, tmp));
+<span class="nc" id="L1109">                foreign = ((Column) joins[i][1]).getTable();</span>
+
+<span class="nc bnc" id="L1111" title="All 2 branches missed.">                if (joins[i][2] == Boolean.TRUE)</span>
+<span class="nc" id="L1112">                    _join = JOIN_INVERSE;</span>
+            } else
+<span class="nc" id="L1114">                constant = true;</span>
+        }
+
+        // if this is not a constant join, look for existing foreign key
+        // on local columns
+<span class="nc" id="L1119">        ForeignKey exist = null;</span>
+<span class="nc bnc" id="L1120" title="All 4 branches missed.">        if (!constant &amp;&amp; local.getForeignKeys().length &gt; 0) {</span>
+<span class="nc" id="L1121">            Column[] cols = new Column[joins.length];</span>
+<span class="nc" id="L1122">            Column[] pks = new Column[joins.length];</span>
+<span class="nc bnc" id="L1123" title="All 2 branches missed.">            for (int i = 0; i &lt; joins.length; i++) {</span>
+<span class="nc" id="L1124">                cols[i] = (Column) joins[i][0];</span>
+<span class="nc" id="L1125">                pks[i] = (Column) joins[i][1];</span>
+            }
+
+<span class="nc" id="L1128">            ForeignKey[] fks = local.getForeignKeys();</span>
+<span class="nc bnc" id="L1129" title="All 2 branches missed.">            for (int i = 0; i &lt; fks.length; i++) {</span>
+<span class="nc bnc" id="L1130" title="All 2 branches missed.">                if (fks[i].getConstantColumns().length == 0</span>
+<span class="nc bnc" id="L1131" title="All 2 branches missed.">                    &amp;&amp; fks[i].getConstantPrimaryKeyColumns().length == 0</span>
+<span class="nc bnc" id="L1132" title="All 2 branches missed.">                    &amp;&amp; fks[i].columnsMatch(cols, pks)) {</span>
+<span class="nc" id="L1133">                    exist = fks[i];</span>
+<span class="nc" id="L1134">                    break;</span>
+                }
+            }
+        }
+
+<span class="nc" id="L1139">        MappingRepository repos = (MappingRepository) context.getRepository();</span>
+<span class="nc" id="L1140">        DBDictionary dict = repos.getDBDictionary();</span>
+<span class="nc bnc" id="L1141" title="All 2 branches missed.">        if (exist != null) {</span>
+            // make existing key logical?
+<span class="nc bnc" id="L1143" title="All 2 branches missed.">            if (!_canFK) {</span>
+<span class="nc bnc" id="L1144" title="All 4 branches missed.">                if (exist.getDeleteAction() != ForeignKey.ACTION_NONE &amp;&amp; !adapt)</span>
+<span class="nc" id="L1145">                    throw new MetaDataException(_loc.get(prefix</span>
+                        + &quot;-fk-exists&quot;, context));
+<span class="nc" id="L1147">                exist.setDeleteAction(ForeignKey.ACTION_NONE);</span>
+            }
+
+<span class="nc bnc" id="L1150" title="All 6 branches missed.">            if (_fk != null &amp;&amp; _fk.isDeferred() &amp;&amp; !exist.isDeferred()) {</span>
+<span class="nc" id="L1151">                Log log = repos.getLog();</span>
+<span class="nc bnc" id="L1152" title="All 2 branches missed.">                if (log.isWarnEnabled())</span>
+<span class="nc" id="L1153">                    log.warn(_loc.get(prefix + &quot;-defer-fk&quot;, context));</span>
+            }
+
+            // allow user-given info to override existing key if we're adapting;
+            // template info cannot override existing key
+<span class="nc bnc" id="L1158" title="All 4 branches missed.">            if (adapt &amp;&amp; _fk != null) {</span>
+<span class="nc bnc" id="L1159" title="All 2 branches missed.">                if (_fk.getUpdateAction() != ForeignKey.ACTION_NONE)</span>
+<span class="nc" id="L1160">                    exist.setUpdateAction(_fk.getUpdateAction());</span>
+<span class="nc bnc" id="L1161" title="All 2 branches missed.">                if (_fk.getDeleteAction() != ForeignKey.ACTION_NONE)</span>
+<span class="nc" id="L1162">                    exist.setDeleteAction(_fk.getDeleteAction());</span>
+            }
+<span class="nc" id="L1164">            setIOFromJoins(exist, joins);</span>
+<span class="nc" id="L1165">            return exist;</span>
+        }
+
+<span class="nc" id="L1168">        DBIdentifier name = DBIdentifier.NULL;</span>
+<span class="nc" id="L1169">        int delAction = ForeignKey.ACTION_NONE;</span>
+<span class="nc" id="L1170">        int upAction = ForeignKey.ACTION_NONE;</span>
+<span class="nc" id="L1171">        boolean deferred = false;</span>
+<span class="nc" id="L1172">        boolean fill = repos.getMappingDefaults().defaultMissingInfo();</span>
+<span class="nc bnc" id="L1173" title="All 2 branches missed.">        ForeignKey tmplate = (def == null) ? null</span>
+<span class="nc bnc" id="L1174" title="All 2 branches missed.">            : def.get(local, foreign, _join == JOIN_INVERSE);</span>
+<span class="nc bnc" id="L1175" title="All 8 branches missed.">        if (_fk != null &amp;&amp; (tmplate == null || (!adapt &amp;&amp; !fill))) {</span>
+            // if not adapting or no template info use given data
+<span class="nc" id="L1177">            name = _fk.getIdentifier();</span>
+<span class="nc" id="L1178">            delAction = _fk.getDeleteAction();</span>
+<span class="nc" id="L1179">            upAction = _fk.getUpdateAction();</span>
+<span class="nc" id="L1180">            deferred = _fk.isDeferred();</span>
+<span class="nc bnc" id="L1181" title="All 6 branches missed.">        } else if (_canFK &amp;&amp; (adapt || fill)) {</span>
+<span class="nc bnc" id="L1182" title="All 4 branches missed.">            if (_fk == null &amp;&amp; tmplate != null) {</span>
+                // no user given info; use template data
+<span class="nc" id="L1184">                name = tmplate.getIdentifier();</span>
+<span class="nc" id="L1185">                delAction = tmplate.getDeleteAction();</span>
+<span class="nc" id="L1186">                upAction = tmplate.getUpdateAction();</span>
+<span class="nc" id="L1187">                deferred = tmplate.isDeferred();</span>
+<span class="nc bnc" id="L1188" title="All 4 branches missed.">            } else if (_fk != null &amp;&amp; tmplate != null) {</span>
+                // merge user and template data, always letting user info win
+<span class="nc" id="L1190">                name = _fk.getIdentifier();</span>
+<span class="nc bnc" id="L1191" title="All 4 branches missed.">                if (DBIdentifier.isNull(name) &amp;&amp; !DBIdentifier.isNull(tmplate.getIdentifier()))</span>
+<span class="nc" id="L1192">                    name = tmplate.getIdentifier();</span>
+<span class="nc" id="L1193">                delAction = _fk.getDeleteAction();</span>
+<span class="nc bnc" id="L1194" title="All 2 branches missed.">                if (delAction == ForeignKey.ACTION_NONE)</span>
+<span class="nc" id="L1195">                    delAction = tmplate.getDeleteAction();</span>
+<span class="nc" id="L1196">                upAction = _fk.getUpdateAction();</span>
+<span class="nc bnc" id="L1197" title="All 2 branches missed.">                if (upAction == ForeignKey.ACTION_NONE)</span>
+<span class="nc" id="L1198">                    upAction = tmplate.getUpdateAction();</span>
+<span class="nc" id="L1199">                deferred = _fk.isDeferred();</span>
+            }
+        }
+
+<span class="nc bnc" id="L1203" title="All 2 branches missed.">        if (!dict.supportsDeleteAction(delAction)</span>
+<span class="nc bnc" id="L1204" title="All 2 branches missed.">            || !dict.supportsUpdateAction(upAction)) {</span>
+<span class="nc" id="L1205">            Log log = repos.getLog();</span>
+<span class="nc bnc" id="L1206" title="All 2 branches missed.">            if (log.isWarnEnabled())</span>
+<span class="nc" id="L1207">                log.warn(_loc.get(prefix + &quot;-unsupported-fk-action&quot;, context));</span>
+<span class="nc" id="L1208">            delAction = ForeignKey.ACTION_NONE;</span>
+<span class="nc" id="L1209">            upAction = ForeignKey.ACTION_NONE;</span>
+        }
+<span class="nc bnc" id="L1211" title="All 4 branches missed.">        if (deferred &amp;&amp; !dict.supportsDeferredConstraints) {</span>
+<span class="nc" id="L1212">            Log log = repos.getLog();</span>
+<span class="nc bnc" id="L1213" title="All 2 branches missed.">            if (log.isWarnEnabled())</span>
+<span class="nc" id="L1214">                log.warn(_loc.get(prefix + &quot;-create-defer-fk&quot;,</span>
+                    context, dict.platform));
+<span class="nc" id="L1216">            deferred = false;</span>
+        }
+
+        // create foreign key with merged info
+<span class="nc" id="L1220">        ForeignKey fk = local.addForeignKey(name);</span>
+<span class="nc" id="L1221">        fk.setDeleteAction(delAction);</span>
+<span class="nc" id="L1222">        fk.setUpdateAction(upAction);</span>
+<span class="nc" id="L1223">        fk.setDeferred(deferred);</span>
+
+        // add joins to key
+        Column col;
+<span class="nc bnc" id="L1227" title="All 2 branches missed.">        for (int i = 0; i &lt; joins.length; i++) {</span>
+<span class="nc" id="L1228">            col = (Column) joins[i][0];</span>
+<span class="nc bnc" id="L1229" title="All 2 branches missed.">            if (joins[i][1]instanceof Column)</span>
+<span class="nc" id="L1230">                fk.join(col, (Column) joins[i][1]);</span>
+<span class="nc bnc" id="L1231" title="All 6 branches missed.">            else if ((joins[i][2] == Boolean.TRUE) != (_join == JOIN_INVERSE))</span>
+<span class="nc" id="L1232">                fk.joinConstant(joins[i][1], col);</span>
+            else
+<span class="nc" id="L1234">                fk.joinConstant(col, joins[i][1]);</span>
+        }
+<span class="nc" id="L1236">        setIOFromJoins(fk, joins);</span>
+<span class="nc" id="L1237">        return fk;</span>
+    }
+
+    /**
+     * Use the join information to populate our internal column I/O data.
+     */
+    private void setIOFromJoins(ForeignKey fk, Object[][] joins) {
+<span class="nc" id="L1244">        List&lt;Column&gt; cols = getColumns();</span>
+<span class="nc" id="L1245">        _io = null;</span>
+<span class="nc bnc" id="L1246" title="All 2 branches missed.">        if (cols.isEmpty())</span>
+<span class="nc" id="L1247">            return;</span>
+
+<span class="nc" id="L1249">        int constIdx = 0;</span>
+        int idx;
+<span class="nc bnc" id="L1251" title="All 2 branches missed.">        for (int i = 0; i &lt; joins.length; i++) {</span>
+            // const columns are indexed after std join columns in fk IO
+<span class="nc bnc" id="L1253" title="All 2 branches missed.">            if (joins[i][1]instanceof Column)</span>
+<span class="nc" id="L1254">                idx = i - constIdx;</span>
+<span class="nc bnc" id="L1255" title="All 6 branches missed.">            else if ((joins[i][2] == Boolean.TRUE) == (_join == JOIN_INVERSE))</span>
+<span class="nc" id="L1256">                idx = fk.getColumns().length + constIdx++;</span>
+            else
+                continue;
+<span class="nc" id="L1259">            setIOFromColumnFlags(cols.get(i), idx);</span>
+        }
+<span class="nc" id="L1261">    }</span>
+
+    /**
+     * Create or retrieve the foreign key joins.
+     *
+     * @param context the mapping we're retrieving a key for
+     * @param prefix localized error message key prefix
+     * @param table the table for the key
+     * @param cls type we're joining from, if applicable
+     * @param rel target type we're joining to
+     * @param given the columns given by the user
+     * @param def foreign key defaults provider
+     * @param inversable whether the foreign key can be inversed
+     * @param adapt whether we can modify the existing mapping or schema
+     * @return array of tuples where the first element is the
+     * local column (or in the case of a constant join the
+     * sole column), the second is the target column (or
+     * constant), and the third is {@link Boolean#TRUE} if
+     * this is an inverse join
+     */
+    private Object[][] createJoins(MetaDataContext context,
+        String prefix, Table table, ClassMapping cls, ClassMapping rel,
+        List&lt;Column&gt; given, ForeignKeyDefaults def, boolean inversable, boolean adapt) {
+<span class="nc" id="L1284">        MappingRepository repos = (MappingRepository) context.getRepository();</span>
+<span class="nc" id="L1285">        boolean fill = repos.getMappingDefaults().defaultMissingInfo();</span>
+        Object[][] joins;
+
+        // if no columns given, just create mirrors of target columns
+<span class="nc bnc" id="L1289" title="All 2 branches missed.">        if (given.isEmpty()) {</span>
+<span class="nc bnc" id="L1290" title="All 4 branches missed.">            if (!adapt &amp;&amp; !fill)</span>
+<span class="nc" id="L1291">                throw new MetaDataException(_loc.get(prefix + &quot;-no-fk-cols&quot;,</span>
+                    context));
+
+<span class="nc" id="L1294">            Column[] targets = rel.getPrimaryKeyColumns();</span>
+<span class="nc" id="L1295">            joins = new Object[targets.length][3];</span>
+            Column tmplate;
+<span class="nc bnc" id="L1297" title="All 2 branches missed.">            for (int i = 0; i &lt; targets.length; i++) {</span>
+<span class="nc" id="L1298">                tmplate = new Column();</span>
+<span class="nc" id="L1299">                tmplate.setIdentifier(targets[i].getIdentifier());</span>
+<span class="nc" id="L1300">                tmplate.setJavaType(targets[i].getJavaType());</span>
+<span class="nc" id="L1301">                tmplate.setType(targets[i].getType());</span>
+<span class="nc" id="L1302">                tmplate.setTypeName(targets[i].getTypeName());</span>
+<span class="nc" id="L1303">                tmplate.setSize(targets[i].getSize());</span>
+<span class="nc" id="L1304">                tmplate.setDecimalDigits(targets[i].getDecimalDigits());</span>
+
+<span class="nc bnc" id="L1306" title="All 2 branches missed.">                if (def != null)</span>
+<span class="nc" id="L1307">                    def.populate(table, rel.getTable(), tmplate, targets[i],</span>
+                        false, i, targets.length);
+<span class="nc" id="L1309">                joins[i][0] = mergeColumn(context, prefix, tmplate, true,</span>
+                    null, table, adapt, fill);
+<span class="nc" id="L1311">                joins[i][1] = targets[i];</span>
+            }
+<span class="nc" id="L1313">            return joins;</span>
+        }
+
+        // use given columns to create join.  we don't try to use any of the
+        // template columns, even if the user doesn't give a column linking to
+        // every primary key of the target type -- users are allowed to create
+        // partial joins.  this means, though, that if a user wants to specify
+        // info for one join column, he has to at least create elements for
+        // all of them
+
+<span class="nc" id="L1323">        joins = new Object[given.size()][3];</span>
+        Column col;
+<span class="nc bnc" id="L1325" title="All 2 branches missed.">        for (int i = 0; i &lt; joins.length; i++) {</span>
+<span class="nc" id="L1326">            col = given.get(i);</span>
+<span class="nc bnc" id="L1327" title="All 2 branches missed.">            mergeJoinColumn(context, prefix, col, joins, i, table, cls, rel,</span>
+<span class="nc bnc" id="L1328" title="All 2 branches missed.">                def, inversable &amp;&amp; !col.getFlag(Column.FLAG_PK_JOIN), adapt,</span>
+                fill);
+        }
+<span class="nc" id="L1331">        return joins;</span>
+    }
+
+    /**
+     * Create or retrieve a foreign key column for a join.
+     *
+     * @param context the mapping we're retrieving a key for
+     * @param prefix localized error message key prefix
+     * @param given the given local foreign key column
+     * @param joins array of joins
+     * @param idx index of the join array to populate
+     * @param table the table for the key
+     * @param cls the type we're joining from
+     * @param rel target type we're joining to
+     * @param def foreign key defaults provider;
+     * use null to mirror target column names
+     * @param inversable whether the foreign key can be inversed
+     * @param adapt whether we can modify the existing mapping or schema
+     * @param fill whether to default missing column information
+     */
+    private void mergeJoinColumn(MetaDataContext context, String prefix,
+        Column given, Object[][] joins, int idx, Table table, ClassMapping cls,
+        ClassMapping rel, ForeignKeyDefaults def, boolean inversable,
+        boolean adapt, boolean fill) {
+        // default to the primary key column name if this is a pk join
+<span class="nc" id="L1356">        DBIdentifier name = given.getIdentifier();</span>
+<span class="nc bnc" id="L1357" title="All 6 branches missed.">        if (DBIdentifier.isNull(name) &amp;&amp; given.getFlag(Column.FLAG_PK_JOIN) &amp;&amp; cls != null) {</span>
+<span class="nc" id="L1358">            Column[] pks = cls.getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L1359" title="All 2 branches missed.">            if (pks.length == 1)</span>
+<span class="nc" id="L1360">                name = pks[0].getIdentifier();</span>
+        }
+
+        // if we can't adapt, then the user must at least give a column name
+<span class="nc bnc" id="L1364" title="All 6 branches missed.">        if (DBIdentifier.isNull(name) &amp;&amp; !adapt &amp;&amp; !fill)</span>
+<span class="nc" id="L1365">            throw new MetaDataException(_loc.get(prefix + &quot;-no-fkcol-name&quot;,</span>
+                context));
+
+        // check to see if the column isn't in the expected table; it might
+        // be an inverse join or a join to a base class of the target type
+<span class="nc" id="L1370">        Table local = table;</span>
+<span class="nc" id="L1371">        Table foreign = rel.getTable();</span>
+<span class="nc" id="L1372">        boolean fullName = false;</span>
+<span class="nc" id="L1373">        boolean inverse = false;</span>
+<span class="nc bnc" id="L1374" title="All 2 branches missed.">        if (!DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L1375">            QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(name);</span>
+<span class="nc bnc" id="L1376" title="All 2 branches missed.">            if (!DBIdentifier.isNull(path.getObjectTableName())) {</span>
+<span class="nc bnc" id="L1377" title="All 2 branches missed.">                if (DBIdentifier.isEmpty(path.getObjectTableName()))</span>
+<span class="nc" id="L1378">                    local = foreign;</span>
+                else
+<span class="nc" id="L1380">                    local = findTable(context, path.getObjectTableName(),</span>
+                        local, foreign, null);
+<span class="nc" id="L1382">                fullName = true;</span>
+<span class="nc" id="L1383">                name = path.getIdentifier().getUnqualifiedName();</span>
+
+                // if inverse join, then swap local and foreign tables
+<span class="nc bnc" id="L1386" title="All 2 branches missed.">                if (local != table) {</span>
+<span class="nc" id="L1387">                    foreign = table;</span>
+<span class="nc" id="L1388">                    inverse = true;</span>
+                }
+            }
+        }
+<span class="nc bnc" id="L1392" title="All 4 branches missed.">        boolean forceInverse = !fullName &amp;&amp; _join == JOIN_INVERSE;</span>
+<span class="nc bnc" id="L1393" title="All 2 branches missed.">        if (forceInverse) {</span>
+<span class="nc" id="L1394">            local = foreign;</span>
+<span class="nc" id="L1395">            foreign = table;</span>
+<span class="nc" id="L1396">            inverse = true;</span>
+        }
+
+        // determine target
+<span class="nc" id="L1400">        DBIdentifier targetName = given.getTargetIdentifier();</span>
+<span class="nc" id="L1401">        Object target = null;</span>
+<span class="nc" id="L1402">        Table ttable = null;</span>
+<span class="nc" id="L1403">        boolean constant = false;</span>
+<span class="nc" id="L1404">        boolean fullTarget = false;</span>
+<span class="nc bnc" id="L1405" title="All 4 branches missed.">        if (DBIdentifier.isNull(targetName) &amp;&amp; given.getTargetField() != null) {</span>
+<span class="nc bnc" id="L1406" title="All 2 branches missed.">            ClassMapping tcls = (inverse) ? cls : rel;</span>
+<span class="nc" id="L1407">            String fieldName = given.getTargetField();</span>
+<span class="nc" id="L1408">            String[] names = Normalizer.splitName(fieldName);</span>
+<span class="nc bnc" id="L1409" title="All 2 branches missed.">            fullTarget = names.length &gt; 1;</span>
+
+<span class="nc bnc" id="L1411" title="All 4 branches missed.">            if (names.length &gt; 1 &amp;&amp; StringUtil.isEmpty(names[0])) {</span>
+                // allow use of '.' without prefix to mean &quot;use expected local
+                // cls&quot;; but if we already inversed no need to switch again
+<span class="nc bnc" id="L1414" title="All 2 branches missed.">                if (!inverse)</span>
+<span class="nc" id="L1415">                    tcls = cls;</span>
+<span class="nc" id="L1416">                fieldName = names[1];</span>
+<span class="nc bnc" id="L1417" title="All 2 branches missed.">            } else if (names.length &gt; 1) {</span>
+                // must be class + field name
+<span class="nc" id="L1419">                tcls = findClassMapping(context, names[0], cls, rel);</span>
+<span class="nc" id="L1420">                fieldName = names[1];</span>
+            }
+<span class="nc bnc" id="L1422" title="All 2 branches missed.">            if (tcls == null)</span>
+<span class="nc" id="L1423">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-bad-fktargetcls&quot;, context, fieldName, name));
+
+<span class="nc" id="L1426">            FieldMapping field = tcls.getFieldMapping(fieldName);</span>
+<span class="nc bnc" id="L1427" title="All 2 branches missed.">            if (field == null)</span>
+<span class="nc" id="L1428">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-bad-fktargetfield&quot;, new Object[]{ context, fieldName,
+                    name, tcls }));
+<span class="nc bnc" id="L1431" title="All 2 branches missed.">            if (field.getColumns().length != 1)</span>
+<span class="nc" id="L1432">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-fktargetfield-cols&quot;, context, fieldName, name));
+<span class="nc bnc" id="L1434" title="All 2 branches missed.">            ttable = (field.getJoinForeignKey() != null) ? field.getTable()</span>
+<span class="nc" id="L1435">                : field.getDefiningMapping().getTable();</span>
+<span class="nc" id="L1436">            targetName = field.getColumns()[0].getIdentifier();</span>
+<span class="nc bnc" id="L1437" title="All 2 branches missed.">        } else if (!DBIdentifier.isNull(targetName)) {</span>
+<span class="nc" id="L1438">            String targetNameStr = targetName.getName();</span>
+<span class="nc bnc" id="L1439" title="All 2 branches missed.">            if (targetNameStr.charAt(0) == '\'') {</span>
+<span class="nc" id="L1440">                constant = true;</span>
+<span class="nc" id="L1441">                target = targetNameStr.substring(1, targetNameStr.length() - 1);</span>
+<span class="nc bnc" id="L1442" title="All 2 branches missed.">            } else if (targetNameStr.charAt(0) == '-'</span>
+<span class="nc bnc" id="L1443" title="All 2 branches missed.">                || targetNameStr.charAt(0) == '.'</span>
+<span class="nc bnc" id="L1444" title="All 2 branches missed.">                || Character.isDigit(targetNameStr.charAt(0))) {</span>
+<span class="nc" id="L1445">                constant = true;</span>
+                try {
+<span class="nc bnc" id="L1447" title="All 2 branches missed.">                    if (targetNameStr.indexOf('.') == -1)</span>
+<span class="nc" id="L1448">                        target = new Integer(targetNameStr);</span>
+                    else
+<span class="nc" id="L1450">                        target = new Double(targetNameStr);</span>
+<span class="nc" id="L1451">                } catch (RuntimeException re) {</span>
+<span class="nc" id="L1452">                    throw new MetaDataException(_loc.get(prefix</span>
+                        + &quot;-bad-fkconst&quot;, context, targetName, name));
+<span class="nc" id="L1454">                }</span>
+<span class="nc bnc" id="L1455" title="All 2 branches missed.">            } else if (&quot;null&quot;.equalsIgnoreCase(targetNameStr))</span>
+<span class="nc" id="L1456">                constant = true;</span>
+            else {
+<span class="nc" id="L1458">                QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(targetName);</span>
+<span class="nc bnc" id="L1459" title="All 2 branches missed.">                fullTarget = (!DBIdentifier.isNull(path.getObjectTableName()));</span>
+<span class="nc bnc" id="L1460" title="All 2 branches missed.">                if (!DBIdentifier.isNull(path.getObjectTableName()) &amp;&amp;</span>
+<span class="nc bnc" id="L1461" title="All 2 branches missed.">                    DBIdentifier.isEmpty(path.getObjectTableName())) {</span>
+                    // allow use of '.' without prefix to mean &quot;use expected
+                    // local table&quot;, but ignore if we're already inversed
+<span class="nc bnc" id="L1464" title="All 2 branches missed.">                    if (!inverse)</span>
+<span class="nc" id="L1465">                        ttable = local;</span>
+<span class="nc" id="L1466">                    targetName = path.getIdentifier().getUnqualifiedName();</span>
+<span class="nc bnc" id="L1467" title="All 2 branches missed.">                } else if (!DBIdentifier.isNull(path.getObjectTableName())) {</span>
+<span class="nc bnc" id="L1468" title="All 2 branches missed.">                    ttable = findTable(context, path.getObjectTableName(), foreign, local, (inverse) ? cls : rel);</span>
+<span class="nc" id="L1469">                    targetName = path.getIdentifier().getUnqualifiedName();</span>
+                }
+            }
+        }
+
+        // use explicit target table if available
+<span class="nc bnc" id="L1475" title="All 4 branches missed.">        if (ttable == local &amp;&amp; local != foreign) {</span>
+            // swap, unless user gave incompatible table in column name
+<span class="nc bnc" id="L1477" title="All 2 branches missed.">            if (fullName)</span>
+<span class="nc" id="L1478">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-bad-fktarget-inverse&quot;, new Object[]{ context, name,
+                    foreign, ttable }));
+<span class="nc" id="L1481">            local = foreign;</span>
+<span class="nc" id="L1482">            foreign = ttable;</span>
+<span class="nc bnc" id="L1483" title="All 2 branches missed.">        } else if (ttable != null) {</span>
+            // ttable might be a table of a base class of the target
+<span class="nc" id="L1485">            foreign = ttable;</span>
+        }
+
+        // check to see if we inversed; if this is a same-table join, then
+        // consider it an implicit inverse if the user includes the table name
+        // in the column name, but not in the column target, or if the user
+        // gives no column name but a full target name
+<span class="nc bnc" id="L1492" title="All 10 branches missed.">        inverse = inverse || local != table || (local == foreign</span>
+<span class="nc bnc" id="L1493" title="All 4 branches missed.">            &amp;&amp; ((fullName &amp;&amp; !fullTarget) || (DBIdentifier.isNull(name) &amp;&amp; fullTarget)));</span>
+<span class="nc bnc" id="L1494" title="All 6 branches missed.">        if (!inversable &amp;&amp; !constant &amp;&amp; inverse) {</span>
+<span class="nc bnc" id="L1495" title="All 2 branches missed.">            if (local == foreign)</span>
+<span class="nc" id="L1496">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-bad-fk-self-inverse&quot;, context, local));
+<span class="nc" id="L1498">            throw new MetaDataException(_loc.get(prefix + &quot;-bad-fk-inverse&quot;,</span>
+                context, local, table));
+        }
+<span class="nc bnc" id="L1501" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) &amp;&amp; constant)</span>
+<span class="nc" id="L1502">            throw new MetaDataException(_loc.get(prefix</span>
+                + &quot;-no-fkcol-name-adapt&quot;, context));
+
+<span class="nc bnc" id="L1505" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) &amp;&amp; DBIdentifier.isNull(targetName)) {</span>
+            // if no name or target is provided and there's more than one likely
+            // join possibility, too ambiguous
+<span class="nc" id="L1508">            PrimaryKey pk = foreign.getPrimaryKey();</span>
+<span class="nc bnc" id="L1509" title="All 6 branches missed.">            if (joins.length != 1 || pk == null || pk.getColumns().length != 1)</span>
+<span class="nc" id="L1510">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-no-fkcol-name-adapt&quot;, context));
+
+            // assume target is pk column
+<span class="nc" id="L1514">            targetName = pk.getColumns()[0].getIdentifier();</span>
+<span class="nc bnc" id="L1515" title="All 4 branches missed.">        } else if (!DBIdentifier.isNull(name) &amp;&amp; DBIdentifier.isNull(targetName)) {</span>
+            // if one primary key column use it for target; if multiple joins
+            // look for a foreign column with same name as local column
+<span class="nc" id="L1518">            PrimaryKey pk = foreign.getPrimaryKey();</span>
+<span class="nc bnc" id="L1519" title="All 6 branches missed.">            if (joins.length == 1 &amp;&amp; pk != null &amp;&amp; pk.getColumns().length == 1) {</span>
+<span class="nc" id="L1520">                targetName = pk.getColumns()[0].getIdentifier();</span>
+            }
+<span class="nc bnc" id="L1522" title="All 2 branches missed.">            else if (foreign.getColumn(name) != null) {</span>
+<span class="nc" id="L1523">                targetName = name;</span>
+            }
+            else {
+<span class="nc" id="L1526">                throw new MetaDataException(_loc.get(prefix</span>
+                    + &quot;-no-fkcol-target-adapt&quot;, context, name));
+            }
+        }
+
+        // find the target column, and create template for local column based
+        // on it
+<span class="nc" id="L1533">        Column tmplate = new Column();</span>
+<span class="nc" id="L1534">        tmplate.setIdentifier(name);</span>
+<span class="nc bnc" id="L1535" title="All 2 branches missed.">        if (!constant) {</span>
+<span class="nc" id="L1536">            Column tcol = foreign.getColumn(targetName, false);</span>
+<span class="nc bnc" id="L1537" title="All 2 branches missed.">            if (tcol == null) {</span>
+<span class="nc" id="L1538">            	String schemaCase = rel.getMappingRepository().getDBDictionary().schemaCase;</span>
+<span class="nc bnc" id="L1539" title="All 2 branches missed.">            	if (DBDictionary.SCHEMA_CASE_LOWER.equals(schemaCase)) {</span>
+<span class="nc" id="L1540">                	tcol = foreign.getColumn(DBIdentifier.toLower(targetName, true), false);</span>
+<span class="nc bnc" id="L1541" title="All 2 branches missed.">            	} else if (DBDictionary.SCHEMA_CASE_UPPER.equals(schemaCase)) {</span>
+<span class="nc" id="L1542">            		tcol = foreign.getColumn(DBIdentifier.toUpper(targetName, true), false);</span>
+            	}
+            }
+<span class="nc bnc" id="L1545" title="All 2 branches missed.">        	if (tcol == null) {</span>
+        		// give up
+<span class="nc" id="L1547">        		throw new MetaDataException(_loc.get(prefix + &quot;-bad-fktarget&quot;,</span>
+    				new Object[]{ context, targetName, name, foreign }));
+        	}
+<span class="nc bnc" id="L1550" title="All 2 branches missed.">            if (DBIdentifier.isNull(name))</span>
+<span class="nc" id="L1551">                tmplate.setIdentifier(tcol.getIdentifier());</span>
+<span class="nc" id="L1552">            tmplate.setJavaType(tcol.getJavaType());</span>
+<span class="nc" id="L1553">            tmplate.setType(tcol.getType());</span>
+<span class="nc" id="L1554">            tmplate.setTypeName(tcol.getTypeName());</span>
+<span class="nc" id="L1555">            tmplate.setSize(tcol.getSize());</span>
+<span class="nc" id="L1556">            tmplate.setDecimalDigits(tcol.getDecimalDigits());</span>
+<span class="nc" id="L1557">            target = tcol;</span>
+<span class="nc bnc" id="L1558" title="All 2 branches missed.">        } else if (target instanceof String)</span>
+<span class="nc" id="L1559">            tmplate.setJavaType(JavaTypes.STRING);</span>
+<span class="nc bnc" id="L1560" title="All 2 branches missed.">        else if (target instanceof Integer)</span>
+<span class="nc" id="L1561">            tmplate.setJavaType(JavaTypes.INT);</span>
+<span class="nc bnc" id="L1562" title="All 2 branches missed.">        else if (target instanceof Double)</span>
+<span class="nc" id="L1563">            tmplate.setJavaType(JavaTypes.DOUBLE);</span>
+
+        // populate template, but let user-given name override default name
+<span class="nc bnc" id="L1566" title="All 2 branches missed.">        if (def != null)</span>
+<span class="nc" id="L1567">            def.populate(local, foreign, tmplate, target, inverse, idx,</span>
+                joins.length);
+<span class="nc bnc" id="L1569" title="All 2 branches missed.">        if (!DBIdentifier.isNull(name))</span>
+<span class="nc" id="L1570">            tmplate.setIdentifier(name);</span>
+
+        // create or merge local column
+<span class="nc" id="L1573">        Column col = mergeColumn(context, prefix, tmplate, true, given, local,</span>
+            adapt, fill);
+
+<span class="nc" id="L1576">        joins[idx][0] = col;</span>
+<span class="nc" id="L1577">        joins[idx][1] = target;</span>
+<span class="nc bnc" id="L1578" title="All 2 branches missed.">        if (inverse)</span>
+<span class="nc" id="L1579">            joins[idx][2] = Boolean.TRUE;</span>
+<span class="nc" id="L1580">    }</span>
+
+    /**
+     * Find the target class mapping given the user's class name.
+     *
+     * @param context for error messages
+     * @param clsName class name given by user
+     * @param cls original source mapping
+     * @param rel original target mapping
+     */
+    private static ClassMapping findClassMapping(MetaDataContext context,
+        String clsName, ClassMapping cls, ClassMapping rel) {
+<span class="nc bnc" id="L1592" title="All 2 branches missed.">        if (isClassMappingName(clsName, cls))</span>
+<span class="nc" id="L1593">            return cls;</span>
+<span class="nc bnc" id="L1594" title="All 2 branches missed.">        if (isClassMappingName(clsName, rel))</span>
+<span class="nc" id="L1595">            return rel;</span>
+<span class="nc" id="L1596">        throw new MetaDataException(_loc.get(&quot;target-wrong-cls&quot;, new Object[]</span>
+            { context, clsName, cls, rel }));
+    }
+
+    /**
+     * Return whether the given name matches the given mapping.
+     */
+    private static boolean isClassMappingName(String name, ClassMapping cls) {
+<span class="nc bnc" id="L1604" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L1605">            return false;</span>
+<span class="nc bnc" id="L1606" title="All 2 branches missed.">        if (name.equals(cls.getDescribedType().getName())</span>
+<span class="nc bnc" id="L1607" title="All 2 branches missed.">            || name.equals(ClassUtil.getClassName(cls.getDescribedType())))</span>
+<span class="nc" id="L1608">            return true;</span>
+<span class="nc" id="L1609">        return isClassMappingName(name, cls.getPCSuperclassMapping());</span>
+    }
+
+    /**
+     * Sets internal column information to match the given mapped columns.
+     *
+     * @param forceJDBCType whether to force the jdbc-type of the columns
+     * to be set, even when it matches the default for the columns' java type
+     */
+    protected void syncColumns(MetaDataContext context, Column[] cols,
+        boolean forceJDBCType) {
+<span class="nc bnc" id="L1620" title="All 4 branches missed.">        if (cols == null || cols.length == 0)</span>
+<span class="nc" id="L1621">            _cols = null;</span>
+        else {
+<span class="nc" id="L1623">            _cols = new ArrayList&lt;&gt;(cols.length);</span>
+            Column col;
+<span class="nc bnc" id="L1625" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L1626">                col = syncColumn(context, cols[i], cols.length,</span>
+<span class="nc" id="L1627">                    forceJDBCType, cols[i].getTable(), null, null, false);</span>
+<span class="nc" id="L1628">                setColumnFlagsFromIO(col, i);</span>
+<span class="nc" id="L1629">                _cols.add(col);</span>
+            }
+        }
+<span class="nc" id="L1632">    }</span>
+
+    /**
+     * Set I/O flags on the column.
+     */
+    private void setColumnFlagsFromIO(Column col, int i) {
+<span class="nc bnc" id="L1638" title="All 2 branches missed.">        if (_io == null)</span>
+<span class="nc" id="L1639">            return;</span>
+<span class="nc bnc" id="L1640" title="All 2 branches missed.">        col.setFlag(Column.FLAG_UNUPDATABLE, !_io.isUpdatable(i, false));</span>
+<span class="nc bnc" id="L1641" title="All 2 branches missed.">        col.setFlag(Column.FLAG_UNINSERTABLE, !_io.isInsertable(i, false));</span>
+<span class="nc" id="L1642">    }</span>
+
+    /**
+     * Sets internal index information to match given mapped index.
+     */
+    protected void syncIndex(MetaDataContext context, Index idx) {
+<span class="nc bnc" id="L1648" title="All 2 branches missed.">        if (idx == null) {</span>
+<span class="nc" id="L1649">            _idx = null;</span>
+<span class="nc" id="L1650">            return;</span>
+        }
+
+<span class="nc" id="L1653">        _canIdx = true;</span>
+<span class="nc" id="L1654">        _idx = new Index();</span>
+<span class="nc" id="L1655">        _idx.setIdentifier(idx.getIdentifier());</span>
+<span class="nc" id="L1656">        _idx.setUnique(idx.isUnique());</span>
+<span class="nc bnc" id="L1657" title="All 4 branches missed.">        if (idx.getColumns() != null &amp;&amp; idx.getColumns().length &gt; 1)</span>
+<span class="nc" id="L1658">            _idx.setColumns(idx.getColumns());</span>
+<span class="nc" id="L1659">    }</span>
+
+    /**
+     * Sets internal constraint information to match given mapped constraint.
+     */
+    protected void syncUnique(MetaDataContext context, Unique unq) {
+<span class="nc bnc" id="L1665" title="All 2 branches missed.">        if (unq == null) {</span>
+<span class="nc" id="L1666">            _unq = null;</span>
+<span class="nc" id="L1667">            return;</span>
+        }
+
+<span class="nc" id="L1670">        _canUnq = true;</span>
+<span class="nc" id="L1671">        _unq = new Unique();</span>
+<span class="nc" id="L1672">        _unq.setIdentifier(unq.getIdentifier());</span>
+<span class="nc" id="L1673">        _unq.setDeferred(unq.isDeferred());</span>
+<span class="nc" id="L1674">    }</span>
+
+    /**
+     * Sets internal constraint and column information to match given mapped
+     * constraint.
+     *
+     * @param local default local table
+     * @param target default target table
+     */
+    protected void syncForeignKey(MetaDataContext context, ForeignKey fk,
+        Table local, Table target) {
+<span class="nc bnc" id="L1685" title="All 2 branches missed.">        if (fk == null) {</span>
+<span class="nc" id="L1686">            _fk = null;</span>
+<span class="nc" id="L1687">            _cols = null;</span>
+<span class="nc" id="L1688">            _join = JOIN_NONE;</span>
+<span class="nc" id="L1689">            return;</span>
+        }
+<span class="nc bnc" id="L1691" title="All 2 branches missed.">        if (_join == JOIN_NONE)</span>
+<span class="nc" id="L1692">            _join = JOIN_FORWARD;</span>
+
+<span class="nc bnc" id="L1694" title="All 2 branches missed.">        if (fk.isLogical())</span>
+<span class="nc" id="L1695">            _fk = null;</span>
+        else {
+<span class="nc" id="L1697">            _canFK = true;</span>
+<span class="nc" id="L1698">            _fk = new ForeignKey();</span>
+<span class="nc" id="L1699">            _fk.setIdentifier(fk.getIdentifier());</span>
+<span class="nc" id="L1700">            _fk.setDeleteAction(fk.getDeleteAction());</span>
+<span class="nc" id="L1701">            _fk.setUpdateAction(fk.getUpdateAction());</span>
+<span class="nc" id="L1702">            _fk.setDeferred(fk.isDeferred());</span>
+        }
+
+<span class="nc" id="L1705">        Column[] cols = fk.getColumns();</span>
+<span class="nc" id="L1706">        Column[] pkCols = fk.getPrimaryKeyColumns();</span>
+<span class="nc" id="L1707">        Column[] ccols = fk.getConstantColumns();</span>
+<span class="nc" id="L1708">        Object[] cs = fk.getConstants();</span>
+<span class="nc" id="L1709">        Column[] cpkCols = fk.getConstantPrimaryKeyColumns();</span>
+<span class="nc" id="L1710">        Object[] cpks = fk.getPrimaryKeyConstants();</span>
+
+<span class="nc" id="L1712">        int size = cols.length + ccols.length + cpkCols.length;</span>
+<span class="nc" id="L1713">        _cols = new ArrayList&lt;&gt;(size);</span>
+        Column col;
+<span class="nc bnc" id="L1715" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L1716" title="All 2 branches missed.">            col = syncColumn(context, cols[i], size, false, local,</span>
+                target, pkCols[i], _join == JOIN_INVERSE);
+<span class="nc" id="L1718">            setColumnFlagsFromIO(col, i);</span>
+<span class="nc" id="L1719">            _cols.add(col);</span>
+        }
+        Object constant;
+<span class="nc bnc" id="L1722" title="All 2 branches missed.">        for (int i = 0; i &lt; ccols.length; i++) {</span>
+<span class="nc bnc" id="L1723" title="All 2 branches missed.">            constant = (cs[i] == null) ? NULL : cs[i];</span>
+<span class="nc bnc" id="L1724" title="All 2 branches missed.">            col = syncColumn(context, ccols[i], size, false, local,</span>
+                target, constant, _join == JOIN_INVERSE);
+<span class="nc" id="L1726">            setColumnFlagsFromIO(col, cols.length + i);</span>
+<span class="nc" id="L1727">            _cols.add(col);</span>
+        }
+<span class="nc bnc" id="L1729" title="All 2 branches missed.">        for (int i = 0; i &lt; cpkCols.length; i++) {</span>
+<span class="nc bnc" id="L1730" title="All 2 branches missed.">            constant = (cpks[i] == null) ? NULL : cpks[i];</span>
+<span class="nc bnc" id="L1731" title="All 2 branches missed.">            _cols.add(syncColumn(context, cpkCols[i], size, false, target,</span>
+                local, constant, _join != JOIN_INVERSE));
+        }
+<span class="nc" id="L1734">    }</span>
+
+    /**
+     * Create a copy of the given column with the raw mapping information
+     * set correctly, and without settings that match defaults.
+     *
+     * @param num the number of columns for this mapping
+     * @param forceJDBCType whether the jdbc-type of the created column
+     * should be set, even if it matches the default
+     * for the given column's java type
+     * @param colTable expected table for the column
+     * @param targetTable expected target table for join column
+     * @param target target column or object for join column; for a
+     * constant null target, use {@link #NULL}
+     * @param inverse whether join column is for inverse join
+     */
+    protected static Column syncColumn(MetaDataContext context, Column col,
+        int num, boolean forceJDBCType, Table colTable, Table targetTable,
+        Object target, boolean inverse) {
+        // use full name for cols that aren't in the expected table, or that
+        // are inverse joins
+<span class="nc" id="L1755">        DBDictionary dict = ((MappingRepository) context.getRepository()).</span>
+<span class="nc" id="L1756">            getDBDictionary();</span>
+<span class="nc" id="L1757">        Column copy = new Column();</span>
+<span class="nc bnc" id="L1758" title="All 4 branches missed.">        if (col.getTable() != colTable || inverse)</span>
+<span class="nc" id="L1759">            copy.setIdentifier(QualifiedDBIdentifier.newPath(dict.getFullIdentifier(col.getTable(), true),</span>
+<span class="nc" id="L1760">                col.getIdentifier()));</span>
+        else
+<span class="nc" id="L1762">            copy.setIdentifier(col.getIdentifier());</span>
+
+        // set target if not default
+<span class="nc bnc" id="L1765" title="All 2 branches missed.">        if (target != null) {</span>
+<span class="nc bnc" id="L1766" title="All 2 branches missed.">            if (target == NULL)</span>
+<span class="nc" id="L1767">                copy.setTargetIdentifier(DBIdentifier.newColumn(&quot;null&quot;));</span>
+<span class="nc bnc" id="L1768" title="All 2 branches missed.">            else if (target instanceof Column) {</span>
+<span class="nc" id="L1769">                Column tcol = (Column) target;</span>
+<span class="nc bnc" id="L1770" title="All 6 branches missed.">                if ((!inverse &amp;&amp; tcol.getTable() != targetTable)</span>
+<span class="nc bnc" id="L1771" title="All 2 branches missed.">                    || (inverse &amp;&amp; tcol.getTable() != colTable))</span>
+<span class="nc" id="L1772">                    copy.setTargetIdentifier(</span>
+<span class="nc" id="L1773">                        QualifiedDBIdentifier.newPath(dict.getFullIdentifier(tcol.getTable(), true),</span>
+<span class="nc" id="L1774">                        tcol.getIdentifier()));</span>
+<span class="nc bnc" id="L1775" title="All 2 branches missed.">                else if (!defaultTarget(col, tcol, num))</span>
+<span class="nc" id="L1776">                    copy.setTargetIdentifier(tcol.getIdentifier());</span>
+<span class="nc bnc" id="L1777" title="All 2 branches missed.">            } else if (target instanceof Number)</span>
+<span class="nc" id="L1778">                copy.setTargetIdentifier(DBIdentifier.newConstant(target.toString()));</span>
+            else
+<span class="nc" id="L1780">                copy.setTargetIdentifier(DBIdentifier.newConstant(&quot;'&quot; + target + &quot;'&quot;));</span>
+<span class="nc bnc" id="L1781" title="All 2 branches missed.">        } else if (num &gt; 1)</span>
+<span class="nc" id="L1782">            copy.setTargetField(col.getTargetField());</span>
+
+<span class="nc bnc" id="L1784" title="All 4 branches missed.">        if (col.getSize() != 0 &amp;&amp; col.getSize() != dict.characterColumnSize</span>
+<span class="nc bnc" id="L1785" title="All 4 branches missed.">            &amp;&amp; (col.getSize() != -1 || !col.isLob()))</span>
+<span class="nc" id="L1786">            copy.setSize(col.getSize());</span>
+<span class="nc bnc" id="L1787" title="All 2 branches missed.">        if (col.getDecimalDigits() != 0)</span>
+<span class="nc" id="L1788">            copy.setDecimalDigits(col.getDecimalDigits());</span>
+<span class="nc bnc" id="L1789" title="All 2 branches missed.">        if (col.getDefaultString() != null)</span>
+<span class="nc" id="L1790">            copy.setDefaultString(col.getDefaultString());</span>
+<span class="nc bnc" id="L1791" title="All 4 branches missed.">        if (col.isNotNull() &amp;&amp; !col.isPrimaryKey()</span>
+<span class="nc bnc" id="L1792" title="All 4 branches missed.">            &amp;&amp; (!isPrimitive(col.getJavaType()) || isForeignKey(col)))</span>
+<span class="nc" id="L1793">            copy.setNotNull(true);</span>
+
+        // set type name if not default
+<span class="nc" id="L1796">        String typeName = col.getTypeName();</span>
+<span class="nc bnc" id="L1797" title="All 4 branches missed.">        if (typeName != null || copy.getSize() != 0</span>
+<span class="nc bnc" id="L1798" title="All 2 branches missed.">            || copy.getDecimalDigits() != 0) {</span>
+            // is this the dict default type? have to ensure jdbc-type set
+            // prior to finding dict default
+<span class="nc" id="L1801">            copy.setType(col.getType());</span>
+<span class="nc" id="L1802">            String defName = dict.getTypeName(copy);</span>
+<span class="nc" id="L1803">            copy.setType(Types.OTHER);</span>
+
+            // copy should not have size info set if it isn't used in type name
+<span class="nc bnc" id="L1806" title="All 2 branches missed.">            boolean defSized = defName.indexOf('(') != -1;</span>
+<span class="nc bnc" id="L1807" title="All 2 branches missed.">            if (!defSized) {</span>
+<span class="nc bnc" id="L1808" title="All 2 branches missed.">                if (copy.getSize() &gt; 0)</span>
+<span class="nc" id="L1809">                    copy.setSize(0);</span>
+<span class="nc" id="L1810">                copy.setDecimalDigits(0);</span>
+            }
+
+<span class="nc bnc" id="L1813" title="All 2 branches missed.">            if (typeName != null) {</span>
+                // make sure to strip size for comparison
+<span class="nc bnc" id="L1815" title="All 4 branches missed.">                if (typeName.indexOf('(') == -1 &amp;&amp; defSized)</span>
+<span class="nc" id="L1816">                    defName = defName.substring(0, defName.indexOf('('));</span>
+<span class="nc bnc" id="L1817" title="All 2 branches missed.">                if (!typeName.equalsIgnoreCase(defName))</span>
+<span class="nc" id="L1818">                    copy.setTypeName(typeName);</span>
+            }
+        }
+
+        // set jdbc-type if not default or if forced
+<span class="nc bnc" id="L1823" title="All 6 branches missed.">        if (forceJDBCType</span>
+            || (target != null &amp;&amp; !(target instanceof Column)
+<span class="nc bnc" id="L1825" title="All 2 branches missed.">            &amp;&amp; col.getType() != Types.VARCHAR)</span>
+<span class="nc bnc" id="L1826" title="All 2 branches missed.">            || dict.getJDBCType(col.getJavaType(), false) != col.getType())</span>
+<span class="nc" id="L1827">            copy.setType(col.getType());</span>
+
+<span class="nc" id="L1829">        return copy;</span>
+    }
+
+    /**
+     * Return whether the given column belongs to a foreign key.
+     */
+    private static boolean isForeignKey(Column col)
+    {
+<span class="nc bnc" id="L1837" title="All 2 branches missed.">        if (col.getTable() == null)</span>
+<span class="nc" id="L1838">            return false;</span>
+<span class="nc" id="L1839">        ForeignKey[] fks = col.getTable().getForeignKeys();</span>
+<span class="nc bnc" id="L1840" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++)</span>
+<span class="nc bnc" id="L1841" title="All 2 branches missed.">            if (fks[i].containsColumn(col)</span>
+<span class="nc bnc" id="L1842" title="All 2 branches missed.">                || fks[i].containsConstantColumn(col))</span>
+<span class="nc" id="L1843">                return true;</span>
+<span class="nc" id="L1844">        return false;</span>
+    }
+
+    /**
+     * Return true if the given type code represents a primitive.
+     */
+    private static boolean isPrimitive(int type) {
+<span class="nc bnc" id="L1851" title="All 2 branches missed.">        switch (type) {</span>
+            case JavaTypes.BOOLEAN:
+            case JavaTypes.BYTE:
+            case JavaTypes.CHAR:
+            case JavaTypes.DOUBLE:
+            case JavaTypes.FLOAT:
+            case JavaTypes.INT:
+            case JavaTypes.LONG:
+            case JavaTypes.SHORT:
+<span class="nc" id="L1860">                return true;</span>
+            default:
+<span class="nc" id="L1862">                return false;</span>
+        }
+    }
+
+    /**
+     * Return true if the given target column matches the default.
+     * If there is only one column involved in the join and it links to the
+     * single target table pk column, or if the column name is the same as
+     * the target column name, then the target is the default.
+     */
+    private static boolean defaultTarget(Column col, Column targetCol,
+        int num) {
+<span class="nc bnc" id="L1874" title="All 2 branches missed.">        if (col.getIdentifier().equals(targetCol.getIdentifier()))</span>
+<span class="nc" id="L1875">            return true;</span>
+<span class="nc bnc" id="L1876" title="All 2 branches missed.">        if (num &gt; 1)</span>
+<span class="nc" id="L1877">            return false;</span>
+
+<span class="nc" id="L1879">        PrimaryKey pk = targetCol.getTable().getPrimaryKey();</span>
+<span class="nc bnc" id="L1880" title="All 4 branches missed.">        if (pk == null || pk.getColumns().length != 1)</span>
+<span class="nc" id="L1881">            return false;</span>
+<span class="nc bnc" id="L1882" title="All 2 branches missed.">        return targetCol == pk.getColumns()[0];</span>
+    }
+
+    /**
+     * Supplies default table information.
+     */
+    public interface TableDefaults {
+
+        /**
+         * Return the default table name.
+         * @deprecated
+         */
+        @Deprecated String get(Schema schema);
+        DBIdentifier getIdentifier(Schema schema);
+    }
+
+    /**
+     * Supplies default foreign key information.
+     */
+    public interface ForeignKeyDefaults {
+
+        /**
+         * Return a default foreign key for the given tables, or null to
+         * create a logical foreign key only. Do not fill in the columns of
+         * the foreign key, only attributes like its name, delete action, etc.
+         * Do not add the foreign key to the table.
+         */
+        ForeignKey get(Table local, Table foreign, boolean inverse);
+
+        /**
+         * Populate the given foreign key column with defaults.
+         *
+         * @param target the target column or constant value
+         * @param pos the index of this column in the foreign key
+         * @param cols the number of columns in the foreign key
+         */
+        void populate(Table local, Table foreign, Column col,
+            Object target, boolean inverse, int pos, int cols);
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

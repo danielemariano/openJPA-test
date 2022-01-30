@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>NumberVersionStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">NumberVersionStrategy.java</span></div><h1>NumberVersionStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * Uses a version number for optimistic versioning.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L32">public class NumberVersionStrategy</span>
+    extends ColumnVersionStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    public static final String ALIAS = &quot;version-number&quot;;
+
+<span class="nc" id="L40">    private Number _initial = 1;</span>
+<span class="nc" id="L41">    private Integer _javaType = null;</span>
+
+    /**
+     * Set the initial value for version column. Defaults to 1.
+     */
+    public void setInitialValue(int initial) {
+<span class="nc" id="L47">        _initial = initial;</span>
+<span class="nc" id="L48">    }</span>
+
+    /**
+     * Return the initial value for version column. Defaults to 1.
+     */
+    public int getInitialValue() {
+<span class="nc" id="L54">        return _initial.intValue();</span>
+    }
+
+    @Override
+    public String getAlias() {
+<span class="nc" id="L59">        return ALIAS;</span>
+    }
+
+    @Override
+    protected int getJavaType() {
+<span class="nc bnc" id="L64" title="All 4 branches missed.">        if (_javaType == null &amp;&amp; vers.getClassMapping().getVersionFieldMapping() != null) {</span>
+<span class="nc" id="L65">            _javaType = Integer.valueOf(vers.getClassMapping().getVersionFieldMapping().getTypeCode());</span>
+        } else {
+<span class="nc" id="L67">            return JavaTypes.INT;</span>
+        }
+
+<span class="nc" id="L70">        return _javaType;</span>
+    }
+
+    @Override
+    protected Object nextVersion(Object version) {
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if (version == null)</span>
+<span class="nc" id="L76">            return _initial;</span>
+<span class="nc" id="L77">        return ((Number) version).intValue() + 1;</span>
+    }
+
+    @Override
+    public Map&lt;Column,String&gt; getBulkUpdateValues() {
+<span class="nc" id="L82">        Column[] cols = vers.getColumns();</span>
+<span class="nc" id="L83">        Map&lt;Column,String&gt; map = new HashMap&lt;&gt;(cols.length);</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L85">            map.put(cols[i], cols[i].getName() + &quot; + 1&quot;);</span>
+<span class="nc" id="L86">        return map;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

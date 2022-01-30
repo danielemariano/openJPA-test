@@ -1,0 +1,975 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Table.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">Table.java</span></div><h1>Table.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.TreeMap;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.meta.SourceTracker;
+
+/**
+ * Represents a database table.
+ *
+ * @author Abe White
+ * @author Stephen Kim
+ */
+
+public class Table
+    extends NameSet
+    implements Comparable&lt;Object&gt;, SourceTracker {
+
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L47">    private DBIdentifier _name = DBIdentifier.NULL;</span>
+<span class="nc" id="L48">    private DBIdentifier _schemaName = DBIdentifier.NULL;</span>
+    // all keys must be normalized with normalizeColumnKey
+<span class="nc" id="L50">    private Map&lt;DBIdentifier, Column&gt; _colMap = null;</span>
+<span class="nc" id="L51">    private Map&lt;DBIdentifier, Index&gt; _idxMap = null;</span>
+<span class="nc" id="L52">    private Collection&lt;ForeignKey&gt; _fkList = null;</span>
+<span class="nc" id="L53">    private Collection&lt;Unique&gt; _unqList = null;</span>
+<span class="nc" id="L54">    private Schema _schema = null;</span>
+<span class="nc" id="L55">    private PrimaryKey _pk = null;</span>
+
+    // keep track of source
+<span class="nc" id="L58">    private File _source = null;</span>
+<span class="nc" id="L59">    private int _srcType = SRC_OTHER;</span>
+
+    // cache
+<span class="nc" id="L62">    private Column[] _cols = null;</span>
+<span class="nc" id="L63">    private Column[] _autoAssign = null;</span>
+<span class="nc" id="L64">    private Column[] _rels = null;</span>
+<span class="nc" id="L65">    private ForeignKey[] _fks = null;</span>
+<span class="nc" id="L66">    private Index[] _idxs = null;</span>
+<span class="nc" id="L67">    private Unique[] _unqs = null;</span>
+<span class="nc" id="L68">    private String _comment = null;</span>
+<span class="nc" id="L69">    private int _lineNum = 0;</span>
+<span class="nc" id="L70">    private int _colNum = 0;</span>
+<span class="nc" id="L71">    private boolean _isAssociation = false;</span>
+<span class="nc" id="L72">    private QualifiedDBIdentifier _fullPath = null;</span>
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L77">    public Table() {</span>
+<span class="nc" id="L78">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param name the table name
+     * @param schema the table schema
+     * @deprecated
+     */
+    @Deprecated
+    public Table(String name, Schema schema) {
+<span class="nc" id="L89">        this(DBIdentifier.newTable(name), schema);</span>
+<span class="nc" id="L90">    }</span>
+
+<span class="nc" id="L92">    public Table(DBIdentifier name, Schema schema) {</span>
+<span class="nc" id="L93">        setIdentifier(name);</span>
+<span class="nc" id="L94">        addName(name, true);</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        if (schema != null)</span>
+<span class="nc" id="L96">            setSchemaIdentifier(schema.getIdentifier());</span>
+<span class="nc" id="L97">        _schema = schema;</span>
+<span class="nc" id="L98">    }</span>
+
+    public void setAssociation() {
+<span class="nc" id="L101">        _isAssociation = true;</span>
+<span class="nc" id="L102">    }</span>
+
+    public boolean isAssociation() {
+<span class="nc" id="L105">        return _isAssociation;</span>
+    }
+
+    /**
+     * Called when the table is removed from its schema. Removes all table
+     * members, and invalidates the table.
+     */
+    void remove() {
+<span class="nc" id="L113">        ForeignKey[] fks = getForeignKeys();</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++)</span>
+<span class="nc" id="L115">            removeForeignKey(fks[i]);</span>
+<span class="nc" id="L116">        Index[] idxs = getIndexes();</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        for (int i = 0; i &lt; idxs.length; i++)</span>
+<span class="nc" id="L118">            removeIndex(idxs[i]);</span>
+<span class="nc" id="L119">        Unique[] unqs = getUniques();</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        for (int i = 0; i &lt; unqs.length; i++)</span>
+<span class="nc" id="L121">            removeUnique(unqs[i]);</span>
+<span class="nc" id="L122">        removePrimaryKey();</span>
+<span class="nc" id="L123">        Column[] cols = getColumns();</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L125">            removeColumn(cols[i]);</span>
+<span class="nc" id="L126">        _schema = null;</span>
+<span class="nc" id="L127">        _schemaName = DBIdentifier.NULL;</span>
+<span class="nc" id="L128">        _fullPath = null;</span>
+<span class="nc" id="L129">    }</span>
+
+    /**
+     * Return the schema for the table.
+     */
+    public Schema getSchema() {
+<span class="nc" id="L135">        return _schema;</span>
+    }
+
+    /**
+     * The table's schema name.
+     * @deprecated
+     */
+    @Deprecated
+    public String getSchemaName() {
+<span class="nc" id="L144">        return getSchemaIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getSchemaIdentifier() {
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        return _schemaName == null ? DBIdentifier.NULL : _schemaName;</span>
+    }
+
+    /**
+     * The table's schema name. You can only call this method on tables
+     * whose schema object is not set.
+     * @deprecated
+     */
+    @Deprecated
+    public void setSchemaName(String name) {
+<span class="nc" id="L158">        setSchemaIdentifier(DBIdentifier.newSchema(name));</span>
+<span class="nc" id="L159">    }</span>
+
+    public void setSchemaIdentifier(DBIdentifier name) {
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        if (getSchema() != null)</span>
+<span class="nc" id="L163">            throw new IllegalStateException();</span>
+<span class="nc" id="L164">        _schemaName = name;</span>
+<span class="nc" id="L165">        _fullPath = null;</span>
+<span class="nc" id="L166">    }</span>
+
+    /**
+     * Return the name of the table.
+     * @deprecated
+     */
+    @Deprecated
+    public String getName() {
+<span class="nc" id="L174">        return getIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getIdentifier() {
+<span class="nc bnc" id="L178" title="All 2 branches missed.">        return _name == null ? DBIdentifier.NULL : _name;</span>
+    }
+
+    /**
+     * Set the name of the table. This method can only be called on tables
+     * that are not part of a schema.
+     * @deprecated use {@link #setIdentifier(DBIdentifier)} instead.
+     */
+    @Deprecated
+    public void setName(String name) {
+<span class="nc" id="L188">        setIdentifier(DBIdentifier.newTable(name));</span>
+<span class="nc" id="L189">    }</span>
+
+    /**
+     * Set the name of the table. This method can only be called on tables which are not part of a schema.
+     * @param name The name of the table.
+     * @throws IllegalStateException if {@link #getSchema()} does not return null.
+     */
+    public void setIdentifier(DBIdentifier name) {
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        if (getSchema() != null)</span>
+<span class="nc" id="L198">            throw new IllegalStateException();</span>
+<span class="nc" id="L199">        _name = name;</span>
+<span class="nc" id="L200">        _fullPath = null;</span>
+<span class="nc" id="L201">    }</span>
+
+    /**
+     * Return the table name, including schema, using '.' as the
+     * catalog separator.
+     * @deprecated
+     */
+    @Deprecated
+    public String getFullName() {
+<span class="nc" id="L210">        return getFullIdentifier().getName();</span>
+    }
+
+    public QualifiedDBIdentifier getQualifiedPath() {
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (_fullPath  == null) {</span>
+<span class="nc" id="L215">            _fullPath = QualifiedDBIdentifier.newPath(_schemaName, _name );</span>
+        }
+<span class="nc" id="L217">        return _fullPath;</span>
+    }
+
+    public DBIdentifier getFullIdentifier() {
+<span class="nc" id="L221">        return getQualifiedPath().getIdentifier();</span>
+    }
+
+    @Override
+    public File getSourceFile() {
+<span class="nc" id="L226">        return _source;</span>
+    }
+
+    @Override
+    public Object getSourceScope() {
+<span class="nc" id="L231">        return null;</span>
+    }
+
+    @Override
+    public int getSourceType() {
+<span class="nc" id="L236">        return _srcType;</span>
+    }
+
+    public void setSource(File source, int srcType) {
+<span class="nc" id="L240">        _source = source;</span>
+<span class="nc" id="L241">        _srcType = srcType;</span>
+<span class="nc" id="L242">    }</span>
+
+    @Override
+    public String getResourceName() {
+<span class="nc" id="L246">        return getFullIdentifier().getName();</span>
+    }
+
+    /**
+     * Return the table's columns, in alphabetical order.
+     */
+    public Column[] getColumns() {
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        if (_cols == null) {</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">            if (_colMap == null)</span>
+<span class="nc" id="L255">                _cols = Schemas.EMPTY_COLUMNS;</span>
+            else {
+<span class="nc" id="L257">                Column[] cols = new Column[_colMap.size()];</span>
+<span class="nc" id="L258">                Iterator&lt;Column&gt; itr = _colMap.values().iterator();</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">                for (int i = 0; itr.hasNext(); i++) {</span>
+<span class="nc" id="L260">                    cols[i] = itr.next();</span>
+<span class="nc" id="L261">                    cols[i].setIndex(i);</span>
+                }
+<span class="nc" id="L263">                _cols = cols;</span>
+            }
+        }
+<span class="nc" id="L266">        return _cols;</span>
+    }
+
+    /**
+     * Return this table's auto-assigned columns.
+     */
+    public Column[] getAutoAssignedColumns() {
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        if (_autoAssign == null) {</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">            if (_colMap == null)</span>
+<span class="nc" id="L275">                _autoAssign = Schemas.EMPTY_COLUMNS;</span>
+            else {
+<span class="nc" id="L277">                Collection&lt;Column&gt; autos = null;</span>
+<span class="nc" id="L278">                Column[] cols = getColumns();</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">                for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">                    if (cols[i].isAutoAssigned()) {</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">                        if (autos == null)</span>
+<span class="nc" id="L282">                            autos = new ArrayList&lt;&gt;(3);</span>
+<span class="nc" id="L283">                        autos.add(cols[i]);</span>
+                    }
+                }
+<span class="nc bnc" id="L286" title="All 2 branches missed.">                _autoAssign = (autos == null) ? Schemas.EMPTY_COLUMNS</span>
+<span class="nc" id="L287">                    : (Column[]) autos.toArray(new Column[autos.size()]);</span>
+            }
+        }
+<span class="nc" id="L290">        return _autoAssign;</span>
+    }
+
+    /**
+     * Return this table's relation id columns.
+     */
+    public Column[] getRelationIdColumns() {
+<span class="nc bnc" id="L297" title="All 2 branches missed.">        if (_rels == null) {</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">            if (_colMap == null)</span>
+<span class="nc" id="L299">                _rels = Schemas.EMPTY_COLUMNS;</span>
+            else {
+<span class="nc" id="L301">                Collection&lt;Column&gt; rels = null;</span>
+<span class="nc" id="L302">                Column[] cols = getColumns();</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">                for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L304" title="All 2 branches missed.">                    if (cols[i].isRelationId()) {</span>
+<span class="nc bnc" id="L305" title="All 2 branches missed.">                        if (rels == null)</span>
+<span class="nc" id="L306">                            rels = new ArrayList&lt;&gt;(3);</span>
+<span class="nc" id="L307">                        rels.add(cols[i]);</span>
+                    }
+                }
+<span class="nc bnc" id="L310" title="All 2 branches missed.">                _rels = (rels == null) ? Schemas.EMPTY_COLUMNS</span>
+<span class="nc" id="L311">                    : (Column[]) rels.toArray(new Column[rels.size()]);</span>
+            }
+        }
+<span class="nc" id="L314">        return _rels;</span>
+    }
+
+    /**
+     * Return the list of column names, used only for informative (error) messages.
+     * @return
+     */
+    public String[] getColumnNames() {
+<span class="nc bnc" id="L322" title="All 2 branches missed.">        if (_colMap == null) {</span>
+<span class="nc" id="L323">            return new String[0];</span>
+        }
+<span class="nc" id="L325">        return _colMap</span>
+<span class="nc" id="L326">                .values()</span>
+<span class="nc" id="L327">                .stream()</span>
+<span class="nc" id="L328">                .map(Column::getIdentifier)</span>
+<span class="nc" id="L329">                .map(DBIdentifier::getName)</span>
+<span class="nc" id="L330">                .toArray(String[]::new);</span>
+    }
+
+    /**
+     * Return the column with the given name, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public Column getColumn(String name) {
+<span class="nc" id="L339">        return getColumn(DBIdentifier.newIdentifier(name, DBIdentifierType.COLUMN, true));</span>
+    }
+
+    private Column internalGetColumn(DBIdentifier name) {
+<span class="nc bnc" id="L343" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) || _colMap == null)</span>
+<span class="nc" id="L344">            return null;</span>
+<span class="nc" id="L345">        DBIdentifier key = normalizeColumnKey(name);</span>
+<span class="nc" id="L346">        return _colMap.get(key);</span>
+    }
+
+    public Column getColumn(DBIdentifier name) {
+<span class="nc" id="L350">        return internalGetColumn(name);</span>
+    }
+
+    private static DBIdentifier normalizeColumnKey(DBIdentifier name) {
+<span class="nc" id="L354">        return DBIdentifier.removeDelimitersAndMakeUpper(name);</span>
+    }
+
+    public Column getColumn(DBIdentifier name, boolean create) {
+<span class="nc" id="L358">        return getColumn(name);</span>
+    }
+
+    /**
+     * Affirms if this table contains the column of the given name without any
+     * side-effect.
+     * @see Table#getColumn(String) can have side-effect of creating a column
+     * for dynamic table implementation.
+     * @deprecated
+     */
+    @Deprecated
+    public boolean containsColumn(String name) {
+<span class="nc" id="L370">        return containsColumn(DBIdentifier.newColumn(name), null);</span>
+    }
+
+    public boolean containsColumn(DBIdentifier name) {
+<span class="nc" id="L374">        return containsColumn(name, null);</span>
+    }
+
+    /**
+     * Affirms if this table contains the column of the given name without any
+     * side-effect.
+     * @param dict the current database dictionary or null.
+     * @see Table#getColumn(String) can have side-effect of creating a column
+     * for dynamic table implementation.
+     * @deprecated
+     */
+    @Deprecated
+    public boolean containsColumn(String name, DBDictionary dict) {
+<span class="nc bnc" id="L387" title="All 4 branches missed.">        if (name == null || _colMap == null) {</span>
+<span class="nc" id="L388">            return false;</span>
+        }
+<span class="nc" id="L390">        return containsColumn(DBIdentifier.newIdentifier(name, DBIdentifierType.COLUMN, true));</span>
+    }
+
+    public boolean containsColumn(DBIdentifier name, DBDictionary dict) {
+<span class="nc bnc" id="L394" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) || _colMap == null) {</span>
+<span class="nc" id="L395">            return false;</span>
+        }
+<span class="nc" id="L397">        return _colMap.containsKey(normalizeColumnKey(name));</span>
+    }
+
+    public boolean containsColumn(Column col) {
+<span class="nc" id="L401">        DBIdentifier colName = col.getIdentifier();</span>
+<span class="nc bnc" id="L402" title="All 4 branches missed.">        if (DBIdentifier.isNull(colName) || _colMap == null) {</span>
+<span class="nc" id="L403">            return false;</span>
+        }
+<span class="nc" id="L405">        DBIdentifier sName = DBIdentifier.toUpper(colName);</span>
+<span class="nc" id="L406">        Collection&lt;Column&gt; coll = _colMap.values();</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        for (Column column : coll) {</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">            if (column.getIdentifier().equals(sName))</span>
+<span class="nc" id="L409">                return true;</span>
+<span class="nc" id="L410">        }</span>
+
+<span class="nc" id="L412">        return false;</span>
+    }
+
+    /**
+     * Add a column to the table.
+     * @deprecated
+     */
+    @Deprecated
+    public Column addColumn(String name) {
+<span class="nc" id="L421">        return addColumn(DBIdentifier.newColumn(name));</span>
+    }
+
+    public Column addColumn(DBIdentifier name) {
+<span class="nc" id="L425">        addName(name, true);</span>
+<span class="nc" id="L426">        Schema schema = getSchema();</span>
+        Column col;
+<span class="nc bnc" id="L428" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null) {</span>
+<span class="nc" id="L429">            col = schema.getSchemaGroup().newColumn(name, this);</span>
+        } else {
+<span class="nc" id="L431">            col = new Column(name, this);</span>
+        }
+<span class="nc bnc" id="L433" title="All 2 branches missed.">        if (_colMap == null)</span>
+<span class="nc" id="L434">            _colMap = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc" id="L435">        _colMap.put(normalizeColumnKey(name), col);</span>
+<span class="nc" id="L436">        _cols = null;</span>
+<span class="nc" id="L437">        return col;</span>
+    }
+
+
+    /**
+     * Add a column with a shortened (i.e., validated) name to the table
+     * @deprecated
+     */
+    @Deprecated
+    public Column addColumn(String name, String validName) {
+<span class="nc" id="L447">        return addColumn(DBIdentifier.newColumn(name), DBIdentifier.newColumn(validName));</span>
+    }
+
+    public Column addColumn(DBIdentifier name, DBIdentifier validName) {
+<span class="nc" id="L451">        addName(name, true);</span>
+<span class="nc" id="L452">        Schema schema = getSchema();</span>
+        Column col;
+<span class="nc bnc" id="L454" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null)</span>
+<span class="nc" id="L455">            col = schema.getSchemaGroup().newColumn(validName, this);</span>
+        else
+<span class="nc" id="L457">            col = new Column(validName, this);</span>
+<span class="nc bnc" id="L458" title="All 2 branches missed.">        if (_colMap == null)</span>
+<span class="nc" id="L459">            _colMap = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc" id="L460">        _colMap.put(normalizeColumnKey(name), col);</span>
+<span class="nc" id="L461">        _cols = null;</span>
+<span class="nc" id="L462">        return col;</span>
+    }
+
+    /**
+     * Add a name to this NameSet
+     * @deprecated
+     */
+    @Deprecated
+    public void addCorrectedColumnName(String name, boolean validate) {
+<span class="nc" id="L471">        addName(DBIdentifier.newColumn(name), validate);</span>
+<span class="nc" id="L472">    }</span>
+
+    public void addCorrectedColumnName(DBIdentifier name, boolean validate) {
+<span class="nc" id="L475">        addName(name, validate);</span>
+<span class="nc" id="L476">    }</span>
+
+
+    /**
+     * Remove the given column from the table.
+     *
+     * @return true if the column was removed, false if not in the table
+     */
+    public boolean removeColumn(Column col) {
+<span class="nc bnc" id="L485" title="All 4 branches missed.">        if (col == null || _colMap == null)</span>
+<span class="nc" id="L486">            return false;</span>
+
+<span class="nc" id="L488">        DBIdentifier sName = normalizeColumnKey(col.getIdentifier());</span>
+<span class="nc" id="L489">        Column cur = _colMap.get(sName);</span>
+<span class="nc bnc" id="L490" title="All 2 branches missed.">        if (!col.equals(cur))</span>
+<span class="nc" id="L491">            return false;</span>
+
+<span class="nc" id="L493">        removeName(sName);</span>
+<span class="nc" id="L494">        _colMap.remove(sName);</span>
+<span class="nc" id="L495">        _cols = null;</span>
+<span class="nc bnc" id="L496" title="All 2 branches missed.">        if (col.isAutoAssigned())</span>
+<span class="nc" id="L497">            _autoAssign = null;</span>
+<span class="nc bnc" id="L498" title="All 2 branches missed.">        if (col.isRelationId())</span>
+<span class="nc" id="L499">            _rels = null;</span>
+<span class="nc" id="L500">        col.remove();</span>
+<span class="nc" id="L501">        return true;</span>
+    }
+
+    /**
+     * Import a column from another table.
+     */
+    public Column importColumn(Column col) {
+<span class="nc bnc" id="L508" title="All 2 branches missed.">        if (col == null)</span>
+<span class="nc" id="L509">            return null;</span>
+
+<span class="nc" id="L511">        Column copy = addColumn(col.getIdentifier());</span>
+<span class="nc" id="L512">        copy.setType(col.getType());</span>
+<span class="nc" id="L513">        copy.setTypeIdentifier(col.getTypeIdentifier());</span>
+<span class="nc" id="L514">        copy.setJavaType(col.getJavaType());</span>
+<span class="nc" id="L515">        copy.setNotNull(col.isNotNull());</span>
+<span class="nc" id="L516">        copy.setDefaultString(col.getDefaultString());</span>
+<span class="nc" id="L517">        copy.setSize(col.getSize());</span>
+<span class="nc" id="L518">        copy.setDecimalDigits(col.getDecimalDigits());</span>
+<span class="nc" id="L519">        copy.setAutoAssigned(col.isAutoAssigned());</span>
+<span class="nc" id="L520">        copy.setXML(col.isXML());</span>
+<span class="nc" id="L521">        return copy;</span>
+    }
+
+    /**
+     * Return the primary key for the table, if any.
+     */
+    public PrimaryKey getPrimaryKey() {
+<span class="nc" id="L528">        return _pk;</span>
+    }
+
+    /**
+     * Set the primary key for the table.
+     */
+    public PrimaryKey addPrimaryKey() {
+<span class="nc" id="L535">        return addPrimaryKey(DBIdentifier.NULL);</span>
+    }
+
+    /**
+     * Set the primary key for the table.
+     * @deprecated
+     */
+    @Deprecated
+    public PrimaryKey addPrimaryKey(String name) {
+<span class="nc" id="L544">        return addPrimaryKey(DBIdentifier.newConstraint(name));</span>
+    }
+
+    public PrimaryKey addPrimaryKey(DBIdentifier name) {
+<span class="nc" id="L548">        Schema schema = getSchema();</span>
+<span class="nc bnc" id="L549" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null) {</span>
+<span class="nc" id="L550">            schema.getSchemaGroup().addName(name, false);</span>
+<span class="nc" id="L551">            _pk = schema.getSchemaGroup().newPrimaryKey(name, this);</span>
+        } else
+<span class="nc" id="L553">            _pk = new PrimaryKey(name, this);</span>
+<span class="nc" id="L554">        return _pk;</span>
+    }
+
+    /**
+     * Remove the primary key from this table.
+     *
+     * @return true if there was a pk to remove, false otherwise
+     */
+    public boolean removePrimaryKey() {
+<span class="nc bnc" id="L563" title="All 2 branches missed.">        boolean rem = _pk != null;</span>
+<span class="nc bnc" id="L564" title="All 2 branches missed.">        if (rem) {</span>
+<span class="nc" id="L565">            Schema schema = getSchema();</span>
+<span class="nc bnc" id="L566" title="All 4 branches missed.">            if (schema != null &amp;&amp; schema.getSchemaGroup() != null)</span>
+<span class="nc" id="L567">                schema.getSchemaGroup().removeName(_pk.getIdentifier());</span>
+<span class="nc" id="L568">            _pk.remove();</span>
+        }
+<span class="nc" id="L570">        _pk = null;</span>
+<span class="nc" id="L571">        return rem;</span>
+    }
+
+    /**
+     * Import a primary key; column names must match columns of this table.
+     */
+    public PrimaryKey importPrimaryKey(PrimaryKey pk) {
+<span class="nc bnc" id="L578" title="All 2 branches missed.">        if (pk == null)</span>
+<span class="nc" id="L579">            return null;</span>
+
+<span class="nc" id="L581">        PrimaryKey copy = addPrimaryKey(pk.getIdentifier());</span>
+<span class="nc" id="L582">        copy.setLogical(pk.isLogical());</span>
+<span class="nc" id="L583">        Column[] cols = pk.getColumns();</span>
+<span class="nc bnc" id="L584" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L585">            copy.addColumn(getColumn(cols[i].getIdentifier()));</span>
+<span class="nc" id="L586">        return copy;</span>
+    }
+
+    /**
+     * Return the foreign key with the given name. If multiple foreign keys
+     * have the name, the first match is returned.
+     * @deprecated
+     */
+    @Deprecated
+    public ForeignKey getForeignKey(String name) {
+<span class="nc" id="L596">        return getForeignKey(DBIdentifier.newForeignKey(name));</span>
+    }
+
+    public ForeignKey getForeignKey(DBIdentifier name) {
+<span class="nc" id="L600">        ForeignKey[] fks = getForeignKeys();</span>
+<span class="nc bnc" id="L601" title="All 2 branches missed.">        for (int i = 0; i &lt; fks.length; i++) {</span>
+<span class="nc bnc" id="L602" title="All 2 branches missed.">            if (name.equals(fks[i].getIdentifier())) {</span>
+<span class="nc" id="L603">                return fks[i];</span>
+            }
+        }
+<span class="nc" id="L606">        return null;</span>
+    }
+
+    /**
+     * Return all foreign keys for the table.
+     */
+    public ForeignKey[] getForeignKeys() {
+<span class="nc bnc" id="L613" title="All 2 branches missed.">        if (_fks == null) {</span>
+<span class="nc bnc" id="L614" title="All 2 branches missed.">            if (_fkList == null)</span>
+<span class="nc" id="L615">                _fks = Schemas.EMPTY_FOREIGN_KEYS;</span>
+            else {
+<span class="nc" id="L617">                ForeignKey[] fks = new ForeignKey[_fkList.size()];</span>
+<span class="nc" id="L618">                Iterator&lt;ForeignKey&gt; itr = _fkList.iterator();</span>
+<span class="nc bnc" id="L619" title="All 2 branches missed.">                for (int i = 0; itr.hasNext(); i++) {</span>
+<span class="nc" id="L620">                    fks[i] = itr.next();</span>
+<span class="nc" id="L621">                    fks[i].setIndex(i);</span>
+                }
+<span class="nc" id="L623">                _fks = fks;</span>
+            }
+        }
+<span class="nc" id="L626">        return _fks;</span>
+    }
+
+    /**
+     * Add a foreign key to the table.
+     */
+    public ForeignKey addForeignKey() {
+<span class="nc" id="L633">        return addForeignKey(DBIdentifier.NULL);</span>
+    }
+
+    /**
+     * Add a foreign key to the table. Duplicate key names are not allowed.
+     * @deprecated
+     */
+    @Deprecated
+    public ForeignKey addForeignKey(String name) {
+<span class="nc" id="L642">        return addForeignKey(DBIdentifier.newForeignKey(name));</span>
+    }
+
+    public ForeignKey addForeignKey(DBIdentifier name) {
+<span class="nc" id="L646">        Schema schema = getSchema();</span>
+        ForeignKey fk;
+<span class="nc bnc" id="L648" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null) {</span>
+<span class="nc" id="L649">            schema.getSchemaGroup().addName(name, false);</span>
+<span class="nc" id="L650">            fk = schema.getSchemaGroup().newForeignKey(name, this);</span>
+        } else
+<span class="nc" id="L652">            fk = new ForeignKey(name, this);</span>
+<span class="nc bnc" id="L653" title="All 2 branches missed.">        if (_fkList == null)</span>
+<span class="nc" id="L654">            _fkList = new ArrayList&lt;&gt;(3);</span>
+<span class="nc" id="L655">        _fkList.add(fk);</span>
+<span class="nc" id="L656">        _fks = null;</span>
+<span class="nc" id="L657">        return fk;</span>
+    }
+
+    /**
+     * Remove the given foreign key from the table.
+     *
+     * @return true if the key was removed, false if not in the table
+     */
+    public boolean removeForeignKey(ForeignKey fk) {
+<span class="nc bnc" id="L666" title="All 4 branches missed.">        if (fk == null || _fkList == null)</span>
+<span class="nc" id="L667">            return false;</span>
+
+<span class="nc bnc" id="L669" title="All 2 branches missed.">        if (!_fkList.remove(fk))</span>
+<span class="nc" id="L670">            return false;</span>
+
+<span class="nc" id="L672">        Schema schema = getSchema();</span>
+<span class="nc bnc" id="L673" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null)</span>
+<span class="nc" id="L674">            schema.getSchemaGroup().removeName(fk.getIdentifier());</span>
+<span class="nc" id="L675">        _fks = null;</span>
+<span class="nc" id="L676">        fk.remove();</span>
+<span class="nc" id="L677">        return true;</span>
+    }
+
+    /**
+     * Import a foreign key; column names must match columns of this table.
+     */
+    public ForeignKey importForeignKey(ForeignKey fk) {
+<span class="nc bnc" id="L684" title="All 2 branches missed.">        if (fk == null)</span>
+<span class="nc" id="L685">            return null;</span>
+
+<span class="nc" id="L687">        ForeignKey copy = addForeignKey(fk.getIdentifier());</span>
+<span class="nc" id="L688">        copy.setDeleteAction(fk.getDeleteAction());</span>
+
+<span class="nc" id="L690">        Schema schema = getSchema();</span>
+<span class="nc bnc" id="L691" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null) {</span>
+<span class="nc" id="L692">            Column[] pks = fk.getPrimaryKeyColumns();</span>
+<span class="nc" id="L693">            Table joined = null;</span>
+<span class="nc bnc" id="L694" title="All 2 branches missed.">            if (pks.length &gt; 0)</span>
+<span class="nc" id="L695">                joined = schema.getSchemaGroup().findTable(pks[0].getTable());</span>
+
+<span class="nc" id="L697">            Column[] cols = fk.getColumns();</span>
+<span class="nc bnc" id="L698" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L699">                copy.join(getColumn(cols[i].getIdentifier()),</span>
+<span class="nc" id="L700">                    joined.getColumn(pks[i].getIdentifier()));</span>
+
+<span class="nc" id="L702">            cols = fk.getConstantColumns();</span>
+<span class="nc bnc" id="L703" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L704">                copy.joinConstant(getColumn(cols[i].getIdentifier()),</span>
+<span class="nc" id="L705">                    fk.getPrimaryKeyConstant(cols[i]));</span>
+
+<span class="nc" id="L707">            pks = fk.getConstantPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L708" title="All 4 branches missed.">            if (joined == null &amp;&amp; pks.length &gt; 0)</span>
+<span class="nc" id="L709">                joined = schema.getSchemaGroup().findTable(pks[0].getTable());</span>
+<span class="nc bnc" id="L710" title="All 2 branches missed.">            for (int i = 0; i &lt; pks.length; i++)</span>
+<span class="nc" id="L711">                copy.joinConstant(fk.getConstant(pks[i]),</span>
+<span class="nc" id="L712">                    joined.getColumn(pks[i].getIdentifier()));</span>
+        }
+<span class="nc" id="L714">        return copy;</span>
+    }
+
+    /**
+     * Return the table's indexes.
+     */
+    public Index[] getIndexes() {
+<span class="nc bnc" id="L721" title="All 4 branches missed.">        if (_idxs == null || _idxs.length == 0)</span>
+<span class="nc bnc" id="L722" title="All 2 branches missed.">            _idxs = (_idxMap == null) ? Schemas.EMPTY_INDEXES : (Index[])</span>
+<span class="nc" id="L723">                _idxMap.values().toArray(new Index[_idxMap.size()]);</span>
+<span class="nc" id="L724">        return _idxs;</span>
+    }
+
+    /**
+     * Return the index with the given name, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public Index getIndex(String name) {
+<span class="nc bnc" id="L733" title="All 4 branches missed.">        if (name == null || _idxMap == null)</span>
+<span class="nc" id="L734">            return null;</span>
+<span class="nc" id="L735">        return getIndex(DBIdentifier.newIdentifier(name, DBIdentifierType.INDEX, true));</span>
+    }
+
+    public Index getIndex(DBIdentifier name) {
+<span class="nc bnc" id="L739" title="All 4 branches missed.">        if (name == null || _idxMap == null)</span>
+<span class="nc" id="L740">            return null;</span>
+
+<span class="nc" id="L742">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L743">        return _idxMap.get(sName);</span>
+    }
+
+    /**
+     * Add an index to the table.
+     * @deprecated
+     */
+    @Deprecated
+    public Index addIndex(String name) {
+<span class="nc" id="L752">        return addIndex(DBIdentifier.newIndex(name));</span>
+    }
+
+    public Index addIndex(DBIdentifier name) {
+<span class="nc" id="L756">        Schema schema = getSchema();</span>
+        Index idx;
+<span class="nc bnc" id="L758" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null) {</span>
+<span class="nc" id="L759">            schema.getSchemaGroup().addName(name, true);</span>
+<span class="nc" id="L760">            idx = schema.getSchemaGroup().newIndex(name, this);</span>
+        } else
+<span class="nc" id="L762">            idx = new Index(name, this);</span>
+<span class="nc bnc" id="L763" title="All 2 branches missed.">        if (_idxMap == null)</span>
+<span class="nc" id="L764">            _idxMap = new TreeMap&lt;&gt;();</span>
+<span class="nc" id="L765">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L766">        _idxMap.put(sName, idx);</span>
+<span class="nc" id="L767">        _idxs = null;</span>
+<span class="nc" id="L768">        return idx;</span>
+    }
+
+    /**
+     * Remove the given index from the table.
+     *
+     * @return true if the index was removed, false if not in the table
+     */
+    public boolean removeIndex(Index idx) {
+<span class="nc bnc" id="L777" title="All 4 branches missed.">        if (idx == null || _idxMap == null)</span>
+<span class="nc" id="L778">            return false;</span>
+
+<span class="nc" id="L780">        DBIdentifier sName = DBIdentifier.toUpper(idx.getIdentifier());</span>
+<span class="nc" id="L781">        Index cur = _idxMap.get(sName);</span>
+<span class="nc bnc" id="L782" title="All 2 branches missed.">        if (!idx.equals(cur))</span>
+<span class="nc" id="L783">            return false;</span>
+
+<span class="nc" id="L785">        _idxMap.remove(sName);</span>
+<span class="nc" id="L786">        Schema schema = getSchema();</span>
+<span class="nc bnc" id="L787" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null)</span>
+<span class="nc" id="L788">            schema.getSchemaGroup().removeName(idx.getIdentifier());</span>
+<span class="nc" id="L789">        idx.remove();</span>
+<span class="nc" id="L790">        _idxs = null;</span>
+<span class="nc" id="L791">        return true;</span>
+    }
+
+    /**
+     * Import an index; column names must match columns of this table.
+     */
+    public Index importIndex(Index idx) {
+<span class="nc bnc" id="L798" title="All 2 branches missed.">        if (idx == null)</span>
+<span class="nc" id="L799">            return null;</span>
+
+<span class="nc" id="L801">        Index copy = addIndex(idx.getIdentifier());</span>
+<span class="nc" id="L802">        copy.setUnique(idx.isUnique());</span>
+
+<span class="nc" id="L804">        Column[] cols = idx.getColumns();</span>
+<span class="nc bnc" id="L805" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L806">            copy.addColumn(getColumn(cols[i].getIdentifier()));</span>
+<span class="nc" id="L807">        return copy;</span>
+    }
+
+    /**
+     * Return the table's unique constraints.
+     */
+    public Unique[] getUniques() {
+<span class="nc bnc" id="L814" title="All 2 branches missed.">        if (_unqs == null)</span>
+<span class="nc bnc" id="L815" title="All 2 branches missed.">            _unqs = (_unqList == null) ? Schemas.EMPTY_UNIQUES : (Unique[])</span>
+<span class="nc" id="L816">                _unqList.toArray(new Unique[_unqList.size()]);</span>
+<span class="nc" id="L817">        return _unqs;</span>
+    }
+
+    /**
+     * Return the unique constraint with the given name, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public Unique getUnique(String name) {
+<span class="nc" id="L826">        return getUnique(DBIdentifier.newConstraint(name));</span>
+    }
+
+    public Unique getUnique(DBIdentifier name) {
+<span class="nc" id="L830">        Unique[] unqs = getUniques();</span>
+<span class="nc bnc" id="L831" title="All 2 branches missed.">        for (int i = 0; i &lt; unqs.length; i++)</span>
+<span class="nc bnc" id="L832" title="All 2 branches missed.">            if (DBIdentifier.equal(name, unqs[i].getIdentifier()))</span>
+<span class="nc" id="L833">                return unqs[i];</span>
+<span class="nc" id="L834">        return null;</span>
+    }
+
+    /**
+     * Add a unique constraint to the table.
+     * @deprecated
+     */
+    @Deprecated
+    public Unique addUnique(String name) {
+<span class="nc" id="L843">        return addUnique(DBIdentifier.newConstraint(name));</span>
+    }
+
+    public Unique addUnique(DBIdentifier name) {
+<span class="nc" id="L847">        Schema schema = getSchema();</span>
+        Unique unq;
+<span class="nc bnc" id="L849" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null) {</span>
+<span class="nc" id="L850">            schema.getSchemaGroup().addName(name, false);</span>
+<span class="nc" id="L851">            unq = schema.getSchemaGroup().newUnique(name, this);</span>
+        } else
+<span class="nc" id="L853">            unq = new Unique(name, this);</span>
+<span class="nc bnc" id="L854" title="All 2 branches missed.">        if (_unqList == null)</span>
+<span class="nc" id="L855">            _unqList = new ArrayList&lt;&gt;(3);</span>
+<span class="nc" id="L856">        _unqList.add(unq);</span>
+<span class="nc" id="L857">        _unqs = null;</span>
+<span class="nc" id="L858">        return unq;</span>
+    }
+
+    /**
+     * Remove the given unique constraint from the table.
+     *
+     * @return true if the constraint was removed, false if not in the table
+     */
+    public boolean removeUnique(Unique unq) {
+<span class="nc bnc" id="L867" title="All 4 branches missed.">        if (unq == null || _unqList == null)</span>
+<span class="nc" id="L868">            return false;</span>
+
+<span class="nc bnc" id="L870" title="All 2 branches missed.">        if (!_unqList.remove(unq))</span>
+<span class="nc" id="L871">            return false;</span>
+
+<span class="nc" id="L873">        Schema schema = getSchema();</span>
+<span class="nc bnc" id="L874" title="All 4 branches missed.">        if (schema != null &amp;&amp; schema.getSchemaGroup() != null)</span>
+<span class="nc" id="L875">            schema.getSchemaGroup().removeName(unq.getIdentifier());</span>
+<span class="nc" id="L876">        _unqs = null;</span>
+<span class="nc" id="L877">        unq.remove();</span>
+<span class="nc" id="L878">        return true;</span>
+    }
+
+    /**
+     * Import a constraint; column names must match columns of this table.
+     */
+    public Unique importUnique(Unique unq) {
+<span class="nc bnc" id="L885" title="All 2 branches missed.">        if (unq == null)</span>
+<span class="nc" id="L886">            return null;</span>
+
+<span class="nc" id="L888">        Unique copy = addUnique(unq.getIdentifier());</span>
+<span class="nc" id="L889">        copy.setDeferred(unq.isDeferred());</span>
+
+<span class="nc" id="L891">        Column[] cols = unq.getColumns();</span>
+<span class="nc bnc" id="L892" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L893">            copy.addColumn(getColumn(cols[i].getIdentifier()));</span>
+<span class="nc" id="L894">        return copy;</span>
+    }
+
+    /**
+     * Called by columns to ensure that all columns are properly indexed
+     * before returning that information to the user.
+     */
+    void indexColumns() {
+<span class="nc" id="L902">        getColumns();</span>
+<span class="nc" id="L903">    }</span>
+
+    /**
+     * Called by foreign keys to ensure that all fks are properly indexed
+     * before returning that information to the user.
+     */
+    void indexForeignKeys() {
+<span class="nc" id="L910">        getForeignKeys();</span>
+<span class="nc" id="L911">    }</span>
+
+    /**
+     * Called by columns when their auto increment status changes.
+     */
+    void changeAutoAssigned(Column col) {
+<span class="nc" id="L917">        _autoAssign = null;</span>
+<span class="nc" id="L918">    }</span>
+
+    /**
+     * Called by columns when their relation id status changes.
+     */
+    void changeRelationId(Column col) {
+<span class="nc" id="L924">        _rels = null;</span>
+<span class="nc" id="L925">    }</span>
+
+    @Override
+    public int compareTo(Object other) {
+<span class="nc" id="L929">        DBIdentifier name = getFullIdentifier();</span>
+<span class="nc" id="L930">        DBIdentifier otherName = ((Table) other).getFullIdentifier();</span>
+<span class="nc bnc" id="L931" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) &amp;&amp; DBIdentifier.isNull(otherName))</span>
+<span class="nc" id="L932">            return 0;</span>
+<span class="nc bnc" id="L933" title="All 2 branches missed.">        if (DBIdentifier.isNull(name))</span>
+<span class="nc" id="L934">            return 1;</span>
+<span class="nc bnc" id="L935" title="All 2 branches missed.">        if (DBIdentifier.isNull(otherName))</span>
+<span class="nc" id="L936">            return -1;</span>
+<span class="nc" id="L937">        return name.compareTo(otherName);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L942">        return getFullIdentifier().getName();</span>
+    }
+
+    public boolean hasComment() {
+<span class="nc bnc" id="L946" title="All 4 branches missed.">        return _comment != null &amp;&amp; !_comment.equalsIgnoreCase(_name.getName());</span>
+    }
+
+    public String getComment() {
+<span class="nc" id="L950">        return _comment;</span>
+    }
+
+    public void setComment(String comment) {
+<span class="nc" id="L954">        _comment = comment;</span>
+<span class="nc" id="L955">    }</span>
+
+    @Override
+    public int getLineNumber() {
+<span class="nc" id="L959">        return _lineNum;</span>
+    }
+
+    public void setLineNumber(int lineNum) {
+<span class="nc" id="L963">        _lineNum = lineNum;</span>
+<span class="nc" id="L964">    }</span>
+
+    @Override
+    public int getColNumber() {
+<span class="nc" id="L968">        return _colNum;</span>
+    }
+
+    public void setColNumber(int colNum) {
+<span class="nc" id="L972">        _colNum = colNum;</span>
+<span class="nc" id="L973">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

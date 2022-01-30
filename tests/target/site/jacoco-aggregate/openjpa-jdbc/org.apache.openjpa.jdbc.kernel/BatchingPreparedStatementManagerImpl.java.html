@@ -1,0 +1,368 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>BatchingPreparedStatementManagerImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">BatchingPreparedStatementManagerImpl.java</span></div><h1>BatchingPreparedStatementManagerImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowImpl;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.jdbc.ReportingSQLException;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.OptimisticException;
+
+/**
+ * Batch prepared statement manager implementation. This prepared statement
+ * manager will utilize the JDBC addBatch() and exceuteBatch() to batch the SQL
+ * statements together to improve the execution performance.
+ *
+ * @author Teresa Kan
+ */
+
+public class BatchingPreparedStatementManagerImpl extends
+        PreparedStatementManagerImpl {
+
+<span class="nc" id="L50">    private final static Localizer _loc = Localizer</span>
+<span class="nc" id="L51">            .forPackage(BatchingPreparedStatementManagerImpl.class);</span>
+
+<span class="nc" id="L53">    private String _batchedSql = null;</span>
+<span class="nc" id="L54">    private List&lt;RowImpl&gt; _batchedRows = new ArrayList&lt;&gt;();</span>
+    private int _batchLimit;
+<span class="nc" id="L56">    private boolean _disableBatch = false;</span>
+
+    /**
+     * Constructor. Supply connection.
+     */
+    public BatchingPreparedStatementManagerImpl(JDBCStore store,
+        Connection conn, int batchLimit) {
+<span class="nc" id="L63">        super(store, conn);</span>
+<span class="nc" id="L64">        _batchLimit = batchLimit;</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (_log.isTraceEnabled())</span>
+<span class="nc" id="L66">            _log.trace(_loc.get(&quot;batch_limit&quot;, String.valueOf(_batchLimit)));</span>
+<span class="nc" id="L67">    }</span>
+
+    /**
+     * Flush the given row immediately or deferred the flush in batch.
+     */
+    @Override
+    protected void flushAndUpdate(RowImpl row) throws SQLException {
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        if (isBatchDisabled(row)) {</span>
+            // if there were some statements batched before, then
+            // we need to flush them out first before processing the
+            // current non batch process.
+<span class="nc" id="L78">            flushBatch();</span>
+
+<span class="nc" id="L80">            super.flushAndUpdate(row);</span>
+        } else {
+            // process the SQL statement, either execute it immediately or
+            // batch it for later execution.
+<span class="nc" id="L84">            batchOrExecuteRow(row);</span>
+        }
+<span class="nc" id="L86">    }</span>
+
+    protected void batchOrExecuteRow(RowImpl row) throws SQLException {
+<span class="nc" id="L89">        String sql = row.getSQL(_dict);</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if (_batchedSql == null) {</span>
+            // brand new SQL
+<span class="nc" id="L92">            _batchedSql = sql;</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        } else if (!sql.equals(_batchedSql)) {</span>
+            // SQL statements changed.
+<span class="nc bnc" id="L95" title="All 3 branches missed.">            switch (_batchedRows.size()) {</span>
+            case 0:
+<span class="nc" id="L97">                break;</span>
+            case 1:
+                // single entry in cache, direct SQL execution.
+                try {
+<span class="nc" id="L101">                    super.flushAndUpdate((RowImpl) _batchedRows.get(0));</span>
+                } finally {
+<span class="nc" id="L103">                    _batchedSql = null;</span>
+<span class="nc" id="L104">                    _batchedRows.clear();</span>
+                }
+<span class="nc" id="L106">                break;</span>
+            default:
+                // flush all entries in cache in batch.
+<span class="nc" id="L109">                flushBatch();</span>
+            }
+<span class="nc" id="L111">            _batchedSql = sql;</span>
+        }
+<span class="nc" id="L113">        _batchedRows.add(row);</span>
+<span class="nc" id="L114">    }</span>
+
+    /*
+     * Compute if batching is disabled, based on values of batch limit
+     * and database characteristics.
+     */
+    private boolean isBatchDisabled(RowImpl row) {
+<span class="nc" id="L121">        boolean rtnVal = true;</span>
+<span class="nc" id="L122">        int limit = getBatchLimit();</span>
+<span class="nc bnc" id="L123" title="All 6 branches missed.">        if ((limit &lt; 0 || limit &gt; 1) &amp;&amp; !isBatchDisabled()) {</span>
+<span class="nc" id="L124">            OpenJPAStateManager sm = row.getPrimaryKey();</span>
+<span class="nc" id="L125">            ClassMapping cmd = null;</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">            if (sm != null)</span>
+<span class="nc" id="L127">                cmd = (ClassMapping) sm.getMetaData();</span>
+<span class="nc" id="L128">            Column[] autoAssign = null;</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">            if (row.getAction() == Row.ACTION_INSERT)</span>
+<span class="nc" id="L130">                autoAssign = row.getTable().getAutoAssignedColumns();</span>
+            // validate batch capability
+<span class="nc" id="L132">            rtnVal = _dict</span>
+<span class="nc" id="L133">                .validateBatchProcess(row, autoAssign, sm, cmd);</span>
+<span class="nc" id="L134">            setBatchDisabled(rtnVal);</span>
+        }
+<span class="nc" id="L136">        return rtnVal;</span>
+    }
+
+    /**
+     * flush all cached up statements to be executed as a single or batched
+     * prepared statements.
+     */
+    protected void flushBatch() throws SQLException {
+<span class="nc" id="L144">        List&lt;RowImpl&gt; batchedRows = getBatchedRows();</span>
+<span class="nc" id="L145">        String batchedSql = getBatchedSql();</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        if (batchedRows == null)</span>
+<span class="nc" id="L147">            return;</span>
+
+<span class="nc" id="L149">        int batchSize = batchedRows.size();</span>
+<span class="nc bnc" id="L150" title="All 4 branches missed.">        if (batchedSql != null &amp;&amp;  batchSize &gt; 0) {</span>
+<span class="nc" id="L151">            PreparedStatement ps = null;</span>
+            try {
+<span class="nc" id="L153">                RowImpl onerow = null;</span>
+<span class="nc" id="L154">                ps = prepareStatement(batchedSql);</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">                if (batchSize == 1) {</span>
+                    // execute a single row.
+<span class="nc" id="L157">                    onerow = batchedRows.get(0);</span>
+<span class="nc" id="L158">                    flushSingleRow(onerow, ps);</span>
+                } else {
+                    // cache has more than one rows, execute as batch.
+<span class="nc" id="L161">                    int count = 0;</span>
+<span class="nc" id="L162">                    int batchedRowsBaseIndex = 0;</span>
+<span class="nc" id="L163">                    Iterator&lt;RowImpl&gt; itr = batchedRows.iterator();</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">                    while (itr.hasNext()) {</span>
+<span class="nc" id="L165">                        onerow = itr.next();</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">                        if (_batchLimit == 1) {</span>
+<span class="nc" id="L167">                            flushSingleRow(onerow, ps);</span>
+                        } else {
+<span class="nc bnc" id="L169" title="All 4 branches missed.">                            if (count &lt; _batchLimit || _batchLimit == -1) {</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">                                if (ps != null)</span>
+<span class="nc" id="L171">                                    onerow.flush(ps, _dict, _store);</span>
+<span class="nc" id="L172">                                addBatch(ps, onerow, count);</span>
+<span class="nc" id="L173">                                count++;</span>
+                            } else {
+                                // reach the batchLimit, execute the batch
+<span class="nc" id="L176">                                int[] rtn = executeBatch(ps);</span>
+<span class="nc" id="L177">                                checkUpdateCount(rtn, batchedRowsBaseIndex, ps);</span>
+
+<span class="nc" id="L179">                                batchedRowsBaseIndex += _batchLimit;</span>
+
+<span class="nc bnc" id="L181" title="All 2 branches missed.">                                if (ps != null)</span>
+<span class="nc" id="L182">                                    onerow.flush(ps, _dict, _store);</span>
+<span class="nc" id="L183">                                addBatch(ps, onerow, count);</span>
+                                // reset the count to 1 for new batch
+<span class="nc" id="L185">                                count = 1;</span>
+<span class="nc" id="L186">                            }</span>
+                        }
+                    }
+                    // end of the loop, execute the batch
+<span class="nc" id="L190">                    int[] rtn = executeBatch(ps);</span>
+<span class="nc" id="L191">                    checkUpdateCount(rtn, batchedRowsBaseIndex, ps);</span>
+                }
+<span class="nc" id="L193">            } catch (SQLException se) {</span>
+                //If we look at PreparedStatementManagerImpl.flushAndUpdate (which is the 'non-batch' code path
+                //similar to this path, or I should say, the path which is taken instead of this path when
+                //we aren't using batching), we see that the catch block doesn't do a 'se.getNextException'.
+                //When we do a 'getNextException', the 'next exception' doesn't contain the same message as se.
+                //That is, 'next exception' contains a subset msg which is contained in se.
+<span class="nc" id="L199">                SQLException sqex = se.getNextException();</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">                if (sqex == null){</span>
+<span class="nc" id="L201">                    sqex = se;</span>
+                }
+
+<span class="nc bnc" id="L204" title="All 2 branches missed.">                if (se instanceof ReportingSQLException){</span>
+<span class="nc" id="L205">                  int index = ((ReportingSQLException) se).getIndexOfFirstFailedObject();</span>
+
+                  //if we have only batched one statement, the index should be 0.  As can be seen above,
+                  //if 'batchSize == 1' a different path is taken (the 'single row' path), and if that row
+                  //fails, we know that the index is 0 since there is only one row.
+<span class="nc bnc" id="L210" title="All 2 branches missed.">                  if (batchSize == 1){</span>
+<span class="nc" id="L211">                      index = 0;</span>
+                  }
+
+                  //index should not be less than 0 in this path, but if for some reason it is, lets
+                  //resort to the 'old way' and simply pass the 'ps' as the failed object.
+<span class="nc bnc" id="L216" title="All 2 branches missed.">                  if (index &lt; 0){</span>
+<span class="nc" id="L217">                      throw SQLExceptions.getStore(se, ps, _dict);</span>
+                  }
+                  else{
+<span class="nc bnc" id="L220" title="All 2 branches missed.">                      if(_batchedRows.size() == 0) {</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">                          if(_log.isTraceEnabled()) {</span>
+<span class="nc" id="L222">                              _log.trace(&quot;No batched rows found. The failed object may not be reliable&quot;);</span>
+                          }
+<span class="nc" id="L224">                          throw SQLExceptions.getStore(se, ps, _dict);</span>
+                      }
+<span class="nc" id="L226">                      throw SQLExceptions.getStore(se, (_batchedRows.get(index)).getFailedObject(), _dict);</span>
+                  }
+                }
+                else{
+                	//per comments above, use 'sqex' rather than 'se'.
+<span class="nc" id="L231">                    throw SQLExceptions.getStore(sqex, ps, _dict);</span>
+                }
+            } finally {
+<span class="nc" id="L234">                _batchedSql = null;</span>
+<span class="nc" id="L235">                batchedRows.clear();</span>
+<span class="nc bnc" id="L236" title="All 2 branches missed.">                if (ps != null) {</span>
+<span class="nc" id="L237">                    ps.clearParameters();</span>
+                    try {
+<span class="nc" id="L239">                        ps.close();</span>
+<span class="nc" id="L240">                    } catch (SQLException sqex) {</span>
+<span class="nc" id="L241">                        throw SQLExceptions.getStore(sqex, ps, _dict);</span>
+<span class="nc" id="L242">                    }</span>
+                }
+            }
+        }
+<span class="nc" id="L246">    }</span>
+
+    /*
+     * Execute an update of a single row.
+     */
+    private void flushSingleRow(RowImpl row, PreparedStatement ps)
+        throws SQLException {
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        if (ps != null)</span>
+<span class="nc" id="L254">            row.flush(ps, _dict, _store);</span>
+<span class="nc" id="L255">        int count = executeUpdate(ps, row.getSQL(_dict), row);</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">        if (count != 1) {</span>
+<span class="nc" id="L257">            logSQLWarnings(ps);</span>
+<span class="nc" id="L258">            Object failed = row.getFailedObject();</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">            if (failed != null)</span>
+<span class="nc" id="L260">                _exceptions.add(new OptimisticException(failed));</span>
+<span class="nc bnc" id="L261" title="All 2 branches missed.">            else if (row.getAction() == Row.ACTION_INSERT)</span>
+<span class="nc" id="L262">                throw new SQLException(_loc.get(&quot;update-failed-no-failed-obj&quot;,</span>
+<span class="nc" id="L263">                    String.valueOf(count), row.getSQL(_dict)).getMessage());</span>
+        }
+<span class="nc" id="L265">    }</span>
+
+    /*
+     * Process executeBatch function array of return counts.
+     */
+    private void checkUpdateCount(int[] count, int batchedRowsBaseIndex,
+        PreparedStatement ps)
+        throws SQLException {
+        // value in int[] count  returned from executeBatch:
+        //               Update          Delete        Insert
+        // ===============================================================
+        //               OK / Error      OK / Error    OK / Error
+        // DB2LUW         1 / 0           1 / 0         1 / SQLException
+        // DB2/ZOS        1 / 0           1 / 0        -2 / SQLException
+        // Oracle        -2 / -2         -2 / -2       -2 / SQLException
+<span class="nc" id="L280">        int cnt = 0;</span>
+<span class="nc" id="L281">        int updateSuccessCnt = _dict.getBatchUpdateCount(ps);</span>
+<span class="nc" id="L282">        Object failed = null;</span>
+<span class="nc" id="L283">        List&lt;RowImpl&gt; batchedRows = getBatchedRows();</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">        for (int i = 0; i &lt; count.length; i++) {</span>
+<span class="nc" id="L285">            cnt = count[i];</span>
+<span class="nc" id="L286">            RowImpl row = (RowImpl) batchedRows.get(batchedRowsBaseIndex + i);</span>
+<span class="nc" id="L287">            failed = row.getFailedObject();</span>
+<span class="nc bnc" id="L288" title="All 4 branches missed.">            switch (cnt) {</span>
+            case Statement.EXECUTE_FAILED: // -3
+<span class="nc bnc" id="L290" title="All 4 branches missed.">                if (failed != null || row.getAction() == Row.ACTION_UPDATE)</span>
+<span class="nc" id="L291">                    _exceptions.add(new OptimisticException(failed));</span>
+<span class="nc bnc" id="L292" title="All 2 branches missed.">                else if (row.getAction() == Row.ACTION_INSERT)</span>
+<span class="nc" id="L293">                    throw new SQLException(_loc.get(</span>
+                        &quot;update-failed-no-failed-obj&quot;,
+<span class="nc" id="L295">                        String.valueOf(count[i]),</span>
+<span class="nc" id="L296">                        row.getSQL(_dict)).getMessage());</span>
+                break;
+            case Statement.SUCCESS_NO_INFO: // -2
+<span class="nc bnc" id="L299" title="All 4 branches missed.">                if (_dict.reportsSuccessNoInfoOnBatchUpdates &amp;&amp;</span>
+                    updateSuccessCnt != count.length) {
+                    // Oracle batching specifics:
+                    // treat update/delete of SUCCESS_NO_INFO as failed case
+                    // because:
+                    // 1. transaction should be rolled back.
+                    // 2. if DataCache is enabled, objects in
+                    //    cache should be removed.
+<span class="nc bnc" id="L307" title="All 2 branches missed.">                    if (failed != null)</span>
+<span class="nc" id="L308">                        _exceptions.add(new OptimisticException(failed));</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">                    else if (row.getAction() == Row.ACTION_INSERT)</span>
+<span class="nc" id="L310">                        throw new SQLException(_loc.get(</span>
+                            &quot;update-failed-no-failed-obj&quot;,
+<span class="nc" id="L312">                            String.valueOf(count[i]),</span>
+<span class="nc" id="L313">                            row.getSQL(_dict)).getMessage());</span>
+                }
+<span class="nc bnc" id="L315" title="All 2 branches missed.">                if (_log.isTraceEnabled())</span>
+<span class="nc" id="L316">                    _log.trace(_loc.get(&quot;batch_update_info&quot;,</span>
+<span class="nc" id="L317">                        String.valueOf(cnt),</span>
+<span class="nc" id="L318">                        row.getSQL(_dict)).getMessage());</span>
+                break;
+            case 0: // no row is inserted, treats it as failed
+                // case
+<span class="nc" id="L322">                logSQLWarnings(ps);</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">                if (failed != null)</span>
+<span class="nc" id="L324">                    _exceptions.add(new OptimisticException(failed));</span>
+<span class="nc bnc" id="L325" title="All 2 branches missed.">                else if (row.getAction() == Row.ACTION_INSERT)</span>
+<span class="nc" id="L326">                    throw new SQLException(_loc.get(</span>
+                        &quot;update-failed-no-failed-obj&quot;,
+<span class="nc" id="L328">                        String.valueOf(count[i]),</span>
+<span class="nc" id="L329">                        row.getSQL(_dict)).getMessage());</span>
+            }
+        }
+<span class="nc" id="L332">    }</span>
+
+    public boolean isBatchDisabled() {
+<span class="nc" id="L335">        return _disableBatch;</span>
+    }
+
+    public void setBatchDisabled(boolean disableBatch) {
+<span class="nc" id="L339">        _disableBatch = disableBatch;</span>
+<span class="nc" id="L340">    }</span>
+
+    public int getBatchLimit() {
+<span class="nc" id="L343">        return _batchLimit;</span>
+    }
+
+    public void setBatchLimit(int batchLimit) {
+<span class="nc" id="L347">        _batchLimit = batchLimit;</span>
+<span class="nc" id="L348">    }</span>
+
+    public List&lt;RowImpl&gt; getBatchedRows() {
+<span class="nc" id="L351">        return _batchedRows;</span>
+    }
+
+    public String getBatchedSql() {
+<span class="nc" id="L355">        return _batchedSql;</span>
+    }
+
+    protected void addBatch(PreparedStatement ps, RowImpl row,
+            int count) throws SQLException {
+<span class="nc" id="L360">        ps.addBatch();</span>
+<span class="nc" id="L361">    }</span>
+
+    protected int[] executeBatch(PreparedStatement ps)
+    throws SQLException {
+<span class="nc" id="L365">        return ps.executeBatch();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

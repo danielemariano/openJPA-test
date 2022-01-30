@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FetchModeValue.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.conf</a> &gt; <span class="el_source">FetchModeValue.java</span></div><h1>FetchModeValue.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.conf;
+
+import org.apache.openjpa.jdbc.kernel.EagerFetchModes;
+import org.apache.openjpa.lib.conf.IntValue;
+
+/**
+ * Value type used to represent fetch modes. This type is
+ * defined separately so that it can be used both in the global configuration
+ * and in class metadata with the same encapsulated configuration.
+ *
+ * @author Abe White
+ */
+public class FetchModeValue
+    extends IntValue {
+
+    public static final String EAGER_NONE = &quot;none&quot;;
+    public static final String EAGER_JOIN = &quot;join&quot;;
+    public static final String EAGER_PARALLEL = &quot;parallel&quot;;
+
+<span class="nc" id="L38">    private static String[] ALIASES = new String[]{</span>
+<span class="nc" id="L39">        EAGER_PARALLEL, String.valueOf(EagerFetchModes.EAGER_PARALLEL),</span>
+<span class="nc" id="L40">        EAGER_JOIN, String.valueOf(EagerFetchModes.EAGER_JOIN),</span>
+<span class="nc" id="L41">        EAGER_NONE, String.valueOf(EagerFetchModes.EAGER_NONE),</span>
+        // deprecated
+<span class="nc" id="L43">        &quot;multiple&quot;, String.valueOf(EagerFetchModes.EAGER_PARALLEL),</span>
+<span class="nc" id="L44">        &quot;single&quot;, String.valueOf(EagerFetchModes.EAGER_JOIN),</span>
+    };
+
+    public FetchModeValue(String prop) {
+<span class="nc" id="L48">        super(prop);</span>
+<span class="nc" id="L49">        setAliases(ALIASES);</span>
+<span class="nc" id="L50">        setAliasListComprehensive(true);</span>
+<span class="nc" id="L51">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

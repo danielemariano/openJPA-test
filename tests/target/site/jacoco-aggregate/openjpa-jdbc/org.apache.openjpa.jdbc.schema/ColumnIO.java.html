@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ColumnIO.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">ColumnIO.java</span></div><h1>ColumnIO.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.io.Serializable;
+
+/**
+ * Metadata about column I/O in a specific context. In the context of
+ * a foreign key, the standard foreign key columns are indexed first, then
+ * the constant columns.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L30">public class ColumnIO implements Serializable {</span>
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L33">    public static final ColumnIO UNRESTRICTED = new ColumnIO() {</span>
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public void setInsertable(int col, boolean insertable) {
+<span class="nc" id="L38">            throw new UnsupportedOperationException();</span>
+        }
+
+        @Override
+        public void setUpdatable(int col, boolean updatable) {
+<span class="nc" id="L43">            throw new UnsupportedOperationException();</span>
+        }
+
+        @Override
+        public void setNullInsertable(int col, boolean insertable) {
+<span class="nc" id="L48">            throw new UnsupportedOperationException();</span>
+        }
+
+        @Override
+        public void setNullUpdatable(int col, boolean insertable) {
+<span class="nc" id="L53">            throw new UnsupportedOperationException();</span>
+        }
+    };
+
+<span class="nc" id="L57">    private int _unInsertable = 0;</span>
+<span class="nc" id="L58">    private int _unUpdatable = 0;</span>
+<span class="nc" id="L59">    private int _unNullInsertable = 0;</span>
+<span class="nc" id="L60">    private int _unNullUpdatable = 0;</span>
+
+    /**
+     * Whether the column at the given index is insertable in this context.
+     */
+    public boolean isInsertable(int col, boolean nullValue) {
+<span class="nc" id="L66">        return is(col, _unInsertable, _unNullInsertable, nullValue);</span>
+    }
+
+    /**
+     * Equivalent to &lt;code&gt;isInsertable (0, nullValue)&lt;/code&gt;, but returns
+     * false if the given column is null.
+     */
+    public boolean isInsertable(Column col, boolean nullValue) {
+<span class="nc" id="L74">        return is(col, _unInsertable, _unNullInsertable, nullValue);</span>
+    }
+
+    /**
+     * Whether any column up to but excluding the given index is insertable.
+     */
+    public boolean isAnyInsertable(int col, boolean nullValue) {
+<span class="nc" id="L81">        return isAny(col, _unInsertable, _unNullInsertable, nullValue);</span>
+    }
+
+    /**
+     * Equivalent to &lt;code&gt;isAnyInsertable (cols.length, nullValue)&lt;/code&gt;.
+     */
+    public boolean isAnyInsertable(Column[] cols, boolean nullValue) {
+<span class="nc" id="L88">        return isAny(cols, _unInsertable, _unNullInsertable, nullValue);</span>
+    }
+
+    /**
+     * Return true if any columns for the given key are insertable.
+     */
+    public boolean isAnyInsertable(ForeignKey fk, boolean nullValue) {
+<span class="nc bnc" id="L95" title="All 4 branches missed.">        return isAny(fk, _unInsertable, _unNullInsertable, nullValue)</span>
+<span class="nc bnc" id="L96" title="All 4 branches missed.">            &amp;&amp; (!nullValue || fk.isLogical() || isNullable(fk));</span>
+    }
+
+    /**
+     * Whether all columns up to but excluding the given index are insertable.
+     */
+    public boolean isAllInsertable(int col, boolean nullValue) {
+<span class="nc" id="L103">        return isAll(col, _unInsertable, _unNullInsertable, nullValue);</span>
+    }
+
+    /**
+     * Equivalent to &lt;code&gt;isAllInsertable (cols.length, nullValue)&lt;/code&gt;.
+     */
+    public boolean isAllInsertable(Column[] cols, boolean nullValue) {
+<span class="nc" id="L110">        return isAll(cols, _unInsertable, _unNullInsertable, nullValue);</span>
+    }
+
+    /**
+     * Return true if all columns for the given key are insertable.
+     */
+    public boolean isAllInsertable(ForeignKey fk, boolean nullValue) {
+<span class="nc bnc" id="L117" title="All 4 branches missed.">        return isAll(fk, _unInsertable, _unNullInsertable, nullValue)</span>
+<span class="nc bnc" id="L118" title="All 4 branches missed.">            &amp;&amp; (!nullValue || fk.isLogical() || isNullable(fk));</span>
+    }
+
+    /**
+     * Whether the column at the given index is insertable in this context.
+     */
+    public void setInsertable(int col, boolean insertable) {
+<span class="nc" id="L125">        _unInsertable = set(col, insertable, _unInsertable);</span>
+<span class="nc" id="L126">    }</span>
+
+    /**
+     * Whether this context can insert the given column as null/default in
+     * this context.
+     */
+    public void setNullInsertable(int col, boolean insertable) {
+<span class="nc" id="L133">        _unNullInsertable = set(col, insertable, _unNullInsertable);</span>
+<span class="nc" id="L134">    }</span>
+
+    /**
+     * Whether the column at the given index is updatable in this context.
+     */
+    public boolean isUpdatable(int col, boolean nullValue) {
+<span class="nc" id="L140">        return is(col, _unUpdatable, _unNullUpdatable, nullValue);</span>
+    }
+
+    /**
+     * Equivalent to &lt;code&gt;isUpdatable (0, nullValue)&lt;/code&gt;, but returns
+     * false if the given column is null.
+     */
+    public boolean isUpdatable(Column col, boolean nullValue) {
+<span class="nc" id="L148">        return is(col, _unUpdatable, _unNullUpdatable, nullValue);</span>
+    }
+
+    /**
+     * Whether any column up to but excluding the given index is updatable.
+     */
+    public boolean isAnyUpdatable(int col, boolean nullValue) {
+<span class="nc" id="L155">        return isAny(col, _unUpdatable, _unNullUpdatable, nullValue);</span>
+    }
+
+    /**
+     * Equivalent to &lt;code&gt;isAnyUpdatable (cols.length, nullValue)&lt;/code&gt;.
+     */
+    public boolean isAnyUpdatable(Column[] cols, boolean nullValue) {
+<span class="nc" id="L162">        return isAny(cols, _unUpdatable, _unNullUpdatable, nullValue);</span>
+    }
+
+    /**
+     * Return true if any columns for the given key are updatable.
+     */
+    public boolean isAnyUpdatable(ForeignKey fk, boolean nullValue) {
+<span class="nc bnc" id="L169" title="All 4 branches missed.">        return isAny(fk, _unUpdatable, _unNullUpdatable, nullValue)</span>
+<span class="nc bnc" id="L170" title="All 4 branches missed.">            &amp;&amp; (!nullValue || fk.isLogical() || isNullable(fk));</span>
+    }
+
+    /**
+     * Whether all columns up to but excluding the given index are updatable.
+     */
+    public boolean isAllUpdatable(int col, boolean nullValue) {
+<span class="nc" id="L177">        return isAll(col, _unUpdatable, _unNullUpdatable, nullValue);</span>
+    }
+
+    /**
+     * Equivalent to &lt;code&gt;isAllUpdatable (cols.length, nullValue)&lt;/code&gt;.
+     */
+    public boolean isAllUpdatable(Column[] cols, boolean nullValue) {
+<span class="nc" id="L184">        return isAll(cols, _unUpdatable, _unNullUpdatable, nullValue);</span>
+    }
+
+    /**
+     * Return true if all columns for the given key are updatable.
+     */
+    public boolean isAllUpdatable(ForeignKey fk, boolean nullValue) {
+<span class="nc bnc" id="L191" title="All 4 branches missed.">        return isAll(fk, _unUpdatable, _unNullUpdatable, nullValue)</span>
+<span class="nc bnc" id="L192" title="All 4 branches missed.">            &amp;&amp; (!nullValue || fk.isLogical() || isNullable(fk));</span>
+    }
+
+    /**
+     * Whether the column at the given index is updatable in this context.
+     */
+    public void setUpdatable(int col, boolean updatable) {
+<span class="nc" id="L199">        _unUpdatable = set(col, updatable, _unUpdatable);</span>
+<span class="nc" id="L200">    }</span>
+
+    /**
+     * Whether this context can set the given column to null/default in
+     * this context.
+     */
+    public void setNullUpdatable(int col, boolean updatable) {
+<span class="nc" id="L207">        _unNullUpdatable = set(col, updatable, _unNullUpdatable);</span>
+<span class="nc" id="L208">    }</span>
+
+    /**
+     * Whether the column at the given index has the given property.
+     */
+    private boolean is(int col, int property, int nullProperty,
+        boolean nullValue) {
+<span class="nc bnc" id="L215" title="All 6 branches missed.">        return (property &amp; (2 &lt;&lt; col)) == 0</span>
+            &amp;&amp; (!nullValue || (nullProperty &amp; (2 &lt;&lt; col)) == 0);
+    }
+
+    /**
+     * Whether the column has the given property.
+     */
+    private boolean is(Column col, int property, int nullProperty,
+        boolean nullValue) {
+<span class="nc bnc" id="L224" title="All 4 branches missed.">        return col != null &amp;&amp; is(0, property, nullProperty, nullValue);</span>
+    }
+
+    /**
+     * Whether any column up to but excluding the given index has the given
+     * property.
+     */
+    private boolean isAny(int col, int property, int nullProperty,
+        boolean nullValue) {
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        if (col == 0)</span>
+<span class="nc" id="L234">            return false;</span>
+<span class="nc bnc" id="L235" title="All 2 branches missed.">        if (property == 0)</span>
+<span class="nc" id="L236">            return true;</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        for (int i = 0; i &lt; col; i++)</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">            if (is(i, property, nullProperty, nullValue))</span>
+<span class="nc" id="L239">                return true;</span>
+<span class="nc" id="L240">        return false;</span>
+    }
+
+    /**
+     * Whether any columns have the given property.
+     */
+    private boolean isAny(Column[] cols, int property, int nullProperty,
+        boolean nullValue) {
+<span class="nc" id="L248">        return isAny(cols.length, property, nullProperty, nullValue);</span>
+    }
+
+    /**
+     * Whether any columns for the given key have the property.
+     */
+    private boolean isAny(ForeignKey fk, int property, int nullProperty,
+        boolean nullValue) {
+<span class="nc bnc" id="L256" title="All 4 branches missed.">        return fk != null &amp;&amp; isAny(fk.getColumns().length</span>
+<span class="nc" id="L257">            + fk.getConstantColumns().length, property, nullProperty,</span>
+            nullValue);
+    }
+
+    /**
+     * Whether all columns up to but excluding the given index have the given
+     * property.
+     */
+    private boolean isAll(int col, int property, int nullProperty,
+        boolean nullValue) {
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        if (col == 0)</span>
+<span class="nc" id="L268">            return false;</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">        if (property == 0)</span>
+<span class="nc" id="L270">            return true;</span>
+<span class="nc bnc" id="L271" title="All 2 branches missed.">        for (int i = 0; i &lt; col; i++)</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">            if (!is(i, property, nullProperty, nullValue))</span>
+<span class="nc" id="L273">                return false;</span>
+<span class="nc" id="L274">        return true;</span>
+    }
+
+    /**
+     * Whether all columns have the given property.
+     */
+    private boolean isAll(Column[] cols, int property, int nullProperty,
+        boolean nullValue) {
+<span class="nc" id="L282">        return isAll(cols.length, property, nullProperty, nullValue);</span>
+    }
+
+    /**
+     * Whether all columns for the key have the given property.
+     */
+    private boolean isAll(ForeignKey fk, int property, int nullProperty,
+        boolean nullValue) {
+<span class="nc bnc" id="L290" title="All 4 branches missed.">        return fk != null &amp;&amp; isAll(fk.getColumns().length</span>
+<span class="nc" id="L291">            + fk.getConstantColumns().length, property, nullProperty,</span>
+            nullValue);
+    }
+
+    /**
+     * Set the given property.
+     */
+    private int set(int col, boolean is, int property) {
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        if (is)</span>
+<span class="nc" id="L300">            return property &amp; ~(2 &lt;&lt; col);</span>
+<span class="nc" id="L301">        return property | (2 &lt;&lt; col);</span>
+    }
+
+    /**
+     * Whether the given foreign key is nullable.
+     */
+    private boolean isNullable(ForeignKey fk) {
+<span class="nc" id="L308">        Column[] cols = fk.getColumns();</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L310" title="All 4 branches missed.">            if (cols[i].isNotNull() || cols[i].isPrimaryKey())</span>
+<span class="nc" id="L311">                return false;</span>
+<span class="nc" id="L312">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

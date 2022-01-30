@@ -1,0 +1,1091 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PostgresDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">PostgresDictionary.java</span></div><h1>PostgresDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.security.AccessController;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.Normalizer;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.kernel.exps.FilterValue;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.lib.jdbc.DelegatingConnection;
+import org.apache.openjpa.lib.jdbc.DelegatingPreparedStatement;
+import org.apache.openjpa.lib.jdbc.ReportingSQLException;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.StoreException;
+import org.postgresql.PGConnection;
+import org.postgresql.largeobject.LargeObject;
+import org.postgresql.largeobject.LargeObjectManager;
+
+/**
+ * Dictionary for PostgreSQL.
+ */
+public class PostgresDictionary extends DBDictionary {
+
+<span class="nc" id="L73">    private static final Localizer _loc = Localizer.forPackage(PostgresDictionary.class);</span>
+
+
+    private Method dbcpGetDelegate;
+    private Method connectionUnwrap;
+
+<span class="nc" id="L79">    protected Set&lt;String&gt; _timestampTypes = new HashSet&lt;&gt;();</span>
+
+
+    /**
+     * SQL statement to load all sequence schema,name pairs from all schemas.
+     */
+<span class="nc" id="L85">    public String allSequencesSQL = &quot;SELECT NULL AS SEQUENCE_SCHEMA, relname &quot; +</span>
+        &quot;AS SEQUENCE_NAME FROM pg_class WHERE relkind='S'&quot;;
+
+    /**
+     * SQL statement to load schema,name pairs for all sequences with a
+     * certain name from all schemas.
+     */
+<span class="nc" id="L92">    public String namedSequencesFromAllSchemasSQL = &quot;SELECT NULL AS &quot; +</span>
+        &quot;SEQUENCE_SCHEMA, relname AS SEQUENCE_NAME FROM pg_class &quot; +
+        &quot;WHERE relkind='S' AND relname = ?&quot;;
+
+    /**
+     * SQL statement to load schema,name pairs from a named schema.
+     */
+<span class="nc" id="L99">    public String allSequencesFromOneSchemaSQL = &quot;SELECT NULL AS &quot; +</span>
+        &quot;SEQUENCE_SCHEMA, relname AS SEQUENCE_NAME FROM pg_class, &quot; +
+        &quot;pg_namespace WHERE relkind='S' AND pg_class.relnamespace = &quot; +
+        &quot;pg_namespace.oid AND nspname = ?&quot;;
+
+    /**
+     * SQL statement to load a sequence's schema,name pair from one schema.
+     */
+<span class="nc" id="L107">    public String namedSequenceFromOneSchemaSQL = &quot;SELECT NULL AS &quot; +</span>
+        &quot;SEQUENCE_SCHEMA, relname AS SEQUENCE_NAME FROM pg_class, &quot; +
+        &quot;pg_namespace WHERE relkind='S' AND pg_class.relnamespace = &quot; +
+        &quot;pg_namespace.oid AND relname = ? AND nspname = ?&quot;;
+
+    /**
+     * Some Postgres drivers do not support the {@link Statement#setFetchSize}
+     * method.
+     */
+<span class="nc" id="L116">    public boolean supportsSetFetchSize = true;</span>
+
+    /**
+     * Statement used to determine whether a sequence is owned.  Owned
+     * sequences are managed by the database and are considered system
+     * sequences.
+     * parm 1: '&lt;table_name.schema_name&gt;'
+     * parm 2: '&lt;column_name&gt;'
+     */
+<span class="nc" id="L125">    public String isOwnedSequenceSQL = &quot;SELECT pg_get_serial_sequence(?, ?)&quot;;</span>
+
+
+<span class="nc" id="L128">    public PostgresDictionary() {</span>
+<span class="nc" id="L129">        platform = &quot;PostgreSQL&quot;;</span>
+<span class="nc" id="L130">        validationSQL = &quot;SELECT NOW()&quot;;</span>
+<span class="nc" id="L131">        datePrecision = MICRO;</span>
+<span class="nc" id="L132">        supportsAlterTableWithDropColumn = false;</span>
+<span class="nc" id="L133">        supportsDeferredConstraints = true;</span>
+<span class="nc" id="L134">        supportsSelectStartIndex = true;</span>
+<span class="nc" id="L135">        supportsSelectEndIndex = true;</span>
+
+<span class="nc" id="L137">        maxTableNameLength = 63;</span>
+<span class="nc" id="L138">        maxColumnNameLength = 63;</span>
+<span class="nc" id="L139">        maxIndexNameLength = 63;</span>
+<span class="nc" id="L140">        maxConstraintNameLength = 63;</span>
+<span class="nc" id="L141">        maxAutoAssignNameLength = 63;</span>
+<span class="nc" id="L142">        schemaCase = SCHEMA_CASE_LOWER;</span>
+<span class="nc" id="L143">        rangePosition = RANGE_POST_LOCK;</span>
+<span class="nc" id="L144">        requiresAliasForSubselect = true;</span>
+<span class="nc" id="L145">        allowsAliasInBulkClause = false;</span>
+
+        // single-quote escape will result in SELECT CURVAL('mysequence')
+<span class="nc" id="L148">        lastGeneratedKeyQuery = &quot;SELECT CURRVAL(''{1}_{0}_seq'')&quot;;</span>
+<span class="nc" id="L149">        supportsAutoAssign = true;</span>
+<span class="nc" id="L150">        autoAssignTypeName = &quot;BIGSERIAL&quot;;</span>
+<span class="nc" id="L151">        nextSequenceQuery = &quot;SELECT NEXTVAL(''{0}'')&quot;;</span>
+
+<span class="nc" id="L153">        useGetBytesForBlobs = true;</span>
+<span class="nc" id="L154">        useSetBytesForBlobs = true;</span>
+<span class="nc" id="L155">        useGetStringForClobs = true;</span>
+<span class="nc" id="L156">        useSetStringForClobs = true;</span>
+<span class="nc" id="L157">        bitTypeName = &quot;BOOL&quot;;</span>
+<span class="nc" id="L158">        smallintTypeName = &quot;SMALLINT&quot;;</span>
+<span class="nc" id="L159">        realTypeName = &quot;FLOAT4&quot;;</span>
+<span class="nc" id="L160">        tinyintTypeName = &quot;SMALLINT&quot;;</span>
+<span class="nc" id="L161">        binaryTypeName = &quot;BYTEA&quot;;</span>
+<span class="nc" id="L162">        blobTypeName = &quot;BYTEA&quot;;</span>
+<span class="nc" id="L163">        longVarbinaryTypeName = &quot;BYTEA&quot;;</span>
+<span class="nc" id="L164">        varbinaryTypeName = &quot;BYTEA&quot;;</span>
+<span class="nc" id="L165">        clobTypeName = &quot;TEXT&quot;;</span>
+<span class="nc" id="L166">        longVarcharTypeName = &quot;TEXT&quot;;</span>
+<span class="nc" id="L167">        doubleTypeName = &quot;DOUBLE PRECISION&quot;;</span>
+<span class="nc" id="L168">        timestampTypeName = &quot;TIMESTAMP&quot;;</span>
+<span class="nc" id="L169">        fixedSizeTypeNameSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;BOOL&quot;, &quot;BYTEA&quot;, &quot;NAME&quot;, &quot;INT8&quot;, &quot;INT2&quot;, &quot;INT2VECTOR&quot;, &quot;INT4&quot;,
+            &quot;REGPROC&quot;, &quot;TEXT&quot;, &quot;OID&quot;, &quot;TID&quot;, &quot;XID&quot;, &quot;CID&quot;, &quot;OIDVECTOR&quot;,
+            &quot;SET&quot;, &quot;FLOAT4&quot;, &quot;FLOAT8&quot;, &quot;ABSTIME&quot;, &quot;RELTIME&quot;, &quot;TINTERVAL&quot;,
+            &quot;MONEY&quot;,
+        }));
+<span class="nc" id="L175">        booleanRepresentation = BooleanRepresentationFactory.BOOLEAN;</span>
+
+<span class="nc" id="L177">        supportsLockingWithDistinctClause = false;</span>
+<span class="nc" id="L178">        supportsQueryTimeout = false;</span>
+<span class="nc" id="L179">        supportsLockingWithOuterJoin = false;</span>
+
+<span class="nc" id="L181">        reservedWordSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;ABORT&quot;, &quot;ACL&quot;, &quot;AGGREGATE&quot;, &quot;APPEND&quot;, &quot;ARCHIVE&quot;, &quot;ARCH_STORE&quot;,
+            &quot;BACKWARD&quot;, &quot;BINARY&quot;, &quot;CHANGE&quot;, &quot;CLUSTER&quot;, &quot;COPY&quot;, &quot;DATABASE&quot;,
+            &quot;DELIMITER&quot;, &quot;DELIMITERS&quot;, &quot;DO&quot;, &quot;EXPLAIN&quot;, &quot;EXTEND&quot;,
+            &quot;FORWARD&quot;, &quot;HEAVY&quot;, &quot;INDEX&quot;, &quot;INHERITS&quot;, &quot;ISNULL&quot;, &quot;LIGHT&quot;,
+            &quot;LISTEN&quot;, &quot;LOAD&quot;, &quot;MERGE&quot;, &quot;NOTHING&quot;, &quot;NOTIFY&quot;, &quot;NOTNULL&quot;,
+            &quot;OID&quot;, &quot;OIDS&quot;, &quot;PURGE&quot;, &quot;RECIPE&quot;, &quot;RENAME&quot;, &quot;REPLACE&quot;,
+            &quot;RETRIEVE&quot;, &quot;RETURNS&quot;, &quot;RULE&quot;, &quot;SETOF&quot;, &quot;STDIN&quot;, &quot;STDOUT&quot;,
+            &quot;STORE&quot;, &quot;VACUUM&quot;, &quot;VERBOSE&quot;, &quot;VERSION&quot;,
+        }));
+
+        // reservedWordSet subset that CANNOT be used as valid column names
+        // (i.e., without surrounding them with double-quotes)
+<span class="nc" id="L194">        invalidColumnWordSet.addAll(Arrays.asList(new String[] {</span>
+            &quot;ALL&quot;, &quot;AND&quot;, &quot;ANY&quot;, &quot;AS&quot;, &quot;ASC&quot;, &quot;AUTHORIZATION&quot;, &quot;BETWEEN&quot;,
+            &quot;BINARY&quot;, &quot;BOTH&quot;, &quot;CASE&quot;, &quot;CAST&quot;, &quot;CHECK&quot;, &quot;COLLATE&quot;, &quot;COLUMN&quot;,
+            &quot;CONSTRAINT&quot;, &quot;CREATE&quot;, &quot;CROSS&quot;, &quot;CURRENT_DATE&quot;, &quot;CURRENT_TIME&quot;,
+            &quot;CURRENT_TIMESTAMP&quot;, &quot;CURRENT_USER&quot;, &quot;DEFAULT&quot;, &quot;DEFERRABLE&quot;,
+            &quot;DESC&quot;, &quot;DISTINCT&quot;, &quot;DO&quot;, &quot;ELSE&quot;, &quot;END&quot;, &quot;END&quot;, &quot;EXCEPT&quot;, &quot;FALSE&quot;,
+            &quot;FOR&quot;, &quot;FOREIGN&quot;, &quot;FROM&quot;, &quot;FULL&quot;, &quot;GRANT&quot;, &quot;GROUP&quot;, &quot;HAVING&quot;, &quot;IN&quot;,
+            &quot;INITIALLY&quot;, &quot;INNER&quot;, &quot;INTERSECT&quot;, &quot;INTO&quot;, &quot;IS&quot;, &quot;ISNULL&quot;, &quot;JOIN&quot;,
+            &quot;LEADING&quot;, &quot;LEFT&quot;, &quot;LIKE&quot;, &quot;NATURAL&quot;, &quot;NOT&quot;, &quot;NOTNULL&quot;, &quot;NULL&quot;,
+            &quot;ON&quot;, &quot;ONLY&quot;, &quot;OR&quot;, &quot;ORDER&quot;, &quot;OUTER&quot;, &quot;OVERLAPS&quot;, &quot;PRIMARY&quot;,
+            &quot;REFERENCES&quot;, &quot;RIGHT&quot;, &quot;SELECT&quot;, &quot;SESSION_USER&quot;, &quot;SOME&quot;, &quot;TABLE&quot;,
+            &quot;THEN&quot;, &quot;TO&quot;, &quot;TRAILING&quot;, &quot;TRUE&quot;, &quot;UNION&quot;, &quot;UNIQUE&quot;, &quot;USER&quot;,
+            &quot;USING&quot;, &quot;VERBOSE&quot;, &quot;WHEN&quot;, &quot;WHERE&quot;,
+        }));
+
+<span class="nc" id="L209">        _timestampTypes.add(&quot;ABSTIME&quot;);</span>
+<span class="nc" id="L210">        _timestampTypes.add(&quot;TIMESTAMP&quot;);</span>
+<span class="nc" id="L211">        _timestampTypes.add(timestampTypeName.toUpperCase(Locale.ENGLISH)); // handle user configured timestamp types.</span>
+<span class="nc" id="L212">    }</span>
+
+    @Override
+    public Date getDate(ResultSet rs, int column)
+        throws SQLException {
+        try {
+<span class="nc" id="L218">            return super.getDate(rs, column);</span>
+<span class="nc" id="L219">        } catch (StringIndexOutOfBoundsException sioobe) {</span>
+            // there is a bug in some versions of the postgres JDBC
+            // driver such that a date with not enough numbers in it
+            // will throw a parsing exception: this tries to work
+            // around it. The bug only occurs when there is a trailing
+            // millisecond missing from the end. E.g., when the date is
+            // like:
+            // 2066-10-19 22:08:32.83
+            // rather than what the driver expects:
+            // 2066-10-19 22:08:32.830
+<span class="nc" id="L229">            String dateStr = rs.getString(column);</span>
+<span class="nc" id="L230">            SimpleDateFormat fmt = new SimpleDateFormat(</span>
+                &quot;yyyy-MM-dd hh:mm:ss.SS&quot;);
+            try {
+<span class="nc" id="L233">                return fmt.parse(dateStr);</span>
+<span class="nc" id="L234">            } catch (ParseException pe) {</span>
+<span class="nc" id="L235">                throw new SQLException(pe.toString());</span>
+            }
+        }
+    }
+
+    @Override
+    public byte getByte(ResultSet rs, int column)
+        throws SQLException {
+        // postgres does not perform automatic conversions, so attempting to
+        // get a whole number out of a decimal will throw an exception.
+        // fall back to performing manual conversion if the initial get fails
+        try {
+<span class="nc" id="L247">            return super.getByte(rs, column);</span>
+<span class="nc" id="L248">        } catch (SQLException sqle) {</span>
+<span class="nc" id="L249">            return super.getBigDecimal(rs, column).byteValue();</span>
+        }
+    }
+
+    @Override
+    public short getShort(ResultSet rs, int column)
+        throws SQLException {
+        // postgres does not perform automatic conversions, so attempting to
+        // get a whole number out of a decimal will throw an exception.
+        // fall back to performing manual conversion if the initial get fails
+        try {
+<span class="nc" id="L260">            return super.getShort(rs, column);</span>
+<span class="nc" id="L261">        } catch (SQLException sqle) {</span>
+<span class="nc" id="L262">            return super.getBigDecimal(rs, column).shortValue();</span>
+        }
+    }
+
+    @Override
+    public int getInt(ResultSet rs, int column)
+        throws SQLException {
+        // postgres does not perform automatic conversions, so attempting to
+        // get a whole number out of a decimal will throw an exception.
+        // fall back to performing manual conversion if the initial get fails
+        try {
+<span class="nc" id="L273">            return super.getInt(rs, column);</span>
+<span class="nc" id="L274">        } catch (SQLException sqle) {</span>
+<span class="nc" id="L275">            return super.getBigDecimal(rs, column).intValue();</span>
+        }
+    }
+
+    @Override
+    public long getLong(ResultSet rs, int column)
+        throws SQLException {
+        // postgres does not perform automatic conversions, so attempting to
+        // get a whole number out of a decimal will throw an exception.
+        // fall back to performing manual conversion if the initial get fails
+        try {
+<span class="nc" id="L286">            return super.getLong(rs, column);</span>
+<span class="nc" id="L287">        } catch (SQLException sqle) {</span>
+<span class="nc" id="L288">            return super.getBigDecimal(rs, column).longValue();</span>
+        }
+    }
+
+    /**
+     * Handle XML and bytea/oid columns in a PostgreSQL way.
+     */
+    @Override
+    public void setNull(PreparedStatement stmnt, int idx, int colType,
+        Column col)
+        throws SQLException {
+<span class="nc bnc" id="L299" title="All 4 branches missed.">        if (col != null &amp;&amp; col.isXML()) {</span>
+<span class="nc" id="L300">            stmnt.setNull(idx, Types.OTHER);</span>
+<span class="nc" id="L301">            return;</span>
+        }
+
+        // OPENJPA-308
+<span class="nc bnc" id="L305" title="All 2 branches missed.">        if (colType == Types.BLOB)</span>
+<span class="nc" id="L306">            colType = Types.BINARY;</span>
+<span class="nc" id="L307">        stmnt.setNull(idx, colType);</span>
+<span class="nc" id="L308">    }</span>
+
+    @Override
+    protected void appendSelectRange(SQLBuffer buf, long start, long end,
+        boolean subselect) {
+<span class="nc bnc" id="L313" title="All 2 branches missed.">        if (end != Long.MAX_VALUE)</span>
+<span class="nc" id="L314">            buf.append(&quot; LIMIT &quot;).appendValue(end - start);</span>
+<span class="nc bnc" id="L315" title="All 2 branches missed.">        if (start != 0)</span>
+<span class="nc" id="L316">            buf.append(&quot; OFFSET &quot;).appendValue(start);</span>
+<span class="nc" id="L317">    }</span>
+
+    @Override
+    public void indexOf(SQLBuffer buf, FilterValue str, FilterValue find,
+        FilterValue start) {
+<span class="nc" id="L322">        buf.append(&quot;(POSITION(&quot;);</span>
+<span class="nc" id="L323">        find.appendTo(buf);</span>
+<span class="nc" id="L324">        buf.append(&quot; IN &quot;);</span>
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        if (start != null)</span>
+<span class="nc" id="L326">            substring(buf, str, start, null);</span>
+        else
+<span class="nc" id="L328">            str.appendTo(buf);</span>
+<span class="nc" id="L329">        buf.append(&quot;)&quot;);</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">        if (start != null) {</span>
+<span class="nc" id="L331">            buf.append(&quot; - 1 + &quot;);</span>
+<span class="nc" id="L332">            start.appendTo(buf);</span>
+        }
+<span class="nc" id="L334">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L335">    }</span>
+
+    @Override
+    protected boolean supportsDeferredUniqueConstraints() {
+        // Postgres only supports deferred foreign key constraints.
+<span class="nc" id="L340">        return false;</span>
+    }
+
+    @Override
+    protected String getSequencesSQL(String schemaName, String sequenceName) {
+<span class="nc" id="L345">        return getSequencesSQL(DBIdentifier.newSchema(schemaName), DBIdentifier.newSequence(sequenceName));</span>
+    }
+
+    @Override
+    protected String getSequencesSQL(DBIdentifier schemaName, DBIdentifier sequenceName) {
+<span class="nc bnc" id="L350" title="All 4 branches missed.">        if (DBIdentifier.isNull(schemaName) &amp;&amp; DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L351">            return allSequencesSQL;</span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">        else if (DBIdentifier.isNull(schemaName))</span>
+<span class="nc" id="L353">            return namedSequencesFromAllSchemasSQL;</span>
+<span class="nc bnc" id="L354" title="All 2 branches missed.">        else if (DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L355">            return allSequencesFromOneSchemaSQL;</span>
+        else
+<span class="nc" id="L357">            return namedSequenceFromOneSchemaSQL;</span>
+    }
+
+    @Override
+    public boolean isSystemSequence(String name, String schema,
+        boolean targetSchema) {
+<span class="nc" id="L363">        return isSystemSequence(DBIdentifier.newTable(name), DBIdentifier.newSchema(schema), targetSchema);</span>
+    }
+
+    @Override
+    public boolean isSystemSequence(DBIdentifier name, DBIdentifier schema,
+        boolean targetSchema) {
+<span class="nc" id="L369">        return isSystemSequence(name, schema, targetSchema, null);</span>
+    }
+
+    @Override
+    public boolean isSystemSequence(DBIdentifier name, DBIdentifier schema,
+        boolean targetSchema, Connection conn) {
+<span class="nc bnc" id="L375" title="All 2 branches missed.">        if (super.isSystemSequence(name, schema, targetSchema))</span>
+<span class="nc" id="L376">            return true;</span>
+
+<span class="nc bnc" id="L378" title="All 2 branches missed.">        if (isOwnedSequence(name, schema, conn)) {</span>
+<span class="nc" id="L379">            return true;</span>
+        }
+<span class="nc" id="L381">        return false;</span>
+    }
+
+    /**
+     * Uses the native Postgres function pg_get_serial_sequence to determine whether
+     * a sequence is owned by the database.  Column types such as bigserial use a
+     * system assigned sequence generator of the format: table_column_seq
+     *
+     * @link http://www.postgresql.org/docs/current/static/functions-info.html
+     */
+    public boolean isOwnedSequence(DBIdentifier name, DBIdentifier schema, Connection conn) {
+
+<span class="nc bnc" id="L393" title="All 2 branches missed.">        String strName = DBIdentifier.isNull(name) ? &quot;&quot; : name.getName();</span>
+        // basic check for SEQ suffix.  not SEQ, not an owned sequence
+<span class="nc bnc" id="L395" title="All 4 branches missed.">        if (strName == null || !strName.toUpperCase(Locale.ENGLISH).endsWith(&quot;_SEQ&quot;))</span>
+<span class="nc" id="L396">            return false;</span>
+
+        // If no connection, use secondary method to determine ownership
+<span class="nc bnc" id="L399" title="All 2 branches missed.">        if (conn == null) {</span>
+<span class="nc" id="L400">            return isOwnedSequence(strName);</span>
+        }
+
+        // Build permutations of table, column pairs from the provided
+        // sequence name.  If any of them are determined owned, assume the
+        // sequence is owned.  This is not perfect, but considerably better than
+        // considering all sequences suffixed with _seq are db owned.
+<span class="nc" id="L407">        String[][] namePairs = buildNames(strName);</span>
+
+<span class="nc bnc" id="L409" title="All 2 branches missed.">        if(namePairs != null) { // unable to parse strName.</span>
+            try {
+<span class="nc bnc" id="L411" title="All 2 branches missed.">                for (int i = 0; i &lt; namePairs.length; i++) {</span>
+<span class="nc bnc" id="L412" title="All 2 branches missed.">                    if (queryOwnership(conn, namePairs[i], schema)) {</span>
+<span class="nc" id="L413">                        return true;</span>
+                    }
+                }
+<span class="nc" id="L416">            } catch (Throwable t) {</span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">                if (log.isWarnEnabled()) {</span>
+<span class="nc" id="L418">                    log.warn(_loc.get(&quot;psql-owned-seq-warning&quot;), t);</span>
+                }
+<span class="nc" id="L420">                return isOwnedSequence(strName);</span>
+<span class="nc" id="L421">            }</span>
+        } else {
+<span class="nc bnc" id="L423" title="All 2 branches missed.">            if(log.isTraceEnabled()) {</span>
+<span class="nc" id="L424">                log.trace(String.format(&quot;Unable to query ownership for sequence %s using the connection. &quot; +</span>
+                                &quot;Falling back to simpler detection based on the name&quot;,
+<span class="nc" id="L426">                    name.getName()));</span>
+            }
+
+<span class="nc" id="L429">            return isOwnedSequence(strName);</span>
+        }
+<span class="nc" id="L431">        return false;</span>
+    }
+
+    private boolean queryOwnership(Connection conn, String[] namePair,
+        DBIdentifier schema) throws Throwable {
+<span class="nc" id="L436">        PreparedStatement ps = null;</span>
+<span class="nc" id="L437">        ResultSet rs = null;</span>
+        try {
+<span class="nc" id="L439">            ps = prepareStatement(conn, isOwnedSequenceSQL);</span>
+<span class="nc" id="L440">            String tblName = &quot;&quot;;</span>
+<span class="nc bnc" id="L441" title="All 2 branches missed.">            if (!DBIdentifier.isEmpty(schema)) {</span>
+<span class="nc" id="L442">                tblName = schema.getName() + getIdentifierDelimiter();</span>
+            }
+<span class="nc" id="L444">            tblName += namePair[0];</span>
+<span class="nc" id="L445">            ps.setString(1, tblName);</span>
+<span class="nc" id="L446">            String colName = toDBName(DBIdentifier.newColumn(namePair[1]));</span>
+<span class="nc" id="L447">            ps.setString(2, colName);</span>
+<span class="nc" id="L448">            ps.execute();</span>
+<span class="nc" id="L449">            rs = ps.getResultSet();</span>
+<span class="nc bnc" id="L450" title="All 4 branches missed.">            if (rs == null || !rs.next()) {</span>
+<span class="nc" id="L451">                return false;</span>
+            }
+<span class="nc" id="L453">            String val = getString(rs, 1);</span>
+<span class="nc bnc" id="L454" title="All 4 branches missed.">            if (val == null || val.length() == 0) {</span>
+<span class="nc" id="L455">                return false;</span>
+            }
+<span class="nc" id="L457">            return true;</span>
+<span class="nc" id="L458">        } catch (Throwable t) {</span>
+<span class="nc bnc" id="L459" title="All 2 branches missed.">            if (t instanceof ReportingSQLException) {</span>
+                // Handle known/acceptable exceptions
+                // 42P01 - table does not exist
+                // 42703 - column does not exist within table
+<span class="nc" id="L463">                ReportingSQLException rse = (ReportingSQLException)t;</span>
+<span class="nc bnc" id="L464" title="All 2 branches missed.">                if (&quot;42P01&quot;.equals(rse.getSQLState()) ||</span>
+<span class="nc bnc" id="L465" title="All 2 branches missed.">                    &quot;42703&quot;.equals(rse.getSQLState())) {</span>
+<span class="nc" id="L466">                    return false;</span>
+                }
+            }
+<span class="nc" id="L469">            throw t;</span>
+        }
+        finally {
+<span class="nc bnc" id="L472" title="All 2 branches missed.">            if (rs != null) {</span>
+                try {
+<span class="nc" id="L474">                    rs.close();</span>
+<span class="nc" id="L475">                } catch (Throwable t) {}</span>
+            }
+<span class="nc bnc" id="L477" title="All 2 branches missed.">            if (ps != null) {</span>
+                try {
+<span class="nc" id="L479">                    ps.close();</span>
+<span class="nc" id="L480">                } catch (Throwable t) {}</span>
+            }
+        }
+    }
+
+    /**
+     * Owned sequences are of the form &lt;table&gt;_&lt;col&gt;_seq. Table and column
+     * names can contain underscores so permutations of these names must be
+     * produced for ownership verification.
+     * @param strName
+     * @return If strName cannot be split into three or more parts null will be returned.
+     *  Otherwise a String[][] of the potential sequence names will be returned.
+     */
+    private String[][] buildNames(String strName) {
+        // split the sequence name into components
+        // owned sequences are of the form &lt;table&gt;_&lt;col&gt;_seq
+<span class="nc" id="L496">        String[] parts = Normalizer.splitName(strName, &quot;_&quot;);</span>
+
+<span class="nc bnc" id="L498" title="All 4 branches missed.">        if (parts == null || parts.length &lt; 3) {</span>
+<span class="nc bnc" id="L499" title="All 2 branches missed.">            if(log.isTraceEnabled()) {</span>
+<span class="nc" id="L500">                log.trace(String.format(&quot;Unable to parse sequences from %s. Found %s parts. Returning null&quot;,</span>
+<span class="nc bnc" id="L501" title="All 2 branches missed.">                    strName, parts == null ? 0 : parts.length));</span>
+            }
+<span class="nc" id="L503">            return null;</span>
+        }
+        // Simple and most common case
+<span class="nc bnc" id="L506" title="All 2 branches missed.">        if (parts.length == 3) {</span>
+<span class="nc" id="L507">            return new String[][] { {parts[0], parts[1]} };</span>
+        }
+        // If table or column names contain underscores, build a list
+        // of possibilities
+<span class="nc" id="L511">        String[][] names = new String[(parts.length - 2)][2];</span>
+<span class="nc bnc" id="L512" title="All 2 branches missed.">        for (int i = 0; i &lt; parts.length - 2; i++) {</span>
+<span class="nc" id="L513">            String[] namePair = new String[2];</span>
+<span class="nc" id="L514">            StringBuilder name0 = new StringBuilder();</span>
+<span class="nc" id="L515">            StringBuilder name1 = new StringBuilder();</span>
+<span class="nc bnc" id="L516" title="All 2 branches missed.">            for (int j = 0; j &lt; parts.length - 1; j++) {</span>
+<span class="nc bnc" id="L517" title="All 2 branches missed.">                if (j &lt;= i) {</span>
+<span class="nc" id="L518">                    name0.append(parts[j]);</span>
+<span class="nc bnc" id="L519" title="All 2 branches missed.">                    if (j &lt; i) {</span>
+<span class="nc" id="L520">                        name0.append(&quot;_&quot;);</span>
+                    }
+                } else {
+<span class="nc" id="L523">                    name1.append(parts[j]);</span>
+<span class="nc bnc" id="L524" title="All 2 branches missed.">                    if (j &lt; parts.length - 2) {</span>
+<span class="nc" id="L525">                        name1.append(&quot;_&quot;);</span>
+                    }
+                }
+            }
+<span class="nc" id="L529">            namePair[0] = name0.toString();</span>
+<span class="nc" id="L530">            namePair[1] = name1.toString();</span>
+<span class="nc" id="L531">            names[i] = namePair;</span>
+        }
+<span class="nc" id="L533">        return names;</span>
+    }
+
+    /**
+     * Secondary logic if owned sequences cannot be determined by calling the
+     * db.  This logic assumes that any sequence suffixed with _SEQ is an
+     * owned sequence (identical to the behavior of prior versions of OpenJPA).
+     * @param strName
+     */
+    private boolean isOwnedSequence(String strName) {
+        // filter out generated sequences used for bigserial cols, which are
+        // of the form &lt;table&gt;_&lt;col&gt;_seq
+<span class="nc bnc" id="L545" title="All 2 branches missed.">        int idx = (strName == null) ? -1 : strName.indexOf('_');</span>
+<span class="nc bnc" id="L546" title="All 4 branches missed.">        return idx != -1 &amp;&amp; idx != strName.length() - 4</span>
+<span class="nc bnc" id="L547" title="All 2 branches missed.">            &amp;&amp; strName.toUpperCase(Locale.ENGLISH).endsWith(&quot;_SEQ&quot;);</span>
+    }
+
+    @Override
+    public boolean isSystemTable(String name, String schema,
+        boolean targetSchema) {
+<span class="nc" id="L553">        return isSystemTable(DBIdentifier.newTable(name), DBIdentifier.newSchema(schema), targetSchema);</span>
+    }
+
+    @Override
+    public boolean isSystemTable(DBIdentifier name, DBIdentifier schema,
+        boolean targetSchema) {
+        // names starting with &quot;pg_&quot; are reserved for Postgresql internal use
+<span class="nc bnc" id="L560" title="All 2 branches missed.">        String strName = DBIdentifier.isNull(name) ? null : name.getName();</span>
+<span class="nc bnc" id="L561" title="All 4 branches missed.">        return super.isSystemTable(name, schema, targetSchema)</span>
+<span class="nc bnc" id="L562" title="All 2 branches missed.">            || (strName != null &amp;&amp; strName.toLowerCase(Locale.ENGLISH).startsWith(&quot;pg_&quot;));</span>
+    }
+
+    @Override
+    public boolean isSystemIndex(String name, Table table) {
+<span class="nc" id="L567">        return isSystemIndex(DBIdentifier.newIndex(name), table);</span>
+    }
+
+    @Override
+    public boolean isSystemIndex(DBIdentifier name, Table table) {
+        // names starting with &quot;pg_&quot; are reserved for Postgresql internal use
+<span class="nc bnc" id="L573" title="All 2 branches missed.">        String strName = DBIdentifier.isNull(name) ? null : name.getName();</span>
+<span class="nc bnc" id="L574" title="All 4 branches missed.">        return super.isSystemIndex(name, table)</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">            || (strName != null &amp;&amp; strName.toLowerCase(Locale.ENGLISH).startsWith(&quot;pg_&quot;));</span>
+    }
+
+    @Override
+    public Connection decorate(Connection conn)
+        throws SQLException {
+<span class="nc" id="L581">        return new PostgresConnection(super.decorate(conn), this);</span>
+    }
+
+    @Override
+    public InputStream getLOBStream(JDBCStore store, ResultSet rs,
+        int column) throws SQLException {
+<span class="nc" id="L587">        DelegatingConnection conn = (DelegatingConnection)store</span>
+<span class="nc" id="L588">            .getConnection();</span>
+<span class="nc" id="L589">        conn.setAutoCommit(false);</span>
+<span class="nc" id="L590">        LargeObjectManager lom = getLargeObjectManager(conn);</span>
+<span class="nc bnc" id="L591" title="All 2 branches missed.">        if (rs.getInt(column) != -1) {</span>
+<span class="nc" id="L592">            LargeObject lo = lom.open(rs.getInt(column));</span>
+<span class="nc" id="L593">            return lo.getInputStream();</span>
+        } else {
+<span class="nc" id="L595">            return null;</span>
+        }
+    }
+
+    @Override
+    public void insertBlobForStreamingLoad(Row row, Column col,
+        JDBCStore store, Object ob, Select sel) throws SQLException {
+<span class="nc bnc" id="L602" title="All 2 branches missed.">        if (row.getAction() == Row.ACTION_INSERT) {</span>
+<span class="nc" id="L603">            insertPostgresBlob(row, col, store, ob);</span>
+<span class="nc bnc" id="L604" title="All 2 branches missed.">        } else if (row.getAction() == Row.ACTION_UPDATE) {</span>
+<span class="nc" id="L605">            updatePostgresBlob(row, col, store, ob, sel);</span>
+        }
+<span class="nc" id="L607">    }</span>
+
+    private void insertPostgresBlob(Row row, Column col, JDBCStore store,
+        Object ob) throws SQLException {
+<span class="nc bnc" id="L611" title="All 2 branches missed.">        if (ob != null) {</span>
+<span class="nc" id="L612">            col.setType(Types.INTEGER);</span>
+<span class="nc" id="L613">            DelegatingConnection conn = (DelegatingConnection)store</span>
+<span class="nc" id="L614">            .getConnection();</span>
+            try {
+<span class="nc" id="L616">                conn.setAutoCommit(false);</span>
+<span class="nc" id="L617">                LargeObjectManager lom = getLargeObjectManager(conn);</span>
+                // The create method is valid in versions previous to 8.3
+                // in 8.3 this method is deprecated, use createLO
+<span class="nc" id="L620">                int oid = lom.create();</span>
+<span class="nc" id="L621">                LargeObject lo = lom.open(oid, LargeObjectManager.WRITE);</span>
+<span class="nc" id="L622">                OutputStream os = lo.getOutputStream();</span>
+<span class="nc" id="L623">                copy((InputStream)ob, os);</span>
+<span class="nc" id="L624">                lo.close();</span>
+<span class="nc" id="L625">                row.setInt(col, oid);</span>
+<span class="nc" id="L626">            } catch (IOException ioe) {</span>
+<span class="nc" id="L627">                throw new StoreException(ioe);</span>
+            } finally {
+<span class="nc" id="L629">                conn.close();</span>
+            }
+<span class="nc" id="L631">        } else {</span>
+<span class="nc" id="L632">            row.setInt(col, -1);</span>
+        }
+<span class="nc" id="L634">    }</span>
+
+    private void updatePostgresBlob(Row row, Column col, JDBCStore store,
+        Object ob, Select sel) throws SQLException {
+<span class="nc" id="L638">        JDBCFetchConfiguration fetch = store.getFetchConfiguration();</span>
+<span class="nc" id="L639">        SQLBuffer sql = sel.toSelect(true, fetch);</span>
+<span class="nc" id="L640">        ResultSet res = null;</span>
+<span class="nc" id="L641">        DelegatingConnection conn =</span>
+<span class="nc" id="L642">            (DelegatingConnection) store.getConnection();</span>
+<span class="nc" id="L643">        PreparedStatement stmnt = null;</span>
+        try {
+<span class="nc" id="L645">            stmnt = sql.prepareStatement(conn, fetch,</span>
+                ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_UPDATABLE);
+<span class="nc" id="L647">            setTimeouts(stmnt, fetch, true);</span>
+<span class="nc" id="L648">            res = stmnt.executeQuery();</span>
+<span class="nc bnc" id="L649" title="All 2 branches missed.">            if (!res.next()) {</span>
+<span class="nc" id="L650">                throw new InternalException(_loc.get(&quot;stream-exception&quot;));</span>
+            }
+<span class="nc" id="L652">            int oid = res.getInt(1);</span>
+<span class="nc bnc" id="L653" title="All 2 branches missed.">            if (oid != -1) {</span>
+<span class="nc" id="L654">                conn.setAutoCommit(false);</span>
+<span class="nc" id="L655">                LargeObjectManager lom = getLargeObjectManager(conn);</span>
+<span class="nc bnc" id="L656" title="All 2 branches missed.">                if (ob != null) {</span>
+<span class="nc" id="L657">                    LargeObject lo = lom.open(oid, LargeObjectManager.WRITE);</span>
+<span class="nc" id="L658">                    OutputStream os = lo.getOutputStream();</span>
+<span class="nc" id="L659">                    long size = copy((InputStream) ob, os);</span>
+<span class="nc" id="L660">                    lo.truncate((int) size);</span>
+<span class="nc" id="L661">                    lo.close();</span>
+<span class="nc" id="L662">                } else {</span>
+<span class="nc" id="L663">                    lom.delete(oid);</span>
+<span class="nc" id="L664">                    row.setInt(col, -1);</span>
+                }
+<span class="nc" id="L666">            } else {</span>
+<span class="nc bnc" id="L667" title="All 2 branches missed.">                if (ob != null) {</span>
+<span class="nc" id="L668">                    conn.setAutoCommit(false);</span>
+<span class="nc" id="L669">                    LargeObjectManager lom = getLargeObjectManager(conn);</span>
+<span class="nc" id="L670">                    oid = lom.create();</span>
+<span class="nc" id="L671">                    LargeObject lo = lom.open(oid, LargeObjectManager.WRITE);</span>
+<span class="nc" id="L672">                    OutputStream os = lo.getOutputStream();</span>
+<span class="nc" id="L673">                    copy((InputStream)ob, os);</span>
+<span class="nc" id="L674">                    lo.close();</span>
+<span class="nc" id="L675">                    row.setInt(col, oid);</span>
+                }
+            }
+
+<span class="nc" id="L679">        } catch (IOException ioe) {</span>
+<span class="nc" id="L680">            throw new StoreException(ioe);</span>
+        } finally {
+<span class="nc bnc" id="L682" title="All 2 branches missed.">            if (res != null)</span>
+<span class="nc" id="L683">                try { res.close (); } catch (SQLException e) {}</span>
+<span class="nc bnc" id="L684" title="All 2 branches missed.">            if (stmnt != null)</span>
+<span class="nc" id="L685">                try { stmnt.close (); } catch (SQLException e) {}</span>
+<span class="nc bnc" id="L686" title="All 2 branches missed.">            if (conn != null)</span>
+<span class="nc" id="L687">                try { conn.close (); } catch (SQLException e) {}</span>
+        }
+
+<span class="nc" id="L690">    }</span>
+
+    @Override
+    public void updateBlob(Select sel, JDBCStore store, InputStream is)
+        throws SQLException {
+        //Do nothing
+<span class="nc" id="L696">    }</span>
+
+    @Override
+    public void deleteStream(JDBCStore store, Select sel) throws SQLException {
+<span class="nc" id="L700">        JDBCFetchConfiguration fetch = store.getFetchConfiguration();</span>
+<span class="nc" id="L701">        SQLBuffer sql = sel.toSelect(true, fetch);</span>
+<span class="nc" id="L702">        ResultSet res = null;</span>
+<span class="nc" id="L703">        DelegatingConnection conn =</span>
+<span class="nc" id="L704">            (DelegatingConnection) store.getConnection();</span>
+<span class="nc" id="L705">        PreparedStatement stmnt = null;</span>
+        try {
+<span class="nc" id="L707">            stmnt = sql.prepareStatement(conn, fetch,</span>
+                ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_UPDATABLE);
+<span class="nc" id="L709">            setTimeouts(stmnt, fetch, true);</span>
+<span class="nc" id="L710">            res = stmnt.executeQuery();</span>
+<span class="nc bnc" id="L711" title="All 2 branches missed.">            if (!res.next()) {</span>
+<span class="nc" id="L712">                throw new InternalException(_loc.get(&quot;stream-exception&quot;));</span>
+            }
+<span class="nc" id="L714">            int oid = res.getInt(1);</span>
+<span class="nc bnc" id="L715" title="All 2 branches missed.">            if (oid != -1) {</span>
+<span class="nc" id="L716">                conn.setAutoCommit(false);</span>
+<span class="nc" id="L717">                LargeObjectManager lom = getLargeObjectManager(conn);</span>
+<span class="nc" id="L718">                lom.delete(oid);</span>
+            }
+        } finally {
+<span class="nc bnc" id="L721" title="All 2 branches missed.">            if (res != null)</span>
+<span class="nc" id="L722">                try { res.close (); } catch (SQLException e) {}</span>
+<span class="nc bnc" id="L723" title="All 2 branches missed.">            if (stmnt != null)</span>
+<span class="nc" id="L724">                try { stmnt.close (); } catch (SQLException e) {}</span>
+<span class="nc bnc" id="L725" title="All 2 branches missed.">            if (conn != null)</span>
+<span class="nc" id="L726">                try { conn.close (); } catch (SQLException e) {}</span>
+        }
+<span class="nc" id="L728">    }</span>
+
+
+    @Override
+    public LocalDate getLocalDate(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L733">        return rs.getObject(column, LocalDate.class);</span>
+    }
+
+    @Override
+    public LocalTime getLocalTime(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L738">        return rs.getObject(column, LocalTime.class);</span>
+    }
+
+    @Override
+    public LocalDateTime getLocalDateTime(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L743">        return rs.getObject(column, LocalDateTime.class);</span>
+    }
+
+    @Override
+    public OffsetDateTime getOffsetDateTime(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L748">        return rs.getObject(column, OffsetDateTime.class);</span>
+    }
+
+    @Override
+    public void setLocalDate(PreparedStatement stmnt, int idx, LocalDate val, Column col) throws SQLException {
+<span class="nc" id="L753">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L754">    }</span>
+
+    @Override
+    public void setLocalTime(PreparedStatement stmnt, int idx, LocalTime val, Column col) throws SQLException {
+<span class="nc" id="L758">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L759">    }</span>
+
+    @Override
+    public void setLocalDateTime(PreparedStatement stmnt, int idx, LocalDateTime val, Column col) throws SQLException {
+<span class="nc" id="L763">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L764">    }</span>
+
+    @Override
+    public void setOffsetDateTime(PreparedStatement stmnt, int idx, OffsetDateTime val, Column col) throws SQLException {
+<span class="nc" id="L768">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L769">    }</span>
+
+    /**
+     * Determine XML column support and backslash handling.
+     */
+    @Override
+    public void connectedConfiguration(Connection conn) throws SQLException {
+<span class="nc" id="L776">        super.connectedConfiguration(conn);</span>
+
+<span class="nc" id="L778">        DatabaseMetaData metaData = conn.getMetaData();</span>
+<span class="nc" id="L779">        int maj = 0;</span>
+<span class="nc" id="L780">        int min = 0;</span>
+<span class="nc bnc" id="L781" title="All 2 branches missed.">        if (isJDBC3) {</span>
+<span class="nc" id="L782">            maj = metaData.getDatabaseMajorVersion();</span>
+<span class="nc" id="L783">            min = metaData.getDatabaseMinorVersion();</span>
+        } else {
+            try {
+                // The product version looks like &quot;8.3.5&quot;.
+<span class="nc" id="L787">                String productVersion = metaData.getDatabaseProductVersion();</span>
+<span class="nc" id="L788">                String majMin[] = productVersion.split(&quot;\\.&quot;);</span>
+<span class="nc" id="L789">                maj = Integer.parseInt(majMin[0]);</span>
+<span class="nc" id="L790">                min = Integer.parseInt(majMin[1]);</span>
+<span class="nc" id="L791">            } catch (Exception e) {</span>
+                // We don't understand the version format.
+<span class="nc bnc" id="L793" title="All 2 branches missed.">                if (log.isWarnEnabled())</span>
+<span class="nc" id="L794">                    log.warn(e.toString(),e);</span>
+<span class="nc" id="L795">            }</span>
+        }
+
+<span class="nc bnc" id="L798" title="All 6 branches missed.">        if ((maj &gt;= 9 || (maj == 8 &amp;&amp; min &gt;= 3))) {</span>
+<span class="nc" id="L799">            supportsXMLColumn = true;</span>
+        }
+
+        // PostgreSQL requires to escape search strings
+<span class="nc" id="L803">        requiresSearchStringEscapeForLike = true;</span>
+
+        // Old PostgreSQL requires double-escape for strings.
+<span class="nc bnc" id="L806" title="All 6 branches missed.">        if ((maj &lt;= 8 || (maj == 9 &amp;&amp; min == 0))) {</span>
+<span class="nc" id="L807">            searchStringEscape = &quot;\\\\&quot;;</span>
+        }
+<span class="nc" id="L809">    }</span>
+
+    /**
+     * If column is an XML column, PostgreSQL requires that its value is set
+     * by using {@link PreparedStatement#setObject(int, Object, int)}
+     * with {@link Types#OTHER} as the third argument.
+     */
+    @Override
+    public void setClobString(PreparedStatement stmnt, int idx, String val,
+        Column col) throws SQLException {
+<span class="nc bnc" id="L819" title="All 4 branches missed.">        if (col != null &amp;&amp; col.isXML())</span>
+<span class="nc" id="L820">            stmnt.setObject(idx, val, Types.OTHER);</span>
+        else
+<span class="nc" id="L822">            super.setClobString(stmnt, idx, val, col);</span>
+<span class="nc" id="L823">    }</span>
+
+    /**
+     * Override the getOjbect() method to handle the case where the latest
+     * Postgres JDBC driver returns a org.postgresql.util.PGobject instead of a
+     * java.sql.Timestamp
+     *
+     * @param rs
+     * @param column
+     * @param map
+     *
+     * @exception SQLException
+     */
+    @Override
+    public Object getObject(ResultSet rs, int column, Map map)
+        throws SQLException {
+<span class="nc" id="L839">        Object obj = super.getObject(rs, column, map);</span>
+
+<span class="nc bnc" id="L841" title="All 2 branches missed.">        if (obj == null) {</span>
+<span class="nc" id="L842">            return null;</span>
+        }
+<span class="nc bnc" id="L844" title="All 2 branches missed.">        if (obj.getClass().getName().equals(&quot;org.postgresql.util.PGobject&quot;)) {</span>
+            try {
+<span class="nc" id="L846">                Method m = obj.getClass().getMethod(&quot;getType&quot;, (Class[]) null);</span>
+<span class="nc" id="L847">                Object type = m.invoke(obj, (Object[]) null);</span>
+<span class="nc bnc" id="L848" title="All 2 branches missed.">                if(_timestampTypes.contains(((String) type).toUpperCase(Locale.ENGLISH))) {</span>
+<span class="nc" id="L849">                    return rs.getTimestamp(column);</span>
+                }
+<span class="nc" id="L851">            } catch (Throwable t) {</span>
+<span class="nc bnc" id="L852" title="All 2 branches missed.">                if (t instanceof InvocationTargetException)</span>
+<span class="nc" id="L853">                    t = ((InvocationTargetException) t).getTargetException();</span>
+<span class="nc bnc" id="L854" title="All 2 branches missed.">                if (t instanceof SQLException)</span>
+<span class="nc" id="L855">                    throw (SQLException) t;</span>
+<span class="nc" id="L856">                throw new SQLException(t.getMessage());</span>
+<span class="nc" id="L857">            }</span>
+        }
+<span class="nc" id="L859">        return obj;</span>
+    }
+
+    /**
+     * Append XML comparison.
+     *
+     * @param buf
+     *            the SQL buffer to write the comparison
+     * @param op
+     *            the comparison operation to perform
+     * @param lhs
+     *            the left hand side of the comparison
+     * @param rhs
+     *            the right hand side of the comparison
+     * @param lhsxml
+     *            indicates whether the left operand maps to XML
+     * @param rhsxml
+     *            indicates whether the right operand maps to XML
+     */
+    @Override
+    public void appendXmlComparison(SQLBuffer buf, String op, FilterValue lhs,
+        FilterValue rhs, boolean lhsxml, boolean rhsxml) {
+<span class="nc" id="L881">        super.appendXmlComparison(buf, op, lhs, rhs, lhsxml, rhsxml);</span>
+<span class="nc bnc" id="L882" title="All 2 branches missed.">        if (lhsxml)</span>
+<span class="nc" id="L883">            appendXmlValue(buf, lhs);</span>
+        else
+<span class="nc" id="L885">            lhs.appendTo(buf);</span>
+<span class="nc" id="L886">        buf.append(&quot; &quot;).append(op).append(&quot; &quot;);</span>
+<span class="nc bnc" id="L887" title="All 2 branches missed.">        if (rhsxml)</span>
+<span class="nc" id="L888">            appendXmlValue(buf, rhs);</span>
+        else
+<span class="nc" id="L890">            rhs.appendTo(buf);</span>
+<span class="nc" id="L891">    }</span>
+
+    /**
+     * Append XML column value so that it can be used in comparisons.
+     *
+     * @param buf
+     *            the SQL buffer to write the value
+     * @param val
+     *            the value to be written
+     */
+    private void appendXmlValue(SQLBuffer buf, FilterValue val) {
+<span class="nc" id="L902">        Class rc = Filters.wrap(val.getType());</span>
+<span class="nc" id="L903">        int type = getJDBCType(JavaTypes.getTypeCode(rc), false);</span>
+<span class="nc bnc" id="L904" title="All 2 branches missed.">        boolean isXmlAttribute = (val.getXmlMapping() == null) ? false</span>
+<span class="nc" id="L905">                : val.getXmlMapping().isXmlAttribute();</span>
+<span class="nc" id="L906">        SQLBuffer newBufer = new SQLBuffer(this);</span>
+<span class="nc" id="L907">        newBufer.append(&quot;(xpath('/*/&quot;);</span>
+<span class="nc" id="L908">        val.appendTo(newBufer);</span>
+<span class="nc bnc" id="L909" title="All 2 branches missed.">        if (!isXmlAttribute)</span>
+<span class="nc" id="L910">            newBufer.append(&quot;/text()&quot;);</span>
+<span class="nc" id="L911">        newBufer.append(&quot;',&quot;).</span>
+<span class="nc" id="L912">            append(val.getColumnAlias(val.getFieldMapping().getColumns()[0])).</span>
+<span class="nc" id="L913">            append(&quot;))[1]&quot;);</span>
+<span class="nc" id="L914">        appendCast(buf, newBufer, type);</span>
+<span class="nc" id="L915">    }</span>
+
+
+    /**
+     * Return a SQL string to act as a placeholder for the given column.
+     */
+    @Override
+    public String getPlaceholderValueString(Column col) {
+<span class="nc bnc" id="L923" title="All 2 branches missed.">        if (col.getType() == Types.BIT) {</span>
+<span class="nc" id="L924">            return &quot;false&quot;;</span>
+        } else {
+<span class="nc" id="L926">            return super.getPlaceholderValueString(col);</span>
+        }
+    }
+
+    /**
+     * Get the native PostgreSQL Large Object Manager used for LOB handling.
+     */
+    protected LargeObjectManager getLargeObjectManager(DelegatingConnection conn) throws SQLException {
+<span class="nc" id="L934">        return getPGConnection(conn).getLargeObjectAPI();</span>
+    }
+
+    /**
+     * Get the native PostgreSQL connection from the given connection.
+     * Various attempts of unwrapping are being performed.
+     */
+    protected PGConnection getPGConnection(DelegatingConnection conn) {
+<span class="nc" id="L942">        Connection innerConn = conn.getInnermostDelegate();</span>
+<span class="nc bnc" id="L943" title="All 2 branches missed.">        if (innerConn instanceof PGConnection) {</span>
+<span class="nc" id="L944">            return (PGConnection) innerConn;</span>
+        }
+<span class="nc bnc" id="L946" title="All 2 branches missed.">        if (innerConn.getClass().getName().startsWith(&quot;org.apache.commons.dbcp2&quot;)) {</span>
+<span class="nc" id="L947">            return (PGConnection) getDbcpDelegate(innerConn);</span>
+        }
+<span class="nc" id="L949">        return (PGConnection) unwrapConnection(conn, PGConnection.class);</span>
+    }
+
+    /**
+     * Get the delegated connection from the given DBCP connection.
+     *
+     * @param conn must be a DBCP connection
+     * @return connection the DBCP connection delegates to
+     */
+    protected Connection getDbcpDelegate(Connection conn) {
+<span class="nc" id="L959">        Connection delegate = null;</span>
+        try {
+<span class="nc bnc" id="L961" title="All 2 branches missed.">            if (dbcpGetDelegate == null) {</span>
+<span class="nc" id="L962">                Class&lt;?&gt; dbcpConnectionClass =</span>
+<span class="nc" id="L963">                    Class.forName(&quot;org.apache.commons.dbcp2.DelegatingConnection&quot;, true, AccessController</span>
+<span class="nc" id="L964">                        .doPrivileged(J2DoPrivHelper.getContextClassLoaderAction()));</span>
+<span class="nc" id="L965">                Class&lt;?&gt; poolingDataSource = Class.forName(</span>
+                        &quot;org.apache.commons.dbcp2.PoolingDataSource&quot;, true,
+<span class="nc" id="L967">                        AccessController.doPrivileged(J2DoPrivHelper</span>
+<span class="nc" id="L968">                                .getContextClassLoaderAction()));</span>
+<span class="nc" id="L969">                Method setAccessToUnderlyingConnectionAllowed = poolingDataSource</span>
+<span class="nc" id="L970">                        .getMethod(&quot;setAccessToUnderlyingConnectionAllowed&quot;,</span>
+                                boolean.class);
+
+<span class="nc" id="L973">                Field this$0 = conn.getClass().getDeclaredField(&quot;this$0&quot;);</span>
+<span class="nc" id="L974">                this$0.setAccessible(true);</span>
+<span class="nc" id="L975">                Object poolingDataSourceObj = this$0.get(conn);</span>
+<span class="nc" id="L976">                setAccessToUnderlyingConnectionAllowed.invoke(poolingDataSourceObj,</span>
+<span class="nc" id="L977">                        true);</span>
+
+<span class="nc" id="L979">                dbcpGetDelegate = dbcpConnectionClass.getMethod(&quot;getInnermostDelegate&quot;);</span>
+            }
+<span class="nc" id="L981">            delegate = (Connection) dbcpGetDelegate.invoke(conn);</span>
+<span class="nc" id="L982">        } catch (Exception e) {</span>
+<span class="nc" id="L983">            throw new InternalException(_loc.get(&quot;dbcp-unwrap-failed&quot;), e);</span>
+<span class="nc" id="L984">        }</span>
+<span class="nc bnc" id="L985" title="All 2 branches missed.">        if (delegate == null) {</span>
+<span class="nc" id="L986">            throw new InternalException(_loc.get(&quot;dbcp-unwrap-failed&quot;));</span>
+        }
+<span class="nc" id="L988">        return delegate;</span>
+    }
+
+    /**
+     * Get (unwrap) the delegated connection from the given connection.
+     * Use reflection to attempt to unwrap a connection.
+     * Note: This is a JDBC 4 operation, so it requires a Java 6 environment
+     * with a JDBC 4 driver or data source to have any chance of success.
+     *
+     * @param conn a delegating connection
+     * @param connectionClass the expected type of delegated connection
+     * @return connection the given connection delegates to
+     */
+    private Connection unwrapConnection(Connection conn, Class&lt;?&gt; connectionClass) {
+        try {
+<span class="nc bnc" id="L1003" title="All 2 branches missed.">            if (connectionUnwrap == null) {</span>
+<span class="nc" id="L1004">                connectionUnwrap = Connection.class.getMethod(&quot;unwrap&quot;, Class.class);</span>
+            }
+<span class="nc" id="L1006">            return (Connection) connectionUnwrap.invoke(conn, connectionClass);</span>
+<span class="nc" id="L1007">        } catch (Exception e) {</span>
+<span class="nc" id="L1008">            throw new InternalException(_loc.get(&quot;connection-unwrap-failed&quot;), e);</span>
+        }
+    }
+
+    /**
+     * Connection wrapper to work around the postgres empty result set bug.
+     */
+    protected static class PostgresConnection extends DelegatingConnection {
+
+        private final PostgresDictionary _dict;
+
+        public PostgresConnection(Connection conn, PostgresDictionary dict) {
+<span class="nc" id="L1020">            super(conn);</span>
+<span class="nc" id="L1021">            _dict = dict;</span>
+<span class="nc" id="L1022">        }</span>
+
+        @Override
+        protected PreparedStatement prepareStatement(String sql, boolean wrap)
+            throws SQLException {
+<span class="nc" id="L1027">           return new PostgresPreparedStatement(super.prepareStatement(sql, false), PostgresConnection.this, _dict);</span>
+        }
+
+        @Override
+        protected PreparedStatement prepareStatement(String sql, int rsType,
+            int rsConcur, boolean wrap)
+            throws SQLException {
+<span class="nc" id="L1034">            return new PostgresPreparedStatement(super.prepareStatement(sql, rsType, rsConcur, false),</span>
+                    PostgresConnection.this,
+                    _dict);
+        }
+    }
+
+    /**
+     * Statement wrapper to work around the postgres empty result set bug.
+     */
+    protected static class PostgresPreparedStatement extends DelegatingPreparedStatement {
+
+        private final PostgresDictionary _dict;
+
+        public PostgresPreparedStatement(PreparedStatement ps,
+            Connection conn, PostgresDictionary dict) {
+<span class="nc" id="L1049">            super(ps, conn);</span>
+<span class="nc" id="L1050">            _dict = dict;</span>
+<span class="nc" id="L1051">        }</span>
+
+        @Override
+        protected ResultSet executeQuery(boolean wrap)
+            throws SQLException {
+            try {
+<span class="nc" id="L1057">                return super.executeQuery(wrap);</span>
+<span class="nc" id="L1058">            } catch (SQLException se) {</span>
+                // we need to make our best guess whether this is the empty
+                // ResultSet bug, since this exception could occur
+                // for other reasons (like an invalid query string). Note
+                // that Postgres error messages are localized, so we
+                // cannot just parse the exception String.
+<span class="nc" id="L1064">                ResultSet rs = getResultSet(wrap);</span>
+
+                // ResultSet should be empty: if not, then maybe an
+                // actual error occurred
+<span class="nc bnc" id="L1068" title="All 2 branches missed.">                if (rs == null)</span>
+<span class="nc" id="L1069">                    throw se;</span>
+
+<span class="nc" id="L1071">                return rs;</span>
+            }
+        }
+
+        @Override
+        public void setFetchSize(int i)
+            throws SQLException {
+            // some postgres drivers do not support the setFetchSize method
+            try {
+<span class="nc bnc" id="L1080" title="All 2 branches missed.">                if (_dict.supportsSetFetchSize)</span>
+<span class="nc" id="L1081">                    super.setFetchSize(i);</span>
+<span class="nc" id="L1082">            } catch (SQLException e) {</span>
+<span class="nc" id="L1083">                _dict.supportsSetFetchSize = false;</span>
+<span class="nc bnc" id="L1084" title="All 2 branches missed.">                if (_dict.log.isWarnEnabled())</span>
+<span class="nc" id="L1085">                    _dict.log.warn(_loc.get(&quot;psql-no-set-fetch-size&quot;), e);</span>
+<span class="nc" id="L1086">            }</span>
+<span class="nc" id="L1087">        }</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

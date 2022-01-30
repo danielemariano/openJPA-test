@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>LocalConstraint.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">LocalConstraint.java</span></div><h1>LocalConstraint.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.InvalidStateException;
+
+/**
+ * Constraint over local table columns, as opposed to a foreign key which
+ * spans tables. Column APIs can represent a full constraint or a partial
+ * constraint, aligning with {@link java.sql.DatabaseMetaData}.
+ *
+ * @author Abe White
+ */
+public abstract class LocalConstraint extends Constraint {
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L38">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L39">        (LocalConstraint.class);</span>
+
+<span class="nc" id="L41">    private List&lt;Column&gt; _colList = null;</span>
+<span class="nc" id="L42">    private Column[] _cols = null;</span>
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L47">    public LocalConstraint() {</span>
+<span class="nc" id="L48">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param name the name of the constraint, if any
+     * @param table the table of the constraint
+     * @deprecated
+     */
+    @Deprecated
+    public LocalConstraint(String name, Table table) {
+<span class="nc" id="L59">        super(name, table);</span>
+<span class="nc" id="L60">    }</span>
+
+    public LocalConstraint(DBIdentifier name, Table table) {
+<span class="nc" id="L63">        super(name, table);</span>
+<span class="nc" id="L64">    }</span>
+/**
+     * Called when the constraint is removed from its table.
+     */
+    @Override
+    void remove() {
+        // remove all columns
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        for (Column c : _cols) {</span>
+<span class="nc" id="L72">            c.removeConstraint(this);</span>
+        }
+<span class="nc" id="L74">        setColumns(null);</span>
+<span class="nc" id="L75">        super.remove();</span>
+<span class="nc" id="L76">    }</span>
+
+    /**
+     * Return all the columns the constraint spans.
+     */
+    public Column[] getColumns() {
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        if (_cols == null)</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">            _cols = (_colList == null) ? Schemas.EMPTY_COLUMNS</span>
+<span class="nc" id="L84">                : (Column[]) _colList.toArray(new Column[_colList.size()]);</span>
+<span class="nc" id="L85">        return _cols;</span>
+    }
+
+    /**
+     * Set the columns the constraint spans.
+     */
+    public void setColumns(Column[] cols) {
+<span class="nc" id="L92">        Column[] cur = getColumns();</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        for (int i = 0; i &lt; cur.length; i++)</span>
+<span class="nc" id="L94">            removeColumn(cur[i]);</span>
+
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        if (cols != null)</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L98">                addColumn(cols[i]);</span>
+<span class="nc" id="L99">    }</span>
+
+    /**
+     * Add a column to the constraint.
+     */
+    public void addColumn(Column col) {
+<span class="nc bnc" id="L105" title="All 2 branches missed.">    	if (col == null)</span>
+<span class="nc" id="L106">            throw new InvalidStateException(_loc.get(&quot;table-mismatch&quot;,</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">                col == null ? null : col.getTable(),</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">                col == null ? null : getTable()));</span>
+
+<span class="nc bnc" id="L110" title="All 2 branches missed.">        if (_colList == null)</span>
+<span class="nc" id="L111">            _colList = new ArrayList&lt;&gt;(3);</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        else if (_colList.contains(col))</span>
+<span class="nc" id="L113">            return;</span>
+
+<span class="nc" id="L115">        _colList.add(col);</span>
+<span class="nc" id="L116">        _cols = null;</span>
+<span class="nc" id="L117">        col.addConstraint(this);</span>
+<span class="nc" id="L118">    }</span>
+
+    /**
+     * Remove a column from the constraint.
+     *
+     * @return true if the column was removed, false if not part of the
+     * primary key
+     */
+    public boolean removeColumn(Column col) {
+<span class="nc bnc" id="L127" title="All 4 branches missed.">        if (col == null || _colList == null)</span>
+<span class="nc" id="L128">            return false;</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (_colList.remove(col)) {</span>
+<span class="nc" id="L130">            _cols = null;</span>
+<span class="nc" id="L131">            col.removeConstraint(this);</span>
+<span class="nc" id="L132">            return true;</span>
+        }
+<span class="nc" id="L134">        return false;</span>
+    }
+
+    /**
+     * Return true if the pk includes the given column.
+     */
+    public boolean containsColumn(Column col) {
+<span class="nc bnc" id="L141" title="All 4 branches missed.">        if (col == null || _colList == null)</span>
+<span class="nc" id="L142">            return false;</span>
+<span class="nc" id="L143">        return _colList.contains(col);</span>
+    }
+
+    /**
+     * Ref all columns in this constraint.
+     */
+    public void refColumns() {
+<span class="nc" id="L150">        Column[] cols = getColumns();</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L152">            cols[i].ref();</span>
+<span class="nc" id="L153">    }</span>
+
+    /**
+     * Deref all columns in this constraint.
+     */
+    public void derefColumns() {
+<span class="nc" id="L159">        Column[] cols = getColumns();</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L161">            cols[i].deref();</span>
+<span class="nc" id="L162">    }</span>
+
+    /**
+     * Return true if the given columns match the columns of this constraint.
+     */
+    public boolean columnsMatch(Column[] ocols) {
+<span class="nc" id="L168">        Column[] cols = getColumns();</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (cols.length != ocols.length)</span>
+<span class="nc" id="L170">            return false;</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        for (int i = 0; i &lt; ocols.length; i++)</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">            if (!hasColumn(cols, ocols[i]))</span>
+<span class="nc" id="L173">                return false;</span>
+<span class="nc" id="L174">        return true;</span>
+    }
+
+    /**
+     * Return whether the given column exists in the array.
+     */
+    private static boolean hasColumn(Column[] cols, Column col) {
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">            if (cols[i].getQualifiedPath().equals(col.getQualifiedPath()))</span>
+<span class="nc" id="L183">                return true;</span>
+<span class="nc" id="L184">        return false;</span>
+    }
+
+    /**
+     * Return true if the columns of this constraint matches that of
+     * the given one. The constraints are not compared on name.
+     */
+    protected boolean equalsLocalConstraint(LocalConstraint lc) {
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if (lc == this)</span>
+<span class="nc" id="L193">            return true;</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if (lc == null)</span>
+<span class="nc" id="L195">            return false;</span>
+<span class="nc" id="L196">        return columnsMatch(lc.getColumns());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

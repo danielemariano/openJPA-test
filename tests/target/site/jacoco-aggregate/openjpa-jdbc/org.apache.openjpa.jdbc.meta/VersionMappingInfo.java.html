@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>VersionMappingInfo.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">VersionMappingInfo.java</span></div><h1>VersionMappingInfo.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.meta.strats.NoneVersionStrategy;
+import org.apache.openjpa.jdbc.meta.strats.SuperclassVersionStrategy;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Information about the mapping from a version indicator to the schema, in
+ * raw form. The columns and tables used in mapping info will not be part of
+ * the {@link SchemaGroup} used at runtime. Rather, they will be structs
+ * with the relevant pieces of information filled in.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L47">public class VersionMappingInfo</span>
+    extends MappingInfo {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L52">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L53">    	(VersionMappingInfo.class);</span>
+    /**
+     * Return the columns set for this version, based on the given templates.
+     */
+    public Column[] getColumns(Version version, Column[] templates,
+        boolean adapt) {
+<span class="nc bnc" id="L59" title="All 2 branches missed.">    	if (spansMultipleTables(templates))</span>
+<span class="nc" id="L60">    		return getMultiTableColumns(version, templates, adapt);</span>
+<span class="nc" id="L61">        Table table = getSingleTable(version, templates);</span>
+<span class="nc" id="L62">        version.getMappingRepository().getMappingDefaults().populateColumns</span>
+<span class="nc" id="L63">            (version, table, templates);</span>
+<span class="nc" id="L64">        return createColumns(version, null, templates, table, adapt);</span>
+    }
+
+    /**
+     * Return the columns set for this version when the columns are spread
+     * across multiple tables.
+     */
+    public Column[] getMultiTableColumns(Version vers, Column[] templates,
+            boolean adapt) {
+<span class="nc" id="L73">    	Table primaryTable = vers.getClassMapping().getTable();</span>
+<span class="nc" id="L74">    	List&lt;DBIdentifier&gt; secondaryTableNames = Arrays.asList(vers</span>
+<span class="nc" id="L75">                .getClassMapping().getMappingInfo().getSecondaryTableIdentifiers());</span>
+<span class="nc" id="L76">        Map&lt;Table, List&lt;Column&gt;&gt; assign = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">    	for (Column col : templates) {</span>
+<span class="nc" id="L78">    	    DBIdentifier tableName = col.getTableIdentifier();</span>
+    	    Table table;
+<span class="nc bnc" id="L80" title="All 2 branches missed.">    		if (DBIdentifier.isEmpty(tableName)</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">    		  || tableName.equals(primaryTable.getIdentifier())) {</span>
+<span class="nc" id="L82">    			table = primaryTable;</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">    		} else if (secondaryTableNames.contains(tableName)) {</span>
+<span class="nc" id="L84">    			table = primaryTable.getSchema().getTable(tableName);</span>
+    		} else {
+<span class="nc" id="L86">                throw new UserException(_loc.get(&quot;bad-version-column-table&quot;,</span>
+<span class="nc" id="L87">    					col.getIdentifier().toString(), tableName));</span>
+    		}
+<span class="nc bnc" id="L89" title="All 2 branches missed.">    		if (!assign.containsKey(table))</span>
+<span class="nc" id="L90">    			assign.put(table, new ArrayList&lt;Column&gt;());</span>
+<span class="nc" id="L91">    		assign.get(table).add(col);</span>
+    	}
+<span class="nc" id="L93">    	MappingDefaults def = vers.getMappingRepository().getMappingDefaults();</span>
+<span class="nc" id="L94">    	List&lt;Column&gt; result = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L96">        Set&lt;Map.Entry&lt;Table,List&lt;Column&gt;&gt;&gt; assignSet = assign.entrySet();</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        for (Map.Entry&lt;Table,List&lt;Column&gt;&gt; assignEntry : assignSet) {</span>
+<span class="nc" id="L98">            Table table = assignEntry.getKey();</span>
+<span class="nc" id="L99">            List&lt;Column&gt; cols = assignEntry.getValue();</span>
+<span class="nc" id="L100">            Column[] partTemplates = cols.toArray(new Column[cols.size()]);</span>
+<span class="nc" id="L101">            def.populateColumns(vers, table, partTemplates);</span>
+<span class="nc" id="L102">            result.addAll(Arrays.asList(createColumns(vers, null, partTemplates,</span>
+    				table, adapt)));
+<span class="nc" id="L104">    	}</span>
+<span class="nc" id="L105">    	return result.toArray(new Column[result.size()]);</span>
+    }
+
+    /**
+     * Return the index to set on the version columns, or null if none.
+     */
+    public Index getIndex(Version version, Column[] cols, boolean adapt) {
+<span class="nc" id="L112">        Index idx = null;</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        if (cols.length &gt; 0)</span>
+<span class="nc" id="L114">            idx = version.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L115">                getIndex(version, cols[0].getTable(), cols);</span>
+<span class="nc" id="L116">        return createIndex(version, null, idx, cols, adapt);</span>
+    }
+
+    /**
+     * Synchronize internal information with the mapping data for the given
+     * version.
+     */
+    public void syncWith(Version version) {
+<span class="nc" id="L124">        clear(false);</span>
+
+<span class="nc" id="L126">        ClassMapping cls = version.getClassMapping();</span>
+<span class="nc" id="L127">        Column[] cols = version.getColumns();</span>
+
+<span class="nc" id="L129">        setColumnIO(version.getColumnIO());</span>
+<span class="nc" id="L130">        syncColumns(version, cols, false);</span>
+<span class="nc" id="L131">        syncIndex(version, version.getIndex());</span>
+
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if (version.getStrategy() == null</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">            || version.getStrategy() instanceof SuperclassVersionStrategy)</span>
+<span class="nc" id="L135">            return;</span>
+
+        // explicit version strategy if:
+        // - unmapped class and version mapped
+        // - mapped base class
+        // - mapped subclass that doesn't rely on superclass version
+<span class="nc" id="L141">        String strat = version.getStrategy().getAlias();</span>
+<span class="nc bnc" id="L142" title="All 4 branches missed.">        if ((!cls.isMapped() &amp;&amp; !NoneVersionStrategy.ALIAS.equals(strat))</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">            || (cls.isMapped()</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">            &amp;&amp; cls.getJoinablePCSuperclassMapping() == null))</span>
+<span class="nc" id="L145">            setStrategy(strat);</span>
+<span class="nc" id="L146">    }</span>
+
+    /**
+     * Affirms if the given columns belong to more than one tables.
+     */
+    boolean spansMultipleTables(Column[] cols) {
+<span class="nc bnc" id="L152" title="All 4 branches missed.">    	if (cols == null || cols.length &lt;= 1)</span>
+<span class="nc" id="L153">    		return false;</span>
+<span class="nc" id="L154">    	Set&lt;DBIdentifier&gt; tables = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">    	for (Column col : cols)</span>
+<span class="nc bnc" id="L156" title="All 4 branches missed.">    		if (tables.add(col.getTableIdentifier()) &amp;&amp; tables.size() &gt; 1)</span>
+<span class="nc" id="L157">    			return true;</span>
+<span class="nc" id="L158">    	return false;</span>
+    }
+
+    /**
+     * Gets the table where this version columns are mapped.
+     */
+    private Table getSingleTable(Version version, Column[] cols) {
+<span class="nc bnc" id="L165" title="All 4 branches missed.">    	if (cols == null || cols.length == 0</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">    	 || DBIdentifier.isEmpty(cols[0].getTableIdentifier()))</span>
+<span class="nc" id="L167">    		return version.getClassMapping().getTable();</span>
+<span class="nc" id="L168">    	return version.getClassMapping().getTable().getSchema()</span>
+<span class="nc" id="L169">    		.getTable(cols[0].getTableIdentifier());</span>
+    }
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SQLExceptions.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">SQLExceptions.java</span></div><h1>SQLExceptions.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.SQLException;
+import java.util.LinkedList;
+import java.util.List;
+
+import org.apache.openjpa.lib.util.Localizer.Message;
+import org.apache.openjpa.util.LockException;
+import org.apache.openjpa.util.OpenJPAException;
+import org.apache.openjpa.util.StoreException;
+
+/**
+ * Helper class for converting a {@link SQLException} into
+ * the appropriate OpenJPA type.
+ *
+ * @author Marc Prud'hommeaux
+ */
+<span class="nc" id="L36">public class SQLExceptions {</span>
+
+<span class="nc" id="L38">    private static final SQLException[] EMPTY_EXCEPS = new SQLException[0];</span>
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(SQLException se) {
+<span class="nc" id="L44">        return getStore(se, null, null);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link OpenJPAException}.
+     */
+    public static OpenJPAException getStore(SQLException se, Object failed) {
+<span class="nc" id="L51">        return getStore(se, failed, null);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(SQLException se,
+        DBDictionary dict) {
+<span class="nc" id="L59">        return getStore(se.getMessage(), se, dict);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(SQLException se,
+        DBDictionary dict, int level) {
+<span class="nc" id="L67">        return getStore(se.getMessage(), se, dict, level);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(SQLException se, Object failed,
+        DBDictionary dict) {
+<span class="nc" id="L75">        return getStore(se.getMessage(), se, failed, dict, -1);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(SQLException se, Object failed,
+        DBDictionary dict, int level) {
+<span class="nc" id="L83">        return getStore(se.getMessage(), se, failed, dict, level);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(Message msg, SQLException se,
+        DBDictionary dict) {
+<span class="nc" id="L91">        return getStore(msg.getMessage(), se, null, dict, -1);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(Message msg, SQLException se,
+        DBDictionary dict, int level) {
+<span class="nc" id="L99">        return getStore(msg.getMessage(), se, null, dict, level);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(String msg, SQLException se,
+        DBDictionary dict) {
+<span class="nc" id="L107">        return getStore(msg, se, null, dict, -1);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(String msg, SQLException se,
+        DBDictionary dict, int level) {
+<span class="nc" id="L115">        return getStore(msg, se, null, dict, level);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(String msg, SQLException se,
+        Object failed, DBDictionary dict) {
+<span class="nc" id="L123">        return getStore(msg, se, failed, dict, -1);</span>
+    }
+
+    /**
+     * Convert the specified exception into a {@link StoreException}.
+     */
+    public static OpenJPAException getStore(String msg, SQLException se, Object failed, DBDictionary dict, int level) {
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        if (msg == null)</span>
+<span class="nc" id="L131">            msg = se.getClass().getName();</span>
+<span class="nc" id="L132">        SQLException[] ses = getSQLExceptions(se);</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        OpenJPAException storeEx = (dict == null) ? new StoreException(msg).setFailedObject(failed)</span>
+<span class="nc" id="L134">                .setNestedThrowables(ses) : dict.newStoreException(msg, ses, failed);</span>
+<span class="nc bnc" id="L135" title="All 4 branches missed.">        if (level != -1 &amp;&amp; storeEx.getSubtype() == StoreException.LOCK) {</span>
+<span class="nc" id="L136">            LockException lockEx = (LockException) storeEx;</span>
+<span class="nc" id="L137">            lockEx.setLockLevel(level);</span>
+        }
+<span class="nc" id="L139">        return storeEx;</span>
+    }
+
+    /**
+     * Returns an array of {@link SQLException} instances for the specified
+     * exception.
+     */
+    private static SQLException[] getSQLExceptions(SQLException se) {
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (se == null)</span>
+<span class="nc" id="L148">            return EMPTY_EXCEPS;</span>
+
+<span class="nc" id="L150">        List&lt;SQLException&gt; errs = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L151" title="All 4 branches missed.">        while (se != null &amp;&amp; !errs.contains(se)) {</span>
+<span class="nc" id="L152">            errs.add(se);</span>
+<span class="nc" id="L153">            se = se.getNextException();</span>
+        }
+<span class="nc" id="L155">        return (SQLException[]) errs.toArray(new SQLException[errs.size()]);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

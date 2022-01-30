@@ -1,0 +1,1982 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JDBCStoreManager.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">JDBCStoreManager.java</span></div><h1>JDBCStoreManager.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import javax.sql.DataSource;
+
+import org.apache.openjpa.datacache.QueryCache;
+import org.apache.openjpa.datacache.QueryCacheStoreQuery;
+import org.apache.openjpa.enhance.PersistenceCapable;
+import org.apache.openjpa.event.OrphanedKeyAction;
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Discriminator;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.meta.strats.SuperclassDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.JoinSyntaxes;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.jdbc.sql.SQLFactory;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.jdbc.sql.SelectExecutor;
+import org.apache.openjpa.jdbc.sql.Union;
+import org.apache.openjpa.kernel.BrokerImpl;
+import org.apache.openjpa.kernel.FetchConfiguration;
+import org.apache.openjpa.kernel.FinderCache;
+import org.apache.openjpa.kernel.LockManager;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.PCState;
+import org.apache.openjpa.kernel.QueryLanguages;
+import org.apache.openjpa.kernel.Seq;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.kernel.StoreManager;
+import org.apache.openjpa.kernel.StoreQuery;
+import org.apache.openjpa.kernel.exps.ExpressionParser;
+import org.apache.openjpa.lib.jdbc.DelegatingConnection;
+import org.apache.openjpa.lib.jdbc.DelegatingPreparedStatement;
+import org.apache.openjpa.lib.jdbc.DelegatingStatement;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.rop.MergedResultObjectProvider;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.ValueStrategies;
+import org.apache.openjpa.util.ApplicationIds;
+import org.apache.openjpa.util.Exceptions;
+import org.apache.openjpa.util.Id;
+import org.apache.openjpa.util.ImplHelper;
+import org.apache.openjpa.util.InvalidStateException;
+import org.apache.openjpa.util.OpenJPAId;
+import org.apache.openjpa.util.StoreException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * StoreManager plugin that uses JDBC to store persistent data in a
+ * relational data store.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L93">public class JDBCStoreManager implements StoreManager, JDBCStore {</span>
+
+<span class="nc" id="L95">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L96">        (JDBCStoreManager.class);</span>
+
+<span class="nc" id="L98">    private StoreContext _ctx = null;</span>
+<span class="nc" id="L99">    private JDBCConfiguration _conf = null;</span>
+<span class="nc" id="L100">    private DBDictionary _dict = null;</span>
+<span class="nc" id="L101">    private SQLFactory _sql = null;</span>
+<span class="nc" id="L102">    private JDBCLockManager _lm = null;</span>
+<span class="nc" id="L103">    private DataSource _ds = null;</span>
+<span class="nc" id="L104">    private RefCountConnection _conn = null;</span>
+<span class="nc" id="L105">    private boolean _active = false;</span>
+<span class="nc" id="L106">    private Log _log = null;</span>
+
+    // track the pending statements so we can cancel them
+<span class="nc" id="L109">    private List&lt;Statement&gt; _stmnts = Collections.synchronizedList(new ArrayList&lt;Statement&gt;());</span>
+
+    // pool statements so that we can try to reuse rather than recreate
+<span class="nc" id="L112">    private List&lt;CancelPreparedStatement&gt; _cancelPreparedStatementsPool = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L113">    private List&lt;CancelStatement&gt; _cancelStatementPool = new ArrayList&lt;&gt;();</span>
+
+    @Override
+    public StoreContext getContext() {
+<span class="nc" id="L117">        return _ctx;</span>
+    }
+
+    @Override
+    public void setContext(StoreContext ctx) {
+<span class="nc" id="L122">        setContext(ctx, (JDBCConfiguration) ctx.getConfiguration());</span>
+<span class="nc" id="L123">    }</span>
+
+    public void setContext(StoreContext ctx, JDBCConfiguration conf) {
+<span class="nc" id="L126">        _ctx = ctx;</span>
+<span class="nc" id="L127">        _conf = conf;</span>
+<span class="nc" id="L128">        _dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L129">        _sql = _conf.getSQLFactoryInstance();</span>
+<span class="nc" id="L130">        _log = _conf.getLog(JDBCConfiguration.LOG_DIAG);</span>
+
+<span class="nc" id="L132">        LockManager lm = ctx.getLockManager();</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if (lm instanceof JDBCLockManager)</span>
+<span class="nc" id="L134">            _lm = (JDBCLockManager) lm;</span>
+
+<span class="nc" id="L136">        _ds = getDataSource(ctx);</span>
+
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (_conf.getUpdateManagerInstance().orderDirty())</span>
+<span class="nc" id="L139">            ctx.setOrderDirtyObjects(true);</span>
+<span class="nc" id="L140">    }</span>
+
+    private boolean useConnectionFactory2(StoreContext ctx) {
+<span class="nc bnc" id="L143" title="All 4 branches missed.">        return (!ctx.isManaged() &amp;&amp; _conf.isConnectionFactoryModeManaged());</span>
+    }
+
+    private DataSource getDataSource(StoreContext ctx) {
+        DataSource ds;
+
+<span class="nc bnc" id="L149" title="All 2 branches missed.">        if(useConnectionFactory2(ctx)) {</span>
+<span class="nc" id="L150">            ds = _conf.getDataSource2(ctx);</span>
+        }
+        else {
+<span class="nc" id="L153">            ds = _conf.getDataSource(ctx);</span>
+        }
+<span class="nc" id="L155">        return ds;</span>
+    }
+
+    @Override
+    public JDBCConfiguration getConfiguration() {
+<span class="nc" id="L160">        return _conf;</span>
+    }
+
+    @Override
+    public DBDictionary getDBDictionary() {
+<span class="nc" id="L165">        return _dict;</span>
+    }
+
+    @Override
+    public SQLFactory getSQLFactory() {
+<span class="nc" id="L170">        return _sql;</span>
+    }
+
+    @Override
+    public JDBCLockManager getLockManager() {
+<span class="nc" id="L175">        return _lm;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration getFetchConfiguration() {
+<span class="nc" id="L180">        return (JDBCFetchConfiguration) _ctx.getFetchConfiguration();</span>
+    }
+
+    @Override
+    public void beginOptimistic() {
+<span class="nc" id="L185">    }</span>
+
+    @Override
+    public void rollbackOptimistic() {
+<span class="nc" id="L189">    }</span>
+
+    @Override
+    public void begin() {
+<span class="nc" id="L193">        _active = true;</span>
+        try {
+<span class="nc bnc" id="L195" title="All 4 branches missed.">            if ((!_ctx.isManaged() || !_conf.isConnectionFactoryModeManaged())</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">                &amp;&amp; _conn.getAutoCommit())</span>
+<span class="nc" id="L197">                _conn.setAutoCommit(false);</span>
+<span class="nc" id="L198">        } catch (SQLException se) {</span>
+<span class="nc" id="L199">            _active = false;</span>
+<span class="nc" id="L200">            throw SQLExceptions.getStore(se, _dict);</span>
+<span class="nc" id="L201">        }</span>
+<span class="nc" id="L202">    }</span>
+
+    @Override
+    public void commit() {
+        try {
+<span class="nc bnc" id="L207" title="All 4 branches missed.">            if (!_ctx.isManaged() || !_conf.isConnectionFactoryModeManaged())</span>
+<span class="nc" id="L208">                _conn.commit();</span>
+<span class="nc" id="L209">        } catch (SQLException se) {</span>
+            try {
+<span class="nc" id="L211">                _conn.rollback();</span>
+<span class="nc" id="L212">            } catch (SQLException se2) {</span>
+<span class="nc" id="L213">            }</span>
+<span class="nc" id="L214">            throw SQLExceptions.getStore(se, _dict);</span>
+        } finally {
+<span class="nc" id="L216">            _active = false;</span>
+        }
+<span class="nc" id="L218">    }</span>
+
+    @Override
+    public void rollback() {
+        // already rolled back ourselves?
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if (!_active)</span>
+<span class="nc" id="L224">            return;</span>
+
+        try {
+<span class="nc bnc" id="L227" title="All 2 branches missed.">            if (_conn != null</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">                &amp;&amp; (!_ctx.isManaged() || !_conf</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">                    .isConnectionFactoryModeManaged()))</span>
+<span class="nc" id="L230">                _conn.rollback();</span>
+<span class="nc" id="L231">        } catch (SQLException se) {</span>
+<span class="nc" id="L232">            throw SQLExceptions.getStore(se, _dict);</span>
+        } finally {
+<span class="nc" id="L234">            _active = false;</span>
+        }
+<span class="nc" id="L236">    }</span>
+
+    @Override
+    public void retainConnection() {
+<span class="nc" id="L240">        connect(false);</span>
+<span class="nc" id="L241">        _conn.setRetain(true);</span>
+<span class="nc" id="L242">    }</span>
+
+    @Override
+    public void releaseConnection() {
+<span class="nc bnc" id="L246" title="All 2 branches missed.">        if (_conn != null)</span>
+<span class="nc" id="L247">            _conn.setRetain(false);</span>
+<span class="nc" id="L248">    }</span>
+
+    @Override
+    public Object getClientConnection() {
+<span class="nc" id="L252">        return new ClientConnection(getConnection());</span>
+    }
+
+    @Override
+    public Connection getConnection() {
+<span class="nc" id="L257">        connect(true);</span>
+<span class="nc" id="L258">        return _conn;</span>
+    }
+
+    protected DataSource getDataSource() {
+<span class="nc" id="L262">        return _ds;</span>
+    }
+
+    @Override
+    public boolean exists(OpenJPAStateManager sm, Object context) {
+        // add where conditions on base class to avoid joins if subclass
+        // doesn't use oid as identifier
+<span class="nc" id="L269">        ClassMapping mapping = (ClassMapping) sm.getMetaData();</span>
+<span class="nc" id="L270">        return exists(mapping, sm.getObjectId(), context);</span>
+    }
+
+    @Override
+    public boolean isCached(List&lt;Object&gt; oids, BitSet edata) {
+        // JDBCStoreManager doesn't store oids in memory.
+<span class="nc" id="L276">        return false;</span>
+    }
+
+    private boolean exists(ClassMapping mapping, Object oid, Object context) {
+        // add where conditions on base class to avoid joins if subclass
+        // doesn't use oid as identifier
+<span class="nc" id="L282">        Select sel = _sql.newSelect();</span>
+<span class="nc bnc" id="L283" title="All 2 branches missed.">        while (mapping.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L284">            mapping = mapping.getJoinablePCSuperclassMapping();</span>
+
+<span class="nc" id="L286">        sel.wherePrimaryKey(oid, mapping, this);</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        if (_log.isTraceEnabled()) {</span>
+<span class="nc" id="L288">            _log.trace(&quot;exists: oid=&quot;+oid+&quot; &quot;+mapping.getDescribedType());</span>
+        }
+        try {
+<span class="nc bnc" id="L291" title="All 2 branches missed.">            return sel.getCount(this) != 0;</span>
+<span class="nc" id="L292">        } catch (SQLException se) {</span>
+<span class="nc" id="L293">            throw SQLExceptions.getStore(se, _dict);</span>
+        }
+    }
+
+    @Override
+    public boolean syncVersion(OpenJPAStateManager sm, Object context) {
+<span class="nc" id="L299">        ClassMapping mapping = (ClassMapping) sm.getMetaData();</span>
+        try {
+<span class="nc" id="L301">            return mapping.getVersion().checkVersion(sm, this, true);</span>
+<span class="nc" id="L302">        } catch (SQLException se) {</span>
+<span class="nc" id="L303">            throw SQLExceptions.getStore(se, _dict, getReadLockLevel());</span>
+        }
+    }
+
+    private int getReadLockLevel() {
+<span class="nc" id="L308">        JDBCFetchConfiguration fetch = getFetchConfiguration();</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">        if (fetch != null) {</span>
+<span class="nc" id="L310">            return fetch.getReadLockLevel();</span>
+        }
+<span class="nc" id="L312">        return -1;</span>
+    }
+
+    @Override
+    public int compareVersion(OpenJPAStateManager state, Object v1, Object v2) {
+<span class="nc" id="L317">        ClassMapping mapping = (ClassMapping) state.getMetaData();</span>
+<span class="nc" id="L318">        return mapping.getVersion().compareVersion(v1, v2);</span>
+    }
+
+    @Override
+    public boolean initialize(OpenJPAStateManager sm, PCState state,
+        FetchConfiguration fetch, Object context) {
+<span class="nc" id="L324">        ConnectionInfo info = (ConnectionInfo) context;</span>
+        try {
+<span class="nc" id="L326">            return initializeState(sm, state, (JDBCFetchConfiguration) fetch,</span>
+                info);
+<span class="nc" id="L328">        } catch (ClassNotFoundException cnfe) {</span>
+<span class="nc" id="L329">            throw new UserException(cnfe);</span>
+<span class="nc" id="L330">        } catch (SQLException se) {</span>
+<span class="nc" id="L331">            throw SQLExceptions.getStore(se, Exceptions.toString(sm.getPersistenceCapable()),</span>
+<span class="nc" id="L332">                    _dict, fetch.getReadLockLevel());</span>
+        }
+    }
+
+    /**
+     * Initialize a newly-loaded instance.
+     */
+    protected boolean initializeState(OpenJPAStateManager sm, PCState state,
+        JDBCFetchConfiguration fetch, ConnectionInfo info)
+        throws ClassNotFoundException, SQLException {
+<span class="nc" id="L342">        Object oid = sm.getObjectId();</span>
+<span class="nc" id="L343">        ClassMapping mapping = (ClassMapping) sm.getMetaData();</span>
+<span class="nc" id="L344">        Result res = null;</span>
+        try {
+<span class="nc bnc" id="L346" title="All 4 branches missed.">            if (info != null &amp;&amp; info.result != null) {</span>
+<span class="nc" id="L347">                res = info.result;</span>
+<span class="nc" id="L348">                info.sm = sm;</span>
+<span class="nc bnc" id="L349" title="All 2 branches missed.">                if (info.mapping == null)</span>
+<span class="nc" id="L350">                    info.mapping = mapping;</span>
+<span class="nc" id="L351">                mapping = info.mapping;</span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">            } else if (oid instanceof OpenJPAId</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">                &amp;&amp; !((OpenJPAId) oid).hasSubclasses()) {</span>
+<span class="nc" id="L354">                Boolean custom = customLoad(sm, mapping, state, fetch);</span>
+<span class="nc bnc" id="L355" title="All 2 branches missed.">                if (custom != null)</span>
+<span class="nc" id="L356">                    return custom.booleanValue();</span>
+<span class="nc" id="L357">                res = getInitializeStateResult(sm, mapping, fetch,</span>
+                    Select.SUBS_EXACT);
+<span class="nc bnc" id="L359" title="All 4 branches missed.">                if (res == null &amp;&amp; !selectPrimaryKey(sm, mapping, fetch))</span>
+<span class="nc" id="L360">                    return false;</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">                if (isEmptyResult(res))</span>
+<span class="nc" id="L362">                    return false;</span>
+<span class="nc" id="L363">            } else {</span>
+<span class="nc" id="L364">                ClassMapping[] mappings = mapping.</span>
+<span class="nc" id="L365">                    getIndependentAssignableMappings();</span>
+<span class="nc bnc" id="L366" title="All 2 branches missed.">                if (mappings.length == 1) {</span>
+<span class="nc" id="L367">                    mapping = mappings[0];</span>
+<span class="nc" id="L368">                    Boolean custom = customLoad(sm, mapping, state, fetch);</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">                    if (custom != null)</span>
+<span class="nc" id="L370">                        return custom.booleanValue();</span>
+<span class="nc" id="L371">                    res = getInitializeStateResult(sm, mapping, fetch,</span>
+                        Select.SUBS_ANY_JOINABLE);
+<span class="nc bnc" id="L373" title="All 4 branches missed.">                    if (res == null &amp;&amp; !selectPrimaryKey(sm, mapping, fetch))</span>
+<span class="nc" id="L374">                        return false;</span>
+<span class="nc" id="L375">                } else</span>
+<span class="nc" id="L376">                    res = getInitializeStateUnionResult(sm, mapping, mappings,</span>
+                        fetch);
+<span class="nc bnc" id="L378" title="All 2 branches missed.">                if (isEmptyResult(res))</span>
+<span class="nc" id="L379">                    return false;</span>
+            }
+
+            // figure out what type of object this is; the state manager
+            // only guarantees to provide a base class
+            Class&lt;?&gt; type;
+<span class="nc bnc" id="L385" title="All 2 branches missed.">            if ((type = getType(res, mapping)) == null) {</span>
+<span class="nc bnc" id="L386" title="All 2 branches missed.">                if (res.getBaseMapping() != null)</span>
+<span class="nc" id="L387">                    mapping = res.getBaseMapping();</span>
+<span class="nc" id="L388">                res.startDataRequest(mapping.getDiscriminator());</span>
+                try {
+<span class="nc" id="L390">                    type = mapping.getDiscriminator().getClass(this, mapping,</span>
+                        res);
+                } finally {
+<span class="nc" id="L393">                    res.endDataRequest();</span>
+                }
+            }
+
+            // initialize the state manager; this may change the mapping
+            // and the object id instance if the type as determined
+            // from the indicator is a subclass of expected type
+<span class="nc" id="L400">            sm.initialize(type, state);</span>
+
+<span class="nc bnc" id="L402" title="All 4 branches missed.">            if (info != null &amp;&amp; info.result != null) {</span>
+<span class="nc" id="L403">                FieldMapping mappedByFieldMapping = info.result.</span>
+<span class="nc" id="L404">                    getMappedByFieldMapping();</span>
+<span class="nc" id="L405">                Object mappedByObject = info.result.getMappedByValue();</span>
+<span class="nc bnc" id="L406" title="All 4 branches missed.">                if (mappedByFieldMapping != null &amp;&amp; mappedByObject != null)</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">                    if (mappedByObject instanceof OpenJPAId &amp;&amp;</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">                        mapping.getExtraFieldDataIndex(mappedByFieldMapping.getIndex()) != -1) {</span>
+                        // The inverse relation can not be set since
+                        // we are eagerly loading this sm for
+                        // a sm owner that is still in the process of
+                        // initializing itself.
+                        // Remember owner oid by setIntermediate().
+                        // The inverse relation is set later by
+                        // setInverseRelation() when the sm owner is fully
+                        // initialized.
+<span class="nc" id="L417">                        int index = mappedByFieldMapping.getIndex();</span>
+<span class="nc bnc" id="L418" title="All 2 branches missed.">                        if (sm.getLoaded().get(index)) {</span>
+<span class="nc" id="L419">                            sm.setImplData(index, mappedByObject);</span>
+                        } else {
+<span class="nc" id="L421">                            sm.setIntermediate(index, mappedByObject);</span>
+                        }
+<span class="nc" id="L423">                    } else {</span>
+<span class="nc" id="L424">                        setMappedBy(sm, mappedByFieldMapping, mappedByObject);</span>
+                    }
+            }
+            // load the selected mappings into the given state manager
+<span class="nc bnc" id="L428" title="All 2 branches missed.">            if (res != null) {</span>
+                // re-get the mapping in case the instance was a subclass
+<span class="nc" id="L430">                mapping = (ClassMapping) sm.getMetaData();</span>
+<span class="nc" id="L431">                load(mapping, sm, fetch, res);</span>
+<span class="nc" id="L432">                getVersion(mapping, sm, res);</span>
+<span class="nc" id="L433">                setInverseRelation(sm, mapping, res);</span>
+            }
+<span class="nc" id="L435">            return true;</span>
+        } finally {
+<span class="nc bnc" id="L437" title="All 6 branches missed.">            if (res != null &amp;&amp; (info == null || res != info.result))</span>
+<span class="nc" id="L438">                res.close();</span>
+        }
+    }
+
+    private void setInverseRelation(OpenJPAStateManager owner,
+        ClassMapping mapping, Result res) {
+<span class="nc" id="L444">        FieldMapping[] fms = mapping.getFieldMappings();</span>
+
+        // At this point, the owner is fully initialized.
+        // Check if the owner has eagerly loaded ToMany relations.
+<span class="nc bnc" id="L448" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L449" title="All 2 branches missed.">            if (res.getEager(fms[i]) != null) {</span>
+<span class="nc bnc" id="L450" title="All 2 branches missed.">                if (!fms[i].getElement().isTypePC()) {</span>
+<span class="nc" id="L451">                    continue;</span>
+                }
+<span class="nc" id="L453">                Object coll =  owner.fetchObject(fms[i].getIndex());</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">                if (coll instanceof Map)</span>
+<span class="nc" id="L455">                    coll = ((Map&lt;?,?&gt;)coll).values();</span>
+<span class="nc bnc" id="L456" title="All 2 branches missed.">                if (coll instanceof Collection&lt;?&gt; &amp;&amp;</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">                    ((Collection&lt;?&gt;) coll).size() &gt; 0) {</span>
+                    // Found eagerly loaded collection.
+                    // Publisher (1) &lt;==&gt;  (M) Magazine
+                    //    publisher has a EAGER OneToMany relation
+                    //    magazine has a EAGER or LAZY ManyToOne publisher
+                    // For each member (Magazine) in the collection,
+                    // set its inverse relation (Publisher).
+<span class="nc" id="L464">                    for (Iterator&lt;?&gt; itr = ((Collection&lt;?&gt;) coll).iterator();</span>
+<span class="nc bnc" id="L465" title="All 2 branches missed.">                        itr.hasNext();) {</span>
+<span class="nc" id="L466">                        PersistenceCapable pc = (PersistenceCapable) itr.next();</span>
+<span class="nc bnc" id="L467" title="All 2 branches missed.">                        if (pc == null) {</span>
+<span class="nc" id="L468">                            continue;</span>
+                        }
+<span class="nc" id="L470">                        OpenJPAStateManager sm = (OpenJPAStateManager) pc.pcGetStateManager();</span>
+<span class="nc" id="L471">                        ClassMapping cm =</span>
+<span class="nc" id="L472">                            (ClassMapping) _conf.getMetaDataRepositoryInstance().getCachedMetaData(pc.getClass());</span>
+<span class="nc" id="L473">                        FieldMapping[] fmd = cm.getFieldMappings();</span>
+<span class="nc bnc" id="L474" title="All 2 branches missed.">                        for (int j = 0; j &lt; fmd.length; j++) {</span>
+                            // don't check the oids for basic fields.
+<span class="nc bnc" id="L476" title="All 2 branches missed.">                            if (fmd[j].isTypePC()) {</span>
+<span class="nc" id="L477">                                Object oid = sm.getIntermediate(fmd[j].getIndex());</span>
+                                // if oid was setIntermediate() previously and it is the same as the owner,generate
+                                // then set the inverse relation
+<span class="nc bnc" id="L480" title="All 4 branches missed.">                                if (oid != null &amp;&amp; oid.equals(owner.getObjectId())) {</span>
+<span class="nc" id="L481">                                    sm.storeObject(fmd[j].getIndex(), owner.getPersistenceCapable());</span>
+<span class="nc" id="L482">                                    break;</span>
+                                }
+                            }
+                        }
+<span class="nc" id="L486">                    }</span>
+                }
+            }
+        }
+<span class="nc" id="L490">    }</span>
+
+    protected void setMappedBy(OpenJPAStateManager sm,
+        FieldMapping mappedByFieldMapping, Object mappedByObject) {
+<span class="nc" id="L494">        ClassMapping mapping = (ClassMapping) sm.getMetaData();</span>
+<span class="nc" id="L495">        FieldMapping[] fms = mapping.getFieldMappings();</span>
+<span class="nc bnc" id="L496" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L497" title="All 2 branches missed.">            if (fms[i] == mappedByFieldMapping) {</span>
+<span class="nc" id="L498">                sm.storeObject(fms[i].getIndex(), mappedByObject);</span>
+<span class="nc" id="L499">                return;</span>
+            }
+        }
+<span class="nc" id="L502">    }</span>
+
+    /**
+     * This method is to provide override for non-JDBC or JDBC-like
+     * implementation of getting version from the result set.
+     */
+    protected void getVersion(ClassMapping mapping, OpenJPAStateManager sm,
+        Result res) throws SQLException {
+<span class="nc" id="L510">        mapping.getVersion().afterLoad(sm, this);</span>
+<span class="nc" id="L511">    }</span>
+
+    /**
+     * This method is to provide override for non-JDBC or JDBC-like
+     * implementation of checking whether the result set is empty or not.
+     */
+    protected boolean isEmptyResult(Result res) throws SQLException {
+<span class="nc bnc" id="L518" title="All 4 branches missed.">        if (res != null &amp;&amp; !res.next())</span>
+<span class="nc" id="L519">            return true;</span>
+<span class="nc" id="L520">        return false;</span>
+    }
+
+    /**
+     * This method is to provide override for non-JDBC or JDBC-like
+     * implementation of getting type from the result set.
+     */
+    protected Class&lt;?&gt; getType(Result res, ClassMapping mapping){
+<span class="nc bnc" id="L528" title="All 2 branches missed.">        if (res == null)</span>
+<span class="nc" id="L529">            return mapping.getDescribedType();</span>
+<span class="nc" id="L530">        return null;</span>
+    }
+
+    /**
+     * Allow the mapping to custom load data. Return null if the mapping
+     * does not use custom loading.
+     */
+    private Boolean customLoad(OpenJPAStateManager sm, ClassMapping mapping,
+        PCState state, JDBCFetchConfiguration fetch)
+        throws ClassNotFoundException, SQLException {
+        // check to see if the mapping takes care of initialization
+<span class="nc bnc" id="L541" title="All 2 branches missed.">        if (!mapping.customLoad(sm, this, state, fetch))</span>
+<span class="nc" id="L542">            return null;</span>
+<span class="nc bnc" id="L543" title="All 2 branches missed.">        if (sm.getManagedInstance() != null) {</span>
+<span class="nc" id="L544">            mapping.getVersion().afterLoad(sm, this);</span>
+<span class="nc" id="L545">            return Boolean.TRUE;</span>
+        }
+<span class="nc" id="L547">        return Boolean.FALSE;</span>
+    }
+
+    /**
+     * Select the data for the given instance and return the result. Return
+     * null if there is no data in the current fetch groups to select.
+     */
+    private Result getInitializeStateResult(OpenJPAStateManager sm,
+        ClassMapping mapping, JDBCFetchConfiguration fetch, int subs)
+        throws SQLException {
+<span class="nc" id="L557">        FinderQueryImpl fq = getFinder(mapping, fetch);</span>
+<span class="nc bnc" id="L558" title="All 2 branches missed.">        if (fq != null)</span>
+<span class="nc" id="L559">            return fq.execute(sm, this, fetch);</span>
+<span class="nc" id="L560">        Select sel = _sql.newSelect();</span>
+<span class="nc bnc" id="L561" title="All 2 branches missed.">        if (!select(sel, mapping, subs, sm, null, fetch,</span>
+            EagerFetchModes.EAGER_JOIN, true, false))
+<span class="nc" id="L563">            return null;</span>
+<span class="nc" id="L564">        sel.wherePrimaryKey(sm.getObjectId(), mapping, this);</span>
+<span class="nc" id="L565">        sel.setExpectedResultCount(1, false);</span>
+<span class="nc bnc" id="L566" title="All 2 branches missed.">        if (_log.isTraceEnabled()) {</span>
+<span class="nc" id="L567">            _log.trace(&quot;getInitializeStateResult: oid=&quot;+sm.getObjectId()+&quot; &quot;+mapping.getDescribedType());</span>
+        }
+<span class="nc" id="L569">        Result result = sel.execute(this, fetch);</span>
+<span class="nc" id="L570">        cacheFinder(mapping, sel, fetch);</span>
+<span class="nc" id="L571">        return result;</span>
+    }
+
+    /**
+     * Select a union of the data for the given instance from possible concrete
+     * mappings and return the result.
+     */
+    private Result getInitializeStateUnionResult(final OpenJPAStateManager sm,
+        ClassMapping mapping, final ClassMapping[] mappings,
+        final JDBCFetchConfiguration fetch) throws SQLException {
+<span class="nc" id="L581">        FinderQueryImpl fq = getFinder(mapping, fetch);</span>
+<span class="nc bnc" id="L582" title="All 2 branches missed.">        if (fq != null)</span>
+<span class="nc" id="L583">            return fq.execute(sm, this, fetch);</span>
+<span class="nc" id="L584">        final JDBCStoreManager store = this;</span>
+<span class="nc" id="L585">        final int eager = Math.min(fetch.getEagerFetchMode(),</span>
+            EagerFetchModes.EAGER_JOIN);
+
+<span class="nc" id="L588">        Union union = _sql.newUnion(mappings.length);</span>
+<span class="nc" id="L589">        union.setExpectedResultCount(1, false);</span>
+<span class="nc bnc" id="L590" title="All 2 branches missed.">        if (fetch.getSubclassFetchMode(mapping) != EagerFetchModes.EAGER_JOIN)</span>
+<span class="nc" id="L591">            union.abortUnion();</span>
+<span class="nc" id="L592">        union.select(new Union.Selector() {</span>
+            @Override
+            public void select(Select sel, int i) {
+<span class="nc" id="L595">                sel.select(mappings[i], Select.SUBS_ANY_JOINABLE, store, fetch,</span>
+                    eager);
+<span class="nc" id="L597">                sel.wherePrimaryKey(sm.getObjectId(), mappings[i], store);</span>
+<span class="nc" id="L598">            }</span>
+        });
+<span class="nc" id="L600">        Result result = union.execute(this, fetch);</span>
+<span class="nc" id="L601">        cacheFinder(mapping, union, fetch);</span>
+<span class="nc" id="L602">        return result;</span>
+    }
+
+    /**
+     * Select primary key data to make sure the given instance exists, locking
+     * if needed.
+     */
+    private boolean selectPrimaryKey(OpenJPAStateManager sm,
+        ClassMapping mapping, JDBCFetchConfiguration fetch)
+        throws SQLException {
+        // select pks from base class record to ensure it exists and lock
+        // it if needed
+<span class="nc" id="L614">        ClassMapping base = mapping;</span>
+<span class="nc bnc" id="L615" title="All 2 branches missed.">        while (base.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L616">            base = base.getJoinablePCSuperclassMapping();</span>
+
+<span class="nc" id="L618">        Select sel = _sql.newSelect();</span>
+<span class="nc" id="L619">        sel.select(base.getPrimaryKeyColumns());</span>
+<span class="nc" id="L620">        sel.wherePrimaryKey(sm.getObjectId(), base, this);</span>
+<span class="nc bnc" id="L621" title="All 2 branches missed.">        if (_log.isTraceEnabled()) {</span>
+<span class="nc" id="L622">            _log.trace(&quot;selectPrimaryKey: oid=&quot;+sm.getObjectId()+&quot; &quot;+mapping.getDescribedType());</span>
+        }
+<span class="nc" id="L624">        Result exists = sel.execute(this, fetch);</span>
+        try {
+<span class="nc bnc" id="L626" title="All 2 branches missed.">            if (isEmptyResult(exists))</span>
+<span class="nc" id="L627">                return false;</span>
+
+            // record locked?
+<span class="nc bnc" id="L630" title="All 6 branches missed.">            if (_active &amp;&amp; _lm != null &amp;&amp; exists.isLocking())</span>
+<span class="nc" id="L631">                _lm.loadedForUpdate(sm);</span>
+<span class="nc" id="L632">            return true;</span>
+        } finally {
+<span class="nc" id="L634">            exists.close();</span>
+        }
+    }
+
+    @Override
+    public boolean load(OpenJPAStateManager sm, BitSet fields,
+        FetchConfiguration fetch, int lockLevel, Object context) {
+<span class="nc" id="L641">        JDBCFetchConfiguration jfetch = (JDBCFetchConfiguration) fetch;</span>
+
+        // get a connection, or reuse current one
+<span class="nc" id="L644">        ConnectionInfo info = (ConnectionInfo) context;</span>
+<span class="nc" id="L645">        Result res = null;</span>
+<span class="nc bnc" id="L646" title="All 2 branches missed.">        if (info != null) {</span>
+            // if initialize() fails to load required fields, then this method
+            // is called; make sure not to try to use the given result if it's
+            // the same one we just failed to completely initialize() with
+<span class="nc bnc" id="L650" title="All 2 branches missed.">            if (info.sm != sm)</span>
+<span class="nc" id="L651">                res = info.result;</span>
+<span class="nc" id="L652">            info.sm = null;</span>
+        }
+        try {
+            // if there's an existing result, load all we can from it
+<span class="nc" id="L656">            ClassMapping mapping = (ClassMapping) sm.getMetaData();</span>
+<span class="nc bnc" id="L657" title="All 2 branches missed.">            if (res != null) {</span>
+<span class="nc" id="L658">                load(mapping, sm, jfetch, res);</span>
+<span class="nc" id="L659">                removeLoadedFields(sm, fields);</span>
+            }
+
+            // if the instance is hollow and there's a customized
+            // get by id method, use it
+<span class="nc bnc" id="L664" title="All 2 branches missed.">            if (sm.getLoaded().length() == 0</span>
+<span class="nc bnc" id="L665" title="All 2 branches missed.">                &amp;&amp; mapping.customLoad(sm, this, null, jfetch))</span>
+<span class="nc" id="L666">                removeLoadedFields(sm, fields);</span>
+
+
+            //### select is kind of a big object, and in some cases we don't
+            //### use it... would it be worth it to have a small shell select
+            //### object that only creates a real select when actually used?
+            //### Delayed proxy specific optimization: If the only fields that
+            //### need to be loaded are delayed proxies, building the select is
+            //### not necessary.
+
+<span class="nc bnc" id="L676" title="All 2 branches missed.">            if (!isDelayedLoadOnly(sm, fields, mapping)) {</span>
+<span class="nc" id="L677">	            Select sel = _sql.newSelect();</span>
+<span class="nc bnc" id="L678" title="All 2 branches missed.">	            if (select(sel, mapping, Select.SUBS_EXACT, sm, fields, jfetch,</span>
+	                EagerFetchModes.EAGER_JOIN, true, false)) {
+<span class="nc" id="L680">	                sel.wherePrimaryKey(sm.getObjectId(), mapping, this);</span>
+<span class="nc bnc" id="L681" title="All 2 branches missed.">	                if (_log.isTraceEnabled()) {</span>
+<span class="nc" id="L682">	                    _log.trace(&quot;load: &quot;+mapping.getDescribedType()+&quot; oid: &quot;+sm.getObjectId());</span>
+	                }
+<span class="nc" id="L684">	                res = sel.execute(this, jfetch, lockLevel);</span>
+	                try {
+<span class="nc bnc" id="L686" title="All 2 branches missed.">	                    if (isEmptyResult(res))</span>
+<span class="nc" id="L687">	                        return false;</span>
+<span class="nc" id="L688">	                    load(mapping, sm, jfetch, res);</span>
+	                } finally {
+<span class="nc" id="L690">	                    res.close();</span>
+	                }
+	            }
+            }
+
+            // now allow the fields to load themselves individually too
+<span class="nc" id="L696">            FieldMapping[] fms = mapping.getFieldMappings();</span>
+<span class="nc bnc" id="L697" title="All 2 branches missed.">            for (int i = 0; i &lt; fms.length; i++)</span>
+<span class="nc bnc" id="L698" title="All 6 branches missed.">                if (fields.get(i) &amp;&amp; (!sm.getLoaded().get(i) || sm.isDelayed(i))) {</span>
+<span class="nc bnc" id="L699" title="All 2 branches missed.">                    if (_log.isTraceEnabled()) {</span>
+<span class="nc" id="L700">                        _log.trace(&quot;load field: '&quot;+ fms[i].getName() + &quot;' for oid=&quot;+sm.getObjectId()</span>
+<span class="nc" id="L701">                            +&quot; &quot;+mapping.getDescribedType());</span>
+                    }
+<span class="nc" id="L703">                    fms[i].load(sm, this, jfetch.traverseJDBC(fms[i]));</span>
+                }
+<span class="nc" id="L705">            mapping.getVersion().afterLoad(sm, this);</span>
+<span class="nc" id="L706">            return true;</span>
+<span class="nc" id="L707">        } catch (ClassNotFoundException cnfe) {</span>
+<span class="nc" id="L708">            throw new StoreException(cnfe);</span>
+<span class="nc" id="L709">        } catch (SQLException se) {</span>
+<span class="nc" id="L710">            throw SQLExceptions.getStore(se, _dict, lockLevel);</span>
+        }
+    }
+
+    private boolean isDelayedLoadOnly(OpenJPAStateManager sm, BitSet fields, ClassMapping mapping) {
+<span class="nc bnc" id="L715" title="All 2 branches missed.">        if (!sm.getContext().getConfiguration().getProxyManagerInstance().getDelayCollectionLoading()</span>
+<span class="nc bnc" id="L716" title="All 2 branches missed.">            || fields.isEmpty()) {</span>
+<span class="nc" id="L717">            return false;</span>
+        }
+<span class="nc" id="L719">        FieldMapping[] fms = mapping.getFieldMappings();</span>
+<span class="nc bnc" id="L720" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L721" title="All 2 branches missed.">            if (fields.get(i)) {</span>
+<span class="nc bnc" id="L722" title="All 6 branches missed.">                if (!(fms[i].isDelayCapable() &amp;&amp; (!sm.getLoaded().get(i) || sm.isDelayed(i)))) {</span>
+<span class="nc" id="L723">                    return false;</span>
+                }
+            }
+        }
+<span class="nc" id="L727">        return true;</span>
+    }
+
+    /**
+     * Return a list formed by removing all loaded fields from the given one.
+     */
+    private void removeLoadedFields(OpenJPAStateManager sm, BitSet fields) {
+<span class="nc bnc" id="L734" title="All 2 branches missed.">        for (int i = 0, len = fields.length(); i &lt; len; i++)</span>
+<span class="nc bnc" id="L735" title="All 4 branches missed.">            if (fields.get(i) &amp;&amp; sm.getLoaded().get(i))</span>
+<span class="nc" id="L736">                fields.clear(i);</span>
+<span class="nc" id="L737">    }</span>
+
+    @Override
+    public Collection loadAll(Collection sms, PCState state, int load,
+        FetchConfiguration fetch, Object context) {
+<span class="nc" id="L742">        return ImplHelper.loadAll(sms, this, state, load, fetch, context);</span>
+    }
+
+    @Override
+    public void beforeStateChange(OpenJPAStateManager sm, PCState fromState,
+        PCState toState) {
+<span class="nc" id="L748">    }</span>
+
+    @Override
+    public Collection flush(Collection sms) {
+        try {
+<span class="nc bnc" id="L753" title="All 4 branches missed.">            if (_conn != null &amp;&amp; _conn.getInnermostDelegate().isReadOnly())</span>
+<span class="nc" id="L754">                _conn.setReadOnly(false);</span>
+<span class="nc" id="L755">        } catch (SQLException e) {</span>
+<span class="nc" id="L756">        }</span>
+<span class="nc" id="L757">        return _conf.getUpdateManagerInstance().flush(sms, this);</span>
+    }
+
+    @Override
+    public boolean cancelAll() {
+        // note that this method does not lock the context, since
+        // we want to allow a different thread to be able to cancel the
+        // outstanding statement on a different context
+
+        List&lt;Statement&gt; stmnts;
+<span class="nc" id="L767">        synchronized (_stmnts) {</span>
+<span class="nc bnc" id="L768" title="All 2 branches missed.">            if (_stmnts.isEmpty())</span>
+<span class="nc" id="L769">                return false;</span>
+<span class="nc" id="L770">            stmnts = new ArrayList&lt;&gt;(_stmnts);</span>
+<span class="nc" id="L771">        }</span>
+
+        try {
+<span class="nc bnc" id="L774" title="All 2 branches missed.">            for (Iterator&lt;Statement&gt; itr = stmnts.iterator(); itr.hasNext();)</span>
+<span class="nc" id="L775">                ((Statement) itr.next()).cancel();</span>
+<span class="nc" id="L776">            return true;</span>
+<span class="nc" id="L777">        } catch (SQLException se) {</span>
+<span class="nc" id="L778">            throw SQLExceptions.getStore(se, _dict);</span>
+        }
+    }
+
+    @Override
+    public boolean assignObjectId(OpenJPAStateManager sm, boolean preFlush) {
+<span class="nc" id="L784">        ClassMetaData meta = sm.getMetaData();</span>
+<span class="nc bnc" id="L785" title="All 2 branches missed.">        if (meta.getIdentityType() == ClassMetaData.ID_APPLICATION)</span>
+<span class="nc" id="L786">            return ApplicationIds.assign(sm, this, preFlush);</span>
+
+        // datastore identity
+<span class="nc" id="L789">        Object val = ImplHelper.generateIdentityValue(_ctx, meta,</span>
+            JavaTypes.LONG);
+<span class="nc bnc" id="L791" title="All 4 branches missed.">        if (val == null &amp;&amp; meta.getIdentityStrategy() != ValueStrategies.NATIVE)</span>
+<span class="nc" id="L792">            return false;</span>
+<span class="nc bnc" id="L793" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L794">            val = getDataStoreIdSequence(meta).next(_ctx, meta);</span>
+<span class="nc" id="L795">        sm.setObjectId(newDataStoreId(val, meta));</span>
+<span class="nc" id="L796">        return true;</span>
+    }
+
+    @Override
+    public boolean assignField(OpenJPAStateManager sm, int field,
+        boolean preFlush) {
+<span class="nc" id="L802">        FieldMetaData fmd = sm.getMetaData().getField(field);</span>
+<span class="nc" id="L803">        Object val = ImplHelper.generateFieldValue(_ctx, fmd);</span>
+<span class="nc bnc" id="L804" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L805">            return false;</span>
+<span class="nc" id="L806">        sm.store(field, val);</span>
+<span class="nc" id="L807">        return true;</span>
+    }
+
+    @Override
+    public Class&lt;?&gt; getManagedType(Object oid) {
+<span class="nc bnc" id="L812" title="All 2 branches missed.">        if (oid instanceof Id)</span>
+<span class="nc" id="L813">            return ((Id) oid).getType();</span>
+<span class="nc" id="L814">        return null;</span>
+    }
+
+    @Override
+    public Class&lt;?&gt; getDataStoreIdType(ClassMetaData meta) {
+<span class="nc" id="L819">        return Id.class;</span>
+    }
+
+    @Override
+    public Object copyDataStoreId(Object oid, ClassMetaData meta) {
+<span class="nc" id="L824">        Id id = (Id) oid;</span>
+<span class="nc" id="L825">        return new Id(meta.getDescribedType(), id.getId(), id.hasSubclasses());</span>
+    }
+
+    @Override
+    public Object newDataStoreId(Object val, ClassMetaData meta) {
+<span class="nc" id="L830">        return Id.newInstance(meta.getDescribedType(), val);</span>
+    }
+
+    @Override
+    public Id newDataStoreId(long id, ClassMapping mapping, boolean subs) {
+<span class="nc" id="L835">        return new Id(mapping.getDescribedType(), id, subs);</span>
+    }
+
+    @Override
+    public ResultObjectProvider executeExtent(ClassMetaData meta,
+        final boolean subclasses, FetchConfiguration fetch) {
+<span class="nc" id="L841">        ClassMapping mapping = (ClassMapping) meta;</span>
+        final ClassMapping[] mappings;
+<span class="nc bnc" id="L843" title="All 2 branches missed.">        if (subclasses)</span>
+<span class="nc" id="L844">            mappings = mapping.getIndependentAssignableMappings();</span>
+        else
+<span class="nc" id="L846">            mappings = new ClassMapping[] { mapping };</span>
+
+<span class="nc" id="L848">        ResultObjectProvider[] rops = null;</span>
+<span class="nc" id="L849">        final JDBCFetchConfiguration jfetch = (JDBCFetchConfiguration) fetch;</span>
+<span class="nc bnc" id="L850" title="All 2 branches missed.">        if (jfetch.getSubclassFetchMode(mapping) != EagerFetchModes.EAGER_JOIN)</span>
+<span class="nc" id="L851">            rops = new ResultObjectProvider[mappings.length];</span>
+
+        try {
+            // check for custom loads
+            ResultObjectProvider rop;
+<span class="nc bnc" id="L856" title="All 2 branches missed.">            for (int i = 0; i &lt; mappings.length; i++) {</span>
+<span class="nc" id="L857">                rop = mappings[i].customLoad(this, subclasses, jfetch, 0,</span>
+                    Long.MAX_VALUE);
+<span class="nc bnc" id="L859" title="All 2 branches missed.">                if (rop != null) {</span>
+<span class="nc bnc" id="L860" title="All 2 branches missed.">                    if (rops == null)</span>
+<span class="nc" id="L861">                        rops = new ResultObjectProvider[mappings.length];</span>
+<span class="nc" id="L862">                    rops[i] = rop;</span>
+                }
+            }
+
+            // if we're selecting independent mappings separately or have
+            // custom loads, do individual selects for each class
+<span class="nc" id="L868">            rop = null;</span>
+<span class="nc bnc" id="L869" title="All 2 branches missed.">            if (rops != null) {</span>
+<span class="nc bnc" id="L870" title="All 2 branches missed.">                for (int i = 0; i &lt; mappings.length; i++) {</span>
+<span class="nc bnc" id="L871" title="All 2 branches missed.">                    if (rops[i] != null)</span>
+<span class="nc" id="L872">                        continue;</span>
+
+<span class="nc" id="L874">                    Select sel = _sql.newSelect();</span>
+<span class="nc" id="L875">                    sel.setLRS(true);</span>
+<span class="nc bnc" id="L876" title="All 2 branches missed.">                    if (_log.isTraceEnabled()) {</span>
+<span class="nc" id="L877">                        _log.trace(&quot;executeExtent: &quot;+mappings[i].getDescribedType());</span>
+<span class="nc" id="L878">                        sel.logEagerRelations();</span>
+                    }
+<span class="nc" id="L880">                    BitSet paged = selectExtent(sel, mappings[i], jfetch,</span>
+                        subclasses);
+<span class="nc bnc" id="L882" title="All 2 branches missed.">                    if (paged == null)</span>
+<span class="nc" id="L883">                        rops[i] = new InstanceResultObjectProvider(sel,</span>
+                            mappings[i], this, jfetch);
+                    else
+<span class="nc" id="L886">                        rops[i] = new PagingResultObjectProvider(sel,</span>
+                            mappings[i], this, jfetch, paged, Long.MAX_VALUE);
+                }
+<span class="nc bnc" id="L889" title="All 2 branches missed.">                if (rops.length == 1)</span>
+<span class="nc" id="L890">                    return rops[0];</span>
+<span class="nc" id="L891">                return new MergedResultObjectProvider(rops);</span>
+            }
+
+            // perform a union on all independent classes
+<span class="nc" id="L895">            Union union = _sql.newUnion(mappings.length);</span>
+<span class="nc" id="L896">            union.setLRS(true);</span>
+<span class="nc" id="L897">            final BitSet[] paged = new BitSet[mappings.length];</span>
+<span class="nc" id="L898">            union.select(new Union.Selector() {</span>
+                @Override
+                public void select(Select sel, int idx) {
+<span class="nc" id="L901">                    paged[idx] = selectExtent(sel, mappings[idx], jfetch,</span>
+                        subclasses);
+<span class="nc" id="L903">                }</span>
+            });
+
+            // using paging rop if any union element has paged fields
+<span class="nc bnc" id="L907" title="All 2 branches missed.">            for (int i = 0; i &lt; paged.length; i++) {</span>
+<span class="nc bnc" id="L908" title="All 2 branches missed.">                if (paged[i] != null)</span>
+<span class="nc" id="L909">                    return new PagingResultObjectProvider(union, mappings,</span>
+                        JDBCStoreManager.this, jfetch, paged, Long.MAX_VALUE);
+            }
+<span class="nc" id="L912">            return new InstanceResultObjectProvider(union, mappings[0], this,</span>
+                jfetch);
+<span class="nc" id="L914">        } catch (SQLException se) {</span>
+<span class="nc" id="L915">            throw SQLExceptions.getStore(se, _dict);</span>
+        }
+    }
+
+    /**
+     * Select the given mapping for use in an extent, returning paged fields.
+     */
+    private BitSet selectExtent(Select sel, ClassMapping mapping,
+        JDBCFetchConfiguration fetch, boolean subclasses) {
+<span class="nc bnc" id="L924" title="All 2 branches missed.">        int subs = (subclasses) ? Select.SUBS_JOINABLE : Select.SUBS_NONE;</span>
+        // decide between paging and standard iteration
+<span class="nc" id="L926">        BitSet paged = PagingResultObjectProvider.getPagedFields(sel, mapping,</span>
+            this, fetch, EagerFetchModes.EAGER_PARALLEL,
+            Long.MAX_VALUE);
+<span class="nc bnc" id="L929" title="All 2 branches missed.">        if (paged == null)</span>
+<span class="nc" id="L930">            sel.selectIdentifier(mapping, subs, this, fetch,</span>
+                EagerFetchModes.EAGER_PARALLEL);
+        else
+<span class="nc" id="L933">            sel.selectIdentifier(mapping, subs, this, fetch,</span>
+                EagerFetchModes.EAGER_JOIN);
+<span class="nc" id="L935">        return paged;</span>
+    }
+
+    private StoreQuery newStoreQuery(String language) {
+<span class="nc" id="L939">        ExpressionParser ep = QueryLanguages.parserForLanguage(language);</span>
+<span class="nc bnc" id="L940" title="All 2 branches missed.">        if (ep != null) {</span>
+<span class="nc" id="L941">            return new JDBCStoreQuery(this, ep);</span>
+        }
+<span class="nc bnc" id="L943" title="All 2 branches missed.">        if (QueryLanguages.LANG_SQL.equals(language)) {</span>
+<span class="nc" id="L944">            return new SQLStoreQuery(this);</span>
+        }
+<span class="nc bnc" id="L946" title="All 2 branches missed.">        if (QueryLanguages.LANG_PREPARED_SQL.equals(language)) {</span>
+<span class="nc" id="L947">            return new PreparedSQLStoreQuery(this);</span>
+        }
+<span class="nc bnc" id="L949" title="All 2 branches missed.">        if (QueryLanguages.LANG_STORED_PROC.equals(language)) {</span>
+<span class="nc" id="L950">            return new StoredProcedureQuery(this);</span>
+        }
+<span class="nc" id="L952">        return null;</span>
+    }
+
+    @Override
+    public StoreQuery newQuery(String language) {
+<span class="nc" id="L957">        StoreQuery sq = newStoreQuery(language);</span>
+<span class="nc bnc" id="L958" title="All 4 branches missed.">        if (sq == null || QueryLanguages.parserForLanguage(language) == null) {</span>
+<span class="nc" id="L959">            return sq;</span>
+        }
+
+<span class="nc" id="L962">        QueryCache queryCache = _ctx.getConfiguration().getDataCacheManagerInstance().getSystemQueryCache();</span>
+<span class="nc bnc" id="L963" title="All 2 branches missed.">        if (queryCache == null) {</span>
+<span class="nc" id="L964">            return sq;</span>
+        }
+
+<span class="nc" id="L967">        return new QueryCacheStoreQuery(sq, queryCache);</span>
+    }
+
+    @Override
+    public FetchConfiguration newFetchConfiguration() {
+<span class="nc" id="L972">        return new JDBCFetchConfigurationImpl();</span>
+    }
+
+    @Override
+    public Seq getDataStoreIdSequence(ClassMetaData meta) {
+<span class="nc bnc" id="L977" title="All 2 branches missed.">        if (meta.getIdentityStrategy() == ValueStrategies.NATIVE</span>
+<span class="nc bnc" id="L978" title="All 2 branches missed.">            || meta.getIdentityStrategy() == ValueStrategies.NONE)</span>
+<span class="nc" id="L979">            return _conf.getSequenceInstance();</span>
+<span class="nc" id="L980">        return null;</span>
+    }
+
+    @Override
+    public Seq getValueSequence(FieldMetaData fmd) {
+<span class="nc" id="L985">        return null;</span>
+    }
+
+    @Override
+    public void close() {
+<span class="nc bnc" id="L990" title="All 2 branches missed.">        if (_conn != null)</span>
+<span class="nc" id="L991">            _conn.free();</span>
+<span class="nc" id="L992">    }</span>
+
+    /////////////
+    // Utilities
+    /////////////
+
+    /**
+     * Connect to the db.
+     */
+    private void connect(boolean ref) {
+<span class="nc" id="L1002">        _ctx.lock();</span>
+        try {
+            // connect if the connection is currently null, or if
+            // the connection has been closed out from under us
+<span class="nc bnc" id="L1006" title="All 2 branches missed.">            if (_conn == null)</span>
+<span class="nc" id="L1007">                _conn = connectInternal();</span>
+<span class="nc bnc" id="L1008" title="All 2 branches missed.">            if (ref)</span>
+<span class="nc" id="L1009">                _conn.ref();</span>
+<span class="nc" id="L1010">        } catch (SQLException se) {</span>
+<span class="nc" id="L1011">            throw SQLExceptions.getStore(se, _dict);</span>
+        } finally {
+<span class="nc" id="L1013">            _ctx.unlock();</span>
+        }
+<span class="nc" id="L1015">    }</span>
+
+    /**
+     * Connect to the database. This method is separated out so that it
+     * can be overridden.
+     */
+    protected RefCountConnection connectInternal() throws SQLException {
+<span class="nc" id="L1022">        return new RefCountConnection(_ds.getConnection());</span>
+    }
+
+    @Override
+    public Connection getNewConnection() {
+        try {
+<span class="nc" id="L1028">            return _ds.getConnection();</span>
+<span class="nc" id="L1029">        } catch (SQLException e) {</span>
+<span class="nc" id="L1030">            throw SQLExceptions.getStore(e, _dict);</span>
+        }
+    }
+
+    /**
+     * Find the object with the given oid.
+     */
+    @Override
+    public Object find(Object oid, ValueMapping vm,
+        JDBCFetchConfiguration fetch) {
+<span class="nc bnc" id="L1040" title="All 2 branches missed.">        if (oid == null)</span>
+<span class="nc" id="L1041">            return null;</span>
+<span class="nc bnc" id="L1042" title="All 2 branches missed.">        if (_log.isTraceEnabled()) {</span>
+<span class="nc" id="L1043">            ClassMapping declaredTypeMapping = vm.getDeclaredTypeMapping();</span>
+<span class="nc bnc" id="L1044" title="All 2 branches missed.">            Class&lt;?&gt; describedType = (declaredTypeMapping != null) ? declaredTypeMapping.getDescribedType() : null;</span>
+<span class="nc" id="L1045">            _log.trace(&quot;find: oid=&quot;+oid+&quot;, describedType=&quot;+describedType);</span>
+        }
+<span class="nc" id="L1047">        Object pc = _ctx.find(oid, fetch, null, null, 0);</span>
+<span class="nc bnc" id="L1048" title="All 4 branches missed.">        if (pc == null &amp;&amp; vm != null) {</span>
+<span class="nc" id="L1049">            OrphanedKeyAction action = _conf.getOrphanedKeyActionInstance();</span>
+<span class="nc" id="L1050">            pc = action.orphan(oid, null, vm);</span>
+        }
+<span class="nc" id="L1052">        return pc;</span>
+    }
+
+    /**
+     * Load the object in the current row of the given result.
+     */
+    public Object load(ClassMapping mapping, JDBCFetchConfiguration fetch,
+        BitSet exclude, Result result) throws SQLException {
+<span class="nc bnc" id="L1060" title="All 2 branches missed.">        if (!mapping.isMapped())</span>
+<span class="nc" id="L1061">            throw new InvalidStateException(_loc.get(&quot;virtual-mapping&quot;,</span>
+                mapping));
+
+        // get the object id for the row; base class selects pk columns
+<span class="nc" id="L1065">        ClassMapping base = mapping;</span>
+<span class="nc bnc" id="L1066" title="All 2 branches missed.">        while (base.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L1067">            base = base.getJoinablePCSuperclassMapping();</span>
+<span class="nc" id="L1068">        Object oid = base.getObjectId(this, result, null, true, null);</span>
+<span class="nc bnc" id="L1069" title="All 2 branches missed.">        if (oid == null)</span>
+<span class="nc" id="L1070">            return null;</span>
+
+<span class="nc" id="L1072">        ConnectionInfo info = new ConnectionInfo();</span>
+<span class="nc" id="L1073">        info.result = result;</span>
+<span class="nc" id="L1074">        info.mapping = mapping;</span>
+
+        // if inverse relation is known, exclude loading during find
+<span class="nc" id="L1077">        exclude = excludeInverseRelation(mapping, info, exclude);</span>
+<span class="nc" id="L1078">        return _ctx.find(oid, fetch, exclude, info, 0);</span>
+    }
+
+    private BitSet excludeInverseRelation(ClassMapping mapping,
+        ConnectionInfo info, BitSet exclude) {
+<span class="nc" id="L1083">        FieldMapping inverse = info.result.getMappedByFieldMapping();</span>
+<span class="nc bnc" id="L1084" title="All 2 branches missed.">        if (inverse != null) {</span>
+<span class="nc" id="L1085">            FieldMapping[] fms = mapping.getDefinedFieldMappings();</span>
+<span class="nc bnc" id="L1086" title="All 2 branches missed.">            if (exclude == null)</span>
+<span class="nc" id="L1087">                exclude = new BitSet(fms.length);</span>
+<span class="nc bnc" id="L1088" title="All 2 branches missed.">            for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L1089" title="All 2 branches missed.">                if (fms[i] == inverse) {</span>
+<span class="nc" id="L1090">                    exclude.set(fms[i].getIndex());</span>
+<span class="nc" id="L1091">                    break;</span>
+                }
+            }
+        }
+<span class="nc" id="L1095">        return exclude;</span>
+    }
+
+    /**
+     * Load the given state manager with data from the result set. Only
+     * mappings originally selected will be loaded.
+     */
+    private void load(ClassMapping mapping, OpenJPAStateManager sm,
+        JDBCFetchConfiguration fetch, Result res) throws SQLException {
+<span class="nc" id="L1104">        FieldMapping eagerToMany = load(mapping, sm, fetch, res, null);</span>
+<span class="nc bnc" id="L1105" title="All 2 branches missed.">        if (eagerToMany != null) {</span>
+<span class="nc bnc" id="L1106" title="All 2 branches missed.">            if (_log.isTraceEnabled()) {</span>
+<span class="nc" id="L1107">                _log.trace(&quot;Loading eager toMany: &quot;+eagerToMany.getName()+&quot; for &quot;+mapping);</span>
+            }
+<span class="nc" id="L1109">            eagerToMany.loadEagerJoin(sm, this, fetch.traverseJDBC(eagerToMany),</span>
+                res);
+        }
+<span class="nc bnc" id="L1112" title="All 6 branches missed.">        if (_active &amp;&amp; _lm != null &amp;&amp; res.isLocking())</span>
+<span class="nc" id="L1113">            _lm.loadedForUpdate(sm);</span>
+<span class="nc" id="L1114">    }</span>
+
+    /**
+     * Load the fields of the given mapping. Return any to-many eager field
+     * without loading it.
+     */
+    private FieldMapping load(ClassMapping mapping, OpenJPAStateManager sm,
+        JDBCFetchConfiguration fetch, Result res, FieldMapping eagerToMany)
+        throws SQLException {
+<span class="nc bnc" id="L1123" title="All 2 branches missed.">        if (mapping.customLoad(sm, this, fetch, res))</span>
+<span class="nc" id="L1124">            return eagerToMany;</span>
+
+        // load superclass data; base class loads version
+<span class="nc" id="L1127">        ClassMapping parent = mapping.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L1128" title="All 2 branches missed.">        if (parent != null)</span>
+<span class="nc" id="L1129">            eagerToMany = load(parent, sm, fetch, res, eagerToMany);</span>
+<span class="nc bnc" id="L1130" title="All 2 branches missed.">        else if (sm.getVersion() == null)</span>
+<span class="nc" id="L1131">            mapping.getVersion().load(sm, this, res);</span>
+
+        // load unloaded fields
+<span class="nc" id="L1134">        FieldMapping[] fms = mapping.getDefinedFieldMappings();</span>
+        Object eres, processed;
+<span class="nc bnc" id="L1136" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L1137" title="All 4 branches missed.">            if (fms[i].isPrimaryKey() || sm.getLoaded().get(fms[i].getIndex()))</span>
+<span class="nc" id="L1138">                continue;</span>
+
+            // check for eager result, and if not present do standard load
+<span class="nc" id="L1141">            eres = res.getEager(fms[i]);</span>
+<span class="nc" id="L1142">            res.startDataRequest(fms[i]);</span>
+            try {
+<span class="nc bnc" id="L1144" title="All 2 branches missed.">               if (eres == res) {</span>
+<span class="nc bnc" id="L1145" title="All 4 branches missed.">                    if (eagerToMany == null &amp;&amp; fms[i].isEagerSelectToMany())</span>
+<span class="nc" id="L1146">                        eagerToMany = fms[i];</span>
+                    else
+<span class="nc" id="L1148">                        fms[i].loadEagerJoin(sm, this,</span>
+<span class="nc" id="L1149">                            fetch.traverseJDBC(fms[i]), res);</span>
+<span class="nc bnc" id="L1150" title="All 2 branches missed.">                } else if (eres != null) {</span>
+<span class="nc" id="L1151">                    processed = fms[i].loadEagerParallel(sm, this,</span>
+<span class="nc" id="L1152">                        fetch.traverseJDBC(fms[i]), eres);</span>
+<span class="nc bnc" id="L1153" title="All 2 branches missed.">                    if (processed != eres)</span>
+<span class="nc" id="L1154">                        res.putEager(fms[i], processed);</span>
+                } else {
+<span class="nc" id="L1156">                        fms[i].load(sm, this, fetch.traverseJDBC(fms[i]), res);</span>
+                }
+            } finally {
+<span class="nc" id="L1159">                res.endDataRequest();</span>
+            }
+        }
+<span class="nc" id="L1162">        return eagerToMany;</span>
+    }
+
+    /**
+     * For implementation use only.
+     * Return a select for the proper mappings. Return null if no select is
+     * needed. The method is designed to be complementary to the load methods.
+     *
+     * @param sel select to build on
+     * @param mapping the mapping for the base type to select for
+     * @param subs whether the select might include subclasses of the
+     * given mapping
+     * @param sm state manager if an instance is being loaded or
+     * initialized, else null
+     * @param fields if a state manager is being loaded, the set of
+     * fields that must be loaded in order, else null
+     * @param fetch the fetch configuration; used if no specific fields
+     * must be loaded, and used when selecting relations
+     * @param eager eager fetch mode to use
+     * @param ident whether to select primary key columns as distinct
+     * identifiers
+     * @param outer whether we're outer-joining to this type
+     * @return true if the select is required, false otherwise
+     */
+    public boolean select(Select sel, ClassMapping mapping, int subs,
+        OpenJPAStateManager sm, BitSet fields, JDBCFetchConfiguration fetch,
+        int eager, boolean ident, boolean outer) {
+        // add class conditions so that they're cloned for any batched selects
+<span class="nc" id="L1190">        boolean joinedSupers = false;</span>
+<span class="nc bnc" id="L1191" title="All 2 branches missed.">        if(needClassCondition(mapping, subs, sm)) {</span>
+<span class="nc" id="L1192">            joinedSupers = getJoinedSupers(sel, mapping, subs, outer);</span>
+        }
+
+        // create all our eager selects so that those fields are reserved
+        // and cannot be reused during the actual eager select process,
+        // preventing infinite recursion
+<span class="nc" id="L1198">        eager = Math.min(eager, fetch.getEagerFetchMode());</span>
+<span class="nc" id="L1199">        FieldMapping eagerToMany = createEagerSelects(sel, mapping, sm, fields,</span>
+            fetch, eager);
+
+        // select all base class mappings; do this after batching so that
+        // the joins needed by these selects don't get in the WHERE clause
+        // of the batched selects
+<span class="nc" id="L1205">        int seld = selectBaseMappings(sel, mapping, mapping, sm, fields,</span>
+            fetch, eager, eagerToMany, ident, joinedSupers);
+
+        // select eager to-many relations last because during load they
+        // advance the result set and could exhaust it, so no other mappings
+        // can load afterwords
+<span class="nc bnc" id="L1211" title="All 2 branches missed.">        if (eagerToMany != null)</span>
+<span class="nc" id="L1212">            eagerToMany.selectEagerJoin(sel, sm, this,</span>
+<span class="nc" id="L1213">                fetch.traverseJDBC(eagerToMany), eager);</span>
+
+        // optionally select subclass mappings
+<span class="nc bnc" id="L1216" title="All 4 branches missed.">        if (subs == Select.SUBS_JOINABLE || subs == Select.SUBS_ANY_JOINABLE)</span>
+<span class="nc" id="L1217">            selectSubclassMappings(sel, mapping, sm, fetch);</span>
+<span class="nc bnc" id="L1218" title="All 2 branches missed.">        if (sm != null)</span>
+<span class="nc" id="L1219">            sel.setDistinct(false);</span>
+<span class="nc bnc" id="L1220" title="All 2 branches missed.">        return seld &gt; 0;</span>
+    }
+
+    private boolean getJoinedSupers(Select sel, ClassMapping mapping, int subs, boolean outer) {
+<span class="nc" id="L1224">        loadSubclasses(mapping);</span>
+<span class="nc bnc" id="L1225" title="All 2 branches missed.">        Joins joins = (outer) ? sel.newOuterJoins() : null;</span>
+<span class="nc" id="L1226">        boolean includeSubs = false;</span>
+<span class="nc bnc" id="L1227" title="All 4 branches missed.">        if (subs == Select.SUBS_JOINABLE || subs == Select.SUBS_ANY_JOINABLE) {</span>
+<span class="nc" id="L1228">            includeSubs = true;</span>
+        }
+<span class="nc" id="L1230">        return mapping.getDiscriminator().addClassConditions(sel, includeSubs, joins);</span>
+    }
+
+    private boolean needClassCondition(ClassMapping mapping, int subs,
+        OpenJPAStateManager sm) {
+<span class="nc" id="L1235">        boolean retVal = false;</span>
+<span class="nc bnc" id="L1236" title="All 4 branches missed.">        if(sm == null || sm.getPCState() == PCState.TRANSIENT) {</span>
+<span class="nc bnc" id="L1237" title="All 4 branches missed.">            if(subs == Select.SUBS_JOINABLE || subs == Select.SUBS_NONE) {</span>
+<span class="nc" id="L1238">                retVal = true;</span>
+            }
+            else {
+<span class="nc bnc" id="L1241" title="All 2 branches missed.">                if (mapping.getDiscriminator() != null</span>
+<span class="nc bnc" id="L1242" title="All 2 branches missed.">                    &amp;&amp; SuperclassDiscriminatorStrategy.class.isInstance(mapping.getDiscriminator().getStrategy())</span>
+<span class="nc" id="L1243">                    &amp;&amp; mapping.getMappingRepository().getConfiguration().getCompatibilityInstance()</span>
+<span class="nc bnc" id="L1244" title="All 2 branches missed.">                        .getSuperclassDiscriminatorStrategyByDefault()) {</span>
+<span class="nc" id="L1245">                    retVal = true;</span>
+                }
+            }
+        }
+<span class="nc" id="L1249">        return retVal;</span>
+    }
+
+    /**
+     * Mark the fields of this mapping as reserved so that eager fetches can't
+     * get into infinite recursive situations.
+     */
+    private FieldMapping createEagerSelects(Select sel, ClassMapping mapping,
+        OpenJPAStateManager sm, BitSet fields, JDBCFetchConfiguration fetch,
+        int eager) {
+<span class="nc bnc" id="L1259" title="All 4 branches missed.">        if (mapping == null || eager == EagerFetchModes.EAGER_NONE)</span>
+<span class="nc" id="L1260">            return null;</span>
+
+<span class="nc" id="L1262">        FieldMapping eagerToMany = createEagerSelects(sel,</span>
+<span class="nc" id="L1263">            mapping.getJoinablePCSuperclassMapping(), sm, fields, fetch, eager);</span>
+
+<span class="nc" id="L1265">        FieldMapping[] fms = mapping.getDefinedFieldMappings();</span>
+<span class="nc" id="L1266">        boolean inEagerJoin = sel.hasEagerJoin(false);</span>
+        int sels;
+        int jtype;
+        int mode;
+<span class="nc bnc" id="L1270" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc" id="L1271">            mode = fms[i].getEagerFetchMode();</span>
+<span class="nc bnc" id="L1272" title="All 2 branches missed.">            if (mode == EagerFetchModes.EAGER_NONE)</span>
+<span class="nc" id="L1273">                continue;</span>
+<span class="nc bnc" id="L1274" title="All 2 branches missed.">            if (!requiresSelect(fms[i], sm, fields, fetch))</span>
+<span class="nc" id="L1275">                continue;</span>
+
+            // try to select with join first
+<span class="nc bnc" id="L1278" title="All 2 branches missed.">            jtype = (fms[i].getNullValue() == FieldMetaData.NULL_EXCEPTION)</span>
+<span class="nc" id="L1279">                ? Select.EAGER_INNER : Select.EAGER_OUTER;</span>
+<span class="nc bnc" id="L1280" title="All 4 branches missed.">            if (mode != EagerFetchModes.EAGER_PARALLEL &amp;&amp; !fms[i].isEagerSelectToMany()</span>
+<span class="nc bnc" id="L1281" title="All 2 branches missed.">                &amp;&amp; fms[i].supportsSelect(sel, jtype, sm, this, fetch) &gt; 0</span>
+<span class="nc bnc" id="L1282" title="All 2 branches missed.">                &amp;&amp; sel.eagerClone(fms[i], jtype, false, 1) != null)</span>
+<span class="nc" id="L1283">                continue;</span>
+
+<span class="nc" id="L1285">            boolean hasJoin = fetch.hasJoin(fms[i].getFullName(false));</span>
+
+            // if the field declares a preferred select mode of join or does not
+            // have a preferred mode and we're doing a by-id lookup, try
+            // to use a to-many join also.  currently we limit eager
+            // outer joins to non-LRS, non-ranged selects that don't already
+            // have an eager to-many join
+<span class="nc bnc" id="L1292" title="All 8 branches missed.">            if ((hasJoin || mode == EagerFetchModes.EAGER_JOIN</span>
+                || (mode == FetchConfiguration.DEFAULT &amp;&amp; sm != null))
+<span class="nc bnc" id="L1294" title="All 4 branches missed.">                &amp;&amp; fms[i].isEagerSelectToMany()</span>
+                &amp;&amp; !inEagerJoin
+<span class="nc bnc" id="L1296" title="All 2 branches missed.">                &amp;&amp; !sel.hasEagerJoin(true)</span>
+<span class="nc bnc" id="L1297" title="All 4 branches missed.">                &amp;&amp; (!sel.getAutoDistinct() || (!sel.isLRS()</span>
+<span class="nc bnc" id="L1298" title="All 2 branches missed.">                &amp;&amp; sel.getStartIndex() == 0</span>
+<span class="nc bnc" id="L1299" title="All 2 branches missed.">                &amp;&amp; sel.getEndIndex() == Long.MAX_VALUE))</span>
+<span class="nc bnc" id="L1300" title="All 2 branches missed.">                &amp;&amp; fms[i].supportsSelect(sel, jtype, sm, this, fetch) &gt; 0) {</span>
+<span class="nc bnc" id="L1301" title="All 2 branches missed.">                if (sel.eagerClone(fms[i], jtype, true, 1) != null)</span>
+<span class="nc" id="L1302">                    eagerToMany = fms[i];</span>
+                else
+                    continue;
+            }
+
+            // finally, try parallel
+<span class="nc bnc" id="L1308" title="All 2 branches missed.">            if (eager == EagerFetchModes.EAGER_PARALLEL</span>
+<span class="nc bnc" id="L1309" title="All 2 branches missed.">                &amp;&amp; (sels = fms[i].supportsSelect(sel, Select.EAGER_PARALLEL, sm,</span>
+                this, fetch)) != 0)
+<span class="nc" id="L1311">                sel.eagerClone(fms[i], Select.EAGER_PARALLEL,</span>
+<span class="nc" id="L1312">                    fms[i].isEagerSelectToMany(), sels);</span>
+        }
+<span class="nc" id="L1314">        return eagerToMany;</span>
+    }
+
+    /**
+     * Determine if the given field needs to be selected.
+     */
+    private static boolean requiresSelect(FieldMapping fm,
+        OpenJPAStateManager sm, BitSet fields, JDBCFetchConfiguration fetch) {
+<span class="nc bnc" id="L1322" title="All 2 branches missed.">        if (fields != null)</span>
+<span class="nc" id="L1323">            return fields.get(fm.getIndex());</span>
+<span class="nc bnc" id="L1324" title="All 4 branches missed.">        if (sm != null &amp;&amp; sm.getPCState() != PCState.TRANSIENT</span>
+<span class="nc bnc" id="L1325" title="All 2 branches missed.">            &amp;&amp; sm.getLoaded().get(fm.getIndex()))</span>
+<span class="nc" id="L1326">            return false;</span>
+<span class="nc bnc" id="L1327" title="All 2 branches missed.">        return fetch.requiresFetch(fm) == FetchConfiguration.FETCH_LOAD;</span>
+    }
+
+    /**
+     * Select the field mappings of the given class and all its superclasses.
+     *
+     * @param sel the select to use
+     * @param mapping the most-derived type to select for
+     * @param orig the original mapping type selected
+     * @param sm the instance being selected for, or null if none
+     * @param fields the fields to load
+     * @param fetch fetch configuration to use for loading relations
+     * @param eager the eager fetch mode to use
+     * @param joined whether the class has already been joined down to
+     * its base class
+     * @return &amp;gt; 0 if the select is required, 0 if data was
+     * selected but is not required, and &amp;lt; 0 if nothing was selected
+     */
+    private int selectBaseMappings(Select sel, ClassMapping mapping,
+        ClassMapping orig, OpenJPAStateManager sm, BitSet fields,
+        JDBCFetchConfiguration fetch, int eager, FieldMapping eagerToMany,
+        boolean ident, boolean joined) {
+<span class="nc" id="L1349">        ClassMapping parent = mapping.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L1350" title="All 4 branches missed.">        if (parent == null &amp;&amp; !mapping.isMapped())</span>
+<span class="nc" id="L1351">            throw new InvalidStateException(_loc.get(&quot;virtual-mapping&quot;, mapping.</span>
+<span class="nc" id="L1352">                getDescribedType()));</span>
+
+<span class="nc" id="L1354">        int seld = -1;</span>
+<span class="nc" id="L1355">        int pseld = -1;</span>
+
+        // base class selects pks, etc
+<span class="nc bnc" id="L1358" title="All 2 branches missed.">        if (parent == null) {</span>
+            // if no instance, select pks
+<span class="nc bnc" id="L1360" title="All 2 branches missed.">            if (sm == null) {</span>
+<span class="nc bnc" id="L1361" title="All 2 branches missed.">                if (ident)</span>
+<span class="nc" id="L1362">                    sel.selectIdentifier(mapping.getPrimaryKeyColumns());</span>
+                else
+<span class="nc" id="L1364">                    sel.select(mapping.getPrimaryKeyColumns());</span>
+<span class="nc" id="L1365">                seld = 1;</span>
+            }
+
+            // if no instance or not initialized and not exact oid, select type
+<span class="nc bnc" id="L1369" title="All 4 branches missed.">            if ((sm == null || (sm.getPCState() == PCState.TRANSIENT</span>
+<span class="nc bnc" id="L1370" title="All 2 branches missed.">                &amp;&amp; (!(sm.getObjectId() instanceof OpenJPAId)</span>
+<span class="nc bnc" id="L1371" title="All 2 branches missed.">                || ((OpenJPAId) sm.getObjectId()).hasSubclasses())))</span>
+<span class="nc bnc" id="L1372" title="All 2 branches missed.">                &amp;&amp; mapping.getDiscriminator().select(sel, orig))</span>
+<span class="nc" id="L1373">                seld = 1;</span>
+
+            // if no instance or no version, select version
+<span class="nc bnc" id="L1376" title="All 4 branches missed.">            if ((sm == null || sm.getVersion() == null)</span>
+<span class="nc bnc" id="L1377" title="All 2 branches missed.">                &amp;&amp; mapping.getVersion().select(sel, orig))</span>
+<span class="nc" id="L1378">                seld = 1;</span>
+        } else {
+            // recurse on parent
+<span class="nc" id="L1381">            pseld = selectBaseMappings(sel, parent, orig, sm, fields,</span>
+                fetch, eager, eagerToMany, ident, joined);
+        }
+
+        // select the mappings in the given fields set, or based on fetch
+        // configuration if no fields given
+<span class="nc" id="L1387">        FieldMapping[] fms = mapping.getDefinedFieldMappings();</span>
+        SelectExecutor esel;
+        int fseld;
+<span class="nc bnc" id="L1390" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+            // skip eager to-many select; we do that separately in calling
+            // method
+<span class="nc bnc" id="L1393" title="All 2 branches missed.">            if (fms[i] == eagerToMany)</span>
+<span class="nc" id="L1394">                continue;</span>
+
+            // check for eager select
+<span class="nc" id="L1397">            esel = sel.getEager(fms[i]);</span>
+<span class="nc bnc" id="L1398" title="All 2 branches missed.">            if (esel != null) {</span>
+<span class="nc bnc" id="L1399" title="All 2 branches missed.">                if (esel == sel)</span>
+<span class="nc" id="L1400">                    fms[i].selectEagerJoin(sel, sm, this,</span>
+<span class="nc" id="L1401">                        fetch.traverseJDBC(fms[i]), eager);</span>
+                else
+<span class="nc" id="L1403">                    fms[i].selectEagerParallel(esel, sm, this,</span>
+<span class="nc" id="L1404">                        fetch.traverseJDBC(fms[i]), eager);</span>
+<span class="nc" id="L1405">                seld = Math.max(0, seld);</span>
+<span class="nc bnc" id="L1406" title="All 2 branches missed.">            } else if (requiresSelect(fms[i], sm, fields, fetch)) {</span>
+<span class="nc" id="L1407">                fseld = fms[i].select(sel, sm, this,</span>
+<span class="nc" id="L1408">                    fetch.traverseJDBC(fms[i]), eager);</span>
+<span class="nc" id="L1409">                seld = Math.max(fseld, seld);</span>
+<span class="nc bnc" id="L1410" title="All 2 branches missed.">            } else if (optSelect(fms[i], sel, sm, fetch)) {</span>
+<span class="nc" id="L1411">                fseld = fms[i].select(sel, sm, this,</span>
+<span class="nc" id="L1412">                    fetch.traverseJDBC(fms[i]), EagerFetchModes.EAGER_NONE);</span>
+
+                // don't upgrade seld to &gt; 0 based on these fields, since
+                // they're not in the calculated field set
+<span class="nc bnc" id="L1416" title="All 4 branches missed.">                if (fseld &gt;= 0 &amp;&amp; seld &lt; 0)</span>
+<span class="nc" id="L1417">                    seld = 0;</span>
+            }
+        }
+
+        // in certain circumstances force join to superclass table to avoid
+        // SQL generation error.
+<span class="nc bnc" id="L1423" title="All 8 branches missed.">        if ( eagerToMany != null &amp;&amp; pseld &lt; 0 &amp;&amp; !joined</span>
+                &amp;&amp; parent != null ) {
+<span class="nc" id="L1425">            FieldMapping[] pfms = parent.getDefinedFieldMappings();</span>
+<span class="nc bnc" id="L1426" title="All 2 branches missed.">            for (int i = 0; i &lt; pfms.length; i++) {</span>
+<span class="nc bnc" id="L1427" title="All 2 branches missed.">                if (pfms[i] == eagerToMany ) {</span>
+<span class="nc" id="L1428">                    pseld = 0;</span>
+<span class="nc" id="L1429">                    break;</span>
+                }
+            }
+        }
+
+        // join to parent table if the parent / any ancestors have selected
+        // anything
+<span class="nc bnc" id="L1436" title="All 6 branches missed.">        if (!joined &amp;&amp; pseld &gt;= 0 &amp;&amp; parent.getTable() != mapping.getTable())</span>
+<span class="nc" id="L1437">            sel.where(mapping.joinSuperclass(sel.newJoins(), false));</span>
+
+        // return the highest value
+<span class="nc" id="L1440">        return Math.max(pseld, seld);</span>
+    }
+
+    /**
+     * When selecting fields, a special case is made for mappings that use 2-part selects that aren't explicitly *not*
+     * in the dfg so that they can get their primary table data. This method tests for that special case as an
+     * optimization.
+     */
+    private boolean optSelect(FieldMapping fm, Select sel, OpenJPAStateManager sm, JDBCFetchConfiguration fetch) {
+<span class="nc" id="L1449">        boolean dfg =</span>
+<span class="nc bnc" id="L1450" title="All 2 branches missed.">            fetch.getIgnoreDfgForFkSelect() ||</span>
+<span class="nc bnc" id="L1451" title="All 4 branches missed.">                !fm.isInDefaultFetchGroup() &amp;&amp; !fm.isDefaultFetchGroupExplicit();</span>
+
+<span class="nc bnc" id="L1453" title="All 8 branches missed.">        return dfg &amp;&amp; (sm == null || sm.getPCState() == PCState.TRANSIENT || !sm.getLoaded().get(fm.getIndex()))</span>
+<span class="nc bnc" id="L1454" title="All 2 branches missed.">            &amp;&amp; fm.supportsSelect(sel, Select.TYPE_TWO_PART, sm, this, fetch) &gt; 0;</span>
+    }
+
+    /**
+     * Select field mappings that match the given fetch configuration for
+     * subclasses of the given type.
+     *
+     * @param sel the select to use
+     * @param mapping the type whose subclasses to select
+     * @param sm the instance being selected for, or null if none
+     * @param fetch the fetch configuration
+     */
+    private void selectSubclassMappings(Select sel, ClassMapping mapping,
+        OpenJPAStateManager sm, JDBCFetchConfiguration fetch) {
+<span class="nc" id="L1468">        loadSubclasses(mapping);</span>
+<span class="nc" id="L1469">        ClassMapping[] subMappings = mapping.getJoinablePCSubclassMappings();</span>
+<span class="nc bnc" id="L1470" title="All 2 branches missed.">        if (subMappings.length == 0)</span>
+<span class="nc" id="L1471">            return;</span>
+
+        // select all subclass mappings that match the fetch configuration
+        // and whose table is in the list of those selected so far; this
+        // way we select the max possible without selecting any tables that
+        // aren't present in all possible query matches; a special case
+        // is made for mappings that use 2-part selects that aren't
+        // explicitly *not* in the default so that they can get their
+        // primary table data
+        FieldMapping[] fms;
+        boolean joined;
+<span class="nc bnc" id="L1482" title="All 2 branches missed.">        boolean canJoin = _dict.joinSyntax != JoinSyntaxes.SYNTAX_TRADITIONAL</span>
+<span class="nc bnc" id="L1483" title="All 2 branches missed.">            &amp;&amp; fetch.getSubclassFetchMode(mapping) != EagerFetchModes.EAGER_NONE;</span>
+<span class="nc bnc" id="L1484" title="All 2 branches missed.">        for (int i = 0; i &lt; subMappings.length; i++) {</span>
+<span class="nc bnc" id="L1485" title="All 2 branches missed.">            if (!subMappings[i].supportsEagerSelect(sel, sm, this, mapping,</span>
+                fetch))
+<span class="nc" id="L1487">                continue;</span>
+
+            // initialize so that if we can't join, we pretend we already have
+<span class="nc bnc" id="L1490" title="All 2 branches missed.">            joined = !canJoin;</span>
+<span class="nc" id="L1491">            fms = subMappings[i].getDefinedFieldMappings();</span>
+<span class="nc bnc" id="L1492" title="All 2 branches missed.">            for (int j = 0; j &lt; fms.length; j++) {</span>
+                // make sure in one of configured fetch groups
+<span class="nc bnc" id="L1494" title="All 2 branches missed.">                if (fetch.requiresFetch(fms[j]) != FetchConfiguration.FETCH_LOAD</span>
+<span class="nc bnc" id="L1495" title="All 2 branches missed.">                    &amp;&amp; ((!fms[j].isInDefaultFetchGroup()</span>
+<span class="nc bnc" id="L1496" title="All 2 branches missed.">                    &amp;&amp; fms[j].isDefaultFetchGroupExplicit())</span>
+<span class="nc bnc" id="L1497" title="All 2 branches missed.">                    || fms[j].supportsSelect(sel, Select.TYPE_TWO_PART, sm, this,</span>
+                    fetch) &lt;= 0))
+<span class="nc" id="L1499">                    continue;</span>
+
+                // if we can join to the subclass, do so; much better chance
+                // that the field will be able to select itself without joins
+<span class="nc bnc" id="L1503" title="All 2 branches missed.">                if (!joined) {</span>
+                    // mark joined whether or not we join, so we don't have to
+                    // test conditions again for this subclass
+<span class="nc" id="L1506">                    joined = true;</span>
+<span class="nc" id="L1507">                    sel.where(joinSubclass(sel, mapping, subMappings[i], null));</span>
+                }
+
+                // if can select with tables already selected, do it
+<span class="nc bnc" id="L1511" title="All 2 branches missed.">                if (fms[j].supportsSelect(sel, Select.TYPE_JOINLESS, sm, this, fetch) &gt; 0)</span>
+<span class="nc" id="L1512">                    fms[j].select(sel, null, this, fetch.traverseJDBC(fms[j]), EagerFetchModes.EAGER_NONE);</span>
+            }
+        }
+<span class="nc" id="L1515">    }</span>
+
+    /**
+     * Helper method to join from class to its subclass. Recursive to allow
+     * for multiple hops, starting from the base class.
+     */
+    private static Joins joinSubclass(Select sel, ClassMapping base,
+        ClassMapping sub, Joins joins) {
+<span class="nc bnc" id="L1523" title="All 4 branches missed.">        if (sub == base || sub.getTable() == base.getTable()</span>
+<span class="nc bnc" id="L1524" title="All 2 branches missed.">            || sel.isSelected(sub.getTable()))</span>
+<span class="nc" id="L1525">            return null;</span>
+
+        // recurse first so we go least-&gt;most derived
+<span class="nc" id="L1528">        ClassMapping sup = sub.getJoinablePCSuperclassMapping();</span>
+<span class="nc" id="L1529">        joins = joinSubclass(sel, base, sup, joins);</span>
+<span class="nc bnc" id="L1530" title="All 2 branches missed.">        if (joins == null)</span>
+<span class="nc" id="L1531">            joins = sel.newJoins();</span>
+<span class="nc" id="L1532">        return sub.joinSuperclass(joins, true);</span>
+    }
+
+    /**
+     * Makes sure all subclasses of the given type are loaded in the JVM.
+     * This is usually done automatically.
+     */
+    @Override
+    public void loadSubclasses(ClassMapping mapping) {
+<span class="nc" id="L1541">        Discriminator dsc = mapping.getDiscriminator();</span>
+<span class="nc bnc" id="L1542" title="All 2 branches missed.">        if (dsc.getSubclassesLoaded())</span>
+<span class="nc" id="L1543">            return;</span>
+
+        // if the subclass list is set, no need to load subs
+<span class="nc bnc" id="L1546" title="All 2 branches missed.">        if (mapping.getRepository().getPersistentTypeNames(false,</span>
+<span class="nc" id="L1547">            _ctx.getClassLoader()) != null) {</span>
+<span class="nc" id="L1548">            dsc.setSubclassesLoaded(true);</span>
+<span class="nc" id="L1549">            return;</span>
+        }
+
+        try {
+<span class="nc" id="L1553">            dsc.loadSubclasses(this);</span>
+<span class="nc" id="L1554">        } catch (ClassNotFoundException cnfe) {</span>
+<span class="nc" id="L1555">            throw new StoreException(cnfe);</span>
+<span class="nc" id="L1556">        } catch (SQLException se) {</span>
+<span class="nc" id="L1557">            throw SQLExceptions.getStore(se, _dict);</span>
+<span class="nc" id="L1558">        }</span>
+<span class="nc" id="L1559">    }</span>
+
+    /**
+     * Make the statement a candidate for cancellation.
+     */
+    private void beforeExecuteStatement(Statement stmnt) {
+<span class="nc" id="L1565">        _stmnts.add(stmnt);</span>
+<span class="nc" id="L1566">    }</span>
+
+    /**
+     * Remove the statement from the cancellable set.
+     */
+    private void afterExecuteStatement(Statement stmnt) {
+<span class="nc" id="L1572">        _stmnts.remove(stmnt);</span>
+<span class="nc" id="L1573">    }</span>
+
+    FinderQueryImpl getFinder(ClassMapping mapping, FetchConfiguration fetch) {
+<span class="nc" id="L1576">        FinderCache cache = getFinderCache();</span>
+<span class="nc bnc" id="L1577" title="All 2 branches missed.">        return cache == null</span>
+<span class="nc" id="L1578">             ? null : (FinderQueryImpl)cache.get(mapping, fetch);</span>
+    }
+
+    boolean cacheFinder(ClassMapping mapping, SelectExecutor select,
+        FetchConfiguration fetch) {
+<span class="nc" id="L1583">        FinderCache cache = getFinderCache();</span>
+<span class="nc bnc" id="L1584" title="All 4 branches missed.">        return cache != null &amp;&amp; cache.cache(mapping, select, fetch) != null;</span>
+    }
+
+    FinderCache getFinderCache() {
+<span class="nc bnc" id="L1588" title="All 2 branches missed.">        return (((BrokerImpl)getContext()).getCacheFinderQuery())</span>
+<span class="nc" id="L1589">             ? getConfiguration().getFinderCacheInstance() : null;</span>
+    }
+
+    /**
+     * Connection returned to client code. Makes sure its wrapped connection ref count is decremented on finalize.
+     */
+    public static class ClientConnection extends
+            DelegatingConnection {
+
+<span class="nc" id="L1598">        private boolean _closed = false;</span>
+
+        public ClientConnection(Connection conn) {
+<span class="nc" id="L1601">            super(conn);</span>
+<span class="nc" id="L1602">        }</span>
+
+        @Override
+        public void close() throws SQLException {
+<span class="nc" id="L1606">            _closed = true;</span>
+<span class="nc" id="L1607">            super.close();</span>
+<span class="nc" id="L1608">        }</span>
+
+        @Override
+        protected void finalize() throws SQLException {
+<span class="nc bnc" id="L1612" title="All 2 branches missed.">            if (!_closed)</span>
+<span class="nc" id="L1613">                close();</span>
+<span class="nc" id="L1614">        }</span>
+    }
+
+    /**
+     * Connection wrapper that keeps an internal ref count so that it knows
+     * when to really close.
+     */
+    protected class RefCountConnection extends DelegatingConnection {
+
+<span class="nc" id="L1623">        private boolean _retain = false;</span>
+<span class="nc" id="L1624">        private int _refs = 0;</span>
+<span class="nc" id="L1625">        private boolean _freed = false;</span>
+
+<span class="nc" id="L1627">        public RefCountConnection(Connection conn) {</span>
+<span class="nc" id="L1628">            super(conn);</span>
+<span class="nc" id="L1629">        }</span>
+
+        public boolean getRetain() {
+<span class="nc" id="L1632">            return _retain;</span>
+        }
+
+        public void setRetain(boolean retain) {
+<span class="nc bnc" id="L1636" title="All 6 branches missed.">            if (_retain &amp;&amp; !retain &amp;&amp; _refs &lt;= 0)</span>
+<span class="nc" id="L1637">                free();</span>
+<span class="nc" id="L1638">            _retain = retain;</span>
+<span class="nc" id="L1639">        }</span>
+
+        public void ref() {
+            // don't have to lock; called from connect(), which is locked
+<span class="nc" id="L1643">            _refs++;</span>
+<span class="nc" id="L1644">        }</span>
+
+        @Override
+        public void close() throws SQLException {
+            // lock at broker level to avoid deadlocks
+<span class="nc" id="L1649">            _ctx.lock();</span>
+            try {
+<span class="nc" id="L1651">                _refs--;</span>
+<span class="nc bnc" id="L1652" title="All 4 branches missed.">                if (_refs &lt;= 0 &amp;&amp; !_retain)</span>
+<span class="nc" id="L1653">                    free();</span>
+            } finally {
+<span class="nc" id="L1655">                _ctx.unlock();</span>
+            }
+<span class="nc" id="L1657">        }</span>
+
+        /*
+         * Non-thread-safe method.  Ensure protection in the call path...
+         */
+        public void free() {
+            // ensure that we do not close the underlying connection
+            // multiple times; this could happen if someone (e.g., an
+            // Extent) holds a RefConnection, and then closes it (e.g., in
+            // the finalizer) after the StoreManager has already been closed.
+<span class="nc bnc" id="L1667" title="All 2 branches missed.">            if (_freed)</span>
+<span class="nc" id="L1668">                return;</span>
+
+            try {
+<span class="nc" id="L1671">                getDelegate().close();</span>
+<span class="nc" id="L1672">            } catch (SQLException se) {</span>
+<span class="nc" id="L1673">            }</span>
+<span class="nc" id="L1674">            _freed = true;</span>
+<span class="nc" id="L1675">            _conn = null;</span>
+<span class="nc" id="L1676">        }</span>
+
+        @Override
+        protected Statement createStatement(boolean wrap) throws SQLException {
+<span class="nc" id="L1680">            return getCancelStatement(super.createStatement(false),</span>
+                RefCountConnection.this);
+        }
+
+        @Override
+        protected Statement createStatement(int rsType, int rsConcur,
+            boolean wrap) throws SQLException {
+<span class="nc" id="L1687">            return getCancelStatement(super.createStatement(rsType, rsConcur,</span>
+                false), RefCountConnection.this);
+
+        }
+
+        @Override
+        protected PreparedStatement prepareStatement(String sql, boolean wrap)
+            throws SQLException {
+<span class="nc" id="L1695">            return getCancelPreparedStatement(super.prepareStatement(sql,</span>
+                false), RefCountConnection.this);
+        }
+
+        @Override
+        protected PreparedStatement prepareStatement(String sql, int rsType,
+            int rsConcur, boolean wrap) throws SQLException {
+<span class="nc" id="L1702">            return getCancelPreparedStatement(super.prepareStatement(sql,</span>
+                rsType, rsConcur, false), RefCountConnection.this);
+        }
+    }
+
+    private PreparedStatement getCancelPreparedStatement(PreparedStatement stmnt, Connection conn) {
+<span class="nc" id="L1708">        synchronized (_cancelPreparedStatementsPool) {</span>
+<span class="nc bnc" id="L1709" title="All 2 branches missed.">            if (!_cancelPreparedStatementsPool.isEmpty()) {</span>
+<span class="nc" id="L1710">                CancelPreparedStatement res = _cancelPreparedStatementsPool.remove(0);</span>
+<span class="nc" id="L1711">                res.initialize(stmnt, conn);</span>
+<span class="nc" id="L1712">                return res;</span>
+            }
+<span class="nc" id="L1714">        }</span>
+<span class="nc" id="L1715">        return new CancelPreparedStatement(stmnt, conn);</span>
+    }
+
+    private Statement getCancelStatement(Statement stmnt, Connection conn) {
+<span class="nc" id="L1719">        synchronized (_cancelStatementPool) {</span>
+<span class="nc bnc" id="L1720" title="All 2 branches missed.">            if (!_cancelStatementPool.isEmpty()) {</span>
+<span class="nc" id="L1721">                CancelStatement res = _cancelStatementPool.remove(0);</span>
+<span class="nc" id="L1722">                res.initialize(stmnt, conn);</span>
+<span class="nc" id="L1723">                return res;</span>
+            }
+<span class="nc" id="L1725">        }</span>
+
+<span class="nc" id="L1727">        return new CancelStatement(stmnt, conn);</span>
+    }
+
+    /**
+     * Statement type that adds and removes itself from the set of active
+     * statements so that it can be canceled.
+     */
+    private class CancelStatement extends DelegatingStatement {
+
+<span class="nc" id="L1736">        public CancelStatement(Statement stmnt, Connection conn) {</span>
+<span class="nc" id="L1737">            super(stmnt, conn);</span>
+<span class="nc" id="L1738">        }</span>
+
+        @Override
+        public int executeUpdate(String sql) throws SQLException {
+<span class="nc" id="L1742">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1744">                return super.executeUpdate(sql);</span>
+            } finally {
+<span class="nc" id="L1746">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        protected ResultSet executeQuery(String sql, boolean wrap)
+            throws SQLException {
+<span class="nc" id="L1753">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1755">                return super.executeQuery(sql, wrap);</span>
+            } finally {
+<span class="nc" id="L1757">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public boolean execute(String sql) throws SQLException {
+<span class="nc" id="L1763">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1765">                return super.execute(sql);</span>
+            } finally {
+<span class="nc" id="L1767">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public int executeUpdate(String sql, int i) throws SQLException {
+<span class="nc" id="L1773">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1775">                return super.executeUpdate(sql, i);</span>
+            } finally {
+<span class="nc" id="L1777">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public int executeUpdate(String sql, int[] ia) throws SQLException {
+<span class="nc" id="L1783">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1785">                return super.executeUpdate(sql, ia);</span>
+            } finally {
+<span class="nc" id="L1787">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public int executeUpdate(String sql, String[] sa) throws SQLException {
+<span class="nc" id="L1793">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1795">                return super.executeUpdate(sql, sa);</span>
+            } finally {
+<span class="nc" id="L1797">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public boolean execute(String sql, int i) throws SQLException {
+<span class="nc" id="L1803">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1805">                return super.execute(sql, i);</span>
+            } finally {
+<span class="nc" id="L1807">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public boolean execute(String sql, int[] ia) throws SQLException {
+<span class="nc" id="L1813">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1815">                return super.execute(sql, ia);</span>
+            } finally {
+<span class="nc" id="L1817">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public boolean execute(String sql, String[] sa) throws SQLException {
+<span class="nc" id="L1823">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1825">                return super.execute(sql, sa);</span>
+            } finally {
+<span class="nc" id="L1827">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public void close() throws SQLException {
+<span class="nc" id="L1833">        	super.close();</span>
+<span class="nc" id="L1834">    		synchronized (_cancelStatementPool) {</span>
+<span class="nc" id="L1835">    			_cancelStatementPool.add(this);</span>
+<span class="nc" id="L1836">    		}</span>
+<span class="nc" id="L1837">        }</span>
+    }
+
+    /**
+     * Statement type that adds and removes itself from the set of active
+     * statements so that it can be canceled.
+     */
+    private class CancelPreparedStatement extends
+            DelegatingPreparedStatement {
+
+        public CancelPreparedStatement(PreparedStatement stmnt,
+<span class="nc" id="L1848">            Connection conn) {</span>
+<span class="nc" id="L1849">            super(stmnt, conn);</span>
+<span class="nc" id="L1850">        }</span>
+
+        @Override
+        public int executeUpdate() throws SQLException {
+<span class="nc" id="L1854">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1856">                return super.executeUpdate();</span>
+            } finally {
+<span class="nc" id="L1858">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        protected ResultSet executeQuery(boolean wrap) throws SQLException {
+<span class="nc" id="L1864">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1866">                return super.executeQuery(wrap);</span>
+            } finally {
+<span class="nc" id="L1868">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public int[] executeBatch() throws SQLException {
+<span class="nc" id="L1874">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1876">                return super.executeBatch();</span>
+            } finally {
+<span class="nc" id="L1878">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public boolean execute() throws SQLException {
+<span class="nc" id="L1884">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1886">                return super.execute();</span>
+            } finally {
+<span class="nc" id="L1888">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public boolean execute(String s) throws SQLException {
+<span class="nc" id="L1894">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1896">                return super.execute(s);</span>
+            } finally {
+<span class="nc" id="L1898">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public int executeUpdate(String s) throws SQLException {
+<span class="nc" id="L1904">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1906">                return super.executeUpdate(s);</span>
+            } finally {
+<span class="nc" id="L1908">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public int executeUpdate(String s, int i) throws SQLException {
+<span class="nc" id="L1914">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1916">                return super.executeUpdate(s, i);</span>
+            } finally {
+<span class="nc" id="L1918">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public int executeUpdate(String s, int[] ia) throws SQLException {
+<span class="nc" id="L1924">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1926">                return super.executeUpdate(s, ia);</span>
+            } finally {
+<span class="nc" id="L1928">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public int executeUpdate(String s, String[] sa) throws SQLException {
+<span class="nc" id="L1934">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1936">                return super.executeUpdate(s, sa);</span>
+            } finally {
+<span class="nc" id="L1938">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public boolean execute(String s, int i) throws SQLException {
+<span class="nc" id="L1944">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1946">                return super.execute(s, i);</span>
+            } finally {
+<span class="nc" id="L1948">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public boolean execute(String s, int[] ia) throws SQLException {
+<span class="nc" id="L1954">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1956">                return super.execute(s, ia);</span>
+            } finally {
+<span class="nc" id="L1958">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public boolean execute(String s, String[] sa) throws SQLException {
+<span class="nc" id="L1964">            beforeExecuteStatement(this);</span>
+            try {
+<span class="nc" id="L1966">                return super.execute(s, sa);</span>
+            } finally {
+<span class="nc" id="L1968">                afterExecuteStatement(this);</span>
+            }
+        }
+
+        @Override
+        public void close() throws SQLException {
+<span class="nc" id="L1974">        	super.close();</span>
+<span class="nc" id="L1975">    		synchronized (_cancelPreparedStatementsPool) {</span>
+<span class="nc" id="L1976">    			_cancelPreparedStatementsPool.add(this);</span>
+<span class="nc" id="L1977">    		}</span>
+<span class="nc" id="L1978">        }</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

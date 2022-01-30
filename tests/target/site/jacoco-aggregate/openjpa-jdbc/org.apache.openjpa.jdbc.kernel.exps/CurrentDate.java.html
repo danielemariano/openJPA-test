@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CurrentDate.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">CurrentDate.java</span></div><h1>CurrentDate.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.util.Date;
+
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * A literal current DATE/TIME/TIMESTAMP value in a filter.
+ *
+ * @author Marc Prud'hommeaux
+ */
+class CurrentDate
+    extends Const {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final Class&lt;? extends Date&gt; _type;
+
+<span class="nc" id="L43">    public CurrentDate(Class&lt;? extends Date&gt; type) {</span>
+<span class="nc" id="L44">        _type = type;</span>
+<span class="nc" id="L45">    }</span>
+
+    @Override
+    public Class&lt;? extends Date&gt; getType() {
+<span class="nc" id="L49">        return _type;</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L54">    }</span>
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res) throws SQLException {
+<span class="nc bnc" id="L58" title="All 2 branches missed.">        if (Timestamp.class.isAssignableFrom(_type)) {</span>
+<span class="nc" id="L59">            return res.getTimestamp(this, null);</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">        } else if (Time.class.isAssignableFrom(_type)) {</span>
+<span class="nc" id="L61">            return res.getTime(this, null);</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        } else if (Date.class.isAssignableFrom(_type)) {</span>
+<span class="nc" id="L63">            return res.getDate(this, null);</span>
+        } else {
+<span class="nc" id="L65">            throw new InternalException();</span>
+        }
+    }
+
+    @Override
+    public Object getValue(Object[] params) {
+        try {
+<span class="nc" id="L72">            return _type.getConstructor(long.class).newInstance(System.currentTimeMillis());</span>
+<span class="nc" id="L73">        } catch (Exception e) {</span>
+<span class="nc" id="L74">            return new Date();</span>
+        }
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state, SQLBuffer sql, int index) {
+<span class="nc bnc" id="L80" title="All 2 branches missed.">        if (Timestamp.class.isAssignableFrom(_type)) {</span>
+<span class="nc" id="L81">            sql.append(ctx.store.getDBDictionary().currentTimestampFunction);</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        } else if (Time.class.isAssignableFrom(_type)) {</span>
+<span class="nc" id="L83">            sql.append(ctx.store.getDBDictionary().currentTimeFunction);</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        } else if (Date.class.isAssignableFrom(_type)) {</span>
+<span class="nc" id="L85">            sql.append(ctx.store.getDBDictionary().currentDateFunction);</span>
+        } else {
+<span class="nc" id="L87">            throw new InternalException();</span>
+        }
+<span class="nc" id="L89">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

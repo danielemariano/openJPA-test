@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>LobFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">LobFieldStrategy.java</span></div><h1>LobFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.io.InputStream;
+import java.io.Reader;
+import java.sql.SQLException;
+import java.sql.Types;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.ValueMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.PostgresDictionary;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * Direct mapping from a stream value to a column.
+ *
+ * @author Ignacio Andreu
+ * @since 1.1.0
+ */
+<span class="nc" id="L47">public class LobFieldStrategy extends AbstractFieldStrategy {</span>
+
+    
+    private static final long serialVersionUID = 1L;
+    private int fieldType;
+    private boolean isBlob;
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc" id="L56">        assertNotMappedBy();</span>
+<span class="nc" id="L57">        field.mapJoin(adapt, false);</span>
+<span class="nc" id="L58">        field.getKeyMapping().getValueInfo().assertNoSchemaComponents</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">            (field.getKey(), !adapt);</span>
+<span class="nc" id="L60">        field.getElementMapping().getValueInfo().assertNoSchemaComponents</span>
+<span class="nc bnc" id="L61" title="All 2 branches missed.">            (field.getElement(), !adapt);</span>
+<span class="nc" id="L62">        field.setStream(true);</span>
+<span class="nc" id="L63">        ValueMappingInfo vinfo = field.getValueInfo();</span>
+<span class="nc" id="L64">        vinfo.assertNoJoin(field, true);</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        vinfo.assertNoForeignKey(field, !adapt);</span>
+<span class="nc" id="L66">        DBDictionary dict = field.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        DBIdentifier fieldName = DBIdentifier.newColumn(field.getName(), dict != null ? dict.delimitAll() : false);</span>
+
+<span class="nc" id="L69">        Column tmpCol = new Column();</span>
+<span class="nc" id="L70">        tmpCol.setIdentifier(fieldName);</span>
+<span class="nc" id="L71">        tmpCol.setType(fieldType);</span>
+<span class="nc" id="L72">        tmpCol.setJavaType(field.getTypeCode());</span>
+
+<span class="nc" id="L74">        tmpCol.setSize(-1);</span>
+
+<span class="nc" id="L76">        Column[] cols = vinfo.getColumns(field, fieldName,</span>
+<span class="nc" id="L77">            new Column[]{ tmpCol }, field.getTable(), adapt);</span>
+
+<span class="nc" id="L79">        field.setColumns(cols);</span>
+<span class="nc" id="L80">        field.setColumnIO(vinfo.getColumnIO());</span>
+<span class="nc" id="L81">        field.mapConstraints(fieldName, adapt);</span>
+<span class="nc" id="L82">        field.mapPrimaryKey(adapt);</span>
+<span class="nc" id="L83">    }</span>
+
+    @Override
+    public Boolean isCustomInsert(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L87">        return null;</span>
+    }
+
+    @Override
+    public void delete(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L93">        Select sel = createSelect(sm, store);</span>
+<span class="nc" id="L94">        store.getDBDictionary().deleteStream(store, sel);</span>
+<span class="nc" id="L95">    }</span>
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L100">        Object ob = toDataStoreValue(sm.fetchObjectField</span>
+<span class="nc" id="L101">            (field.getIndex()), store);</span>
+<span class="nc" id="L102">        Row row = field.getRow(sm, store, rm, Row.ACTION_INSERT);</span>
+<span class="nc bnc" id="L103" title="All 4 branches missed.">        if (field.getColumnIO().isInsertable(0, ob == null)) {</span>
+<span class="nc" id="L104">            Select sel = createSelect(sm, store);</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">            if (isBlob) {</span>
+<span class="nc" id="L106">                store.getDBDictionary().insertBlobForStreamingLoad</span>
+<span class="nc" id="L107">                    (row, field.getColumns()[0], store, ob, sel);</span>
+            } else {
+<span class="nc" id="L109">                store.getDBDictionary().insertClobForStreamingLoad</span>
+<span class="nc" id="L110">                    (row, field.getColumns()[0], ob);</span>
+            }
+        }
+<span class="nc" id="L113">    }</span>
+
+    @Override
+    public void customInsert(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L118">        Object ob = toDataStoreValue(sm.fetchObjectField</span>
+<span class="nc" id="L119">            (field.getIndex()), store);</span>
+<span class="nc bnc" id="L120" title="All 4 branches missed.">        if (field.getColumnIO().isInsertable(0, ob == null)) {</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">            if (ob != null) {</span>
+<span class="nc" id="L122">                Select sel = createSelect(sm, store);</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">                if (isBlob) {</span>
+<span class="nc" id="L124">                    store.getDBDictionary().updateBlob</span>
+<span class="nc" id="L125">                        (sel, store, (InputStream)ob);</span>
+                } else {
+<span class="nc" id="L127">                    store.getDBDictionary().updateClob</span>
+<span class="nc" id="L128">                        (sel, store, (Reader)ob);</span>
+                }
+            }
+        }
+<span class="nc" id="L132">    }</span>
+
+    @Override
+    public Boolean isCustomUpdate(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L136">        return null;</span>
+    }
+
+    @Override
+    public void update(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L142">        Object ob = toDataStoreValue(sm.fetchObjectField</span>
+<span class="nc" id="L143">            (field.getIndex()), store);</span>
+<span class="nc bnc" id="L144" title="All 4 branches missed.">        if (field.getColumnIO().isUpdatable(0, ob == null)) {</span>
+<span class="nc" id="L145">            Row row = field.getRow(sm, store, rm, Row.ACTION_UPDATE);</span>
+<span class="nc" id="L146">            Select sel = createSelect(sm, store);</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">            if (isBlob) {</span>
+<span class="nc" id="L148">                store.getDBDictionary().insertBlobForStreamingLoad</span>
+<span class="nc" id="L149">                    (row, field.getColumns()[0], store, ob, sel);</span>
+            } else {
+<span class="nc" id="L151">                store.getDBDictionary().insertClobForStreamingLoad</span>
+<span class="nc" id="L152">                    (row, field.getColumns()[0], ob);</span>
+            }
+        }
+<span class="nc" id="L155">    }</span>
+
+    @Override
+    public void customUpdate(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L160">        Object ob = toDataStoreValue(sm.fetchObjectField</span>
+<span class="nc" id="L161">                (field.getIndex()), store);</span>
+<span class="nc bnc" id="L162" title="All 4 branches missed.">        if (field.getColumnIO().isUpdatable(0, ob == null)) {</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">            if (ob != null) {</span>
+<span class="nc" id="L164">                Select sel = createSelect(sm, store);</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">                if (isBlob) {</span>
+<span class="nc" id="L166">                    store.getDBDictionary().updateBlob</span>
+<span class="nc" id="L167">                        (sel, store, (InputStream)ob);</span>
+                } else {
+<span class="nc" id="L169">                    store.getDBDictionary().updateClob</span>
+<span class="nc" id="L170">                        (sel, store, (Reader)ob);</span>
+                }
+            }
+        }
+<span class="nc" id="L174">    }</span>
+
+    @Override
+    public int supportsSelect(Select sel, int type, OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch) {
+<span class="nc bnc" id="L179" title="All 4 branches missed.">        if (type == Select.TYPE_JOINLESS &amp;&amp; sel.isSelected(field.getTable()))</span>
+<span class="nc" id="L180">            return 1;</span>
+<span class="nc" id="L181">        return 0;</span>
+    }
+
+    @Override
+    public int select(Select sel, OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, int eagerMode) {
+<span class="nc" id="L187">        sel.select(field.getColumns()[0], field.join(sel));</span>
+<span class="nc" id="L188">        return 1;</span>
+    }
+
+    @Override
+    public void load(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Result res) throws SQLException {
+<span class="nc" id="L194">        Column col = field.getColumns()[0];</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        if (res.contains(col)) {</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">            if (isBlob) {</span>
+<span class="nc" id="L197">                sm.storeObject(field.getIndex(), res.getLOBStream(store, col));</span>
+            } else {
+<span class="nc" id="L199">                sm.storeObject(field.getIndex(), res.getCharacterStream(col));</span>
+            }
+        }
+<span class="nc" id="L202">    }</span>
+
+    @Override
+    protected void assertNotMappedBy() {
+<span class="nc bnc" id="L206" title="All 4 branches missed.">        if (field != null &amp;&amp; field.getMappedBy() != null)</span>
+<span class="nc" id="L207">            throw new UnsupportedOperationException();</span>
+<span class="nc" id="L208">    }</span>
+
+    @Override
+    public void setFieldMapping(FieldMapping owner) {
+<span class="nc" id="L212">        field = owner;</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        if (owner.getElementMapping().getMappingRepository().getDBDictionary()</span>
+            instanceof PostgresDictionary) {
+<span class="nc" id="L215">            fieldType = Types.INTEGER;</span>
+<span class="nc" id="L216">            isBlob = true;</span>
+<span class="nc" id="L217">            field.setTypeCode(JavaTypes.INT);</span>
+        } else {
+<span class="nc bnc" id="L219" title="All 2 branches missed.">            if (owner.getType().isAssignableFrom(InputStream.class)) {</span>
+<span class="nc" id="L220">                isBlob = true;</span>
+<span class="nc" id="L221">                fieldType = Types.BLOB;</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">            } else if (owner.getType().isAssignableFrom(Reader.class)) {</span>
+<span class="nc" id="L223">                isBlob = false;</span>
+<span class="nc" id="L224">                fieldType = Types.CLOB;</span>
+            }
+        }
+<span class="nc" id="L227">    }</span>
+
+    private Select createSelect(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L230">        Select sel = store.getSQLFactory().newSelect();</span>
+<span class="nc" id="L231">        sel.select(field.getColumns()[0]);</span>
+<span class="nc" id="L232">        sel.selectPrimaryKey(field.getDefiningMapping());</span>
+<span class="nc" id="L233">        sel.wherePrimaryKey</span>
+<span class="nc" id="L234">            (sm.getObjectId(), field.getDefiningMapping(), store);</span>
+<span class="nc" id="L235">        sel.setLob(true);</span>
+<span class="nc" id="L236">        return sel;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

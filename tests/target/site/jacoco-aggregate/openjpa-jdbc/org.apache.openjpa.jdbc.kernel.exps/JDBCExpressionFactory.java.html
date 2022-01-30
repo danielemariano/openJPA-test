@@ -1,0 +1,669 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JDBCExpressionFactory.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">JDBCExpressionFactory.java</span></div><h1>JDBCExpressionFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.io.Serializable;
+import java.util.Date;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Discriminator;
+import org.apache.openjpa.jdbc.meta.strats.NoneDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.VerticalClassStrategy;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Raw;
+import org.apache.openjpa.kernel.exps.AggregateListener;
+import org.apache.openjpa.kernel.exps.Arguments;
+import org.apache.openjpa.kernel.exps.Expression;
+import org.apache.openjpa.kernel.exps.ExpressionFactory;
+import org.apache.openjpa.kernel.exps.FilterListener;
+import org.apache.openjpa.kernel.exps.Literal;
+import org.apache.openjpa.kernel.exps.Parameter;
+import org.apache.openjpa.kernel.exps.Path;
+import org.apache.openjpa.kernel.exps.Subquery;
+import org.apache.openjpa.kernel.exps.Value;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Expression factory implementation that can be used to execute queries
+ * via SQL.
+ *
+ * @author Abe White
+ */
+public class JDBCExpressionFactory
+    implements ExpressionFactory, Serializable {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L56">    private static final Val NULL = new Null();</span>
+
+<span class="nc" id="L58">    private static final Localizer _loc = Localizer.forPackage(JDBCExpressionFactory.class);</span>
+
+    private final ClassMapping _type;
+<span class="nc" id="L61">    private final SelectConstructor _cons = new SelectConstructor();</span>
+<span class="nc" id="L62">    private int _getMapValueAlias = 0;</span>
+
+<span class="nc" id="L64">    private boolean _isBooleanLiteralAsNumeric = true;</span>
+
+    /**
+     * Constructor. Supply the type we're querying against.
+     */
+<span class="nc" id="L69">    public JDBCExpressionFactory(ClassMapping type) {</span>
+<span class="nc" id="L70">        _type = type;</span>
+<span class="nc" id="L71">    }</span>
+
+    public void setBooleanLiteralAsNumeric(boolean isBooleanLiteralAsNumeric) {
+<span class="nc" id="L74">        _isBooleanLiteralAsNumeric = isBooleanLiteralAsNumeric;</span>
+<span class="nc" id="L75">    }</span>
+
+    /**
+     * Use to create SQL select.
+     */
+    public SelectConstructor getSelectConstructor() {
+<span class="nc" id="L81">        return _cons;</span>
+    }
+
+    @Override
+    public Expression emptyExpression() {
+<span class="nc" id="L86">        return new EmptyExpression();</span>
+    }
+
+    @Override
+    public Expression asExpression(Value v) {
+<span class="nc" id="L91">        return equal(v, newLiteral(Boolean.TRUE, Literal.TYPE_BOOLEAN));</span>
+    }
+
+    @Override
+    public Expression equal(Value v1, Value v2) {
+        // if we're comparing an unaccessed bound variable, like in:
+        // coll.contains (var) &amp;&amp; var == x, then translate into:
+        // coll.contains (x)
+<span class="nc bnc" id="L99" title="All 4 branches missed.">        if (v1 instanceof PCPath &amp;&amp; ((PCPath) v1).isUnaccessedVariable())</span>
+<span class="nc" id="L100">            return contains(v1, v2);</span>
+<span class="nc bnc" id="L101" title="All 4 branches missed.">        if (v2 instanceof PCPath &amp;&amp; ((PCPath) v2).isUnaccessedVariable())</span>
+<span class="nc" id="L102">            return contains(v2, v1);</span>
+<span class="nc bnc" id="L103" title="All 4 branches missed.">        if (v1 instanceof Type || v2 instanceof Type) {</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">            Value val = v1 instanceof Type ? v1 : v2;</span>
+<span class="nc" id="L105">            verifyTypeOperation(val, null, false);</span>
+<span class="nc" id="L106">            return new EqualTypeExpression((Val) v1, (Val) v2);</span>
+        }
+<span class="nc" id="L108">        return new EqualExpression((Val) v1, (Val) v2);</span>
+    }
+
+    private void verifyTypeOperation(Value val, Value param, boolean isNotEqual) {
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (val.getPath() == null)</span>
+<span class="nc" id="L113">            return;</span>
+<span class="nc" id="L114">        PCPath path = (PCPath) val.getPath();</span>
+<span class="nc" id="L115">        Discriminator disc = ((Type) val).getDiscriminator();</span>
+<span class="nc bnc" id="L116" title="All 4 branches missed.">        if (disc == null || !(val.getMetaData().getPCSuperclass() != null ||</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            val.getMetaData().getPCSubclasses().length &gt; 0))</span>
+<span class="nc" id="L118">            throw new UserException(_loc.</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">                get(&quot;invalid-type-argument&quot;, path.last() != null ? path.getPCPathString() : path.getSchemaAlias()));</span>
+
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (disc.getColumns().length == 0) {</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">            if (disc.getStrategy() instanceof NoneDiscriminatorStrategy) {</span>
+                // limited support for table per class inheritance hierarchy
+<span class="nc bnc" id="L124" title="All 2 branches missed.">                if (path.last() != null)</span>
+<span class="nc" id="L125">                    throw new UserException(_loc.</span>
+<span class="nc" id="L126">                        get(&quot;type-argument-unsupported&quot;, path.last().getName()));</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">                if (isNotEqual) {</span>
+<span class="nc bnc" id="L128" title="All 4 branches missed.">                    if (param != null &amp;&amp; param instanceof Null)</span>
+<span class="nc" id="L129">                        throw new UserException(_loc.</span>
+<span class="nc" id="L130">                            get(&quot;type-in-expression-unsupported&quot;, path.getSchemaAlias()));</span>
+                    else
+<span class="nc" id="L132">                        throw new UserException(_loc.</span>
+<span class="nc" id="L133">                            get(&quot;type-not-equal-unsupported&quot;, path.getSchemaAlias()));</span>
+                }
+            }
+<span class="nc bnc" id="L136" title="All 4 branches missed.">            if (param != null &amp;&amp; param instanceof CollectionParam)</span>
+<span class="nc" id="L137">                throw new UserException(_loc.</span>
+<span class="nc" id="L138">                    get(&quot;collection-param-unsupported&quot;));</span>
+        }
+<span class="nc" id="L140">    }</span>
+
+    @Override
+    public Expression notEqual(Value v1, Value v2) {
+<span class="nc bnc" id="L144" title="All 4 branches missed.">        if (v1 instanceof Type || v2 instanceof Type) {</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">            Value val = v1 instanceof Type ? v1 : v2;</span>
+<span class="nc bnc" id="L146" title="All 6 branches missed.">            Value param = val == v1 ? (v2 instanceof Null ? v2 : null) : (v1 instanceof Null ? v1 : null);</span>
+<span class="nc" id="L147">            verifyTypeOperation(val, param, true);</span>
+<span class="nc" id="L148">            return new NotEqualTypeExpression((Val) v1, (Val) v2);</span>
+        }
+<span class="nc" id="L150">        return new NotEqualExpression((Val) v1, (Val) v2);</span>
+    }
+
+    @Override
+    public Expression lessThan(Value v1, Value v2) {
+<span class="nc" id="L155">        return new CompareExpression((Val) v1, (Val) v2,</span>
+            CompareExpression.LESS);
+    }
+
+    @Override
+    public Expression greaterThan(Value v1, Value v2) {
+<span class="nc" id="L161">        return new CompareExpression((Val) v1, (Val) v2,</span>
+            CompareExpression.GREATER);
+    }
+
+    @Override
+    public Expression lessThanEqual(Value v1, Value v2) {
+<span class="nc" id="L167">        return new CompareExpression((Val) v1, (Val) v2,</span>
+            CompareExpression.LESS_EQUAL);
+    }
+
+    @Override
+    public Expression greaterThanEqual(Value v1, Value v2) {
+<span class="nc" id="L173">        return new CompareExpression((Val) v1, (Val) v2,</span>
+            CompareExpression.GREATER_EQUAL);
+    }
+
+    @Override
+    public Expression isEmpty(Value val) {
+<span class="nc" id="L179">        return new IsEmptyExpression((Val) val);</span>
+    }
+
+    @Override
+    public Expression isNotEmpty(Value val) {
+<span class="nc" id="L184">        return new IsNotEmptyExpression((Val) val);</span>
+    }
+
+    @Override
+    public Expression contains(Value map, Value arg) {
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        if (map instanceof Const) {</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">            if (arg instanceof Type) {</span>
+                // limited support for table per class inheritance
+<span class="nc" id="L192">                verifyTypeOperation(arg, map, false);</span>
+<span class="nc bnc" id="L193" title="All 2 branches missed.">                if (((ClassMapping) arg.getMetaData()).getDiscriminator().getColumns().length == 0)</span>
+<span class="nc" id="L194">                    return new EqualTypeExpression((Val) arg, (Val) map);</span>
+            }
+
+<span class="nc" id="L197">            return new InExpression((Val) arg, (Const) map);</span>
+        }
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        if (map instanceof SubQ)</span>
+<span class="nc" id="L200">            return new InSubQExpression((Val) arg, (SubQ) map);</span>
+<span class="nc" id="L201">        return new ContainsExpression((Val) map, (Val) arg);</span>
+    }
+
+    @Override
+    public Expression containsKey(Value map, Value arg) {
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        if (map instanceof Const)</span>
+<span class="nc" id="L207">            return new InKeyExpression((Val) arg, (Const) map);</span>
+<span class="nc" id="L208">        return new ContainsKeyExpression((Val) map, (Val) arg);</span>
+    }
+
+    @Override
+    public Expression containsValue(Value map, Value arg) {
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        if (map instanceof Const)</span>
+<span class="nc" id="L214">            return new InValueExpression((Val) arg, (Const) map);</span>
+<span class="nc" id="L215">        return new ContainsExpression((Val) map, (Val) arg);</span>
+    }
+
+    @Override
+    public Expression isInstance(Value val, Class c) {
+<span class="nc bnc" id="L220" title="All 2 branches missed.">        if (val instanceof Const)</span>
+<span class="nc" id="L221">            return new ConstInstanceofExpression((Const) val, c);</span>
+<span class="nc" id="L222">        return new InstanceofExpression((PCPath) val, c);</span>
+    }
+
+    @Override
+    public Expression and(Expression exp1, Expression exp2) {
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (exp1 instanceof BindVariableExpression)</span>
+<span class="nc" id="L228">            return new BindVariableAndExpression((BindVariableExpression) exp1,</span>
+                (Exp) exp2);
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        if (exp2 instanceof BindVariableExpression)</span>
+<span class="nc" id="L231">            return new BindVariableAndExpression((BindVariableExpression) exp2,</span>
+                (Exp) exp1);
+<span class="nc" id="L233">        return new AndExpression((Exp) exp1, (Exp) exp2);</span>
+    }
+
+    @Override
+    public Expression or(Expression exp1, Expression exp2) {
+<span class="nc" id="L238">        return new OrExpression((Exp) exp1, (Exp) exp2);</span>
+    }
+
+    @Override
+    public Expression not(Expression exp) {
+<span class="nc bnc" id="L243" title="All 4 branches missed.">        if (!(exp instanceof IsNotEmptyExpression) &amp;&amp;</span>
+            !(exp instanceof InSubQExpression) &amp;&amp;
+<span class="nc bnc" id="L245" title="All 2 branches missed.">            HasContainsExpressionVisitor.hasContains(exp))</span>
+<span class="nc" id="L246">            return new NotContainsExpression((Exp) exp);</span>
+<span class="nc" id="L247">        return new NotExpression((Exp) exp);</span>
+    }
+
+    @Override
+    public Expression bindVariable(Value var, Value val) {
+        // handle the strange case of using a constant path to bind a
+        // variable; in these cases the variable acts like an unbound
+        // variable that we limit by using an IN clause on the constant
+        // value collection
+<span class="nc bnc" id="L256" title="All 2 branches missed.">        if (val instanceof Const) {</span>
+<span class="nc" id="L257">            PCPath path = new PCPath(_type, (Variable) var);</span>
+<span class="nc" id="L258">            path.setMetaData(var.getMetaData());</span>
+<span class="nc" id="L259">            return new InExpression(path, (Const) val);</span>
+        }
+<span class="nc" id="L261">        return new BindVariableExpression((Variable) var, (PCPath) val, false);</span>
+    }
+
+    @Override
+    public Expression bindKeyVariable(Value var, Value val) {
+        // handle the strange case of using a constant path to bind a
+        // variable; in these cases the variable acts like an unbound
+        // variable that we limit by using an IN clause on the constant
+        // value collection
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        if (val instanceof Const) {</span>
+<span class="nc" id="L271">            PCPath path = new PCPath(_type, (Variable) var);</span>
+<span class="nc" id="L272">            path.setMetaData(var.getMetaData());</span>
+<span class="nc" id="L273">            return new InKeyExpression(path, (Const) val);</span>
+        }
+<span class="nc" id="L275">        return new BindVariableExpression((Variable) var, (PCPath) val, true);</span>
+    }
+
+    @Override
+    public Expression bindValueVariable(Value var, Value val) {
+<span class="nc" id="L280">        return bindVariable(var, val);</span>
+    }
+
+    @Override
+    public Expression startsWith(Value v1, Value v2) {
+<span class="nc" id="L285">        return new StartsWithExpression((Val) v1, (Val) v2);</span>
+    }
+
+    @Override
+    public Expression endsWith(Value v1, Value v2) {
+<span class="nc" id="L290">        return new EndsWithExpression((Val) v1, (Val) v2);</span>
+    }
+
+    @Override
+    public Expression notMatches(Value v1, Value v2,
+        String single, String multi, String esc) {
+<span class="nc" id="L296">        return not(matches(v1, v2, single, multi, esc));</span>
+    }
+
+    @Override
+    public Expression matches(Value v1, Value v2,
+        String single, String multi, String esc) {
+<span class="nc bnc" id="L302" title="All 2 branches missed.">        if (!(v2 instanceof Const))</span>
+<span class="nc" id="L303">            throw new UserException(_loc.get(&quot;const-only&quot;, &quot;matches&quot;));</span>
+<span class="nc bnc" id="L304" title="All 4 branches missed.">        if (esc == null &amp;&amp; _type.getMappingRepository().getDBDictionary().requiresSearchStringEscapeForLike) {</span>
+<span class="nc" id="L305">            esc = _type.getMappingRepository().getDBDictionary().searchStringEscape;</span>
+        }
+<span class="nc" id="L307">        return new MatchesExpression((Val) v1, (Const) v2, single, multi, esc);</span>
+    }
+
+    @Override
+    public Subquery newSubquery(ClassMetaData candidate, boolean subs,
+        String alias) {
+<span class="nc" id="L313">        DBDictionary dict = _type.getMappingRepository().getDBDictionary();</span>
+<span class="nc" id="L314">        dict.assertSupport(dict.supportsSubselect, &quot;SupportsSubselect&quot;);</span>
+<span class="nc" id="L315">        return new SubQ((ClassMapping) candidate, subs, alias);</span>
+    }
+
+    @Override
+    public Path newPath() {
+<span class="nc" id="L320">        return new PCPath(_type);</span>
+    }
+
+    @Override
+    public Path newPath(Value val) {
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        if (val instanceof Const)</span>
+<span class="nc" id="L326">            return new ConstPath((Const) val);</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        if (val instanceof SubQ)</span>
+<span class="nc" id="L328">            return new PCPath((SubQ) val);</span>
+<span class="nc" id="L329">        return new PCPath(_type, (Variable) val);</span>
+    }
+
+    @Override
+    public Literal newLiteral(Object val, int ptype) {
+<span class="nc" id="L334">        return new Lit(val, ptype);</span>
+    }
+
+    @Override
+    public Literal newTypeLiteral(Object val, int ptype) {
+<span class="nc" id="L339">        return new TypeLit(val, ptype);</span>
+    }
+
+    @Override
+    public Value getThis() {
+<span class="nc" id="L344">        return new PCPath(_type);</span>
+    }
+
+    @Override
+    public Value getNull() {
+<span class="nc" id="L349">        return NULL;</span>
+    }
+
+    @Override
+    public &lt;T extends Date&gt; Value getCurrentDate(Class&lt;T&gt; dateType) {
+<span class="nc" id="L354">        return new CurrentDate(dateType);</span>
+    }
+
+    @Override
+    public &lt;T extends Date&gt; Value getCurrentTime(Class&lt;T&gt; dateType) {
+<span class="nc" id="L359">        return  new CurrentDate(dateType);</span>
+    }
+
+    @Override
+    public &lt;T extends Date&gt; Value getCurrentTimestamp(Class&lt;T&gt; dateType) {
+<span class="nc" id="L364">        return  new CurrentDate(dateType);</span>
+    }
+
+    @Override
+    public Parameter newParameter(Object name, Class type) {
+<span class="nc" id="L369">        return new Param(name, type);</span>
+    }
+
+    @Override
+    public Parameter newCollectionValuedParameter(Object key, Class type) {
+<span class="nc" id="L374">        return new CollectionParam(key, type);</span>
+    }
+
+    @Override
+    public Value newExtension(FilterListener listener, Value target,
+        Value arg) {
+<span class="nc" id="L380">        return new Extension((JDBCFilterListener) listener,</span>
+            (Val) target, (Val) arg, _type);
+    }
+
+    @Override
+    public Value newAggregate(AggregateListener listener, Value arg) {
+<span class="nc" id="L386">        return new Aggregate((JDBCAggregateListener) listener,</span>
+            (Val) arg, _type);
+    }
+
+    @Override
+    public Arguments newArgumentList(Value v1, Value v2) {
+<span class="nc" id="L392">        return new Args((Val) v1, (Val) v2);</span>
+    }
+
+    @Override
+    public Arguments newArgumentList(Value... vs) {
+<span class="nc bnc" id="L397" title="All 2 branches missed.">        if (vs == null)</span>
+<span class="nc" id="L398">           return new Args(null);</span>
+<span class="nc" id="L399">        Val[] vals = new Val[vs.length];</span>
+<span class="nc" id="L400">        int i = 0;</span>
+<span class="nc bnc" id="L401" title="All 2 branches missed.">        for (Value v : vs) {</span>
+<span class="nc" id="L402">            vals[i++] = (Val)v;</span>
+        }
+<span class="nc" id="L404">        return new Args(vals);</span>
+    }
+
+    @Override
+    public Value newUnboundVariable(String name, Class type) {
+<span class="nc" id="L409">        return new Variable(name, type);</span>
+    }
+
+    @Override
+    public Value newBoundVariable(String name, Class type) {
+<span class="nc" id="L414">        return newUnboundVariable(name, type);</span>
+    }
+
+    @Override
+    public Value cast(Value val, Class cls) {
+<span class="nc" id="L419">        val.setImplicitType(cls);</span>
+<span class="nc" id="L420">        return val;</span>
+    }
+
+    @Override
+    public Value add(Value v1, Value v2) {
+<span class="nc" id="L425">        return new Math((Val) v1, (Val) v2, Math.ADD);</span>
+    }
+
+    @Override
+    public Value subtract(Value v1, Value v2) {
+<span class="nc" id="L430">        return new Math((Val) v1, (Val) v2, Math.SUBTRACT);</span>
+    }
+
+    @Override
+    public Value multiply(Value v1, Value v2) {
+<span class="nc" id="L435">        return new Math((Val) v1, (Val) v2, Math.MULTIPLY);</span>
+    }
+
+    @Override
+    public Value divide(Value v1, Value v2) {
+<span class="nc" id="L440">        return new Math((Val) v1, (Val) v2, Math.DIVIDE);</span>
+    }
+
+    @Override
+    public Value mod(Value v1, Value v2) {
+<span class="nc" id="L445">        return new Math((Val) v1, (Val) v2, Math.MOD);</span>
+    }
+
+    @Override
+    public Value abs(Value val) {
+<span class="nc" id="L450">        return new Abs((Val) val);</span>
+    }
+
+    @Override
+    public Value indexOf(Value v1, Value v2) {
+<span class="nc" id="L455">        return new IndexOf((Val) v1, (Val) v2);</span>
+    }
+
+    @Override
+    public Value concat(Value v1, Value v2) {
+<span class="nc" id="L460">        return new Concat((Val) v1, (Val) v2);</span>
+    }
+
+    @Override
+    public Value stringLength(Value str) {
+<span class="nc" id="L465">        return new StringLength((Val) str);</span>
+    }
+
+    @Override
+    public Value trim(Value str, Value trimChar, Boolean where) {
+<span class="nc" id="L470">        return new Trim((Val) str, (Val) trimChar, where);</span>
+    }
+
+    @Override
+    public Value sqrt(Value val) {
+<span class="nc" id="L475">        return new Sqrt((Val) val);</span>
+    }
+
+    @Override
+    public Value substring(Value v1, Value v2) {
+<span class="nc" id="L480">        return new Substring((Val) v1, (Val) v2);</span>
+    }
+
+    @Override
+    public Value toUpperCase(Value val) {
+<span class="nc" id="L485">        return new ToUpperCase((Val) val);</span>
+    }
+
+    @Override
+    public Value toLowerCase(Value val) {
+<span class="nc" id="L490">        return new ToLowerCase((Val) val);</span>
+    }
+
+    @Override
+    public Value avg(Value val) {
+<span class="nc" id="L495">        return new Avg((Val) val);</span>
+    }
+
+    @Override
+    public Value count(Value val) {
+<span class="nc" id="L500">        return new Count((Val) val);</span>
+    }
+
+    @Override
+    public Value distinct(Value val) {
+<span class="nc" id="L505">        return new Distinct((Val) val);</span>
+    }
+
+    @Override
+    public Value max(Value val) {
+<span class="nc" id="L510">        return new Max((Val) val);</span>
+    }
+
+    @Override
+    public Value min(Value val) {
+<span class="nc" id="L515">        return new Min((Val) val);</span>
+    }
+
+    @Override
+    public Value sum(Value val) {
+<span class="nc" id="L520">        return new Sum((Val) val);</span>
+    }
+
+    @Override
+    public Value any(Value val) {
+<span class="nc" id="L525">        return new Any((Val) val);</span>
+    }
+
+    @Override
+    public Value all(Value val) {
+<span class="nc" id="L530">        return new All((Val) val);</span>
+    }
+
+    @Override
+    public Value size(Value val) {
+<span class="nc" id="L535">        return new Size((Val) val);</span>
+    }
+
+    @Override
+    public Value index(Value val) {
+<span class="nc" id="L540">        ((PCPath) val).verifyIndexedField();</span>
+<span class="nc" id="L541">        return new Index((Val) val);</span>
+    }
+
+    @Override
+    public Value type(Value val) {
+<span class="nc" id="L546">        return new Type((Val) val);</span>
+    }
+
+    @Override
+    public Value mapEntry(Value key, Value val) {
+<span class="nc" id="L551">        return new MapEntry((Val) key, (Val) val);</span>
+    }
+
+    @Override
+    public Value mapKey(Value key, Value val) {
+<span class="nc" id="L556">        return new MapKey((Val) key);</span>
+    }
+
+    @Override
+    public Value getKey(Value val) {
+<span class="nc" id="L561">        ((PCPath) val).getKey();</span>
+<span class="nc" id="L562">        return val;</span>
+    }
+
+    @Override
+    public Value getObjectId(Value val) {
+<span class="nc bnc" id="L567" title="All 2 branches missed.">        if (val instanceof Const)</span>
+<span class="nc" id="L568">            return new ConstGetObjectId((Const) val);</span>
+<span class="nc" id="L569">        return new GetObjectId((PCPath) val);</span>
+    }
+
+    @Override
+    public Value getMapValue(Value map, Value arg) {
+<span class="nc" id="L574">        return new GetMapValue((Val) map, (Val) arg,</span>
+            &quot;gmv&quot; + _getMapValueAlias++);
+    }
+
+    private Value getLiteralRawString(Value val) {
+<span class="nc bnc" id="L579" title="All 2 branches missed.">        if (val instanceof Lit) {</span>
+<span class="nc" id="L580">            Lit lit = (Lit) val;</span>
+<span class="nc" id="L581">            StringBuilder value = new StringBuilder();</span>
+<span class="nc" id="L582">            int pType = lit.getParseType();</span>
+<span class="nc bnc" id="L583" title="All 4 branches missed.">            if (pType == Literal.TYPE_SQ_STRING ||</span>
+                pType == Literal.TYPE_STRING)
+<span class="nc" id="L585">                value.append(&quot;'&quot;).append(lit.getValue().toString()).append(&quot;'&quot;);</span>
+<span class="nc bnc" id="L586" title="All 2 branches missed.">            else if (pType == Literal.TYPE_BOOLEAN) {</span>
+<span class="nc" id="L587">                Boolean boolVal = (Boolean)lit.getValue();</span>
+<span class="nc bnc" id="L588" title="All 2 branches missed.">                if (_isBooleanLiteralAsNumeric)</span>
+<span class="nc bnc" id="L589" title="All 2 branches missed.">                    value.append(boolVal ? &quot;1&quot; : &quot;0&quot;);</span>
+                else
+<span class="nc bnc" id="L591" title="All 2 branches missed.">                    value.append(boolVal ? &quot;true&quot; : &quot;false&quot;);</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">            } else if (pType == Literal.TYPE_ENUM) {</span>
+<span class="nc" id="L593">                lit.setRaw(true);</span>
+<span class="nc" id="L594">                return val;</span>
+            } else
+<span class="nc" id="L596">                value.append(lit.getValue().toString());</span>
+<span class="nc" id="L597">            lit.setValue(new Raw(value.toString()));</span>
+<span class="nc" id="L598">            return lit;</span>
+        }
+<span class="nc" id="L600">        return val;</span>
+    }
+
+    @Override
+    public Value simpleCaseExpression(Value caseOperand, Expression[] exp,
+            Value val1) {
+<span class="nc" id="L606">        Exp[] exps = new Exp[exp.length];</span>
+<span class="nc bnc" id="L607" title="All 2 branches missed.">        for (int i = 0; i &lt; exp.length; i++)</span>
+<span class="nc" id="L608">            exps[i] = (Exp) exp[i];</span>
+<span class="nc" id="L609">        val1 = getLiteralRawString(val1);</span>
+<span class="nc" id="L610">        return new SimpleCaseExpression((Val) caseOperand, exps,</span>
+            (Val) val1);
+    }
+
+    @Override
+    public Value generalCaseExpression(Expression[] exp,
+            Value val) {
+<span class="nc" id="L617">        Exp[] exps = new Exp[exp.length];</span>
+<span class="nc bnc" id="L618" title="All 2 branches missed.">        for (int i = 0; i &lt; exp.length; i++)</span>
+<span class="nc" id="L619">            exps[i] = (Exp) exp[i];</span>
+<span class="nc" id="L620">        val = getLiteralRawString(val);</span>
+<span class="nc" id="L621">        return new GeneralCaseExpression(exps, (Val) val);</span>
+    }
+
+    @Override
+    public Expression whenCondition(Expression exp, Value val) {
+<span class="nc" id="L626">        val = getLiteralRawString(val);</span>
+<span class="nc" id="L627">        return new WhenCondition((Exp) exp, (Val) val);</span>
+    }
+
+    @Override
+    public Expression whenScalar(Value val1, Value val2) {
+<span class="nc" id="L632">        val1 = getLiteralRawString(val1);</span>
+<span class="nc" id="L633">        val2 = getLiteralRawString(val2);</span>
+<span class="nc" id="L634">        return new WhenScalar((Val) val1, (Val) val2);</span>
+    }
+
+    @Override
+    public Value coalesceExpression(Value[] vals) {;
+<span class="nc" id="L639">        Object[] values = new Val[vals.length];</span>
+<span class="nc bnc" id="L640" title="All 2 branches missed.">        for (int i = 0; i &lt; vals.length; i++) {</span>
+<span class="nc" id="L641">            values[i] = getLiteralRawString(vals[i]);</span>
+        }
+<span class="nc" id="L643">        return new CoalesceExpression((Val[]) values);</span>
+    }
+
+    @Override
+    public Value nullIfExpression(Value val1, Value val2) {
+<span class="nc" id="L648">        val1 = getLiteralRawString(val1);</span>
+<span class="nc" id="L649">        val2 = getLiteralRawString(val2);</span>
+<span class="nc" id="L650">        return new NullIfExpression((Val) val1, (Val) val2);</span>
+    }
+
+    @Override
+    public Value newFunction(String functionName, Class&lt;?&gt; resultType, Value... args) {
+<span class="nc" id="L655">        return new DatastoreFunction(functionName, resultType, newArgumentList(args));</span>
+    }
+
+    @Override
+    public boolean isVerticalType(Value val) {
+<span class="nc bnc" id="L660" title="All 2 branches missed.">        if (!(val instanceof Type))</span>
+<span class="nc" id="L661">            return false;</span>
+<span class="nc" id="L662">        ClassMapping cm = (ClassMapping)((Type)val).getMetaData();</span>
+<span class="nc" id="L663">        String strat = cm.getMappingInfo().getHierarchyStrategy();</span>
+<span class="nc bnc" id="L664" title="All 4 branches missed.">        if (strat != null &amp;&amp; strat.equals(VerticalClassStrategy.ALIAS))</span>
+<span class="nc" id="L665">            return true;</span>
+<span class="nc" id="L666">        return false;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

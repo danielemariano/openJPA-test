@@ -1,0 +1,476 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>NativeJDBCSeq.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">NativeJDBCSeq.java</span></div><h1>NativeJDBCSeq.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.text.MessageFormat;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.SchemaTool;
+import org.apache.openjpa.jdbc.schema.Schemas;
+import org.apache.openjpa.jdbc.schema.Sequence;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configuration;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Options;
+import org.apache.openjpa.util.MetaDataException;
+import org.apache.openjpa.util.UserException;
+
+///////////////////////////////////////////////////////////
+// NOTE: Do not change property names; see SequenceMetaData
+// and SequenceMapping for standard property names.
+////////////////////////////////////////////////////////////
+
+/**
+ * {@link JDBCSeq} implementation that uses a database sequence
+ * to generate numbers.
+ * Supports allocation (caching). In order for allocation to work properly, the database sequence must be defined
+ * with INCREMENT BY value equal to allocate * increment.
+ *
+ * @see JDBCSeq
+ * @see AbstractJDBCSeq
+ */
+<span class="nc" id="L62">public class NativeJDBCSeq</span>
+    extends AbstractJDBCSeq
+    implements Configurable {
+
+    public static final String ACTION_DROP = &quot;drop&quot;;
+    public static final String ACTION_ADD = &quot;add&quot;;
+    public static final String ACTION_GET = &quot;get&quot;;
+
+<span class="nc" id="L70">    private static Localizer _loc = Localizer.forPackage(NativeJDBCSeq.class);</span>
+
+<span class="nc" id="L72">    private JDBCConfiguration _conf = null;</span>
+<span class="nc" id="L73">    private DBIdentifier _seqName = DBIdentifier.newSequence(&quot;OPENJPA_SEQUENCE&quot;);</span>
+<span class="nc" id="L74">    private int _increment = 1;</span>
+<span class="nc" id="L75">    private int _initial = 1;</span>
+<span class="nc" id="L76">    private int _allocate = 50;</span>
+<span class="nc" id="L77">    private Sequence _seq = null;</span>
+<span class="nc" id="L78">    private String _select = null;</span>
+<span class="nc" id="L79">    private long _nextValue = 0;</span>
+<span class="nc" id="L80">    private long _maxValue = -1;</span>
+
+<span class="nc" id="L82">    private DBIdentifier _schema = DBIdentifier.NULL;</span>
+
+<span class="nc" id="L84">    private boolean alterIncrementBy = false;</span>
+<span class="nc" id="L85">    private boolean alreadyLoggedAlterSeqFailure = false;</span>
+<span class="nc" id="L86">    private boolean alreadyLoggedAlterSeqDisabled = false;</span>
+
+    /**
+     * The sequence name. Defaults to &lt;code&gt;OPENJPA_SEQUENCE&lt;/code&gt;.
+     */
+    // @GETTER
+    public String getSequence() {
+<span class="nc" id="L93">        return _seqName.getName();</span>
+    }
+
+    /**
+     * The sequence name. Defaults to &lt;code&gt;OPENJPA_SEQUENCE&lt;/code&gt;.
+     */
+    public void setSequence(String seqName) {
+<span class="nc" id="L100">        _seqName = DBIdentifier.newSequence(seqName);</span>
+<span class="nc" id="L101">    }</span>
+
+    /**
+     * @see Sequence#getInitialValue
+     */
+    public int getInitialValue() {
+<span class="nc" id="L107">        return _initial;</span>
+    }
+
+    /**
+     * @see Sequence#setInitialValue
+     */
+    public void setInitialValue(int initial) {
+<span class="nc" id="L114">        _initial = initial;</span>
+<span class="nc" id="L115">    }</span>
+
+    /**
+     * @see Sequence#getAllocate
+     */
+    public int getAllocate() {
+<span class="nc" id="L121">        return _allocate;</span>
+    }
+
+    /**
+     * @see Sequence#setAllocate
+     */
+    public void setAllocate(int allocate) {
+<span class="nc" id="L128">        _allocate = allocate;</span>
+<span class="nc" id="L129">    }</span>
+
+    /**
+     * @see Sequence#getIncrement
+     */
+    public int getIncrement() {
+<span class="nc" id="L135">        return _increment;</span>
+    }
+
+    /**
+     * @see Sequence#setIncrement
+     */
+    public void setIncrement(int increment) {
+<span class="nc" id="L142">        _increment = increment;</span>
+<span class="nc" id="L143">    }</span>
+
+    @Override
+    public void addSchema(ClassMapping mapping, SchemaGroup group) {
+        // sequence already exists?
+<span class="nc" id="L148">        QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(_seqName);</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">        if (group.isKnownSequence(path))</span>
+<span class="nc" id="L150">            return;</span>
+
+<span class="nc" id="L152">        DBIdentifier schemaName = getSchemaIdentifier();</span>
+<span class="nc bnc" id="L153" title="All 2 branches missed.">        if (DBIdentifier.isEmpty(schemaName)) {</span>
+<span class="nc" id="L154">            schemaName = path.getSchemaName();</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">            if (DBIdentifier.isEmpty(schemaName))</span>
+<span class="nc" id="L156">                schemaName = Schemas.getNewTableSchemaIdentifier(_conf);</span>
+        }
+
+        // create table in this group
+<span class="nc" id="L160">        Schema schema = group.getSchema(schemaName);</span>
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (schema == null)</span>
+<span class="nc" id="L162">            schema = group.addSchema(schemaName);</span>
+<span class="nc" id="L163">        schema.importSequence(_seq);</span>
+<span class="nc" id="L164">    }</span>
+
+    @Override
+    public JDBCConfiguration getConfiguration() {
+<span class="nc" id="L168">        return _conf;</span>
+    }
+
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc" id="L173">        _conf = (JDBCConfiguration) conf;</span>
+<span class="nc" id="L174">    }</span>
+
+    @Override
+    public void startConfiguration() {
+<span class="nc" id="L178">    }</span>
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L182">        buildSequence();</span>
+
+<span class="nc" id="L184">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L185">        String format = dict.nextSequenceQuery;</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (format == null) {</span>
+<span class="nc" id="L187">            throw new MetaDataException(_loc.get(&quot;no-seq-sql&quot;, _seqName));</span>
+        }
+
+<span class="nc" id="L190">        String name = dict.getFullName(_seq);</span>
+        // Increment step is needed for Firebird which uses non-standard sequence fetch syntax.
+        // Use String.valueOf to get rid of possible locale-specific number formatting.
+<span class="nc" id="L193">        _select = MessageFormat.format(format, new Object[]{name, String.valueOf(_allocate * _increment)});</span>
+
+<span class="nc" id="L195">        type = dict.nativeSequenceType;</span>
+<span class="nc" id="L196">    }</span>
+
+    @Override
+    protected synchronized Object nextInternal(JDBCStore store, ClassMapping mapping)
+        throws SQLException {
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (!alterIncrementBy) {</span>
+<span class="nc" id="L202">            allocateInternal(0, store, mapping);</span>
+<span class="nc" id="L203">            alterIncrementBy = true;</span>
+        }
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if (_nextValue &gt;= _maxValue) {</span>
+<span class="nc" id="L206">            allocateInternal(0, store, mapping);</span>
+        }
+<span class="nc" id="L208">        long result = _nextValue;</span>
+<span class="nc" id="L209">        _nextValue += _increment;</span>
+<span class="nc" id="L210">        return result;</span>
+    }
+
+    /**
+     * Allocate additional sequence values.
+     * @param additional ignored - the allocation size is fixed and determined by allocate and increment properties.
+     * @param store used to obtain connection
+     * @param mapping ignored
+     */
+    @Override
+    protected synchronized void allocateInternal(int additional, JDBCStore store, ClassMapping mapping)
+        throws SQLException {
+<span class="nc" id="L222">        Connection conn = getConnection(store);</span>
+        try {
+<span class="nc bnc" id="L224" title="All 2 branches missed.">            if (!alterIncrementBy) {</span>
+<span class="nc" id="L225">                DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">                if (!dict.disableAlterSeqenceIncrementBy) {</span>
+                    // If this fails, we will warn the user at most one time and set _allocated and _increment to 1 so
+                    // as to not potentially insert records ahead of what the database thinks is the next sequence
+                    // value.
+<span class="nc bnc" id="L230" title="All 2 branches missed.">                    if (updateSql(conn, dict.getAlterSequenceSQL(_seq)) == -1) {</span>
+<span class="nc bnc" id="L231" title="All 2 branches missed.">                        if (!alreadyLoggedAlterSeqFailure) {</span>
+<span class="nc" id="L232">                            Log log = _conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">                            if (log.isWarnEnabled()) {</span>
+<span class="nc" id="L234">                                log.warn(_loc.get(&quot;fallback-no-seq-cache&quot;, _seqName));</span>
+                            }
+                        }
+<span class="nc" id="L237">                        alreadyLoggedAlterSeqFailure = true;</span>
+<span class="nc" id="L238">                        _allocate = 1;</span>
+                    }
+                } else {
+<span class="nc bnc" id="L241" title="All 2 branches missed.">                    if (!alreadyLoggedAlterSeqDisabled) {</span>
+<span class="nc" id="L242">                        Log log = _conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">                        if (log.isWarnEnabled()) {</span>
+<span class="nc" id="L244">                            log.warn(_loc.get(&quot;alter-seq-disabled&quot;, _seqName));</span>
+                        }
+                    }
+
+<span class="nc" id="L248">                    alreadyLoggedAlterSeqDisabled = true;</span>
+                }
+            }
+<span class="nc" id="L251">            _nextValue = getSequence(conn);</span>
+<span class="nc" id="L252">            _maxValue = _nextValue + _allocate * _increment;</span>
+        } finally {
+<span class="nc" id="L254">            closeConnection(conn);</span>
+        }
+<span class="nc" id="L256">    }</span>
+
+    /**
+     * Creates the sequence object.
+     */
+    private void buildSequence() {
+<span class="nc" id="L262">        QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(_seqName);</span>
+<span class="nc" id="L263">        DBIdentifier seqName = path.getIdentifier();</span>
+        // JPA 2 added schema as a configurable attribute on
+        // sequence generator.  OpenJPA &lt;= 1.x allowed this via
+        // schema.sequence on the sequence name.  Specifying a schema
+        // name on the annotation or in the orm will override the old
+        // behavior.
+<span class="nc" id="L269">        DBIdentifier schemaName = _schema;</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        if (DBIdentifier.isEmpty(schemaName)) {</span>
+<span class="nc" id="L271">            schemaName = path.getSchemaName();</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">            if (DBIdentifier.isEmpty(schemaName))</span>
+<span class="nc" id="L273">                schemaName = Schemas.getNewTableSchemaIdentifier(_conf);</span>
+        }
+
+        // build the sequence in one of the designated schemas
+<span class="nc" id="L277">        SchemaGroup group = new SchemaGroup();</span>
+<span class="nc" id="L278">        Schema schema = group.addSchema(schemaName);</span>
+
+<span class="nc" id="L280">        _seq = schema.addSequence(seqName);</span>
+<span class="nc" id="L281">        _seq.setInitialValue(_initial);</span>
+<span class="nc" id="L282">        _seq.setIncrement(_increment);</span>
+<span class="nc" id="L283">        _seq.setAllocate(_allocate);</span>
+<span class="nc" id="L284">    }</span>
+
+    /**
+     * Creates the sequence in the DB.
+     */
+    public void refreshSequence()
+        throws SQLException {
+<span class="nc" id="L291">        Log log = _conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);</span>
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        if (log.isInfoEnabled())</span>
+<span class="nc" id="L293">            log.info(_loc.get(&quot;make-native-seq&quot;));</span>
+
+        // create the sequence
+<span class="nc" id="L296">        SchemaTool tool = new SchemaTool(_conf);</span>
+<span class="nc" id="L297">        tool.setIgnoreErrors(true);</span>
+<span class="nc" id="L298">        tool.createSequence(_seq);</span>
+<span class="nc" id="L299">    }</span>
+
+    /**
+     * Drops the sequence in the DB.
+     */
+    public void dropSequence()
+        throws SQLException {
+<span class="nc" id="L306">        Log log = _conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">        if (log.isInfoEnabled())</span>
+<span class="nc" id="L308">            log.info(_loc.get(&quot;drop-native-seq&quot;));</span>
+
+        // drop the table
+<span class="nc" id="L311">        SchemaTool tool = new SchemaTool(_conf);</span>
+<span class="nc" id="L312">        tool.setIgnoreErrors(true);</span>
+<span class="nc" id="L313">        tool.dropSequence(_seq);</span>
+<span class="nc" id="L314">    }</span>
+
+    /**
+     * Return the next sequence value.
+     */
+    private long getSequence(Connection conn)
+        throws SQLException {
+<span class="nc" id="L321">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L322">        PreparedStatement stmnt = null;</span>
+<span class="nc" id="L323">        ResultSet rs = null;</span>
+        try {
+<span class="nc" id="L325">            stmnt = conn.prepareStatement(_select);</span>
+<span class="nc" id="L326">            dict.setTimeouts(stmnt, _conf, false);</span>
+<span class="nc" id="L327">            rs = stmnt.executeQuery();</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">            if (rs.next())</span>
+<span class="nc" id="L329">                return rs.getLong(1);</span>
+
+            // no row !?
+<span class="nc" id="L332">            throw new UserException(_loc.get(&quot;invalid-seq-sql&quot;, _select));</span>
+        } finally {
+            // clean up our resources
+<span class="nc bnc" id="L335" title="All 2 branches missed.">            if (rs != null)</span>
+<span class="nc" id="L336">                try { rs.close(); } catch (SQLException se) {}</span>
+<span class="nc bnc" id="L337" title="All 2 branches missed.">            if (stmnt != null)</span>
+<span class="nc" id="L338">                try { stmnt.close(); } catch (SQLException se) {}</span>
+        }
+    }
+
+    private int updateSql(Connection conn, String sql) throws SQLException {
+<span class="nc" id="L343">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L344">        PreparedStatement stmnt = null;</span>
+<span class="nc" id="L345">        int rc = -1;</span>
+        try {
+<span class="nc" id="L347">            stmnt = conn.prepareStatement(sql);</span>
+<span class="nc" id="L348">            dict.setTimeouts(stmnt, _conf, false);</span>
+<span class="nc" id="L349">            rc = stmnt.executeUpdate();</span>
+<span class="nc" id="L350">        } catch (Exception e) {</span>
+            // tolerate exception when attempting to alter increment,
+            // however, caller should check rc and not cache sequence values if rc != -1.
+        } finally {
+            // clean up our resources
+<span class="nc bnc" id="L355" title="All 2 branches missed.">            if (stmnt != null) {</span>
+                try {
+<span class="nc" id="L357">                    stmnt.close();</span>
+<span class="nc" id="L358">                } catch (SQLException se) {</span>
+<span class="nc" id="L359">                }</span>
+            }
+        }
+<span class="nc" id="L362">        return rc;</span>
+    }
+
+    /////////
+    // Main
+    /////////
+
+    /**
+     * Usage: java org.apache.openjpa.jdbc.schema.NativeJDBCSequence [option]*
+     * -action/-a &amp;lt;add | drop | get&amp;gt;
+     *  Where the following options are recognized.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;-properties/-p &amp;lt;properties file or resource&amp;gt;&lt;/i&gt;: The
+     * path or resource name of an OpenJPA properties file containing
+     * information such as connection data as
+     * outlined in {@link JDBCConfiguration}. Optional.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-&amp;lt;property name&amp;gt; &amp;lt;property value&amp;gt;&lt;/i&gt;: All bean
+     * properties of the OpenJPA {@link JDBCConfiguration} can be set by
+     * using their names and supplying a value.&lt;/li&gt;
+     * &lt;/ul&gt;
+     *  The various actions are as follows.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;add&lt;/i&gt;: Create the sequence.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;drop&lt;/i&gt;: Drop the sequence.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;get&lt;/i&gt;: Print the next sequence value.&lt;/li&gt;
+     * &lt;/ul&gt;
+     */
+    public static void main(String[] args)
+        throws Exception {
+<span class="nc" id="L391">        Options opts = new Options();</span>
+<span class="nc" id="L392">        final String[] arguments = opts.setFromCmdLine(args);</span>
+<span class="nc" id="L393">        boolean ret = Configurations.runAgainstAllAnchors(opts,</span>
+<span class="nc" id="L394">            new Configurations.Runnable() {</span>
+            @Override
+            public boolean run(Options opts) throws Exception {
+<span class="nc" id="L397">                JDBCConfiguration conf = new JDBCConfigurationImpl();</span>
+                try {
+<span class="nc" id="L399">                    return NativeJDBCSeq.run(conf, arguments, opts);</span>
+                } finally {
+<span class="nc" id="L401">                    conf.close();</span>
+                }
+            }
+        });
+<span class="nc bnc" id="L405" title="All 2 branches missed.">        if (!ret) {</span>
+            // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L407">            System.out.println(_loc.get(&quot;native-seq-usage&quot;));</span>
+            // STOP - ALLOW PRINT STATEMENTS
+        }
+<span class="nc" id="L410">    }</span>
+
+    /**
+     * Run the tool. Returns false if invalid options were given.
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        Options opts)
+        throws Exception {
+<span class="nc" id="L418">        String action = opts.removeProperty(&quot;action&quot;, &quot;a&quot;, null);</span>
+<span class="nc" id="L419">        Configurations.populateConfiguration(conf, opts);</span>
+<span class="nc" id="L420">        return run(conf, args, action);</span>
+    }
+
+    /**
+     * Run the tool. Returns false if an invalid option was given.
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        String action)
+        throws Exception {
+<span class="nc bnc" id="L429" title="All 2 branches missed.">        if (args.length != 0)</span>
+<span class="nc" id="L430">            return false;</span>
+
+<span class="nc" id="L432">        NativeJDBCSeq seq = new NativeJDBCSeq();</span>
+<span class="nc" id="L433">        String props = Configurations.getProperties(conf.getSequence());</span>
+<span class="nc" id="L434">        Configurations.configureInstance(seq, conf, props);</span>
+
+<span class="nc bnc" id="L436" title="All 2 branches missed.">        if (ACTION_DROP.equals(action))</span>
+<span class="nc" id="L437">            seq.dropSequence();</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">        else if (ACTION_ADD.equals(action))</span>
+<span class="nc" id="L439">            seq.refreshSequence();</span>
+<span class="nc bnc" id="L440" title="All 2 branches missed.">        else if (ACTION_GET.equals(action)) {</span>
+<span class="nc" id="L441">            Connection conn = conf.getDataSource2(null).getConnection();</span>
+            try {
+<span class="nc" id="L443">                long cur = seq.getSequence(conn);</span>
+                // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L445">                System.out.println(cur);</span>
+                // STOP - ALLOW PRINT STATEMENTS
+            } finally {
+<span class="nc" id="L448">                try { conn.close(); } catch (SQLException se) {}</span>
+            }
+<span class="nc" id="L450">        } else</span>
+<span class="nc" id="L451">            return false;</span>
+<span class="nc" id="L452">        return true;</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    public void setSchema(String schema) {
+<span class="nc" id="L460">        _schema = DBIdentifier.newSchema(schema);</span>
+<span class="nc" id="L461">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    public String getSchema() {
+<span class="nc" id="L468">        return _schema.getName();</span>
+    }
+
+    public DBIdentifier getSchemaIdentifier() {
+<span class="nc" id="L472">        return _schema;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

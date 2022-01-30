@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EqualTypeExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">EqualTypeExpression.java</span></div><h1>EqualTypeExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * Compares two entity types.
+ *
+ * @author Catalina Wei
+ */
+class EqualTypeExpression
+    extends CompareEqualExpression {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Constructor. Supply values to compare.
+     */
+    public EqualTypeExpression(Val val1, Val val2) {
+<span class="nc" id="L45">        super(val1, val2);</span>
+<span class="nc" id="L46">    }</span>
+
+    private ClassMapping getSubClassMapping(Val val1, Val val2, ExpContext ctx) {
+<span class="nc" id="L49">        ClassMapping sub = null;</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">        Val val = val1 instanceof Type ? val2 : val1;</span>
+<span class="nc bnc" id="L51" title="All 2 branches missed.">        if (val instanceof TypeLit)</span>
+<span class="nc" id="L52">            sub = (ClassMapping) val.getMetaData();</span>
+<span class="nc bnc" id="L53" title="All 2 branches missed.">        else if (val instanceof Param)</span>
+<span class="nc" id="L54">            sub = ((Param) val).getValueMetaData(ctx);</span>
+<span class="nc bnc" id="L55" title="All 2 branches missed.">        if (sub != null)</span>
+<span class="nc" id="L56">            ctx.isVerticalStrat = sub.isVerticalStrategy();</span>
+<span class="nc" id="L57">        return sub;</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+            SQLBuffer buf) {
+<span class="nc" id="L63">        Val val1 = getValue1();</span>
+<span class="nc" id="L64">        Val val2 = getValue2();</span>
+<span class="nc" id="L65">        ClassMapping sub = getSubClassMapping(val1, val2, ctx);</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        if (ctx.isVerticalStrat) {</span>
+<span class="nc" id="L67">            appendTo(sel, ctx, (BinaryOpExpState)state, buf, false, false);</span>
+<span class="nc" id="L68">            return;</span>
+        }
+<span class="nc" id="L70">        super.appendTo(sel, ctx, state, buf);</span>
+<span class="nc" id="L71">    }</span>
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, BinaryOpExpState bstate,
+        SQLBuffer buf, boolean val1Null, boolean val2Null) {
+<span class="nc bnc" id="L76" title="All 4 branches missed.">        if (val1Null &amp;&amp; val2Null)</span>
+<span class="nc" id="L77">            buf.append(&quot;1 = 1&quot;);</span>
+<span class="nc bnc" id="L78" title="All 4 branches missed.">        else if (val1Null || val2Null) {</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">            Val val = (val1Null) ? getValue2() : getValue1();</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">            ExpState state = (val1Null) ? bstate.state2 : bstate.state1;</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">            if (!isDirectComparison()) {</span>
+<span class="nc" id="L82">                int len = val.length(sel, ctx, state);</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">                for (int i = 0; i &lt; len; i++) {</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">                    if (i &gt; 0)</span>
+<span class="nc" id="L85">                        buf.append(&quot; AND &quot;);</span>
+<span class="nc" id="L86">                    val.appendTo(sel, ctx, state, buf, i);</span>
+<span class="nc" id="L87">                    buf.append(&quot; IS &quot;).appendValue(null);</span>
+                }
+<span class="nc" id="L89">            } else</span>
+<span class="nc" id="L90">                val.appendIsNull(sel, ctx, state, buf);</span>
+<span class="nc" id="L91">        } else {</span>
+<span class="nc" id="L92">            Val val1 = getValue1();</span>
+<span class="nc" id="L93">            Val val2 = getValue2();</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">            if (val1.length(sel, ctx, bstate.state1) == 1</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">                &amp;&amp; val2.length(sel, ctx, bstate.state2) == 1) {</span>
+<span class="nc" id="L96">                ClassMapping sub = getSubClassMapping(val1, val2, ctx);</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">                if (ctx.isVerticalStrat) {</span>
+<span class="nc" id="L98">                    processVerticalTypeAppend(sel, val1, val2, ctx, buf);</span>
+<span class="nc" id="L99">                    return;</span>
+                }
+
+<span class="nc" id="L102">                String op = &quot;=&quot;;</span>
+<span class="nc bnc" id="L103" title="All 4 branches missed.">                if (sel.getTablePerClassMeta() != null &amp;&amp; sub != sel.getTablePerClassMeta())</span>
+<span class="nc" id="L104">                    op = &quot;&lt;&gt;&quot;;</span>
+
+<span class="nc" id="L106">                ctx.store.getDBDictionary().comparison(buf, op,</span>
+                    new FilterValueImpl(sel, ctx, bstate.state1, val1),
+                    new FilterValueImpl(sel, ctx, bstate.state2, val2));
+<span class="nc" id="L109">            } else {</span>
+<span class="nc" id="L110">                int len = java.lang.Math.min(val1.length(sel, ctx,</span>
+<span class="nc" id="L111">                    bstate.state1), val2.length(sel, ctx, bstate.state2));</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">                for (int i = 0; i &lt; len; i++) {</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">                    if (i &gt; 0)</span>
+<span class="nc" id="L114">                        buf.append(&quot; AND &quot;);</span>
+
+<span class="nc" id="L116">                    val1.appendTo(sel, ctx, bstate.state1, buf, i);</span>
+<span class="nc" id="L117">                    buf.append(&quot; = &quot;);</span>
+<span class="nc" id="L118">                    val2.appendTo(sel, ctx, bstate.state2, buf, i);</span>
+                }
+            }
+        }
+<span class="nc" id="L122">    }</span>
+
+    void processVerticalTypeAppend(Select sel, Val val1, Val val2, ExpContext ctx,
+        SQLBuffer buf) {
+<span class="nc" id="L126">        ClassMapping sub = getSubClassMapping(val1, val2, ctx);</span>
+<span class="nc" id="L127">        List selectFrom = sel.getJoinedTableClassMeta();</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">        if (selectFrom == null) {</span>
+<span class="nc" id="L129">            selectFrom = new ArrayList();</span>
+<span class="nc" id="L130">            sel.setJoinedTableClassMeta(selectFrom);</span>
+        }
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        ClassMapping cm1 = (ClassMapping)((val1 instanceof Type) ? val1.getMetaData() :</span>
+<span class="nc" id="L133">            val1.getMetaData());</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (sub.isVerticalStrategy()) {</span>
+<span class="nc" id="L135">            ClassMetaData[] subs = cm1.getPCSubclassMetaDatas();</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">            for (int i = 0; i &lt; subs.length; i++) {</span>
+<span class="nc bnc" id="L137" title="All 4 branches missed.">                if (!Modifier.isAbstract(subs[i].getDescribedType().getModifiers()) &amp;&amp; subs[i] == sub</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">                    &amp;&amp; !selectFrom.contains(subs[i]))</span>
+<span class="nc" id="L139">                    selectFrom.add(subs[i]);</span>
+            }
+<span class="nc" id="L141">            buf.append(&quot;1=1&quot;);</span>
+<span class="nc" id="L142">            return;</span>
+        }
+<span class="nc" id="L144">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

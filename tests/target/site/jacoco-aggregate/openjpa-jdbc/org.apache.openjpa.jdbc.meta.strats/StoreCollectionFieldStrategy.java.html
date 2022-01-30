@@ -1,0 +1,664 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>StoreCollectionFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">StoreCollectionFieldStrategy.java</span></div><h1>StoreCollectionFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.openjpa.enhance.FieldManager;
+import org.apache.openjpa.enhance.PersistenceCapable;
+import org.apache.openjpa.jdbc.kernel.EagerFetchModes;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.FieldStrategy;
+import org.apache.openjpa.jdbc.meta.RelationId;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.jdbc.sql.SelectExecutor;
+import org.apache.openjpa.jdbc.sql.Union;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.StateManagerImpl;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.ChangeTracker;
+import org.apache.openjpa.util.DelayedProxy;
+import org.apache.openjpa.util.Id;
+import org.apache.openjpa.util.OpenJPAId;
+import org.apache.openjpa.util.Proxy;
+
+/**
+ * Base class for strategies that are stored as a collection, even if
+ * their field value is something else. Handles data loading and basic query
+ * functionality. Subclasses must implement abstract methods and
+ * insert/update/delete behavior as well as overriding
+ * {@link FieldStrategy#toDataStoreValue}, {@link FieldStrategy#join}, and
+ * {@link FieldStrategy#joinRelation} if necessary.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L65">public abstract class StoreCollectionFieldStrategy</span>
+    extends ContainerFieldStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Return the foreign key used to join to the owning field for the given
+     * element mapping from {@link #getIndependentElementMappings} (or null).
+     */
+    protected abstract ForeignKey getJoinForeignKey(ClassMapping elem);
+
+    /**
+     * Implement this method to select the elements of this field for the
+     * given element mapping from {@link #getIndependentElementMappings}
+     * (or null). Elements of the result will be loaded with
+     * {@link #loadElement}.
+     */
+    protected abstract void selectElement(Select sel, ClassMapping elem,
+        JDBCStore store, JDBCFetchConfiguration fetch, int eagerMode,
+        Joins joins);
+
+    /**
+     * Load an element of the collection. The given state manager might be
+     * null if the load is for a projection or for processing eager parallel
+     * results.
+     */
+    protected abstract Object loadElement(OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch, Result res, Joins joins)
+        throws SQLException;
+
+    /**
+     * Join this value's table to the table for the given element mapping
+     * from {@link #getIndependentElementMappings} (or null).
+     *
+     * @see FieldMapping#joinRelation
+     */
+    protected abstract Joins joinElementRelation(Joins joins,
+        ClassMapping elem);
+
+    /**
+     * Join to the owning field table for the given element mapping from
+     * {@link #getIndependentElementMappings} (or null).
+     */
+    protected abstract Joins join(Joins joins, ClassMapping elem);
+
+    /**
+     * Return a large result set proxy for this field.
+     */
+    protected abstract Proxy newLRSProxy();
+
+    /**
+     * Convert the field value to a collection. Handles collections and
+     * arrays by default.
+     */
+    protected Collection toCollection(Object val) {
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (field.getTypeCode() == JavaTypes.COLLECTION)</span>
+<span class="nc" id="L122">            return (Collection) val;</span>
+<span class="nc" id="L123">        return JavaTypes.toList(val, field.getElement().getType(), false);</span>
+    }
+
+    /**
+     * Add an item to the data structure representing a field value.
+     * By default, assumes the structure is a collection.
+     */
+    protected void add(JDBCStore store, Object coll, Object obj) {
+<span class="nc" id="L131">        ((Collection&lt;Object&gt;) coll).add(obj);</span>
+<span class="nc" id="L132">    }</span>
+
+    /**
+     * Returns the first independent element mapping, or null.
+     */
+    private ClassMapping getDefaultElementMapping(boolean traverse) {
+<span class="nc" id="L138">        ClassMapping[] elems = getIndependentElementMappings(traverse);</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">        return (elems.length == 0) ? null : elems[0];</span>
+    }
+
+    @Override
+    public int supportsSelect(Select sel, int type, OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch) {
+<span class="nc bnc" id="L145" title="All 2 branches missed.">        if (field.isLRS())</span>
+<span class="nc" id="L146">            return 0;</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (type == Select.EAGER_PARALLEL)</span>
+<span class="nc" id="L148">            return Math.max(1, getIndependentElementMappings(true).length);</span>
+<span class="nc bnc" id="L149" title="All 4 branches missed.">        if (type != Select.EAGER_INNER &amp;&amp; type != Select.EAGER_OUTER)</span>
+<span class="nc" id="L150">            return 0;</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        if (getIndependentElementMappings(true).length &gt; 1)</span>
+<span class="nc" id="L152">            return 0;</span>
+<span class="nc bnc" id="L153" title="All 2 branches missed.">        return (type == Select.EAGER_INNER || store.getDBDictionary().</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">            canOuterJoin(sel.getJoinSyntax(), getJoinForeignKey</span>
+<span class="nc" id="L155">                (getDefaultElementMapping(false)))) ? 1 : 0;</span>
+    }
+
+    @Override
+    public void selectEagerParallel(SelectExecutor sel,
+        final OpenJPAStateManager sm, final JDBCStore store,
+        final JDBCFetchConfiguration fetch, final int eagerMode) {
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        if (!(sel instanceof Union))</span>
+<span class="nc" id="L163">            selectEager((Select) sel, getDefaultElementMapping(true), sm,</span>
+                store, fetch, eagerMode, true, false);
+        else {
+<span class="nc" id="L166">            final ClassMapping[] elems = getIndependentElementMappings(true);</span>
+<span class="nc" id="L167">            Union union = (Union) sel;</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">            if (fetch.getSubclassFetchMode(field.getElementMapping().</span>
+<span class="nc" id="L169">                getTypeMapping()) != EagerFetchModes.EAGER_JOIN)</span>
+<span class="nc" id="L170">                union.abortUnion();</span>
+<span class="nc" id="L171">            union.select(new Union.Selector() {</span>
+                @Override
+                public void select(Select sel, int idx) {
+<span class="nc" id="L174">                    selectEager(sel, elems[idx], sm, store, fetch, eagerMode,</span>
+                        true, false);
+<span class="nc" id="L176">                }</span>
+            });
+        }
+<span class="nc" id="L179">    }</span>
+
+    @Override
+    public void selectEagerJoin(Select sel, OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch, int eagerMode) {
+        // we limit further eager fetches to joins, because after this point
+        // the select has been modified such that parallel clones may produce
+        // invalid sql
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        boolean outer = field.getNullValue() != FieldMetaData.NULL_EXCEPTION;</span>
+        // force inner join for inner join fetch
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        if (fetch.hasFetchInnerJoin(field.getFullName(false)))</span>
+<span class="nc" id="L190">            outer = false;</span>
+<span class="nc" id="L191">        selectEager(sel, getDefaultElementMapping(true), sm, store, fetch,</span>
+            EagerFetchModes.EAGER_JOIN, false,
+            outer);
+<span class="nc" id="L194">    }</span>
+
+    @Override
+    public boolean isEagerSelectToMany() {
+<span class="nc" id="L198">        return true;</span>
+    }
+
+    /**
+     * Select our data eagerly.
+     */
+    private void selectEager(Select sel, ClassMapping elem,
+        OpenJPAStateManager sm, JDBCStore store, JDBCFetchConfiguration fetch,
+        int eagerMode, boolean selectOid, boolean outer) {
+        // force distinct if there was a to-many join to avoid dups, but
+        // if this is a parallel select don't make distinct based on the
+        // eager joins alone if the original wasn't distinct
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (eagerMode == EagerFetchModes.EAGER_PARALLEL) {</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">            if (sel.hasJoin(true))</span>
+<span class="nc" id="L212">                sel.setDistinct(true);</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">            else if (!sel.isDistinct())</span>
+<span class="nc" id="L214">                sel.setDistinct(false); // set explicitly so remembered</span>
+        }
+
+        // set a variable name that does not conflict with any in the query;
+        // using a variable guarantees that the selected data will use different
+        // aliases and joins than any existing WHERE conditions on this field
+        // that might otherwise limit the elements of the field that match
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if (selectOid)</span>
+<span class="nc" id="L222">            sel.orderByPrimaryKey(field.getDefiningMapping(), true, true);</span>
+<span class="nc" id="L223">        Joins joins = sel.newJoins().setVariable(&quot;*&quot;);</span>
+<span class="nc" id="L224">        joins = join(joins, elem);</span>
+
+        // order, ref cols
+<span class="nc bnc" id="L227" title="All 6 branches missed.">        if (field.getOrderColumn() != null || field.getOrders().length &gt; 0</span>
+            || !selectOid) {
+<span class="nc bnc" id="L229" title="All 2 branches missed.">            if (outer)</span>
+<span class="nc" id="L230">                joins = sel.outer(joins);</span>
+<span class="nc bnc" id="L231" title="All 2 branches missed.">            if (!selectOid) {</span>
+<span class="nc" id="L232">                Column[] refs = getJoinForeignKey(elem).getColumns();</span>
+<span class="nc" id="L233">                sel.orderBy(refs, true, joins, true);</span>
+            }
+<span class="nc" id="L235">            field.orderLocal(sel, elem, joins);</span>
+        }
+
+        // select data
+<span class="nc" id="L239">        joins = joinElementRelation(joins, elem);</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (outer)</span>
+<span class="nc" id="L241">            joins = sel.outer(joins);</span>
+<span class="nc" id="L242">        field.orderRelation(sel, elem, joins);</span>
+<span class="nc" id="L243">        selectElement(sel, elem, store, fetch, eagerMode, joins);</span>
+<span class="nc" id="L244">    }</span>
+
+    @Override
+    public Object loadEagerParallel(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Object res)
+        throws SQLException {
+        // process batched results if we haven't already
+        Map rels;
+<span class="nc bnc" id="L252" title="All 2 branches missed.">        if (res instanceof Result)</span>
+<span class="nc" id="L253">            rels = processEagerParallelResult(sm, store, fetch, (Result) res);</span>
+        else
+<span class="nc" id="L255">            rels = (Map) res;</span>
+
+        // look up the collection for this oid, and store in instance
+<span class="nc" id="L258">        Object coll = rels.remove(sm.getObjectId());</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (field.getTypeCode() == JavaTypes.ARRAY)</span>
+<span class="nc" id="L260">            sm.storeObject(field.getIndex(), JavaTypes.toArray</span>
+<span class="nc" id="L261">                ((Collection) coll, field.getElement().getType()));</span>
+        else {
+<span class="nc bnc" id="L263" title="All 2 branches missed.">            if (coll == null)</span>
+<span class="nc" id="L264">                coll = sm.newProxy(field.getIndex());</span>
+<span class="nc" id="L265">            sm.storeObject(field.getIndex(), coll);</span>
+        }
+<span class="nc" id="L267">        return rels;</span>
+    }
+
+    /**
+     * Process the given batched result.
+     */
+    private Map processEagerParallelResult(OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch, Result res)
+        throws SQLException {
+        // do same joins as for load
+        //### cheat: we know typical result joins only care about the relation
+        //### path; thus we can ignore different mappings
+<span class="nc" id="L279">        ClassMapping elem = getDefaultElementMapping(true);</span>
+<span class="nc" id="L280">        Joins dataJoins = res.newJoins().setVariable(&quot;*&quot;);</span>
+<span class="nc" id="L281">        dataJoins = join(dataJoins, elem);</span>
+<span class="nc" id="L282">        dataJoins = joinElementRelation(dataJoins, elem);</span>
+<span class="nc" id="L283">        Joins orderJoins = null;</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">        if (field.getOrderColumn() != null) {</span>
+<span class="nc" id="L285">            orderJoins = res.newJoins().setVariable(&quot;*&quot;);</span>
+<span class="nc" id="L286">            orderJoins = join(orderJoins, elem);</span>
+        }
+
+<span class="nc" id="L289">        Map rels = new HashMap();</span>
+<span class="nc" id="L290">        ClassMapping ownerMapping = field.getDefiningMapping();</span>
+<span class="nc" id="L291">        Object nextOid, oid = null;</span>
+<span class="nc" id="L292">        Object coll = null;</span>
+<span class="nc" id="L293">        int seq = 0;</span>
+<span class="nc bnc" id="L294" title="All 2 branches missed.">        while (res.next()) {</span>
+            // extract the owner id value
+<span class="nc" id="L296">            nextOid = getNextObjectId(ownerMapping, store, res, oid);</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">            if (nextOid != oid) {</span>
+                // if the old coll was an ordered tracking proxy, set
+                // its seq value to the last order val we read
+<span class="nc bnc" id="L300" title="All 4 branches missed.">                if (seq != 0 &amp;&amp; coll instanceof Proxy)</span>
+<span class="nc" id="L301">                    ((Proxy) coll).getChangeTracker().setNextSequence(seq);</span>
+
+                // start a new collection
+<span class="nc" id="L304">                oid = nextOid;</span>
+<span class="nc" id="L305">                seq = 0;</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">                if (field.getTypeCode() == JavaTypes.ARRAY)</span>
+<span class="nc" id="L307">                    coll = new ArrayList();</span>
+                else
+<span class="nc" id="L309">                    coll = sm.newProxy(field.getIndex());</span>
+<span class="nc" id="L310">                rels.put(oid, coll);</span>
+            }
+
+<span class="nc bnc" id="L313" title="All 2 branches missed.">            if (field.getOrderColumn() != null)</span>
+<span class="nc" id="L314">                seq = res.getInt(field.getOrderColumn(), orderJoins) + 1;</span>
+
+            // for inverse relation field
+<span class="nc bnc" id="L317" title="All 2 branches missed.">            setMappedBy(oid.equals(sm.getObjectId()) ?</span>
+<span class="nc" id="L318">                sm.getPersistenceCapable() : oid, res);</span>
+<span class="nc" id="L319">            Object val = loadElement(null, store, fetch, res, dataJoins);</span>
+<span class="nc" id="L320">            add(store, coll, val);</span>
+<span class="nc" id="L321">        }</span>
+<span class="nc" id="L322">        res.close();</span>
+
+<span class="nc" id="L324">        return rels;</span>
+    }
+
+    private void setMappedBy(Object oid, Result res) {
+        //  for inverse toOne relation field
+<span class="nc" id="L329">        FieldMapping mappedByFieldMapping = field.getMappedByMapping();</span>
+
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        if (mappedByFieldMapping != null) {</span>
+<span class="nc" id="L332">            ValueMapping val = mappedByFieldMapping.getValueMapping();</span>
+<span class="nc" id="L333">            ClassMetaData decMeta = val.getTypeMetaData();</span>
+            // this inverse field does not have corresponding classMapping
+            // its value may be a collection/map etc.
+<span class="nc bnc" id="L336" title="All 2 branches missed.">            if (decMeta == null)</span>
+<span class="nc" id="L337">                return;</span>
+
+<span class="nc" id="L339">            res.setMappedByFieldMapping(mappedByFieldMapping);</span>
+<span class="nc" id="L340">            res.setMappedByValue(oid);</span>
+        }
+<span class="nc" id="L342">    }</span>
+
+    private void setMappedBy(Object oid, OpenJPAStateManager sm, Object coll,
+        Result res) {
+        // for inverseEager field
+<span class="nc" id="L347">        FieldMapping mappedByFieldMapping = field.getMappedByMapping();</span>
+<span class="nc" id="L348">        PersistenceCapable mappedByValue = null;</span>
+
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        if (mappedByFieldMapping != null) {</span>
+<span class="nc" id="L351">            ValueMapping val = mappedByFieldMapping.getValueMapping();</span>
+<span class="nc" id="L352">            ClassMetaData decMeta = val.getTypeMetaData();</span>
+            // this inverse field does not have corresponding classMapping
+            // its value may be a collection/map etc.
+<span class="nc bnc" id="L355" title="All 2 branches missed.">            if (decMeta == null)</span>
+<span class="nc" id="L356">                return;</span>
+
+<span class="nc" id="L358">            StateManagerImpl owner = ((StateManagerImpl)sm).getObjectIdOwner();</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">            if (oid.equals(owner.getObjectId())) {</span>
+<span class="nc" id="L360">                mappedByValue = owner.getPersistenceCapable();</span>
+<span class="nc" id="L361">                res.setMappedByFieldMapping(mappedByFieldMapping);</span>
+<span class="nc" id="L362">                res.setMappedByValue(mappedByValue);</span>
+<span class="nc bnc" id="L363" title="All 2 branches missed.">            } else if (coll instanceof Collection &amp;&amp;</span>
+<span class="nc bnc" id="L364" title="All 2 branches missed.">                ((Collection) coll).size() &gt; 0) {</span>
+                // Customer (1) &lt;--&gt; Orders(n)
+                // coll contains the values of the toMany field (Orders)
+                // get the StateManager of this toMany value
+                // and find the value of the inverse mappedBy field (Customer)
+                // for this toMacdny field
+<span class="nc" id="L370">                PersistenceCapable pc = (PersistenceCapable)</span>
+<span class="nc" id="L371">                    ((Collection) coll).iterator().next();</span>
+<span class="nc" id="L372">                OpenJPAStateManager sm1 = (OpenJPAStateManager) pc.</span>
+<span class="nc" id="L373">                    pcGetStateManager();</span>
+
+<span class="nc" id="L375">                ClassMapping clm = ((ClassMapping) sm1.getMetaData());</span>
+<span class="nc" id="L376">                FieldMapping fm = (FieldMapping) clm.getField(</span>
+<span class="nc" id="L377">                    mappedByFieldMapping.getName());</span>
+<span class="nc bnc" id="L378" title="All 2 branches missed.">                if (fm == mappedByFieldMapping)</span>
+<span class="nc" id="L379">                    res.setMappedByValue(sm1.fetchObject(fm.getIndex()));</span>
+<span class="nc" id="L380">            } else {</span>
+<span class="nc" id="L381">                res.setMappedByValue(null);</span>
+            }
+        }
+<span class="nc" id="L384">    }</span>
+
+    /**
+     * Extract the oid value from the given result. If the next oid is the
+     * same as the given one, returns the given JVM instance.
+     */
+    private Object getNextObjectId(ClassMapping owner, JDBCStore store,
+        Result res, Object oid)
+        throws SQLException {
+        // if this is a datastore id class we can avoid creating a new oid
+        // object for the common case
+<span class="nc bnc" id="L395" title="All 4 branches missed.">        if (oid != null &amp;&amp; owner.getIdentityType() == ClassMetaData.ID_DATASTORE</span>
+<span class="nc bnc" id="L396" title="All 2 branches missed.">            &amp;&amp; owner.isPrimaryKeyObjectId(true)) {</span>
+<span class="nc" id="L397">            long nid = res.getLong(owner.getPrimaryKeyColumns()[0]);</span>
+<span class="nc" id="L398">            long id = ((Id) oid).getId();</span>
+<span class="nc bnc" id="L399" title="All 2 branches missed.">            return (nid == id) ? oid : store.newDataStoreId(nid, owner, true);</span>
+        }
+
+<span class="nc" id="L402">        Object noid = owner.getObjectId(store, res, null, true, null);</span>
+<span class="nc bnc" id="L403" title="All 2 branches missed.">        if (noid == null)</span>
+<span class="nc" id="L404">            return null;</span>
+<span class="nc bnc" id="L405" title="All 2 branches missed.">        return (noid.equals(oid)) ? oid : noid;</span>
+    }
+
+    @Override
+    public void loadEagerJoin(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Result res)
+        throws SQLException {
+        // initialize field value
+        Object coll;
+<span class="nc bnc" id="L414" title="All 2 branches missed.">        if (field.getTypeCode() == JavaTypes.ARRAY)</span>
+<span class="nc" id="L415">            coll = new ArrayList();</span>
+        else
+<span class="nc" id="L417">            coll = sm.newProxy(field.getIndex());</span>
+
+<span class="nc" id="L419">        Joins dataJoins = null;</span>
+<span class="nc" id="L420">        Joins refJoins = res.newJoins().setVariable(&quot;*&quot;);</span>
+<span class="nc" id="L421">        join(refJoins, false);</span>
+
+<span class="nc" id="L423">        ClassMapping ownerMapping = field.getDefiningMapping();</span>
+<span class="nc" id="L424">        Object ref = null;</span>
+<span class="nc" id="L425">        int seq = 0;</span>
+<span class="nc" id="L426">        int typeIdx = res.indexOf();</span>
+<span class="nc" id="L427">        for (int i = 0; true; i++) {</span>
+            // extract the owner id value
+<span class="nc" id="L429">            ref = getNextRef(ownerMapping, store, res, ref, refJoins);</span>
+<span class="nc bnc" id="L430" title="All 2 branches missed.">            if (ref == null) {</span>
+                // if the old coll was an ordered tracking proxy, set
+                // its seq value to the last order val we read
+<span class="nc bnc" id="L433" title="All 4 branches missed.">                if (seq != 0 &amp;&amp; coll instanceof Proxy)</span>
+<span class="nc" id="L434">                    ((Proxy) coll).getChangeTracker().setNextSequence(seq);</span>
+<span class="nc bnc" id="L435" title="All 2 branches missed.">                if (i != 0)</span>
+<span class="nc" id="L436">                    res.pushBack();</span>
+                break;
+            }
+
+            // do same joins as for load
+<span class="nc bnc" id="L441" title="All 2 branches missed.">            if (dataJoins == null) {</span>
+<span class="nc" id="L442">                dataJoins = res.newJoins().setVariable(&quot;*&quot;);</span>
+<span class="nc" id="L443">                dataJoins = join(dataJoins, false);</span>
+<span class="nc" id="L444">                dataJoins = joinRelation(dataJoins, false, false);</span>
+            }
+
+<span class="nc bnc" id="L447" title="All 2 branches missed.">            if (field.getOrderColumn() != null)</span>
+<span class="nc" id="L448">                seq = res.getInt(field.getOrderColumn(), refJoins) + 1;</span>
+<span class="nc" id="L449">            res.setBaseMapping(null);</span>
+<span class="nc" id="L450">            Object obj = loadElement(sm, store, fetch, res, dataJoins);</span>
+<span class="nc bnc" id="L451" title="All 2 branches missed.">            if (obj != null)</span>
+<span class="nc" id="L452">                add(store, coll, obj);</span>
+<span class="nc bnc" id="L453" title="All 4 branches missed.">            if (!res.next() || res.indexOf() != typeIdx) {</span>
+<span class="nc" id="L454">                res.pushBack();</span>
+<span class="nc" id="L455">                break;</span>
+            }
+        }
+
+        // load the collection into the object
+<span class="nc bnc" id="L460" title="All 2 branches missed.">        if (field.getTypeCode() == JavaTypes.ARRAY)</span>
+<span class="nc" id="L461">            sm.storeObject(field.getIndex(), JavaTypes.toArray</span>
+<span class="nc" id="L462">                ((Collection) coll, field.getElement().getType()));</span>
+        else
+<span class="nc" id="L464">            sm.storeObject(field.getIndex(), coll);</span>
+<span class="nc" id="L465">    }</span>
+
+    /**
+     * Extract the reference column value(s) from the given result. If the
+     * extracted result is the same as the current one or the current
+     * one is null, returns the extracted result. Else returns null.
+     */
+    private Object getNextRef(ClassMapping mapping, JDBCStore store,
+        Result res, Object ref, Joins refJoins)
+        throws SQLException {
+<span class="nc" id="L475">        Column[] cols = getJoinForeignKey(getDefaultElementMapping(false)).</span>
+<span class="nc" id="L476">            getColumns();</span>
+        Object val;
+<span class="nc bnc" id="L478" title="All 2 branches missed.">        if (cols.length == 1) {</span>
+<span class="nc" id="L479">            val = res.getObject(cols[0], null, refJoins);</span>
+<span class="nc bnc" id="L480" title="All 6 branches missed.">            if (val == null || (ref != null &amp;&amp; !val.equals(ref)))</span>
+<span class="nc" id="L481">                return null;</span>
+<span class="nc" id="L482">            return val;</span>
+        }
+
+<span class="nc" id="L485">        Object[] refs = (Object[]) ref;</span>
+<span class="nc bnc" id="L486" title="All 2 branches missed.">        if (refs == null)</span>
+<span class="nc" id="L487">            refs = new Object[cols.length];</span>
+<span class="nc bnc" id="L488" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L489">            val = res.getObject(cols[i], null, refJoins);</span>
+<span class="nc bnc" id="L490" title="All 2 branches missed.">            if (val == null)</span>
+<span class="nc" id="L491">                return null;</span>
+<span class="nc bnc" id="L492" title="All 4 branches missed.">            if (refs[i] != null &amp;&amp; !val.equals(refs[i]))</span>
+<span class="nc" id="L493">                return null;</span>
+<span class="nc" id="L494">            refs[i] = val;</span>
+        }
+<span class="nc" id="L496">        return refs;</span>
+    }
+
+    @Override
+    public void load(final OpenJPAStateManager sm, final JDBCStore store,
+        final JDBCFetchConfiguration fetch)
+        throws SQLException {
+
+<span class="nc" id="L504">        Object coll = null;</span>
+<span class="nc" id="L505">        final int fieldIndex = field.getIndex();</span>
+<span class="nc" id="L506">        final boolean delayed = sm.isDelayed(fieldIndex);</span>
+<span class="nc bnc" id="L507" title="All 4 branches missed.">        if (!delayed &amp;&amp; field.isDelayCapable()) {</span>
+<span class="nc" id="L508">            coll = sm.newProxy(fieldIndex);</span>
+<span class="nc bnc" id="L509" title="All 2 branches missed.">            if (coll instanceof DelayedProxy) {</span>
+<span class="nc" id="L510">                sm.storeObject(fieldIndex, coll);</span>
+<span class="nc" id="L511">                sm.setDelayed(fieldIndex, true);</span>
+<span class="nc" id="L512">                return;</span>
+            }
+        }
+
+<span class="nc bnc" id="L516" title="All 2 branches missed.">        if (field.isLRS()) {</span>
+<span class="nc" id="L517">            Proxy pcoll = newLRSProxy();</span>
+
+            // if this is ordered we need to know the next seq to use in case
+            // objects are added to the collection
+<span class="nc bnc" id="L521" title="All 2 branches missed.">            if (field.getOrderColumn() != null) {</span>
+                // we don't allow ordering table per class one-many's, so
+                // we know we don't need a union
+<span class="nc" id="L524">                Select sel = store.getSQLFactory().newSelect();</span>
+<span class="nc" id="L525">                sel.setAggregate(true);</span>
+<span class="nc" id="L526">                StringBuilder sql = new StringBuilder();</span>
+<span class="nc" id="L527">                sql.append(&quot;MAX(&quot;).</span>
+<span class="nc" id="L528">                    append(sel.getColumnAlias(field.getOrderColumn())).</span>
+<span class="nc" id="L529">                    append(&quot;)&quot;);</span>
+<span class="nc" id="L530">                sel.select(sql.toString(), field);</span>
+<span class="nc" id="L531">                ClassMapping rel = getDefaultElementMapping(false);</span>
+<span class="nc" id="L532">                sel.whereForeignKey(getJoinForeignKey(rel),</span>
+<span class="nc" id="L533">                    sm.getObjectId(), field.getDefiningMapping(), store);</span>
+
+<span class="nc" id="L535">                Result res = sel.execute(store, fetch);</span>
+                try {
+<span class="nc" id="L537">                    res.next();</span>
+<span class="nc" id="L538">                    pcoll.getChangeTracker().setNextSequence</span>
+<span class="nc" id="L539">                        (res.getInt(field) + 1);</span>
+                } finally {
+<span class="nc" id="L541">                    res.close();</span>
+                }
+            }
+<span class="nc" id="L544">            sm.storeObjectField(fieldIndex, pcoll);</span>
+<span class="nc" id="L545">            return;</span>
+        }
+
+        // select data for this sm
+<span class="nc" id="L549">        final ClassMapping[] elems = getIndependentElementMappings(true);</span>
+<span class="nc" id="L550">        final Joins[] resJoins = new Joins[Math.max(1, elems.length)];</span>
+<span class="nc" id="L551">        Union union = store.getSQLFactory().newUnion</span>
+<span class="nc" id="L552">            (Math.max(1, elems.length));</span>
+<span class="nc" id="L553">        union.select(new Union.Selector() {</span>
+            @Override
+            public void select(Select sel, int idx) {
+<span class="nc bnc" id="L556" title="All 2 branches missed.">                ClassMapping elem = (elems.length == 0) ? null : elems[idx];</span>
+<span class="nc" id="L557">                resJoins[idx] = selectAll(sel, elem, sm, store, fetch,</span>
+                    EagerFetchModes.EAGER_PARALLEL);
+<span class="nc" id="L559">            }</span>
+        });
+
+        // create proxy
+<span class="nc" id="L563">        ChangeTracker ct = null;</span>
+<span class="nc bnc" id="L564" title="All 2 branches missed.">        if (delayed) {</span>
+<span class="nc bnc" id="L565" title="All 4 branches missed.">            if (sm.isDetached() || sm.getOwner() == null) {</span>
+<span class="nc" id="L566">                sm.getPersistenceCapable().pcProvideField(fieldIndex);</span>
+<span class="nc" id="L567">                coll =</span>
+<span class="nc" id="L568">                    ((FieldManager)sm.getPersistenceCapable().pcGetStateManager()).fetchObjectField(fieldIndex);</span>
+            } else {
+<span class="nc" id="L570">                coll = sm.fetchObjectField(fieldIndex);</span>
+            }
+<span class="nc bnc" id="L572" title="All 2 branches missed.">            if (coll instanceof Proxy)</span>
+<span class="nc" id="L573">                ct = ((Proxy) coll).getChangeTracker();</span>
+        } else {
+<span class="nc bnc" id="L575" title="All 2 branches missed.">            if (field.getTypeCode() == JavaTypes.ARRAY)</span>
+<span class="nc" id="L576">                coll = new ArrayList();</span>
+            else {
+<span class="nc bnc" id="L578" title="All 2 branches missed.">                if (coll == null) {</span>
+<span class="nc" id="L579">                    coll = sm.newProxy(fieldIndex);</span>
+                }
+<span class="nc bnc" id="L581" title="All 2 branches missed.">                if (coll instanceof Proxy)</span>
+<span class="nc" id="L582">                    ct = ((Proxy) coll).getChangeTracker();</span>
+            }
+        }
+
+        // load values
+<span class="nc" id="L587">        Result res = union.execute(store, fetch);</span>
+        try {
+<span class="nc" id="L589">            int seq = -1;</span>
+<span class="nc bnc" id="L590" title="All 2 branches missed.">            while (res.next()) {</span>
+<span class="nc bnc" id="L591" title="All 4 branches missed.">                if (ct != null &amp;&amp; field.getOrderColumn() != null)</span>
+<span class="nc" id="L592">                    seq = res.getInt(field.getOrderColumn());</span>
+<span class="nc" id="L593">                setMappedBy(sm.getObjectId(), sm, coll, res);</span>
+<span class="nc" id="L594">               	add(store, coll, loadElement(sm, store, fetch, res,</span>
+<span class="nc" id="L595">           	        resJoins[res.indexOf()]));</span>
+            }
+<span class="nc bnc" id="L597" title="All 4 branches missed.">            if (ct != null &amp;&amp; field.getOrderColumn() != null)</span>
+<span class="nc" id="L598">                ct.setNextSequence(seq + 1);</span>
+        } finally {
+<span class="nc" id="L600">            res.close();</span>
+        }
+
+        // if not a delayed collection, set into sm
+<span class="nc bnc" id="L604" title="All 2 branches missed.">        if (!delayed) {</span>
+<span class="nc bnc" id="L605" title="All 2 branches missed.">            if (field.getTypeCode() == JavaTypes.ARRAY)</span>
+<span class="nc" id="L606">                sm.storeObject(fieldIndex, JavaTypes.toArray</span>
+<span class="nc" id="L607">                    ((Collection) coll, field.getElement().getType()));</span>
+            else
+<span class="nc" id="L609">                sm.storeObject(fieldIndex, coll);</span>
+        }
+<span class="nc" id="L611">    }</span>
+
+    /**
+     * Select data for loading, starting in field table.
+     */
+    protected Joins selectAll(Select sel, ClassMapping elem,
+        OpenJPAStateManager sm, JDBCStore store, JDBCFetchConfiguration fetch,
+        int eagerMode) {
+<span class="nc" id="L619">        ForeignKey fk = getJoinForeignKey(elem);</span>
+<span class="nc" id="L620">        Object oid = getObjectIdForJoin(fk, sm);</span>
+<span class="nc" id="L621">        sel.whereForeignKey(fk, oid, field.getDefiningMapping(), store);</span>
+
+        // order first, then select so that if the projection introduces
+        // additional ordering, it will be after our required ordering
+<span class="nc" id="L625">        field.orderLocal(sel, elem, null);</span>
+<span class="nc" id="L626">        Joins joins = joinElementRelation(sel.newJoins(), elem);</span>
+<span class="nc" id="L627">        field.orderRelation(sel, elem, joins);</span>
+<span class="nc" id="L628">        selectElement(sel, elem, store, fetch, eagerMode, joins);</span>
+<span class="nc" id="L629">        return joins;</span>
+    }
+
+    @Override
+    public Object loadProjection(JDBCStore store, JDBCFetchConfiguration fetch,
+        Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L636">        return loadElement(null, store, fetch, res, joins);</span>
+    }
+
+    @Override
+    public ForeignKey getJoinForeignKey() {
+<span class="nc" id="L641">        return getJoinForeignKey(getDefaultElementMapping(false));</span>
+    }
+
+    /**
+     * Gets the identity value of the given instance that is suitable to join to the given foreign key.
+     * The special case of the foreign key being a relation identifier will encode the value.
+     */
+    Object getObjectIdForJoin(ForeignKey fk, OpenJPAStateManager sm) {
+<span class="nc" id="L649">        Object oid = sm.getObjectId();</span>
+<span class="nc bnc" id="L650" title="All 2 branches missed.">        if (!RelationStrategies.isRelationId(fk)) {</span>
+<span class="nc" id="L651">            return oid;</span>
+        }
+
+<span class="nc" id="L654">        FieldMapping owningField = field.getMappedByMapping();</span>
+<span class="nc bnc" id="L655" title="All 4 branches missed.">        if (owningField != null &amp;&amp; owningField.getHandler() instanceof RelationId) {</span>
+<span class="nc" id="L656">            return ((RelationId)owningField.getHandler()).toRelationDataStoreValue(sm, null);</span>
+        }
+<span class="nc bnc" id="L658" title="All 2 branches missed.">        if (oid instanceof OpenJPAId) {</span>
+<span class="nc" id="L659">            return ((OpenJPAId)oid).getIdObject();</span>
+        }
+<span class="nc" id="L661">        return oid;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>StateComparisonVersionStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">StateComparisonVersionStrategy.java</span></div><h1>StateComparisonVersionStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+import java.util.BitSet;
+import java.util.Collection;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowImpl;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.StoreManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.ArrayStateImage;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Uses a state image to determine whether concurrency violations take place.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L46">public class StateComparisonVersionStrategy</span>
+    extends AbstractVersionStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    public static final String ALIAS = &quot;state-comparison&quot;;
+
+<span class="nc" id="L54">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L55">        (StateComparisonVersionStrategy.class);</span>
+
+    @Override
+    public String getAlias() {
+<span class="nc" id="L59">        return ALIAS;</span>
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc" id="L64">        ClassMapping cls = vers.getClassMapping();</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (cls.getJoinablePCSuperclassMapping() != null</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">            || cls.getEmbeddingMetaData() != null)</span>
+<span class="nc" id="L67">            throw new MetaDataException(_loc.get(&quot;not-base-vers&quot;, cls));</span>
+
+<span class="nc" id="L69">        vers.getMappingInfo().assertNoSchemaComponents(vers, true);</span>
+<span class="nc" id="L70">    }</span>
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L75">        FieldMapping[] fields = (FieldMapping[]) sm.getMetaData().getFields();</span>
+<span class="nc" id="L76">        Object[] state = ArrayStateImage.newImage(fields.length);</span>
+<span class="nc" id="L77">        BitSet loaded = ArrayStateImage.getLoaded(state);</span>
+
+        // take a snapshot of all versionable field values
+<span class="nc bnc" id="L80" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc bnc" id="L81" title="All 4 branches missed.">            if (!fields[i].isPrimaryKey() &amp;&amp; fields[i].isVersionable()) {</span>
+<span class="nc" id="L82">                loaded.set(i);</span>
+<span class="nc" id="L83">                state[i] = sm.fetch(fields[i].getIndex());</span>
+            }
+        }
+<span class="nc" id="L86">        sm.setNextVersion(state);</span>
+<span class="nc" id="L87">    }</span>
+
+    /**
+     * This method is for class mappings that take over the insert
+     * process, but still want to use this indicator for optimistic locking.
+     */
+    @Override
+    public void customInsert(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L96">        insert(sm, store, null);</span>
+<span class="nc" id="L97">    }</span>
+
+    @Override
+    public void update(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+        // if there is no recorded state (for example, modification made to
+        // hollow instance and no fields every loaded), can't do anything
+<span class="nc" id="L104">        Object[] state = (Object[]) sm.getVersion();</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if (state == null)</span>
+<span class="nc" id="L106">            return;</span>
+
+<span class="nc" id="L108">        BitSet loaded = ArrayStateImage.getLoaded(state);</span>
+<span class="nc" id="L109">        Object[] nextState = ArrayStateImage.clone(state);</span>
+
+        // loop through fields and update changing values for the next state
+        // image, plus add WHERE conditions on updates to make sure that
+        // db values match our previous image
+<span class="nc" id="L114">        FieldMapping[] fields = (FieldMapping[]) sm.getMetaData().getFields();</span>
+        Row row;
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (sm.isVersionCheckRequired()) {</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            for (int i = 0, max = loaded.length(); i &lt; max; i++) {</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">                if (!loaded.get(i))</span>
+<span class="nc" id="L119">                    continue;</span>
+
+                // update our next state image with the new field value
+<span class="nc bnc" id="L122" title="All 4 branches missed.">                if (sm.getDirty().get(i) &amp;&amp; !sm.getFlushed().get(i))</span>
+<span class="nc" id="L123">                    nextState[i] = sm.fetch(fields[i].getIndex());</span>
+
+                // fetch the row for this field; if no row exists, then we can't
+                // add one because we have no updates to perform; that means we
+                // won't detect OL exceptions when another transaction changes
+                // fields that aren't in any of the same tables as fields that
+                // this transaction changed
+<span class="nc" id="L130">                row = rm.getRow(fields[i].getTable(), Row.ACTION_UPDATE,</span>
+                    sm, false);
+<span class="nc bnc" id="L132" title="All 2 branches missed.">                if (row == null)</span>
+<span class="nc" id="L133">                    continue;</span>
+
+                // set WHERE criteria matching the previous state image so the
+                // update will fail for any changes made by another transaction
+<span class="nc" id="L137">                fields[i].where(sm, store, rm, state[i]);</span>
+<span class="nc" id="L138">                row.setFailedObject(sm.getManagedInstance());</span>
+            }
+        }
+<span class="nc" id="L141">        sm.setNextVersion(nextState);</span>
+<span class="nc" id="L142">    }</span>
+
+    /**
+     * This method is for class mappings that take over the update
+     * process, but still want to use this indicator for optimistic locking.
+     *
+     * @param sm the instance to test
+     * @param store store manager context
+     * @param table only state image values in this table will be tested;
+     * if the custom mapping uses different updates for
+     * different tables, this method can be called multiple
+     * times for the multiple tables
+     * @param record set this parameter to true the last time you call
+     * this method, so the indicator can setup the next
+     * version of the given state manager
+     * @return a {@link CustomUpdate} whose getSQL method yields a
+     * boolean SQL expression that tests whether the current
+     * record is equal to our recorded state image, and whose
+     * setParameters method parameterizes the given prepared
+     * statement with the values used in the above boolean expression
+     */
+    public CustomUpdate customUpdate(OpenJPAStateManager sm, JDBCStore store,
+        Table table, boolean record)
+        throws SQLException {
+<span class="nc" id="L166">        CustomUpdate custom = new CustomUpdate(table);</span>
+<span class="nc" id="L167">        Object[] state = (Object[]) sm.getVersion();</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if (state == null)</span>
+<span class="nc" id="L169">            return custom;</span>
+
+<span class="nc" id="L171">        BitSet loaded = ArrayStateImage.getLoaded(state);</span>
+<span class="nc" id="L172">        Object[] nextState = null;</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        if (record)</span>
+<span class="nc" id="L174">            nextState = ArrayStateImage.clone(state);</span>
+
+<span class="nc" id="L176">        FieldMapping[] fields = (FieldMapping[]) sm.getMetaData().getFields();</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">        for (int i = 0, max = loaded.length(); i &lt; max; i++) {</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            if (!loaded.get(i))</span>
+<span class="nc" id="L179">                continue;</span>
+
+<span class="nc bnc" id="L181" title="All 6 branches missed.">            if (record &amp;&amp; sm.getDirty().get(i) &amp;&amp; !sm.getFlushed().get(i))</span>
+<span class="nc" id="L182">                nextState[i] = sm.fetch(fields[i].getIndex());</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            if (fields[i].getTable() == table)</span>
+<span class="nc" id="L184">                fields[i].where(sm, store, custom, state[i]);</span>
+        }
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (record)</span>
+<span class="nc" id="L187">            sm.setNextVersion(nextState);</span>
+
+<span class="nc" id="L189">        return custom;</span>
+    }
+
+    @Override
+    public void afterLoad(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L194">        FieldMapping[] fields = (FieldMapping[]) sm.getMetaData().getFields();</span>
+
+<span class="nc" id="L196">        Object[] state = (Object[]) sm.getVersion();</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        if (state == null)</span>
+<span class="nc" id="L198">            state = ArrayStateImage.newImage(fields.length);</span>
+<span class="nc" id="L199">        BitSet loaded = ArrayStateImage.getLoaded(state);</span>
+
+        // take a snapshot of all versionable field values that were loaded
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">            if (!fields[i].isPrimaryKey()</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">                &amp;&amp; fields[i].isVersionable()</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">                &amp;&amp; sm.getLoaded().get(fields[i].getIndex())</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">                &amp;&amp; !loaded.get(i)</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">                &amp;&amp; !sm.getDirty().get(fields[i].getIndex())) {</span>
+<span class="nc" id="L208">                loaded.set(i);</span>
+<span class="nc" id="L209">                state[i] = sm.fetch(fields[i].getIndex());</span>
+            }
+        }
+<span class="nc" id="L212">        sm.setVersion(state);</span>
+<span class="nc" id="L213">    }</span>
+
+    @Override
+    public boolean checkVersion(OpenJPAStateManager sm, JDBCStore store,
+        boolean updateVersion)
+        throws SQLException {
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        if (updateVersion)</span>
+<span class="nc" id="L220">            sm.setVersion(null);</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        return !updateVersion;</span>
+    }
+
+    @Override
+    public int compareVersion(Object v1, Object v2) {
+<span class="nc bnc" id="L226" title="All 2 branches missed.">        return (ArrayStateImage.sameVersion((Object[]) v1, (Object[]) v2))</span>
+<span class="nc" id="L227">            ? StoreManager.VERSION_SAME : StoreManager.VERSION_DIFFERENT;</span>
+    }
+
+    /**
+     * Row implementation we use to pass to versionable mappings so they
+     * can set up the where conditions we need to add to update statements.
+     *
+     * @author Abe White
+     */
+    public static class CustomUpdate
+        extends RowImpl
+        implements RowManager {
+
+        private CustomUpdate(Table table) {
+<span class="nc" id="L241">            this(table.getColumns());</span>
+<span class="nc" id="L242">        }</span>
+
+        private CustomUpdate(Column[] cols) {
+<span class="nc" id="L245">            super(cols, Row.ACTION_UPDATE);</span>
+<span class="nc" id="L246">        }</span>
+
+        /**
+         * Return a boolean SQL expression that should be added to the
+         * WHERE clause of an UPDATE to test whether the current database
+         * record matches our stored version.
+         */
+        @Override
+        public String getSQL(DBDictionary dict) {
+<span class="nc" id="L255">            Column[] cols = getTable().getColumns();</span>
+<span class="nc" id="L256">            StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L257">            boolean hasWhere = false;</span>
+            Object val;
+<span class="nc bnc" id="L259" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L260">                val = getWhere(cols[i]);</span>
+<span class="nc bnc" id="L261" title="All 2 branches missed.">                if (val == null)</span>
+<span class="nc" id="L262">                    continue;</span>
+
+<span class="nc bnc" id="L264" title="All 2 branches missed.">                if (hasWhere)</span>
+<span class="nc" id="L265">                    buf.append(&quot; AND &quot;);</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">                if (val == NULL)</span>
+<span class="nc" id="L267">                    buf.append(dict.getColumnDBName(cols[i]) + &quot; IS NULL&quot;);</span>
+                else
+<span class="nc" id="L269">                    buf.append(dict.getColumnDBName(cols[i]) + &quot; = ?&quot;);</span>
+<span class="nc" id="L270">                hasWhere = true;</span>
+            }
+<span class="nc" id="L272">            return buf.toString();</span>
+        }
+
+        @Override
+        protected RowImpl newInstance(Column[] cols, int action) {
+<span class="nc" id="L277">            return new CustomUpdate(cols);</span>
+        }
+
+        /////////////////////////////
+        // RowManager implementation
+        /////////////////////////////
+
+        public boolean hasAutoAssignConstraints() {
+<span class="nc" id="L285">            return false;</span>
+        }
+
+        public Collection getInserts() {
+<span class="nc" id="L289">            throw new InternalException();</span>
+        }
+
+        public Collection getUpdates() {
+<span class="nc" id="L293">            throw new InternalException();</span>
+        }
+
+        public Collection getDeletes() {
+<span class="nc" id="L297">            throw new InternalException();</span>
+        }
+
+        public Collection getSecondaryUpdates() {
+<span class="nc" id="L301">            throw new InternalException();</span>
+        }
+
+        public Collection getSecondaryDeletes() {
+<span class="nc" id="L305">            throw new InternalException();</span>
+        }
+
+        public Collection getAllRowUpdates() {
+<span class="nc" id="L309">            throw new InternalException();</span>
+        }
+
+        public Collection getAllRowDeletes() {
+<span class="nc" id="L313">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Row getRow(Table table, int action, OpenJPAStateManager sm,
+            boolean create) {
+            // verionable mappings will never want to create rows, so we
+            // can always safely return null
+<span class="nc bnc" id="L321" title="All 2 branches missed.">            if (table != getTable())</span>
+<span class="nc" id="L322">                return null;</span>
+<span class="nc" id="L323">            return this;</span>
+        }
+
+        @Override
+        public Row getSecondaryRow(Table table, int action) {
+<span class="nc" id="L328">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void flushSecondaryRow(Row row) {
+<span class="nc" id="L333">        }</span>
+
+        @Override
+        public Row getAllRows(Table table, int action) {
+<span class="nc" id="L337">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void flushAllRows(Row row) {
+<span class="nc" id="L342">        }</span>
+
+        @Override
+        public void setObject(Column col, Object val)
+            throws SQLException {
+<span class="nc" id="L347">            throw new InternalException();</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

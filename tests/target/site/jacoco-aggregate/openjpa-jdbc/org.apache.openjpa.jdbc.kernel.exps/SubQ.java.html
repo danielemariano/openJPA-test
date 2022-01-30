@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SubQ.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">SubQ.java</span></div><h1>SubQ.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.kernel.EagerFetchModes;
+import org.apache.openjpa.jdbc.kernel.JDBCStoreQuery;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.kernel.exps.QueryExpressions;
+import org.apache.openjpa.kernel.exps.Subquery;
+import org.apache.openjpa.kernel.exps.Value;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * A subquery.
+ *
+ * @author Abe White
+ */
+public class SubQ
+    extends AbstractVal
+    implements Subquery {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final ClassMapping _candidate;
+    private final boolean _subs;
+    private String _subqAlias;
+<span class="nc" id="L52">    private final SelectConstructor _cons = new SelectConstructor();</span>
+
+<span class="nc" id="L54">    private Class _type = null;</span>
+<span class="nc" id="L55">    private ClassMetaData _meta = null;</span>
+<span class="nc" id="L56">    private QueryExpressions _exps = null;</span>
+<span class="nc" id="L57">    private Select _select = null;</span>
+
+    /**
+     * Constructor. Supply candidate, whether subclasses are included in
+     * the query, and the query alias.
+     */
+<span class="nc" id="L63">    public SubQ(ClassMapping candidate, boolean subs, String alias) {</span>
+<span class="nc" id="L64">        _candidate = candidate;</span>
+<span class="nc" id="L65">        _subs = subs;</span>
+<span class="nc" id="L66">        _subqAlias = alias;</span>
+<span class="nc" id="L67">        _select = (((JDBCConfiguration) candidate.getMappingRepository().</span>
+<span class="nc" id="L68">            getConfiguration()).getSQLFactoryInstance().newSelect());</span>
+<span class="nc" id="L69">        _cons.setSubselect(_select);</span>
+<span class="nc" id="L70">    }</span>
+
+    @Override
+    public Object getSelect() {
+<span class="nc" id="L74">        return _select;</span>
+    }
+
+    /**
+     * Return the subquery candidate type.
+     */
+    public ClassMapping getCandidate() {
+<span class="nc" id="L81">        return _candidate;</span>
+    }
+
+    public boolean getSubs() {
+<span class="nc" id="L85">        return _subs;</span>
+    }
+
+    @Override
+    public void setSubqAlias(String subqAlias) {
+<span class="nc" id="L90">        _subqAlias = subqAlias;</span>
+<span class="nc" id="L91">    }</span>
+
+    @Override
+    public String getSubqAlias() {
+<span class="nc" id="L95">        return _subqAlias;</span>
+    }
+
+    @Override
+    public Class getType() {
+<span class="nc bnc" id="L100" title="All 4 branches missed.">        if (_exps != null &amp;&amp; _type == null) {</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">            if (_exps.projections.length == 0)</span>
+<span class="nc" id="L102">                return _candidate.getDescribedType();</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">            if (_exps.projections.length == 1)</span>
+<span class="nc" id="L104">                return _exps.projections[0].getType();</span>
+        }
+<span class="nc" id="L106">        return _type;</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc bnc" id="L111" title="All 4 branches missed.">        if (_exps != null &amp;&amp; _exps.projections.length == 1)</span>
+<span class="nc" id="L112">            _exps.projections[0].setImplicitType(type);</span>
+<span class="nc" id="L113">        _type = type;</span>
+<span class="nc" id="L114">    }</span>
+
+    @Override
+    public ClassMetaData getMetaData() {
+<span class="nc" id="L118">        return _meta;</span>
+    }
+
+    @Override
+    public void setMetaData(ClassMetaData meta) {
+<span class="nc" id="L123">        _meta = meta;</span>
+<span class="nc" id="L124">    }</span>
+
+    @Override
+    public String getCandidateAlias() {
+<span class="nc" id="L128">        return _subqAlias;</span>
+    }
+
+    @Override
+    public void setQueryExpressions(QueryExpressions query) {
+<span class="nc" id="L133">        _exps = query;</span>
+<span class="nc" id="L134">        _select.setContext(query.ctx());</span>
+<span class="nc" id="L135">    }</span>
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L139">        Select select = JDBCStoreQuery.getThreadLocalSelect(_select);</span>
+<span class="nc" id="L140">        select.setParent(sel, null);</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        if (_exps.projections.length == 1) {</span>
+<span class="nc" id="L142">            return ((Val) _exps.projections[0]).initialize(select, ctx, flags);</span>
+        }
+<span class="nc" id="L144">        return ExpState.NULL;</span>
+    }
+
+    @Override
+    public Object toDataStoreValue(Select sel, ExpContext ctx, ExpState state,
+        Object val) {
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if (_exps.projections.length == 0)</span>
+<span class="nc" id="L151">            return _candidate.toDataStoreValue(val,</span>
+<span class="nc" id="L152">                _candidate.getPrimaryKeyColumns(), ctx.store);</span>
+<span class="nc bnc" id="L153" title="All 2 branches missed.">        if (_exps.projections.length == 1)</span>
+<span class="nc" id="L154">            return ((Val) _exps.projections[0]).toDataStoreValue(sel, ctx,</span>
+                state, val);
+<span class="nc" id="L156">        return val;</span>
+    }
+
+    @Override
+    public void select(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L162">        selectColumns(sel, ctx, state, pks);</span>
+<span class="nc" id="L163">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L168">        sel.select(newSQLBuffer(sel, ctx, state), this);</span>
+<span class="nc" id="L169">    }</span>
+
+    @Override
+    public void groupBy(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L173">        sel.groupBy(newSQLBuffer(sel, ctx, state));</span>
+<span class="nc" id="L174">    }</span>
+
+    @Override
+    public void orderBy(Select sel, ExpContext ctx, ExpState state,
+        boolean asc) {
+<span class="nc" id="L179">        sel.orderBy(newSQLBuffer(sel, ctx, state), asc, false, getSelectAs());</span>
+<span class="nc" id="L180">    }</span>
+
+    private SQLBuffer newSQLBuffer(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L183">        SQLBuffer buf = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L184">        appendTo(sel, ctx, state, buf, 0);</span>
+<span class="nc" id="L185">        return buf;</span>
+    }
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res)
+        throws SQLException {
+<span class="nc" id="L191">        return Filters.convert(res.getObject(this,</span>
+<span class="nc" id="L192">            JavaSQLTypes.JDBC_DEFAULT, null), getType());</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L198">        Value[] projs = _exps.projections;</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        for (int i = 0; i &lt; projs.length; i++) {</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">            if (projs[i] instanceof GeneralCaseExpression) {</span>
+<span class="nc" id="L201">                ((GeneralCaseExpression)projs[i]).setOtherPath(other);</span>
+<span class="nc" id="L202">                ((GeneralCaseExpression)projs[i]).setOtherState(otherState);</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">            } else if (projs[i] instanceof SimpleCaseExpression) {</span>
+<span class="nc" id="L204">                ((SimpleCaseExpression)projs[i]).setOtherPath(other);</span>
+<span class="nc" id="L205">                ((SimpleCaseExpression)projs[i]).setOtherState(otherState);</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            } else if (projs[i] instanceof NullIfExpression) {</span>
+<span class="nc" id="L207">                ((NullIfExpression)projs[i]).setOtherPath(other);</span>
+<span class="nc" id="L208">                ((NullIfExpression)projs[i]).setOtherState(otherState);</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">            } else if (projs[i] instanceof CoalesceExpression) {</span>
+<span class="nc" id="L210">                ((CoalesceExpression)projs[i]).setOtherPath(other);</span>
+<span class="nc" id="L211">                ((CoalesceExpression)projs[i]).setOtherState(otherState);</span>
+            }
+        }
+<span class="nc" id="L214">    }</span>
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L218">        return 1;</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L224">        appendTo(sel, ctx, state, sql, index, false);</span>
+<span class="nc" id="L225">    }</span>
+
+    private void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index, boolean size) {
+<span class="nc" id="L229">        QueryExpressionsState substate = new QueryExpressionsState();</span>
+<span class="nc" id="L230">        Select sub = _cons.evaluate(ctx, sel, _subqAlias, _exps, substate);</span>
+<span class="nc" id="L231">        _cons.select(sub, ctx, _candidate, _subs, _exps, substate,</span>
+            EagerFetchModes.EAGER_NONE);
+
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        if (size)</span>
+<span class="nc" id="L235">            sql.appendCount(sub, ctx.fetch);</span>
+        else
+<span class="nc" id="L237">            sql.append(sub, ctx.fetch);</span>
+<span class="nc" id="L238">    }</span>
+
+    @Override
+    public void appendIsEmpty(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L243">        sql.append(&quot;NOT EXISTS &quot;);</span>
+<span class="nc" id="L244">        appendTo(sel, ctx, state, sql, 0);</span>
+<span class="nc" id="L245">    }</span>
+
+    @Override
+    public void appendIsNotEmpty(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L250">        sql.append(&quot;EXISTS &quot;);</span>
+<span class="nc" id="L251">        appendTo(sel, ctx, state, sql, 0);</span>
+<span class="nc" id="L252">    }</span>
+
+    @Override
+    public void appendSize(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L257">        appendTo(sel, ctx, state, sql, 0, true);</span>
+<span class="nc" id="L258">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L262">        visitor.enter(this);</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">        for (int i = 0; i &lt; _exps.projections.length; i++)</span>
+<span class="nc" id="L264">            _exps.projections[i].acceptVisit(visitor);</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">        if (_exps.filter != null)</span>
+<span class="nc" id="L266">            _exps.filter.acceptVisit(visitor);</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        for (int i = 0; i &lt; _exps.grouping.length; i++)</span>
+<span class="nc" id="L268">            _exps.grouping[i].acceptVisit(visitor);</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">        if (_exps.having != null)</span>
+<span class="nc" id="L270">            _exps.having.acceptVisit(visitor);</span>
+<span class="nc bnc" id="L271" title="All 2 branches missed.">        for (int i = 0; i &lt; _exps.ordering.length; i++)</span>
+<span class="nc" id="L272">            _exps.ordering[i].acceptVisit(visitor);</span>
+<span class="nc" id="L273">        visitor.exit(this);</span>
+<span class="nc" id="L274">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

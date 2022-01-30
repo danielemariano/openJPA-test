@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>RowManagerImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">RowManagerImpl.java</span></div><h1>RowManagerImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * Manages SQL rows during an insert/update/delete process.
+ *
+ * @author Abe White
+ */
+public class RowManagerImpl
+    implements RowManager {
+
+<span class="nc" id="L41">    private Map&lt;Key, PrimaryRow&gt; _inserts = null;</span>
+<span class="nc" id="L42">    private Map&lt;Key, PrimaryRow&gt; _updates = null;</span>
+<span class="nc" id="L43">    private Map&lt;Key, PrimaryRow&gt; _deletes = null;</span>
+<span class="nc" id="L44">    private Collection&lt;SecondaryRow&gt; _secondaryUpdates = null;</span>
+<span class="nc" id="L45">    private Collection&lt;SecondaryRow&gt; _secondaryDeletes = null;</span>
+<span class="nc" id="L46">    private Collection&lt;Row&gt; _allRowUpdates = null;</span>
+<span class="nc" id="L47">    private Collection&lt;Row&gt; _allRowDeletes = null;</span>
+
+    // we maintain a list of the order of all primary rows if the user
+    // wants to be able to fetch them in order
+    private final List&lt;PrimaryRow&gt; _primaryOrder;
+
+    // track whether we're dealing with any auto-inc columns
+<span class="nc" id="L54">    private boolean _auto = false;</span>
+
+    // cache the last key and primary row; when looping over
+    // all the field mappings of a class each one will probably ask for the
+    // same key, so avoid the key creation and row lookup when possible
+<span class="nc" id="L59">    private Key _key = null;</span>
+<span class="nc" id="L60">    private PrimaryRow _row = null;</span>
+
+    /**
+     * Constructor.
+     *
+     * @param order whether to keep track of the order in which rows are added
+     */
+<span class="nc" id="L67">    public RowManagerImpl(boolean order) {</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        _primaryOrder = (order) ? new ArrayList&lt;&gt;() : null;</span>
+<span class="nc" id="L69">    }</span>
+
+    /**
+     * Whether any primary rows have auto-assign constraints.
+     */
+    public boolean hasAutoAssignConstraints() {
+<span class="nc" id="L75">        return _auto;</span>
+    }
+
+    /**
+     * Return the ordered primary rows. Only available if ordering requested
+     * on construction.
+     */
+    public List&lt;PrimaryRow&gt; getOrdered() {
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if(_primaryOrder == null ) {</span>
+<span class="nc" id="L84">            return Collections.emptyList();</span>
+        }
+        else {
+<span class="nc" id="L87">            return _primaryOrder;</span>
+        }
+    }
+
+    /**
+     * Return all inserted primary rows.
+     */
+    public Collection&lt;PrimaryRow&gt; getInserts() {
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        if(_inserts == null ) {</span>
+<span class="nc" id="L96">            return Collections.emptyList();</span>
+        }
+        else {
+<span class="nc" id="L99">            return _inserts.values();</span>
+        }
+    }
+
+    /**
+     * Return all updated primary rows.
+     */
+    public Collection&lt;PrimaryRow&gt; getUpdates() {
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if(_updates == null ){</span>
+<span class="nc" id="L108">            return Collections.emptyList();</span>
+        }
+        else {
+<span class="nc" id="L111">            return _updates.values();</span>
+        }
+    }
+
+    /**
+     * Return all deleted primary rows.
+     */
+    public Collection&lt;PrimaryRow&gt; getDeletes() {
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        if(_deletes == null) {</span>
+<span class="nc" id="L120">            return Collections.emptyList();</span>
+        }
+        else {
+<span class="nc" id="L123">            return _deletes.values();</span>
+        }
+    }
+
+    /**
+     * Return all inserted and updated secondary rows.
+     */
+    public Collection&lt;SecondaryRow&gt; getSecondaryUpdates() {
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if(_secondaryUpdates == null) {</span>
+<span class="nc" id="L132">            return Collections.emptyList();</span>
+        }
+        else {
+<span class="nc" id="L135">            return _secondaryUpdates;</span>
+        }
+    }
+
+    /**
+     * Return all deleted secondary rows.
+     */
+    public Collection&lt;SecondaryRow&gt; getSecondaryDeletes() {
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        if(_secondaryDeletes == null) {</span>
+<span class="nc" id="L144">            return Collections.emptyList();</span>
+        }
+        else {
+<span class="nc" id="L147">            return _secondaryDeletes;</span>
+        }
+    }
+
+    /**
+     * Return any 'all row' updates.
+     */
+    public Collection&lt;Row&gt; getAllRowUpdates() {
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if(_allRowUpdates == null) {</span>
+<span class="nc" id="L156">            return Collections.emptyList();</span>
+        }
+        else {
+<span class="nc" id="L159">            return _allRowUpdates;</span>
+        }
+    }
+
+    /**
+     * Return any 'all row' deletes.
+     */
+    public Collection&lt;Row&gt; getAllRowDeletes() {
+<span class="nc bnc" id="L167" title="All 2 branches missed.">        if(_allRowDeletes == null) {</span>
+<span class="nc" id="L168">            return Collections.emptyList();</span>
+        }
+        else {
+<span class="nc" id="L171">            return _allRowDeletes;</span>
+        }
+
+    }
+
+    @Override
+    public Row getSecondaryRow(Table table, int action) {
+<span class="nc" id="L178">        return new SecondaryRow(table, action);</span>
+    }
+
+    @Override
+    public void flushSecondaryRow(Row row)
+        throws SQLException {
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (!row.isValid())</span>
+<span class="nc" id="L185">            return;</span>
+
+<span class="nc" id="L187">        SecondaryRow srow = (SecondaryRow) row;</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (srow.getAction() == Row.ACTION_DELETE) {</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">            if (_secondaryDeletes == null)</span>
+<span class="nc" id="L190">                _secondaryDeletes = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L191">            _secondaryDeletes.add((SecondaryRow) srow.clone());</span>
+        } else {
+<span class="nc bnc" id="L193" title="All 2 branches missed.">            if (_secondaryUpdates == null)</span>
+<span class="nc" id="L194">                _secondaryUpdates = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L195">            _secondaryUpdates.add((SecondaryRow) srow.clone());</span>
+        }
+<span class="nc" id="L197">    }</span>
+
+    @Override
+    public Row getAllRows(Table table, int action) {
+<span class="nc" id="L201">        return new RowImpl(table, action);</span>
+    }
+
+    @Override
+    public void flushAllRows(Row row) {
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        if (!row.isValid())</span>
+<span class="nc" id="L207">            return;</span>
+
+<span class="nc bnc" id="L209" title="All 3 branches missed.">        switch (row.getAction()) {</span>
+            case Row.ACTION_UPDATE:
+<span class="nc bnc" id="L211" title="All 2 branches missed.">                if (_allRowUpdates == null)</span>
+<span class="nc" id="L212">                    _allRowUpdates = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L213">                _allRowUpdates.add(row);</span>
+<span class="nc" id="L214">                break;</span>
+            case Row.ACTION_DELETE:
+<span class="nc bnc" id="L216" title="All 2 branches missed.">                if (_allRowDeletes == null)</span>
+<span class="nc" id="L217">                    _allRowDeletes = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L218">                _allRowDeletes.add(row);</span>
+<span class="nc" id="L219">                break;</span>
+            default:
+<span class="nc" id="L221">                throw new InternalException(&quot;action = &quot; + row.getAction());</span>
+        }
+<span class="nc" id="L223">    }</span>
+
+    @Override
+    public Row getRow(Table table, int action, OpenJPAStateManager sm,
+        boolean create) {
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (sm == null)</span>
+<span class="nc" id="L229">            return null;</span>
+
+        // check if request matches cached version
+<span class="nc bnc" id="L232" title="All 8 branches missed.">        if (_key != null &amp;&amp; _key.table == table &amp;&amp; _key.sm == sm</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">            &amp;&amp; _row != null &amp;&amp; _row.getAction() == action)</span>
+<span class="nc" id="L234">            return _row;</span>
+
+        Map&lt;Key, PrimaryRow&gt; map;
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        if (action == Row.ACTION_DELETE) {</span>
+<span class="nc bnc" id="L238" title="All 4 branches missed.">            if (_deletes == null &amp;&amp; create)</span>
+<span class="nc" id="L239">                _deletes = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc" id="L240">            map = _deletes;</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        } else if (action == Row.ACTION_INSERT) {</span>
+<span class="nc bnc" id="L242" title="All 4 branches missed.">            if (_inserts == null &amp;&amp; create)</span>
+<span class="nc" id="L243">                _inserts = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc" id="L244">            map = _inserts;</span>
+        } else {
+<span class="nc bnc" id="L246" title="All 4 branches missed.">            if (_updates == null &amp;&amp; create)</span>
+<span class="nc" id="L247">                _updates = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc" id="L248">            map = _updates;</span>
+        }
+<span class="nc bnc" id="L250" title="All 2 branches missed.">        if (map == null)</span>
+<span class="nc" id="L251">            return null;</span>
+
+<span class="nc" id="L253">        _key = new Key(table, sm);</span>
+<span class="nc" id="L254">        _row = map.get(_key);</span>
+
+<span class="nc bnc" id="L256" title="All 4 branches missed.">        if (_row == null &amp;&amp; create) {</span>
+<span class="nc" id="L257">            _row = new PrimaryRow(table, action, sm);</span>
+<span class="nc" id="L258">            map.put(_key, _row);</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">            if (_primaryOrder != null) {</span>
+<span class="nc" id="L260">                _row.setIndex(_primaryOrder.size());</span>
+<span class="nc" id="L261">                _primaryOrder.add(_row);</span>
+            }
+
+<span class="nc bnc" id="L264" title="All 4 branches missed.">            if (!_auto &amp;&amp; action == Row.ACTION_INSERT)</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">                _auto = table.getAutoAssignedColumns().length &gt; 0;</span>
+        }
+
+<span class="nc bnc" id="L268" title="All 2 branches missed.">        if (_row != null)</span>
+<span class="nc" id="L269">            _row.setFailedObject(sm.getManagedInstance());</span>
+<span class="nc" id="L270">        return _row;</span>
+    }
+
+    /**
+     * Key for hashing virtual rows.
+     */
+    private static class Key {
+
+        public final Table table;
+        public final OpenJPAStateManager sm;
+
+<span class="nc" id="L281">        public Key(Table table, OpenJPAStateManager sm) {</span>
+<span class="nc" id="L282">            this.table = table;</span>
+<span class="nc" id="L283">            this.sm = sm;</span>
+<span class="nc" id="L284">        }</span>
+
+        @Override
+        public int hashCode() {
+<span class="nc bnc" id="L288" title="All 4 branches missed.">            return ((table == null) ? 0  : table.hashCode()) + ((sm == null) ? 0  : sm.hashCode()) % Integer.MAX_VALUE;</span>
+        }
+
+        @Override
+        public boolean equals(Object other) {
+<span class="nc bnc" id="L293" title="All 2 branches missed.">            if (other == null)</span>
+<span class="nc" id="L294">                return false;</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">            if (other == this)</span>
+<span class="nc" id="L296">                return true;</span>
+
+<span class="nc" id="L298">            Key key = (Key) other;</span>
+<span class="nc bnc" id="L299" title="All 4 branches missed.">            return table == key.table &amp;&amp; sm == key.sm;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

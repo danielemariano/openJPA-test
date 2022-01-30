@@ -1,0 +1,608 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ResultSetResult.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">ResultSetResult.java</span></div><h1>ResultSetResult.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.io.InputStream;
+import java.io.Reader;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.Connection;
+import java.sql.Ref;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.meta.JavaTypes;
+
+
+/**
+ * Base {@link Result} implementation wrapped around a result set.
+ * Column objects, column names, or column indexes (as &lt;code&gt;Number&lt;/code&gt;
+ * instances) can be used to retrieve result set data.
+ *
+ * @author Abe White
+ */
+public class ResultSetResult
+    extends AbstractResult {
+
+    private final Connection _conn;
+    private final Statement _stmnt;
+    private final ResultSet _rs;
+    private final DBDictionary _dict;
+<span class="nc" id="L67">    private boolean _closeStatement = true;</span>
+<span class="nc" id="L68">    private boolean _closeConn = true;</span>
+<span class="nc" id="L69">    private int _row = -1;</span>
+<span class="nc" id="L70">    private int _size = -1;</span>
+
+    // optional; used to deserialize blobs containing refs to persistent objs
+<span class="nc" id="L73">    private JDBCStore _store = null;</span>
+
+    /**
+     * Constructor.
+     */
+    public ResultSetResult(Connection conn, Statement stmnt,
+<span class="nc" id="L79">        ResultSet rs, DBDictionary dict) {</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">        if (stmnt == null)</span>
+            try {
+<span class="nc" id="L82">                stmnt = rs.getStatement();</span>
+<span class="nc" id="L83">            } catch (Throwable t) {</span>
+<span class="nc" id="L84">            }</span>
+
+<span class="nc" id="L86">        _conn = conn;</span>
+<span class="nc" id="L87">        _stmnt = stmnt;</span>
+<span class="nc" id="L88">        _rs = rs;</span>
+<span class="nc" id="L89">        _dict = dict;</span>
+<span class="nc" id="L90">    }</span>
+
+    /**
+     * Constructor.
+     */
+    public ResultSetResult(Connection conn, Statement stmnt,
+        ResultSet rs, JDBCStore store) {
+<span class="nc" id="L97">        this(conn, stmnt, rs, store.getDBDictionary());</span>
+<span class="nc" id="L98">        setStore(store);</span>
+<span class="nc" id="L99">    }</span>
+
+    /**
+     * Constructor.
+     */
+    public ResultSetResult(Connection conn,
+<span class="nc" id="L105">        ResultSet rs, DBDictionary dict) {</span>
+<span class="nc" id="L106">        _conn = conn;</span>
+<span class="nc" id="L107">        _stmnt = null;</span>
+<span class="nc" id="L108">        _rs = rs;</span>
+<span class="nc" id="L109">        _dict = dict;</span>
+<span class="nc" id="L110">    }</span>
+
+    /**
+     * JDBC 2 constructor. Relies on being able to retrieve the statement
+     * from the result set, and the connection from the statement.
+     */
+    public ResultSetResult(ResultSet rs, DBDictionary dict)
+<span class="nc" id="L117">        throws SQLException {</span>
+<span class="nc" id="L118">        _stmnt = rs.getStatement();</span>
+<span class="nc" id="L119">        _conn = _stmnt.getConnection();</span>
+<span class="nc" id="L120">        _rs = rs;</span>
+<span class="nc" id="L121">        _dict = dict;</span>
+<span class="nc" id="L122">    }</span>
+
+    /**
+     * JDBC 2 constructor. Relies on being able to retrieve the statement
+     * from the result set, and the connection from the statement.
+     */
+    public ResultSetResult(ResultSet rs, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L130">        this(rs, store.getDBDictionary());</span>
+<span class="nc" id="L131">        setStore(store);</span>
+<span class="nc" id="L132">    }</span>
+
+    /**
+     * Return the statement that produced this result.
+     */
+    public Statement getStatement() {
+<span class="nc" id="L138">        return _stmnt;</span>
+    }
+
+    /**
+     * Return the backing result set.
+     */
+    public ResultSet getResultSet() {
+<span class="nc" id="L145">        return _rs;</span>
+    }
+
+    /**
+     * Return the dictionary in use.
+     */
+    public DBDictionary getDBDictionary() {
+<span class="nc" id="L152">        return _dict;</span>
+    }
+
+    /**
+     * Optional store manager used to deserialize blobs containing
+     * references to persistent objects.
+     */
+    public JDBCStore getStore() {
+<span class="nc" id="L160">        return _store;</span>
+    }
+
+    /**
+     * Optional store manager used to deserialize blobs containing
+     * references to persistent objects.
+     */
+    public void setStore(JDBCStore store) {
+<span class="nc" id="L168">        _store = store;</span>
+<span class="nc" id="L169">    }</span>
+
+    /**
+     * Whether to close the backing connection when this result is closed.
+     * Defaults to true.
+     */
+    public boolean getCloseConnection() {
+<span class="nc" id="L176">        return _closeConn;</span>
+    }
+
+    /**
+     * Whether to close the backing connection when this result is closed.
+     * Defaults to true.
+     */
+    public void setCloseConnection(boolean closeConn) {
+<span class="nc" id="L184">        _closeConn = closeConn;</span>
+<span class="nc" id="L185">    }</span>
+
+    public void setCloseStatement(boolean closeStatement) {
+<span class="nc" id="L188">        _closeStatement = closeStatement;</span>
+<span class="nc" id="L189">    }</span>
+
+    @Override
+    public void close() {
+<span class="nc" id="L193">        super.close();</span>
+        try {
+<span class="nc" id="L195">            _rs.close();</span>
+<span class="nc" id="L196">        } catch (SQLException se) {</span>
+<span class="nc" id="L197">        }</span>
+<span class="nc bnc" id="L198" title="All 4 branches missed.">        if (_stmnt != null &amp;&amp; _closeStatement)</span>
+            try {
+<span class="nc" id="L200">                _stmnt.close();</span>
+<span class="nc" id="L201">            } catch (SQLException se) {</span>
+<span class="nc" id="L202">            }</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (_closeConn)</span>
+            try {
+<span class="nc" id="L205">                _conn.close();</span>
+<span class="nc" id="L206">            } catch (SQLException se) {</span>
+<span class="nc" id="L207">            }</span>
+<span class="nc" id="L208">    }</span>
+
+    @Override
+    public boolean supportsRandomAccess()
+        throws SQLException {
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        return _rs.getType() != ResultSet.TYPE_FORWARD_ONLY;</span>
+    }
+
+    @Override
+    protected boolean absoluteInternal(int row)
+        throws SQLException {
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        if (row == ++_row)</span>
+<span class="nc" id="L220">            return _rs.next();</span>
+
+        // random access
+<span class="nc" id="L223">        _rs.absolute(row + 1);</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        if (_rs.getRow() == 0) {</span>
+<span class="nc" id="L225">            _row = -1;</span>
+<span class="nc" id="L226">            return false;</span>
+        }
+<span class="nc" id="L228">        _row = row;</span>
+<span class="nc" id="L229">        return true;</span>
+    }
+
+    @Override
+    protected boolean nextInternal()
+        throws SQLException {
+<span class="nc" id="L235">        _row++;</span>
+<span class="nc" id="L236">        return _rs.next();</span>
+    }
+
+    @Override
+    public int size()
+        throws SQLException {
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        if (_size == -1) {</span>
+<span class="nc" id="L243">            _rs.last();</span>
+<span class="nc" id="L244">            _size = _rs.getRow();</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">            if (_row == -1)</span>
+<span class="nc" id="L246">                _rs.beforeFirst();</span>
+            else
+<span class="nc" id="L248">                _rs.absolute(_row + 1);</span>
+        }
+<span class="nc" id="L250">        return _size;</span>
+    }
+
+    @Override
+    protected boolean containsInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc bnc" id="L256" title="All 2 branches missed.">        return ((Number) translate(obj, joins)).intValue() &gt; 0;</span>
+    }
+
+    @Override
+    protected Array getArrayInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L262">        return _dict.getArray(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected InputStream getAsciiStreamInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L268">        return _dict.getAsciiStream(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected BigDecimal getBigDecimalInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L274">        return _dict.getBigDecimal(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected Number getNumberInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L280">        return _dict.getNumber(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected BigInteger getBigIntegerInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L286">        return _dict.getBigInteger(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected InputStream getBinaryStreamInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L292">        return _dict.getBinaryStream(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected Blob getBlobInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L298">        return _dict.getBlob(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected boolean getBooleanInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L304">        return _dict.getBoolean(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected byte getByteInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L310">        return _dict.getByte(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected byte[] getBytesInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L316">        return _dict.getBytes(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected Calendar getCalendarInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L322">        return _dict.getCalendar(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected LocalDate getLocalDateInternal(Object obj, Joins joins)
+            throws SQLException {
+<span class="nc" id="L328">        return _dict.getLocalDate(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected LocalTime getLocalTimeInternal(Object obj, Joins joins)
+            throws SQLException {
+<span class="nc" id="L334">        return _dict.getLocalTime(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected LocalDateTime getLocalDateTimeInternal(Object obj, Joins joins)
+            throws SQLException {
+<span class="nc" id="L340">        return _dict.getLocalDateTime(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected OffsetTime getOffsetTimeInternal(Object obj, Joins joins)
+            throws SQLException {
+<span class="nc" id="L346">        return _dict.getOffsetTime(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected OffsetDateTime getOffsetDateTimeInternal(Object obj, Joins joins)
+            throws SQLException {
+<span class="nc" id="L352">        return _dict.getOffsetDateTime(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected char getCharInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L358">        return _dict.getChar(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected Reader getCharacterStreamInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L364">        return _dict.getCharacterStream(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected Clob getClobInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L370">        return _dict.getClob(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected Date getDateInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L376">        return _dict.getDate(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected java.sql.Date getDateInternal(Object obj, Calendar cal,
+        Joins joins)
+        throws SQLException {
+<span class="nc" id="L383">        return _dict.getDate(_rs, ((Number) obj).intValue(), cal);</span>
+    }
+
+    @Override
+    protected double getDoubleInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L389">        return _dict.getDouble(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected float getFloatInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L395">        return _dict.getFloat(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected int getIntInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L401">        return _dict.getInt(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected Locale getLocaleInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L407">        return _dict.getLocale(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected long getLongInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L413">        return _dict.getLong(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected Object getStreamInternal(JDBCStore store, Object obj,
+        int metaTypeCode, Object arg, Joins joins) throws SQLException {
+<span class="nc" id="L419">        return getLOBStreamInternal(store, obj, joins);</span>
+    }
+
+    @Override
+    protected Object getObjectInternal(Object obj, int metaTypeCode, Object arg, Joins joins)
+        throws SQLException {
+<span class="nc bnc" id="L425" title="All 4 branches missed.">        if (metaTypeCode == -1 &amp;&amp; obj instanceof Column)</span>
+<span class="nc" id="L426">            metaTypeCode = ((Column) obj).getJavaType();</span>
+
+<span class="nc bnc" id="L428" title="All 6 branches missed.">        boolean isClob = (obj instanceof Column) ? ((Column) obj).getType() == Types.CLOB &amp;&amp; !((Column) obj).isXML()</span>
+<span class="nc" id="L429">                : false;</span>
+<span class="nc" id="L430">        obj = translate(obj, joins);</span>
+
+<span class="nc" id="L432">        Object val = null;</span>
+<span class="nc bnc" id="L433" title="All 34 branches missed.">        switch (metaTypeCode) {</span>
+            case JavaTypes.BOOLEAN:
+            case JavaTypes.BOOLEAN_OBJ:
+<span class="nc bnc" id="L436" title="All 2 branches missed.">                val = (getBooleanInternal(obj, joins)) ? Boolean.TRUE</span>
+<span class="nc" id="L437">                    : Boolean.FALSE;</span>
+<span class="nc" id="L438">                break;</span>
+            case JavaTypes.BYTE:
+            case JavaTypes.BYTE_OBJ:
+<span class="nc" id="L441">                val = new Byte(getByteInternal(obj, joins));</span>
+<span class="nc" id="L442">                break;</span>
+            case JavaTypes.CHAR:
+            case JavaTypes.CHAR_OBJ:
+<span class="nc" id="L445">                val = new Character(getCharInternal(obj, joins));</span>
+<span class="nc" id="L446">                break;</span>
+            case JavaTypes.DOUBLE:
+            case JavaTypes.DOUBLE_OBJ:
+<span class="nc" id="L449">                val = new Double(getDoubleInternal(obj, joins));</span>
+<span class="nc" id="L450">                break;</span>
+            case JavaTypes.FLOAT:
+            case JavaTypes.FLOAT_OBJ:
+<span class="nc" id="L453">                val = new Float(getFloatInternal(obj, joins));</span>
+<span class="nc" id="L454">                break;</span>
+            case JavaTypes.INT:
+            case JavaTypes.INT_OBJ:
+<span class="nc" id="L457">                val = getIntInternal(obj, joins);</span>
+<span class="nc" id="L458">                break;</span>
+            case JavaTypes.LONG:
+            case JavaTypes.LONG_OBJ:
+<span class="nc" id="L461">                val = getLongInternal(obj, joins);</span>
+<span class="nc" id="L462">                break;</span>
+            case JavaTypes.SHORT:
+            case JavaTypes.SHORT_OBJ:
+<span class="nc" id="L465">                val = new Short(getShortInternal(obj, joins));</span>
+<span class="nc" id="L466">                break;</span>
+            case JavaTypes.STRING:
+<span class="nc" id="L468">                return getStringInternal(obj, joins, isClob);</span>
+            case JavaTypes.OBJECT:
+<span class="nc" id="L470">                return _dict</span>
+<span class="nc" id="L471">                    .getBlobObject(_rs, ((Number) obj).intValue(), _store);</span>
+            case JavaTypes.DATE:
+<span class="nc" id="L473">                return getDateInternal(obj, joins);</span>
+            case JavaTypes.CALENDAR:
+<span class="nc" id="L475">                return getCalendarInternal(obj, joins);</span>
+            case JavaTypes.LOCAL_DATE:
+<span class="nc" id="L477">                return getLocalDateInternal(obj, joins);</span>
+            case JavaTypes.LOCAL_TIME:
+<span class="nc" id="L479">                return getLocalTimeInternal(obj, joins);</span>
+            case JavaTypes.LOCAL_DATETIME:
+<span class="nc" id="L481">                return getLocalDateTimeInternal(obj, joins);</span>
+            case JavaTypes.OFFSET_TIME:
+<span class="nc" id="L483">                return getOffsetTimeInternal(obj, joins);</span>
+            case JavaTypes.OFFSET_DATETIME:
+<span class="nc" id="L485">                return getOffsetDateTimeInternal(obj, joins);</span>
+            case JavaTypes.BIGDECIMAL:
+<span class="nc" id="L487">                return getBigDecimalInternal(obj, joins);</span>
+            case JavaTypes.NUMBER:
+<span class="nc" id="L489">                return getNumberInternal(obj, joins);</span>
+            case JavaTypes.BIGINTEGER:
+<span class="nc" id="L491">                return getBigIntegerInternal(obj, joins);</span>
+            case JavaTypes.LOCALE:
+<span class="nc" id="L493">                return getLocaleInternal(obj, joins);</span>
+            case JavaSQLTypes.SQL_ARRAY:
+<span class="nc" id="L495">                return getArrayInternal(obj, joins);</span>
+            case JavaSQLTypes.ASCII_STREAM:
+<span class="nc" id="L497">                return getAsciiStreamInternal(obj, joins);</span>
+            case JavaSQLTypes.BINARY_STREAM:
+<span class="nc" id="L499">                return getBinaryStreamInternal(obj, joins);</span>
+            case JavaSQLTypes.BLOB:
+<span class="nc" id="L501">                return getBlobInternal(obj, joins);</span>
+            case JavaSQLTypes.BYTES:
+<span class="nc" id="L503">                return getBytesInternal(obj, joins);</span>
+            case JavaSQLTypes.CHAR_STREAM:
+<span class="nc" id="L505">                return getCharacterStreamInternal(obj, joins);</span>
+            case JavaSQLTypes.CLOB:
+<span class="nc" id="L507">                return getClobInternal(obj, joins);</span>
+            case JavaSQLTypes.SQL_DATE:
+<span class="nc" id="L509">                return getDateInternal(obj, (Calendar) arg, joins);</span>
+            case JavaSQLTypes.SQL_OBJECT:
+<span class="nc" id="L511">                return getSQLObjectInternal(obj, (Map) arg, joins);</span>
+            case JavaSQLTypes.REF:
+<span class="nc" id="L513">                return getRefInternal(obj, (Map) arg, joins);</span>
+            case JavaSQLTypes.TIME:
+<span class="nc" id="L515">                return getTimeInternal(obj, (Calendar) arg, joins);</span>
+            case JavaSQLTypes.TIMESTAMP:
+<span class="nc" id="L517">                return getTimestampInternal(obj, (Calendar) arg, joins);</span>
+            default:
+<span class="nc bnc" id="L519" title="All 2 branches missed.">                if (obj instanceof Column) {</span>
+<span class="nc" id="L520">                    Column col = (Column) obj;</span>
+<span class="nc bnc" id="L521" title="All 2 branches missed.">                    if (col.getType() == Types.BLOB</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">                        || col.getType() == Types.VARBINARY) {</span>
+<span class="nc" id="L523">                        return _dict</span>
+<span class="nc" id="L524">                            .getBlobObject(_rs, col.getIndex(), _store);</span>
+                    }
+                }
+<span class="nc" id="L527">                return _dict.getObject(_rs, ((Number) obj).intValue(), null);</span>
+        }
+<span class="nc bnc" id="L529" title="All 2 branches missed.">        return (_rs.wasNull()) ? null : val;</span>
+    }
+
+    @Override
+    protected Object getSQLObjectInternal(Object obj, Map map, Joins joins)
+        throws SQLException {
+<span class="nc" id="L535">        return _dict.getObject(_rs, ((Number) obj).intValue(), map);</span>
+    }
+
+    @Override
+    protected Ref getRefInternal(Object obj, Map map, Joins joins)
+        throws SQLException {
+<span class="nc" id="L541">        return _dict.getRef(_rs, ((Number) obj).intValue(), map);</span>
+    }
+
+    @Override
+    protected short getShortInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L547">        return _dict.getShort(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected String getStringInternal(Object obj, Joins joins, boolean isClobString)
+        throws SQLException {
+<span class="nc bnc" id="L553" title="All 2 branches missed.">        if (isClobString) {</span>
+<span class="nc" id="L554">            return _dict.getClobString(_rs, ((Number) obj).intValue());</span>
+        }
+<span class="nc" id="L556">        return _dict.getString(_rs, ((Number) obj).intValue());</span>
+    }
+
+    @Override
+    protected Time getTimeInternal(Object obj, Calendar cal, Joins joins)
+        throws SQLException {
+<span class="nc" id="L562">        return _dict.getTime(_rs, ((Number) obj).intValue(), cal);</span>
+    }
+
+    @Override
+    protected Timestamp getTimestampInternal(Object obj, Calendar cal,
+        Joins joins)
+        throws SQLException {
+<span class="nc" id="L569">        return _dict.getTimestamp(_rs, ((Number) obj).intValue(), cal);</span>
+    }
+
+    @Override
+    public boolean wasNull()
+        throws SQLException {
+<span class="nc" id="L575">        return _rs.wasNull();</span>
+    }
+
+    @Override
+    protected Object translate(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc bnc" id="L581" title="All 2 branches missed.">        if (obj instanceof Number)</span>
+<span class="nc" id="L582">            return obj;</span>
+<span class="nc" id="L583">        return findObject(obj, joins);</span>
+    }
+
+    /**
+     * Return the 1-based result set index for the given column or id, or a
+     * non-positive number if the column is not contained in this result.
+     */
+    protected int findObject(Object obj, Joins joins)
+        throws SQLException {
+        try {
+<span class="nc" id="L593">          String s1 = obj.toString();</span>
+<span class="nc" id="L594">          DBIdentifier sName = DBIdentifier.newColumn(obj.toString());</span>
+<span class="nc" id="L595">          return getResultSet().findColumn(_dict.convertSchemaCase(sName));</span>
+<span class="nc" id="L596">        } catch (SQLException se) {</span>
+<span class="nc" id="L597">            _dict.log.trace(se.getMessage());</span>
+<span class="nc" id="L598">            return 0;</span>
+        }
+    }
+
+    @Override
+    protected InputStream getLOBStreamInternal(JDBCStore store, Object obj,
+        Joins joins) throws SQLException {
+<span class="nc" id="L605">        return _dict.getLOBStream(store, _rs, ((Number) obj).intValue());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

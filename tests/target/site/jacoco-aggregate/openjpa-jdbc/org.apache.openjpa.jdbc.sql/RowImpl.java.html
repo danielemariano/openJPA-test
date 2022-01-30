@@ -1,0 +1,1085 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>RowImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">RowImpl.java</span></div><h1>RowImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.io.InputStream;
+import java.io.Reader;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.meta.Joinable;
+import org.apache.openjpa.jdbc.meta.RelationId;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * Basic {@link Row} implementation.
+ *
+ * @author Abe White
+ */
+public class RowImpl
+    implements Row, Cloneable {
+
+<span class="nc" id="L60">    public static final Object NULL = new Object();</span>
+    protected static final int VALID = 2 &lt;&lt; 0;
+
+    public static final int RAW = Integer.MIN_VALUE;
+
+<span class="nc" id="L65">    protected byte flags = 0;</span>
+    private final Column[] _cols;
+    private final int _action;
+    private final Object[] _vals;
+    private final int[] _types;
+
+<span class="nc" id="L71">    private String _sql = null;</span>
+<span class="nc" id="L72">    private boolean _isFlushed = false;</span>
+
+    /**
+     * Constructor.
+     *
+     * @param table the table the row is a part of
+     * @param action the action on the row
+     */
+    public RowImpl(Table table, int action) {
+<span class="nc" id="L81">        this(table.getColumns(), action);</span>
+<span class="nc" id="L82">    }</span>
+
+<span class="nc" id="L84">    protected RowImpl(Column[] cols, int action) {</span>
+<span class="nc" id="L85">        _cols = cols;</span>
+<span class="nc" id="L86">        _action = action;</span>
+
+        // we need room for values and types for all columns; if an update or
+        // delete, then we need to double that for where column conditions
+<span class="nc" id="L90">        int len = _cols.length;</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if (action != ACTION_INSERT)</span>
+<span class="nc" id="L92">            len *= 2;</span>
+<span class="nc" id="L93">        _vals = new Object[len];</span>
+<span class="nc" id="L94">        _types = new int[len];</span>
+<span class="nc" id="L95">    }</span>
+
+    @Override
+    public Table getTable() {
+<span class="nc" id="L99">        return _cols[0].getTable();</span>
+    }
+
+    public Column[] getColumns() {
+<span class="nc" id="L103">        return _cols;</span>
+    }
+
+    @Override
+    public int getAction() {
+<span class="nc" id="L108">        return _action;</span>
+    }
+
+    @Override
+    public boolean isValid() {
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        return (flags &amp; VALID) != 0;</span>
+    }
+
+    @Override
+    public void setValid(boolean valid) {
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        if (valid)</span>
+<span class="nc" id="L119">            flags |= VALID;</span>
+        else
+<span class="nc" id="L121">            flags &amp;= ~VALID;</span>
+<span class="nc" id="L122">    }</span>
+
+    /**
+     * This implementation does not track primary keys.
+     */
+    @Override
+    public OpenJPAStateManager getPrimaryKey() {
+<span class="nc" id="L129">        return null;</span>
+    }
+
+    /**
+     * This implementation does not track failed objects.
+     */
+    @Override
+    public Object getFailedObject() {
+<span class="nc" id="L137">        return null;</span>
+    }
+
+    /**
+     * This implementation does not track failed objects.
+     */
+    @Override
+    public void setFailedObject(Object failed) {
+<span class="nc" id="L145">        throw new InternalException();</span>
+    }
+
+    /**
+     * Secondary rows cannot be dependent.
+     */
+    public boolean isDependent() {
+<span class="nc" id="L152">        return false;</span>
+    }
+
+    /**
+     * Return the value set for update on the given column.
+     */
+    public Object getSet(Column col) {
+<span class="nc" id="L159">        return _vals[getSetIndex(col)];</span>
+    }
+
+    /**
+     * Return the value set for where on the given column.
+     */
+    public Object getWhere(Column col) {
+<span class="nc" id="L166">        return _vals[getWhereIndex(col)];</span>
+    }
+
+    @Override
+    public void setPrimaryKey(OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L172">        setPrimaryKey(null, sm);</span>
+<span class="nc" id="L173">    }</span>
+
+    @Override
+    public void setPrimaryKey(ColumnIO io, OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L178">        flushPrimaryKey(sm, io, true);</span>
+<span class="nc" id="L179">    }</span>
+
+    @Override
+    public void wherePrimaryKey(OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L184">        flushPrimaryKey(sm, null, false);</span>
+<span class="nc" id="L185">    }</span>
+
+    /**
+     * Flush the primary key values.
+     */
+    private void flushPrimaryKey(OpenJPAStateManager sm, ColumnIO io,
+        boolean set)
+        throws SQLException {
+<span class="nc" id="L193">        ClassMapping mapping = (ClassMapping) sm.getMetaData();</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        while (mapping.getTable() != getTable())</span>
+<span class="nc" id="L195">            mapping = mapping.getPCSuperclassMapping();</span>
+<span class="nc" id="L196">        Column[] cols = mapping.getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        Object oid = mapping.useIdClassFromParent() ? sm.getObjectId() : null;</span>
+<span class="nc" id="L198">        flushJoinValues(sm, oid, cols, cols, io, set);</span>
+<span class="nc" id="L199">    }</span>
+
+    @Override
+    public void setForeignKey(ForeignKey fk, OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L204">        setForeignKey(fk, null, sm);</span>
+<span class="nc" id="L205">    }</span>
+
+    @Override
+    public void setForeignKey(ForeignKey fk, ColumnIO io,
+        OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L211">        flushForeignKey(fk, io, sm, true);</span>
+<span class="nc" id="L212">    }</span>
+
+    @Override
+    public void whereForeignKey(ForeignKey fk, OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L217">        flushForeignKey(fk, null, sm, false);</span>
+<span class="nc" id="L218">    }</span>
+
+    /**
+     * Clear a circular foreign key.
+     */
+    public void clearForeignKey(ForeignKey fk)
+        throws SQLException {
+<span class="nc" id="L225">        _sql = null;</span>
+<span class="nc" id="L226">        Column[] cols = fk.getColumns();</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L228">            _vals[getSetIndex(cols[i])] = null;</span>
+<span class="nc" id="L229">    }</span>
+
+    /**
+     * Flush the foreign key values.
+     */
+    private void flushForeignKey(ForeignKey fk, ColumnIO io,
+        OpenJPAStateManager sm, boolean set)
+        throws SQLException {
+<span class="nc" id="L237">        flushJoinValues(sm, null, fk.getPrimaryKeyColumns(), fk.getColumns(),</span>
+            io, set);
+<span class="nc bnc" id="L239" title="All 2 branches missed.">        if (sm != null) {</span>
+<span class="nc" id="L240">            Column[] cols = fk.getConstantColumns();</span>
+<span class="nc" id="L241">            int len = fk.getColumns().length;</span>
+            Object obj;
+            int type;
+<span class="nc bnc" id="L244" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L245">                obj = fk.getConstant(cols[i]);</span>
+<span class="nc" id="L246">                type = cols[i].getJavaType();</span>
+<span class="nc bnc" id="L247" title="All 6 branches missed.">                if (set &amp;&amp; canSet(io, i + len, obj == null))</span>
+<span class="nc" id="L248">                    setObject(cols[i], obj, type, false);</span>
+<span class="nc bnc" id="L249" title="All 2 branches missed.">                else if (!set)</span>
+<span class="nc" id="L250">                    whereObject(cols[i], obj, type);</span>
+            }
+        }
+<span class="nc" id="L253">    }</span>
+
+    /**
+     * Flush the given instance value to the given columns. Note that
+     * foreign keys may include columns also mapped by simple values. We
+     * use a priority mechanism to ensure that we do not let the nulling
+     * of a foreign key null columns also owned by simple values.
+     *
+     * @param to the instance being joined to
+     * @param toCols the columns being joined to
+     * @param fromCols the columns being joined from
+     * @param io information about I/O capabilities in this context
+     * @param set whether this should be flushed as an update or
+     * as a where condition
+     */
+    private void flushJoinValues(OpenJPAStateManager to, Object oid, Column[] toCols,
+        Column[] fromCols, ColumnIO io, boolean set)
+        throws SQLException {
+<span class="nc bnc" id="L271" title="All 2 branches missed.">        if (to == null) {</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">            for (int i = 0; i &lt; fromCols.length; i++) {</span>
+<span class="nc bnc" id="L273" title="All 4 branches missed.">                if (set &amp;&amp; canSet(io, i, true))</span>
+<span class="nc" id="L274">                    setNull(fromCols[i]);</span>
+<span class="nc bnc" id="L275" title="All 2 branches missed.">                else if (!set)</span>
+<span class="nc" id="L276">                    whereNull(fromCols[i]);</span>
+            }
+<span class="nc" id="L278">            return;</span>
+        }
+<span class="nc bnc" id="L280" title="All 4 branches missed.">        if (set &amp;&amp; !canSetAny(io, fromCols.length, false))</span>
+<span class="nc" id="L281">            return;</span>
+
+<span class="nc" id="L283">        ClassMapping toMapping = (ClassMapping) to.getMetaData();</span>
+        Joinable join;
+        Object val;
+<span class="nc bnc" id="L286" title="All 2 branches missed.">        for (int i = 0; i &lt; toCols.length; i++) {</span>
+            // don't even translate join value if unsettable
+<span class="nc bnc" id="L288" title="All 2 branches missed.">            if (set) {</span>
+<span class="nc bnc" id="L289" title="All 4 branches missed.">                if (_action == ACTION_INSERT &amp;&amp; fromCols[i].isAutoAssigned())</span>
+<span class="nc" id="L290">                    continue;</span>
+<span class="nc bnc" id="L291" title="All 2 branches missed.">                if (!canSet(io, i, false))</span>
+<span class="nc" id="L292">                    continue;</span>
+            }
+
+<span class="nc" id="L295">            join = toMapping.assertJoinable(toCols[i]);</span>
+<span class="nc bnc" id="L296" title="All 2 branches missed.">            if (oid != null)</span>
+<span class="nc" id="L297">                val = join.getJoinValue(oid, toCols[i], (JDBCStore) to.</span>
+<span class="nc" id="L298">                    getContext().getStoreManager().getInnermostDelegate());</span>
+            else
+<span class="nc" id="L300">                val = join.getJoinValue(to, toCols[i], (JDBCStore) to.</span>
+<span class="nc" id="L301">                    getContext().getStoreManager().getInnermostDelegate());</span>
+
+<span class="nc bnc" id="L303" title="All 4 branches missed.">            if (set &amp;&amp; val == null) {</span>
+<span class="nc bnc" id="L304" title="All 2 branches missed.">                if (canSet(io, i, true))</span>
+<span class="nc" id="L305">                    setNull(fromCols[i]);</span>
+<span class="nc bnc" id="L306" title="All 4 branches missed.">            } else if (set &amp;&amp; val instanceof Raw)</span>
+<span class="nc" id="L307">                setRaw(fromCols[i], val.toString());</span>
+<span class="nc bnc" id="L308" title="All 2 branches missed.">            else if (set) {</span>
+<span class="nc" id="L309">                setObject(fromCols[i], val, toCols[i].getJavaType(), false);</span>
+<span class="nc" id="L310">                setJoinRefColumn(to, fromCols, toCols[i], val);</span>
+<span class="nc bnc" id="L311" title="All 2 branches missed.">            } else if (val == null)</span>
+<span class="nc" id="L312">                whereNull(fromCols[i]);</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">            else if (val instanceof Raw)</span>
+<span class="nc" id="L314">                whereRaw(fromCols[i], val.toString());</span>
+            else
+<span class="nc" id="L316">                whereObject(fromCols[i], val, toCols[i].getJavaType());</span>
+        }
+<span class="nc" id="L318">    }</span>
+
+    private void setJoinRefColumn(OpenJPAStateManager inverseSm, Column ownerCols[], Column inverseCol,
+                                   Object val) {
+<span class="nc" id="L322">        OpenJPAStateManager ownerSm = getPrimaryKey();</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">        if (ownerSm != null) {</span>
+<span class="nc" id="L324">            ClassMetaData ownerMeta = ownerSm.getMetaData();</span>
+            // loop through all the fields in the owner entity
+<span class="nc bnc" id="L326" title="All 2 branches missed.">            for (FieldMetaData ownerFM : ownerMeta.getFields()) {</span>
+                // look for any single column in this field references the
+                // same column as the foreign key target column
+<span class="nc" id="L329">                Column cols[] = ((FieldMapping) ownerFM).getColumns();</span>
+<span class="nc bnc" id="L330" title="All 4 branches missed.">                if (cols.length == 1            // only support attribute of non-compound foreign key</span>
+                        &amp;&amp; cols != ownerCols    // not @Id field
+<span class="nc bnc" id="L332" title="All 2 branches missed.">                        &amp;&amp; cols[0].getIdentifier().equals(ownerCols[0].getIdentifier())) {</span>
+                    // copy the foreign key value to the current field.
+<span class="nc" id="L334">                    FieldMetaData inverseFM = inverseSm.getMetaData().getField(</span>
+<span class="nc" id="L335">                                    inverseCol.getIdentifier().getName());</span>
+<span class="nc bnc" id="L336" title="All 2 branches missed.">                    if (inverseFM != null) {</span>
+<span class="nc" id="L337">                        int inverseValIndex = inverseFM.getIndex();</span>
+<span class="nc" id="L338">                        Class&lt;?&gt; inverseType = inverseSm.getMetaData().getField(inverseValIndex).getType();</span>
+<span class="nc" id="L339">                        int ownerIndex = ownerFM.getIndex();</span>
+<span class="nc" id="L340">                        Class&lt;?&gt; ownerType = ownerSm.getMetaData().getField(ownerIndex).getType();</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">                        if (inverseType == ownerType) {</span>
+<span class="nc" id="L342">                            Object inverseVal = inverseSm.fetch(inverseValIndex);</span>
+<span class="nc" id="L343">                            ownerSm.storeField(ownerIndex, inverseVal);</span>
+                        }
+                    }
+                }
+            }
+        }
+<span class="nc" id="L349">    }</span>
+
+    /**
+     * Return true if any of the given column indexes are settable.
+     */
+    protected boolean canSetAny(ColumnIO io, int i, boolean nullValue) {
+<span class="nc bnc" id="L355" title="All 2 branches missed.">        if (io == null)</span>
+<span class="nc" id="L356">            return true;</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">        if (_action == ACTION_INSERT)</span>
+<span class="nc" id="L358">            return io.isAnyInsertable(i, nullValue);</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">        if (_action == ACTION_UPDATE)</span>
+<span class="nc" id="L360">            return io.isAnyUpdatable(i, nullValue);</span>
+<span class="nc" id="L361">        return true;</span>
+    }
+
+    /**
+     * Return true if the given column index is settable.
+     */
+    protected boolean canSet(ColumnIO io, int i, boolean nullValue) {
+<span class="nc bnc" id="L368" title="All 2 branches missed.">        if (io == null)</span>
+<span class="nc" id="L369">            return true;</span>
+<span class="nc bnc" id="L370" title="All 2 branches missed.">        if (_action == ACTION_INSERT)</span>
+<span class="nc" id="L371">            return io.isInsertable(i, nullValue);</span>
+<span class="nc bnc" id="L372" title="All 2 branches missed.">        if (_action == ACTION_UPDATE)</span>
+<span class="nc" id="L373">            return io.isUpdatable(i, nullValue);</span>
+<span class="nc" id="L374">        return true;</span>
+    }
+
+    @Override
+    public void setRelationId(Column col, OpenJPAStateManager sm,
+        RelationId rel)
+        throws SQLException {
+<span class="nc" id="L381">        setObject(col, rel.toRelationDataStoreValue(sm, col),</span>
+<span class="nc" id="L382">            col.getJavaType(), false);</span>
+<span class="nc" id="L383">    }</span>
+
+    /**
+     * Clear a circular relation id.
+     */
+    public void clearRelationId(Column col)
+        throws SQLException {
+<span class="nc" id="L390">        _sql = null;</span>
+<span class="nc" id="L391">        _vals[getSetIndex(col)] = null;</span>
+<span class="nc" id="L392">    }</span>
+
+    @Override
+    public void setArray(Column col, Array val)
+        throws SQLException {
+<span class="nc" id="L397">        setObject(col, val, JavaTypes.ARRAY, false);</span>
+<span class="nc" id="L398">    }</span>
+
+    @Override
+    public void setAsciiStream(Column col, InputStream val, int length)
+        throws SQLException {
+<span class="nc bnc" id="L403" title="All 2 branches missed.">        setObject(col, (val == null) ? null : new Sized(val, length),</span>
+            JavaSQLTypes.ASCII_STREAM, false);
+<span class="nc" id="L405">    }</span>
+
+    @Override
+    public void setBigDecimal(Column col, BigDecimal val)
+        throws SQLException {
+<span class="nc" id="L410">        setObject(col, val, JavaTypes.BIGDECIMAL, false);</span>
+<span class="nc" id="L411">    }</span>
+
+    @Override
+    public void setBigInteger(Column col, BigInteger val)
+        throws SQLException {
+<span class="nc" id="L416">        setObject(col, val, JavaTypes.BIGINTEGER, false);</span>
+<span class="nc" id="L417">    }</span>
+
+    @Override
+    public void setBinaryStream(Column col, InputStream val, int length)
+        throws SQLException {
+<span class="nc bnc" id="L422" title="All 2 branches missed.">        setObject(col, (val == null) ? null : new Sized(val, length),</span>
+            JavaSQLTypes.BINARY_STREAM, false);
+<span class="nc" id="L424">    }</span>
+
+    @Override
+    public void setBlob(Column col, Blob val)
+        throws SQLException {
+<span class="nc" id="L429">        setObject(col, val, JavaSQLTypes.BLOB, false);</span>
+<span class="nc" id="L430">    }</span>
+
+    @Override
+    public void setBoolean(Column col, boolean val)
+        throws SQLException {
+<span class="nc bnc" id="L435" title="All 2 branches missed.">        setObject(col, ((val) ? Boolean.TRUE : Boolean.FALSE),</span>
+            JavaTypes.BOOLEAN, false);
+<span class="nc" id="L437">    }</span>
+
+    @Override
+    public void setByte(Column col, byte val)
+        throws SQLException {
+<span class="nc" id="L442">        setObject(col, new Byte(val), JavaTypes.BYTE, false);</span>
+<span class="nc" id="L443">    }</span>
+
+    @Override
+    public void setBytes(Column col, byte[] val)
+        throws SQLException {
+<span class="nc" id="L448">        setObject(col, val, JavaSQLTypes.BYTES, false);</span>
+<span class="nc" id="L449">    }</span>
+
+    @Override
+    public void setCalendar(Column col, Calendar val)
+        throws SQLException {
+<span class="nc" id="L454">        setObject(col, val, JavaTypes.CALENDAR, false);</span>
+<span class="nc" id="L455">    }</span>
+
+    @Override
+    public void setChar(Column col, char val)
+        throws SQLException {
+<span class="nc" id="L460">        setObject(col, new Character(val), JavaTypes.CHAR, false);</span>
+<span class="nc" id="L461">    }</span>
+
+    @Override
+    public void setCharacterStream(Column col, Reader val, int length)
+        throws SQLException {
+<span class="nc bnc" id="L466" title="All 2 branches missed.">        setObject(col, (val == null) ? null : new Sized(val, length),</span>
+            JavaSQLTypes.CHAR_STREAM, false);
+<span class="nc" id="L468">    }</span>
+
+    @Override
+    public void setClob(Column col, Clob val)
+        throws SQLException {
+<span class="nc" id="L473">        setObject(col, val, JavaSQLTypes.CLOB, false);</span>
+<span class="nc" id="L474">    }</span>
+
+    @Override
+    public void setDate(Column col, Date val)
+        throws SQLException {
+<span class="nc" id="L479">        setObject(col, val, JavaTypes.DATE, false);</span>
+<span class="nc" id="L480">    }</span>
+
+    @Override
+    public void setDate(Column col, java.sql.Date val, Calendar cal)
+        throws SQLException {
+        Object obj;
+<span class="nc bnc" id="L486" title="All 4 branches missed.">        if (val == null || cal == null)</span>
+<span class="nc" id="L487">            obj = val;</span>
+        else
+<span class="nc" id="L489">            obj = new Calendard(val, cal);</span>
+<span class="nc" id="L490">        setObject(col, obj, JavaSQLTypes.SQL_DATE, false);</span>
+<span class="nc" id="L491">    }</span>
+
+    @Override
+    public void setDouble(Column col, double val)
+        throws SQLException {
+<span class="nc" id="L496">        setObject(col, new Double(val), JavaTypes.DOUBLE, false);</span>
+<span class="nc" id="L497">    }</span>
+
+    @Override
+    public void setFloat(Column col, float val)
+        throws SQLException {
+<span class="nc" id="L502">        setObject(col, new Float(val), JavaTypes.FLOAT, false);</span>
+<span class="nc" id="L503">    }</span>
+
+    @Override
+    public void setInt(Column col, int val)
+        throws SQLException {
+<span class="nc" id="L508">        setObject(col, val, JavaTypes.INT, false);</span>
+<span class="nc" id="L509">    }</span>
+
+    @Override
+    public void setLong(Column col, long val)
+        throws SQLException {
+<span class="nc" id="L514">        setObject(col, val, JavaTypes.LONG, false);</span>
+<span class="nc" id="L515">    }</span>
+
+    @Override
+    public void setLocale(Column col, Locale val)
+        throws SQLException {
+<span class="nc" id="L520">        setObject(col, val, JavaTypes.LOCALE, false);</span>
+<span class="nc" id="L521">    }</span>
+
+    @Override
+    public void setNull(Column col)
+        throws SQLException {
+<span class="nc" id="L526">        setNull(col, false);</span>
+<span class="nc" id="L527">    }</span>
+
+    @Override
+    public void setNull(Column col, boolean overrideDefault)
+        throws SQLException {
+<span class="nc" id="L532">        setObject(col, null, col.getJavaType(), overrideDefault);</span>
+<span class="nc" id="L533">    }</span>
+
+    @Override
+    public void setNumber(Column col, Number val)
+        throws SQLException {
+<span class="nc" id="L538">        setObject(col, val, JavaTypes.NUMBER, false);</span>
+<span class="nc" id="L539">    }</span>
+
+    @Override
+    public void setRaw(Column col, String val)
+        throws SQLException {
+<span class="nc" id="L544">        setObject(col, val, RAW, false);</span>
+<span class="nc" id="L545">    }</span>
+
+    @Override
+    public void setShort(Column col, short val)
+        throws SQLException {
+<span class="nc" id="L550">        setObject(col, new Short(val), JavaTypes.SHORT, false);</span>
+<span class="nc" id="L551">    }</span>
+
+    @Override
+    public void setString(Column col, String val)
+        throws SQLException {
+<span class="nc" id="L556">        setObject(col, val, JavaTypes.STRING, false);</span>
+<span class="nc" id="L557">    }</span>
+
+    @Override
+    public void setTime(Column col, Time val, Calendar cal)
+        throws SQLException {
+        Object obj;
+<span class="nc bnc" id="L563" title="All 4 branches missed.">        if (val == null || cal == null)</span>
+<span class="nc" id="L564">            obj = val;</span>
+        else
+<span class="nc" id="L566">            obj = new Calendard(val, cal);</span>
+<span class="nc" id="L567">        setObject(col, obj, JavaSQLTypes.TIME, false);</span>
+<span class="nc" id="L568">    }</span>
+
+    @Override
+    public void setTimestamp(Column col, Timestamp val, Calendar cal)
+        throws SQLException {
+        Object obj;
+<span class="nc bnc" id="L574" title="All 4 branches missed.">        if (val == null || cal == null)</span>
+<span class="nc" id="L575">            obj = val;</span>
+        else
+<span class="nc" id="L577">            obj = new Calendard(val, cal);</span>
+<span class="nc" id="L578">        setObject(col, obj, JavaSQLTypes.TIMESTAMP, false);</span>
+<span class="nc" id="L579">    }</span>
+
+    @Override
+    public void setObject(Column col, Object val)
+        throws SQLException {
+<span class="nc bnc" id="L584" title="All 2 branches missed.">        if (val instanceof Raw)</span>
+<span class="nc" id="L585">            setObject(col, val, RAW, false);</span>
+        else
+<span class="nc" id="L587">            setObject(col, val, col.getJavaType(), false);</span>
+<span class="nc" id="L588">    }</span>
+
+    @Override
+    public void whereArray(Column col, Array val)
+        throws SQLException {
+<span class="nc" id="L593">        whereObject(col, val, JavaSQLTypes.SQL_ARRAY);</span>
+<span class="nc" id="L594">    }</span>
+
+    @Override
+    public void whereAsciiStream(Column col, InputStream val, int length)
+        throws SQLException {
+<span class="nc bnc" id="L599" title="All 2 branches missed.">        whereObject(col, (val == null) ? null : new Sized(val, length),</span>
+            JavaSQLTypes.ASCII_STREAM);
+<span class="nc" id="L601">    }</span>
+
+    @Override
+    public void whereBigDecimal(Column col, BigDecimal val)
+        throws SQLException {
+<span class="nc" id="L606">        whereObject(col, val, JavaTypes.BIGDECIMAL);</span>
+<span class="nc" id="L607">    }</span>
+
+    @Override
+    public void whereBigInteger(Column col, BigInteger val)
+        throws SQLException {
+<span class="nc" id="L612">        whereObject(col, val, JavaTypes.BIGINTEGER);</span>
+<span class="nc" id="L613">    }</span>
+
+    @Override
+    public void whereBinaryStream(Column col, InputStream val, int length)
+        throws SQLException {
+<span class="nc bnc" id="L618" title="All 2 branches missed.">        whereObject(col, (val == null) ? null : new Sized(val, length),</span>
+            JavaSQLTypes.BINARY_STREAM);
+<span class="nc" id="L620">    }</span>
+
+    @Override
+    public void whereBlob(Column col, Blob val)
+        throws SQLException {
+<span class="nc" id="L625">        whereObject(col, val, JavaSQLTypes.BLOB);</span>
+<span class="nc" id="L626">    }</span>
+
+    @Override
+    public void whereBoolean(Column col, boolean val)
+        throws SQLException {
+<span class="nc bnc" id="L631" title="All 2 branches missed.">        whereObject(col, ((val) ? Boolean.TRUE : Boolean.FALSE),</span>
+            JavaTypes.BOOLEAN);
+<span class="nc" id="L633">    }</span>
+
+    @Override
+    public void whereByte(Column col, byte val)
+        throws SQLException {
+<span class="nc" id="L638">        whereObject(col, new Byte(val), JavaTypes.BYTE);</span>
+<span class="nc" id="L639">    }</span>
+
+    @Override
+    public void whereBytes(Column col, byte[] val)
+        throws SQLException {
+<span class="nc" id="L644">        whereObject(col, val, JavaSQLTypes.BYTES);</span>
+<span class="nc" id="L645">    }</span>
+
+    @Override
+    public void whereCalendar(Column col, Calendar val)
+        throws SQLException {
+<span class="nc" id="L650">        whereObject(col, val, JavaTypes.CALENDAR);</span>
+<span class="nc" id="L651">    }</span>
+
+    @Override
+    public void whereChar(Column col, char val)
+        throws SQLException {
+<span class="nc" id="L656">        whereObject(col, new Character(val), JavaTypes.CHAR);</span>
+<span class="nc" id="L657">    }</span>
+
+    @Override
+    public void whereCharacterStream(Column col, Reader val, int length)
+        throws SQLException {
+<span class="nc bnc" id="L662" title="All 2 branches missed.">        whereObject(col, (val == null) ? null : new Sized(val, length),</span>
+            JavaSQLTypes.CHAR_STREAM);
+<span class="nc" id="L664">    }</span>
+
+    @Override
+    public void whereClob(Column col, Clob val)
+        throws SQLException {
+<span class="nc" id="L669">        whereObject(col, val, JavaSQLTypes.CLOB);</span>
+<span class="nc" id="L670">    }</span>
+
+    @Override
+    public void whereDate(Column col, Date val)
+        throws SQLException {
+<span class="nc" id="L675">        whereObject(col, val, JavaTypes.DATE);</span>
+<span class="nc" id="L676">    }</span>
+
+    @Override
+    public void whereDate(Column col, java.sql.Date val, Calendar cal)
+        throws SQLException {
+        Object obj;
+<span class="nc bnc" id="L682" title="All 4 branches missed.">        if (val == null || cal == null)</span>
+<span class="nc" id="L683">            obj = val;</span>
+        else
+<span class="nc" id="L685">            obj = new Calendard(val, cal);</span>
+<span class="nc" id="L686">        whereObject(col, obj, JavaSQLTypes.SQL_DATE);</span>
+<span class="nc" id="L687">    }</span>
+
+    @Override
+    public void whereDouble(Column col, double val)
+        throws SQLException {
+<span class="nc" id="L692">        whereObject(col, new Double(val), JavaTypes.DOUBLE);</span>
+<span class="nc" id="L693">    }</span>
+
+    @Override
+    public void whereFloat(Column col, float val)
+        throws SQLException {
+<span class="nc" id="L698">        whereObject(col, new Float(val), JavaTypes.FLOAT);</span>
+<span class="nc" id="L699">    }</span>
+
+    @Override
+    public void whereInt(Column col, int val)
+        throws SQLException {
+<span class="nc" id="L704">        whereObject(col, val, JavaTypes.INT);</span>
+<span class="nc" id="L705">    }</span>
+
+    @Override
+    public void whereLong(Column col, long val)
+        throws SQLException {
+<span class="nc" id="L710">        whereObject(col, val, JavaTypes.LONG);</span>
+<span class="nc" id="L711">    }</span>
+
+    @Override
+    public void whereLocale(Column col, Locale val)
+        throws SQLException {
+<span class="nc" id="L716">        whereObject(col, val, JavaTypes.LOCALE);</span>
+<span class="nc" id="L717">    }</span>
+
+    @Override
+    public void whereNull(Column col)
+        throws SQLException {
+<span class="nc" id="L722">        whereObject(col, null, col.getJavaType());</span>
+<span class="nc" id="L723">    }</span>
+
+    @Override
+    public void whereNumber(Column col, Number val)
+        throws SQLException {
+<span class="nc" id="L728">        whereObject(col, val, JavaTypes.NUMBER);</span>
+<span class="nc" id="L729">    }</span>
+
+    @Override
+    public void whereRaw(Column col, String val)
+        throws SQLException {
+<span class="nc" id="L734">        whereObject(col, val, RAW);</span>
+<span class="nc" id="L735">    }</span>
+
+    @Override
+    public void whereShort(Column col, short val)
+        throws SQLException {
+<span class="nc" id="L740">        whereObject(col, new Short(val), JavaTypes.SHORT);</span>
+<span class="nc" id="L741">    }</span>
+
+    @Override
+    public void whereString(Column col, String val)
+        throws SQLException {
+<span class="nc" id="L746">        whereObject(col, val, JavaTypes.STRING);</span>
+<span class="nc" id="L747">    }</span>
+
+    @Override
+    public void whereTime(Column col, Time val, Calendar cal)
+        throws SQLException {
+        Object obj;
+<span class="nc bnc" id="L753" title="All 4 branches missed.">        if (val == null || cal == null)</span>
+<span class="nc" id="L754">            obj = val;</span>
+        else
+<span class="nc" id="L756">            obj = new Calendard(val, cal);</span>
+<span class="nc" id="L757">        whereObject(col, obj, JavaSQLTypes.TIME);</span>
+<span class="nc" id="L758">    }</span>
+
+    @Override
+    public void whereTimestamp(Column col, Timestamp val, Calendar cal)
+        throws SQLException {
+        Object obj;
+<span class="nc bnc" id="L764" title="All 4 branches missed.">        if (val == null || cal == null)</span>
+<span class="nc" id="L765">            obj = val;</span>
+        else
+<span class="nc" id="L767">            obj = new Calendard(val, cal);</span>
+<span class="nc" id="L768">        whereObject(col, obj, JavaSQLTypes.TIMESTAMP);</span>
+<span class="nc" id="L769">    }</span>
+
+    @Override
+    public void whereObject(Column col, Object val)
+        throws SQLException {
+<span class="nc bnc" id="L774" title="All 2 branches missed.">        if (val instanceof Raw)</span>
+<span class="nc" id="L775">            whereObject(col, val, RAW);</span>
+        else
+<span class="nc" id="L777">            whereObject(col, val, col.getJavaType());</span>
+<span class="nc" id="L778">    }</span>
+
+    /**
+     * All set column methods delegate to this one. Set the given object
+     * unless this is an insert and the given column is auto-assigned.
+     */
+    protected void setObject(Column col, Object val, int metaType,
+        boolean overrideDefault)
+        throws SQLException {
+        // never set auto increment columns and honor column defaults
+<span class="nc bnc" id="L788" title="All 2 branches missed.">        if (_action == ACTION_INSERT) {</span>
+<span class="nc bnc" id="L789" title="All 2 branches missed.">            if (col.isAutoAssigned()) {</span>
+                // OPENJPA-349: validate because this can be the only column
+<span class="nc" id="L791">                setValid(true);</span>
+<span class="nc" id="L792">                return;</span>
+            }
+<span class="nc bnc" id="L794" title="All 4 branches missed.">            if (!overrideDefault &amp;&amp; val == null</span>
+<span class="nc bnc" id="L795" title="All 2 branches missed.">                &amp;&amp; col.getDefaultString() != null)</span>
+<span class="nc" id="L796">                return;</span>
+        }
+<span class="nc" id="L798">        flush(col, val, metaType, true);</span>
+<span class="nc" id="L799">    }</span>
+
+    /**
+     * All where column methods delegate to this one.
+     */
+    protected void whereObject(Column col, Object val, int metaType)
+        throws SQLException {
+<span class="nc" id="L806">        flush(col, val, metaType, false);</span>
+<span class="nc" id="L807">    }</span>
+
+    /**
+     * Flush the given value as a set or where condition.
+     */
+    private void flush(Column col, Object val, int metaType, boolean set) {
+<span class="nc bnc" id="L813" title="All 2 branches missed.">        int idx = (set) ? getSetIndex(col) : getWhereIndex(col);</span>
+<span class="nc" id="L814">        _types[idx] = metaType;</span>
+<span class="nc bnc" id="L815" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L816">            _vals[idx] = NULL;</span>
+        else
+<span class="nc" id="L818">            _vals[idx] = val;</span>
+<span class="nc bnc" id="L819" title="All 4 branches missed.">        if (set || _action == ACTION_DELETE)</span>
+<span class="nc" id="L820">            setValid(true);</span>
+<span class="nc" id="L821">    }</span>
+
+    /**
+     * Return the SQL for the operation on this row.
+     */
+    public String getSQL(DBDictionary dict) {
+<span class="nc bnc" id="L827" title="All 2 branches missed.">        if (!isValid())</span>
+<span class="nc" id="L828">            return &quot;&quot;;</span>
+<span class="nc bnc" id="L829" title="All 2 branches missed.">        if (_sql == null)</span>
+<span class="nc" id="L830">            _sql = generateSQL(dict);</span>
+<span class="nc" id="L831">        return _sql;</span>
+    }
+
+    /**
+     * Generate the SQL for this row; the result of this method is cached.
+     */
+    protected String generateSQL(DBDictionary dict) {
+<span class="nc bnc" id="L838" title="All 3 branches missed.">        switch (getAction()) {</span>
+            case ACTION_UPDATE:
+<span class="nc" id="L840">                return getUpdateSQL(dict);</span>
+            case ACTION_INSERT:
+<span class="nc" id="L842">                return getInsertSQL(dict);</span>
+            default:
+<span class="nc" id="L844">                return getDeleteSQL(dict);</span>
+        }
+    }
+
+    /**
+     * Return the SQL for a prepared statement update on this row.
+     */
+    private String getUpdateSQL(DBDictionary dict) {
+<span class="nc" id="L852">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L853">        buf.append(&quot;UPDATE &quot;).append(dict.getFullName(getTable(), false)).</span>
+<span class="nc" id="L854">            append(&quot; SET &quot;);</span>
+
+<span class="nc" id="L856">        boolean hasVal = false;</span>
+<span class="nc bnc" id="L857" title="All 2 branches missed.">        for (int i = 0; i &lt; _cols.length; i++) {</span>
+<span class="nc bnc" id="L858" title="All 2 branches missed.">            if (_vals[i] == null)</span>
+<span class="nc" id="L859">                continue;</span>
+
+<span class="nc bnc" id="L861" title="All 2 branches missed.">            if (hasVal)</span>
+<span class="nc" id="L862">                buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L863">            buf.append(dict.getColumnDBName(_cols[i]));</span>
+<span class="nc bnc" id="L864" title="All 2 branches missed.">            if (_types[i] == RAW)</span>
+<span class="nc" id="L865">                buf.append(&quot; = &quot;).append(_vals[i]);</span>
+            else {
+<span class="nc" id="L867">                buf.append(&quot; = &quot;);</span>
+<span class="nc" id="L868">                buf.append(dict.getMarkerForInsertUpdate(_cols[i], _vals[i]));</span>
+            }
+<span class="nc" id="L870">            hasVal = true;</span>
+        }
+
+<span class="nc" id="L873">        appendWhere(buf, dict);</span>
+<span class="nc" id="L874">        return buf.toString();</span>
+    }
+
+    /**
+     * Return the SQL for a prepared statement insert on this row.
+     */
+    private String getInsertSQL(DBDictionary dict) {
+<span class="nc" id="L881">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L882">        StringBuilder vals = new StringBuilder();</span>
+<span class="nc" id="L883">        buf.append(&quot;INSERT INTO &quot;).</span>
+<span class="nc" id="L884">            append(dict.getFullName(getTable(), false)).append(&quot; (&quot;);</span>
+
+<span class="nc" id="L886">        boolean hasVal = false;</span>
+<span class="nc bnc" id="L887" title="All 2 branches missed.">        for (int i = 0; i &lt; _cols.length; i++) {</span>
+<span class="nc bnc" id="L888" title="All 2 branches missed.">            if (_vals[i] == null)</span>
+<span class="nc" id="L889">                continue;</span>
+
+<span class="nc bnc" id="L891" title="All 2 branches missed.">            if (hasVal) {</span>
+<span class="nc" id="L892">                buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L893">                vals.append(&quot;, &quot;);</span>
+            }
+<span class="nc" id="L895">            buf.append(dict.getColumnDBName(_cols[i]));</span>
+<span class="nc bnc" id="L896" title="All 2 branches missed.">            if (_types[i] == RAW)</span>
+<span class="nc" id="L897">                vals.append(_vals[i]);</span>
+            else
+<span class="nc" id="L899">                vals.append(dict.getMarkerForInsertUpdate(_cols[i], _vals[i]));</span>
+<span class="nc" id="L900">            hasVal = true;</span>
+        }
+
+<span class="nc" id="L903">        buf.append(&quot;) VALUES (&quot;).append(vals.toString()).append(&quot;)&quot;);</span>
+<span class="nc" id="L904">        return buf.toString();</span>
+    }
+
+    /**
+     * Return the SQL for a prepared statement delete on this row.
+     */
+    private String getDeleteSQL(DBDictionary dict) {
+<span class="nc" id="L911">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L912">        buf.append(&quot;DELETE FROM &quot;).</span>
+<span class="nc" id="L913">            append(dict.getFullName(getTable(), false));</span>
+<span class="nc" id="L914">        appendWhere(buf, dict);</span>
+<span class="nc" id="L915">        return buf.toString();</span>
+    }
+
+    /**
+     * Appends the where clause onto the given sql buffer.
+     */
+    private void appendWhere(StringBuilder buf, DBDictionary dict) {
+<span class="nc" id="L922">        boolean hasWhere = false;</span>
+<span class="nc bnc" id="L923" title="All 2 branches missed.">        for (int i = 0; i &lt; _cols.length; i++) {</span>
+<span class="nc bnc" id="L924" title="All 2 branches missed.">            if (_vals[getWhereIndex(_cols[i])] == null)</span>
+<span class="nc" id="L925">                continue;</span>
+
+<span class="nc bnc" id="L927" title="All 2 branches missed.">            if (!hasWhere)</span>
+<span class="nc" id="L928">                buf.append(&quot; WHERE &quot;);</span>
+            else
+<span class="nc" id="L930">                buf.append(&quot; AND &quot;);</span>
+
+            // Get platform specific version column name
+<span class="nc bnc" id="L933" title="All 2 branches missed.">            if (_cols[i].getVersionStrategy() != null)</span>
+<span class="nc" id="L934">               buf.append(dict.toDBName(dict.getVersionColumn(_cols[i], _cols[i]</span>
+<span class="nc" id="L935">                   .getTableIdentifier()))).append(&quot; = ?&quot;);</span>
+            // sqlserver seems to have problems using null parameters in the
+            // where clause
+<span class="nc bnc" id="L938" title="All 2 branches missed.">            else if (_vals[getWhereIndex(_cols[i])] == NULL)</span>
+<span class="nc" id="L939">                buf.append(dict.getColumnDBName(_cols[i])).append(&quot; IS NULL&quot;);</span>
+<span class="nc bnc" id="L940" title="All 2 branches missed.">            else if (_types[i] == RAW)</span>
+<span class="nc" id="L941">                buf.append(dict.getColumnDBName(_cols[i])).append(&quot; = &quot;).append(_vals[i]);</span>
+            else
+<span class="nc" id="L943">                buf.append(dict.getColumnDBName(_cols[i])).append(&quot; = ?&quot;);</span>
+<span class="nc" id="L944">            hasWhere = true;</span>
+        }
+<span class="nc" id="L946">    }</span>
+
+    /**
+     * The number of parameters that will be set for this row.
+     */
+    public int getParameterCount() {
+<span class="nc" id="L952">        return _vals.length;</span>
+    }
+
+    /**
+     * Flush the row's values to the given prepared statement.
+     */
+    public void flush(PreparedStatement stmnt, DBDictionary dict,
+        JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L961">        flush(stmnt, 1, dict, store);</span>
+<span class="nc" id="L962">    }</span>
+
+    /**
+     * Flush the row's values to the given prepared statement.
+     */
+    public void flush(PreparedStatement stmnt, int idx, DBDictionary dict,
+        JDBCStore store)
+        throws SQLException {
+
+        // this simple method works because the SQL is always prepared
+        // based on the indexing of the columns in the table object -- the
+        // same ordering we use when storing values and meta types. skip
+        // updates when setting params for DELETEs; the updates are just there
+        // to let us eval fk constraints
+<span class="nc bnc" id="L976" title="All 2 branches missed.">        int i = (getAction() == ACTION_DELETE) ? _cols.length: 0;</span>
+        Column col;
+        Object val;
+<span class="nc" id="L979">        int half = _vals.length / 2;</span>
+<span class="nc bnc" id="L980" title="All 2 branches missed.">        for (; i &lt; _vals.length; i++) {</span>
+<span class="nc bnc" id="L981" title="All 2 branches missed.">            if (_vals[i] == null)</span>
+<span class="nc" id="L982">                continue;</span>
+
+            // we don't set null params in the WHERE clause; we use the NULL
+            // keyword instead to satisfy sqlserver
+<span class="nc bnc" id="L986" title="All 6 branches missed.">            if (_vals[i] == NULL &amp;&amp; getAction() != ACTION_INSERT &amp;&amp; i &gt;= half)</span>
+<span class="nc" id="L987">                continue;</span>
+
+            // if this is an update the vals array will be 2 x the cols
+            // array length; it repeats for where values
+<span class="nc bnc" id="L991" title="All 2 branches missed.">            if (i &lt; _cols.length)</span>
+<span class="nc" id="L992">                col = _cols[i];</span>
+            else
+<span class="nc" id="L994">                col = _cols[i - _cols.length];</span>
+
+<span class="nc" id="L996">            val = _vals[i];</span>
+<span class="nc bnc" id="L997" title="All 2 branches missed.">            if (val == NULL)</span>
+<span class="nc" id="L998">                val = null;</span>
+
+<span class="nc bnc" id="L1000" title="All 4 branches missed.">            if (val == null || _types[i] != RAW) {</span>
+<span class="nc" id="L1001">                dict.setTyped(stmnt, idx, val, col, _types[i], store);</span>
+<span class="nc" id="L1002">                idx++;</span>
+            }
+        }
+<span class="nc" id="L1005">        setFlushed(true);</span>
+<span class="nc" id="L1006">    }</span>
+
+    /**
+     * The array value array index for the given column's value.
+     */
+    private int getSetIndex(Column col) {
+<span class="nc" id="L1012">        return col.getIndex();</span>
+    }
+
+    /**
+     * The array value array index for the given column's value.
+     */
+    private int getWhereIndex(Column col) {
+<span class="nc" id="L1019">        return col.getIndex() + _cols.length;</span>
+    }
+
+    /**
+     * Performs a proper deep clone.
+     */
+    @Override
+    public Object clone() {
+<span class="nc" id="L1027">        RowImpl clone = newInstance(getColumns(), getAction());</span>
+<span class="nc" id="L1028">        copyInto(clone, false);</span>
+<span class="nc" id="L1029">        return clone;</span>
+    }
+
+    /**
+     * Return a new row.
+     */
+    protected RowImpl newInstance(Column[] cols, int action) {
+<span class="nc" id="L1036">        return new RowImpl(cols, action);</span>
+    }
+
+    /**
+     * Copy all values from this row into the given one.
+     *
+     * @param whereOnly if true, only copy where conditions
+     */
+    public void copyInto(RowImpl row, boolean whereOnly) {
+<span class="nc" id="L1045">        int action = getAction();</span>
+<span class="nc" id="L1046">        int rowAction = row.getAction();</span>
+
+        int start;
+        int len;
+<span class="nc bnc" id="L1050" title="All 2 branches missed.">        if (whereOnly) {</span>
+<span class="nc bnc" id="L1051" title="All 4 branches missed.">            if (action == ACTION_INSERT || rowAction == ACTION_INSERT)</span>
+<span class="nc" id="L1052">                start = len = 0;</span>
+            else
+<span class="nc" id="L1054">                start = len = _vals.length / 2;</span>
+        } else {
+<span class="nc" id="L1056">            start = 0;</span>
+<span class="nc bnc" id="L1057" title="All 4 branches missed.">            if (rowAction == ACTION_INSERT &amp;&amp; action != ACTION_INSERT)</span>
+<span class="nc" id="L1058">                len = _vals.length / 2;</span>
+            else
+<span class="nc" id="L1060">                len = _vals.length;</span>
+        }
+
+<span class="nc" id="L1063">        System.arraycopy(_vals, start, row._vals, start, len);</span>
+<span class="nc" id="L1064">        System.arraycopy(_types, start, row._types, start, len);</span>
+<span class="nc bnc" id="L1065" title="All 2 branches missed.">        if (isValid())</span>
+<span class="nc" id="L1066">            row.setValid(true);</span>
+<span class="nc" id="L1067">    }</span>
+
+    public Object[] getVals() {
+<span class="nc" id="L1070">        return _vals;</span>
+    }
+
+    public int[] getTypes() {
+<span class="nc" id="L1074">        return _types;</span>
+    }
+
+    public boolean isFlushed() {
+<span class="nc" id="L1078">        return _isFlushed;</span>
+    }
+
+    public void setFlushed(boolean isFlushed) {
+<span class="nc" id="L1082">        _isFlushed = isFlushed;</span>
+<span class="nc" id="L1083">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

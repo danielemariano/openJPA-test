@@ -1,0 +1,963 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ForeignKey.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">ForeignKey.java</span></div><h1>ForeignKey.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Objects;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringDistance;
+import org.apache.openjpa.util.InvalidStateException;
+
+/**
+ * Represents a database foreign key; may be a logical key with no
+ * database representation. This class can also represent a partial key,
+ * aligning with {@link DatabaseMetaData}.
+ *
+ * @author Abe White
+ */
+public class ForeignKey extends Constraint {
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Logical foreign key; links columns, but does not perform any action
+     * when the joined primary key columns are modified.
+     */
+    public static final int ACTION_NONE = 1;
+
+    /**
+     * Throw an exception if joined primary key columns are modified.
+     */
+    public static final int ACTION_RESTRICT = 2;
+
+    /**
+     * Cascade any modification of the joined primary key columns to
+     * this table. If the joined primary key row is deleted, the row in this
+     * table will also be deleted.
+     */
+    public static final int ACTION_CASCADE = 3;
+
+    /**
+     * Null the local columns if the joined primary key columns are modified.
+     */
+    public static final int ACTION_NULL = 4;
+
+    /**
+     * Set the local columns to their default values if the primary key
+     * columns are modified.
+     */
+    public static final int ACTION_DEFAULT = 5;
+
+<span class="nc" id="L75">    private static final Localizer _loc =</span>
+<span class="nc" id="L76">        Localizer.forPackage(ForeignKey.class);</span>
+
+<span class="nc" id="L78">    private DBIdentifier _pkTableName = DBIdentifier.NULL;</span>
+<span class="nc" id="L79">    private DBIdentifier _pkSchemaName = DBIdentifier.NULL;</span>
+<span class="nc" id="L80">    private DBIdentifier _pkColumnName = DBIdentifier.NULL;</span>
+<span class="nc" id="L81">    private int _seq = 0;</span>
+
+<span class="nc" id="L83">    private LinkedHashMap _joins = null;</span>
+<span class="nc" id="L84">    private LinkedHashMap _joinsPK = null;</span>
+<span class="nc" id="L85">    private LinkedHashMap _consts = null;</span>
+<span class="nc" id="L86">    private LinkedHashMap _constsPK = null;</span>
+<span class="nc" id="L87">    private int _delAction = ACTION_NONE;</span>
+<span class="nc" id="L88">    private int _upAction = ACTION_NONE;</span>
+<span class="nc" id="L89">    private int _index = 0;</span>
+
+    // cached items
+<span class="nc" id="L92">    private Column[] _locals = null;</span>
+<span class="nc" id="L93">    private Column[] _pks = null;</span>
+<span class="nc" id="L94">    private Object[] _constVals = null;</span>
+<span class="nc" id="L95">    private Column[] _constCols = null;</span>
+<span class="nc" id="L96">    private Object[] _constValsPK = null;</span>
+<span class="nc" id="L97">    private Column[] _constColsPK = null;</span>
+<span class="nc" id="L98">    private Table _pkTable = null;</span>
+<span class="nc" id="L99">    private Boolean _autoAssign = null;</span>
+
+    /**
+     * Return the foreign key action constant for the given action name.
+     */
+    public static int getAction(String name) {
+<span class="nc bnc" id="L105" title="All 4 branches missed.">        if (name == null || &quot;none&quot;.equalsIgnoreCase(name))</span>
+<span class="nc" id="L106">            return ACTION_NONE;</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (&quot;cascade&quot;.equalsIgnoreCase(name))</span>
+<span class="nc" id="L108">            return ACTION_CASCADE;</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">        if (&quot;default&quot;.equalsIgnoreCase(name))</span>
+<span class="nc" id="L110">            return ACTION_DEFAULT;</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">        if (&quot;restrict&quot;.equalsIgnoreCase(name)</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">            || &quot;exception&quot;.equalsIgnoreCase(name))</span>
+<span class="nc" id="L113">            return ACTION_RESTRICT;</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (&quot;null&quot;.equalsIgnoreCase(name))</span>
+<span class="nc" id="L115">            return ACTION_NULL;</span>
+
+        // not a recognized action; check for typo
+<span class="nc" id="L118">        List recognized = Arrays.asList(new String[]{ &quot;none&quot;, &quot;exception&quot;,</span>
+            &quot;restrict&quot;, &quot;cascade&quot;, &quot;null&quot;, &quot;default&quot;, });
+<span class="nc" id="L120">        String closest = StringDistance.getClosestLevenshteinDistance(name,</span>
+            recognized, .5F);
+
+        String msg;
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        if (closest != null)</span>
+<span class="nc" id="L125">            msg = _loc.get(&quot;bad-fk-action-hint&quot;, name, closest, recognized)</span>
+<span class="nc" id="L126">                .getMessage();</span>
+        else
+<span class="nc" id="L128">            msg = _loc.get(&quot;bad-fk-action&quot;, name, recognized).getMessage();</span>
+<span class="nc" id="L129">        throw new IllegalArgumentException(msg);</span>
+    }
+
+    /**
+     * Return the foreign key action name for the given action constant.
+     */
+    public static String getActionName(int action) {
+<span class="nc bnc" id="L136" title="All 6 branches missed.">        switch (action) {</span>
+            case ACTION_NONE:
+<span class="nc" id="L138">                return &quot;none&quot;;</span>
+            case ACTION_RESTRICT:
+<span class="nc" id="L140">                return &quot;restrict&quot;;</span>
+            case ACTION_CASCADE:
+<span class="nc" id="L142">                return &quot;cascade&quot;;</span>
+            case ACTION_DEFAULT:
+<span class="nc" id="L144">                return &quot;default&quot;;</span>
+            case ACTION_NULL:
+<span class="nc" id="L146">                return &quot;null&quot;;</span>
+            default:
+<span class="nc" id="L148">                throw new IllegalArgumentException(String.valueOf(action));</span>
+        }
+    }
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L155">    public ForeignKey() {</span>
+<span class="nc" id="L156">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param name the foreign key name, if any
+     * @param table the local table of the foreign key
+     * @deprecated
+     */
+    @Deprecated
+    public ForeignKey(String name, Table table) {
+<span class="nc" id="L167">        super(name, table);</span>
+<span class="nc" id="L168">    }</span>
+
+    public ForeignKey(DBIdentifier name, Table table) {
+<span class="nc" id="L171">        super(name, table);</span>
+<span class="nc" id="L172">    }</span>
+
+    @Override
+    public boolean isLogical() {
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        return _delAction == ACTION_NONE;</span>
+    }
+
+    /**
+     * Whether the primary key columns of this key are auto-incrementing, or
+     * whether they themselves are members of a foreign key who's primary key
+     * is auto-incrementing (recursing to arbitrary depth).
+     */
+    public boolean isPrimaryKeyAutoAssigned() {
+<span class="nc bnc" id="L185" title="All 2 branches missed.">        if (_autoAssign != null)</span>
+<span class="nc" id="L186">            return _autoAssign.booleanValue();</span>
+<span class="nc" id="L187">        return isPrimaryKeyAutoAssigned(new ArrayList(3));</span>
+    }
+
+    /**
+     * Helper to calculate whether this foreign key depends on auto-assigned
+     * columns.  Recurses appropriately if the primary key columns this key
+     * joins to are themselves members of a foreign key that is dependent on
+     * auto-assigned columns.  Caches calculated auto-assign value as a side
+     * effect.
+     *
+     * @param seen track seen foreign keys to prevent infinite recursion in
+     * the case of foreign key cycles
+     */
+    private boolean isPrimaryKeyAutoAssigned(List seen) {
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (_autoAssign != null)</span>
+<span class="nc" id="L202">            return _autoAssign.booleanValue();</span>
+
+<span class="nc" id="L204">        Column[] cols = getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if (cols.length == 0) {</span>
+<span class="nc" id="L206">            _autoAssign = Boolean.FALSE;</span>
+<span class="nc" id="L207">            return false;</span>
+        }
+
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">            if (cols[i].isAutoAssigned()) {</span>
+<span class="nc" id="L212">                _autoAssign = Boolean.TRUE;</span>
+<span class="nc" id="L213">                return true;</span>
+            }
+        }
+
+<span class="nc" id="L217">        ForeignKey[] fks = _pkTable.getForeignKeys();</span>
+<span class="nc" id="L218">        seen.add(this);</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">            for (int j = 0; j &lt; fks.length; j++) {</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">                if (!fks[j].containsColumn(cols[i]))</span>
+<span class="nc" id="L222">                    continue;</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">                if (!seen.contains(fks[j])</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">                    &amp;&amp; fks[j].isPrimaryKeyAutoAssigned(seen)) {</span>
+<span class="nc" id="L225">                    _autoAssign = Boolean.TRUE;</span>
+<span class="nc" id="L226">                    return true;</span>
+                }
+            }
+        }
+
+<span class="nc" id="L231">        _autoAssign = Boolean.FALSE;</span>
+<span class="nc" id="L232">        return false;</span>
+    }
+
+    /**
+     * The name of the primary key table.
+     * @deprecated
+     */
+    @Deprecated
+    public String getPrimaryKeyTableName() {
+<span class="nc" id="L241">        return getPrimaryKeyTableIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getPrimaryKeyTableIdentifier() {
+<span class="nc" id="L245">        Table table = getPrimaryKeyTable();</span>
+<span class="nc bnc" id="L246" title="All 2 branches missed.">        if (table != null)</span>
+<span class="nc" id="L247">            return table.getIdentifier();</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        return _pkTableName == null ? DBIdentifier.NULL : _pkTableName;</span>
+    }
+
+    /**
+     * The name of the primary key table. You can only set the primary
+     * key table name on foreign keys that have not already been joined.
+     * @deprecated
+     */
+    @Deprecated
+    public void setPrimaryKeyTableName(String pkTableName) {
+<span class="nc" id="L258">        setPrimaryKeyTableIdentifier(DBIdentifier.newTable(pkTableName));</span>
+<span class="nc" id="L259">    }</span>
+
+    public void setPrimaryKeyTableIdentifier(DBIdentifier pkTableName) {
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        if (getPrimaryKeyTable() != null)</span>
+<span class="nc" id="L263">            throw new IllegalStateException();</span>
+<span class="nc" id="L264">        _pkTableName = pkTableName;</span>
+<span class="nc" id="L265">    }</span>
+
+    /**
+     * The name of the primary key table's schema.
+     * @deprecated
+     */
+    @Deprecated
+    public String getPrimaryKeySchemaName() {
+<span class="nc" id="L273">        return getPrimaryKeySchemaIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getPrimaryKeySchemaIdentifier() {
+<span class="nc" id="L277">        Table table = getPrimaryKeyTable();</span>
+<span class="nc bnc" id="L278" title="All 2 branches missed.">        if (table != null)</span>
+<span class="nc" id="L279">            return table.getSchemaIdentifier();</span>
+<span class="nc" id="L280">        return _pkSchemaName;</span>
+    }
+
+    /**
+     * The name of the primary key table's schema. You can only set the
+     * primary key schema name on foreign keys that have not already been
+     * joined.
+     * @deprecated
+     */
+    @Deprecated
+    public void setPrimaryKeySchemaName(String pkSchemaName) {
+<span class="nc" id="L291">        setPrimaryKeySchemaIdentifier(DBIdentifier.newSchema(pkSchemaName));</span>
+<span class="nc" id="L292">    }</span>
+
+    public void setPrimaryKeySchemaIdentifier(DBIdentifier pkSchemaName) {
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (getPrimaryKeyTable() != null)</span>
+<span class="nc" id="L296">            throw new IllegalStateException();</span>
+<span class="nc" id="L297">        _pkSchemaName = pkSchemaName;</span>
+<span class="nc" id="L298">    }</span>
+
+    /**
+     * The name of the primary key column.
+     * @deprecated
+     */
+    @Deprecated
+    public String getPrimaryKeyColumnName() {
+<span class="nc" id="L306">        return getPrimaryKeyColumnIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getPrimaryKeyColumnIdentifier() {
+<span class="nc bnc" id="L310" title="All 2 branches missed.">        return _pkColumnName == null ? DBIdentifier.NULL : _pkColumnName;</span>
+    }
+
+    /**
+     * The name of the primary key column. You can only set the
+     * primary key column name on foreign keys that have not already been
+     * joined.
+     * @deprecated
+     */
+    @Deprecated
+    public void setPrimaryKeyColumnName(String pkColumnName) {
+<span class="nc" id="L321">        setPrimaryKeyColumnIdentifier(DBIdentifier.newColumn(pkColumnName));</span>
+<span class="nc" id="L322">    }</span>
+
+    public void setPrimaryKeyColumnIdentifier(DBIdentifier pkColumnName) {
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        if (getPrimaryKeyTable() != null)</span>
+<span class="nc" id="L326">            throw new IllegalStateException();</span>
+<span class="nc" id="L327">        _pkColumnName = pkColumnName;</span>
+<span class="nc" id="L328">    }</span>
+
+    /**
+     * The sequence of this join in the foreign key.
+     */
+    public int getKeySequence() {
+<span class="nc" id="L334">        return _seq;</span>
+    }
+
+    /**
+     * The sequence of this join in the foreign key.
+     */
+    public void setKeySequence(int seq) {
+<span class="nc" id="L341">        _seq = seq;</span>
+<span class="nc" id="L342">    }</span>
+
+    /**
+     * Return the delete action for the key. Will be one of:
+     * {@link #ACTION_NONE}, {@link #ACTION_RESTRICT},
+     * {@link #ACTION_CASCADE}, {@link #ACTION_NULL}, {@link #ACTION_DEFAULT}.
+     */
+    public int getDeleteAction() {
+<span class="nc" id="L350">        return _delAction;</span>
+    }
+
+    /**
+     * Set the delete action for the key. Must be one of:
+     * {@link #ACTION_NONE}, {@link #ACTION_RESTRICT},
+     * {@link #ACTION_CASCADE}, {@link #ACTION_NULL}, {@link #ACTION_DEFAULT}.
+     */
+    public void setDeleteAction(int action) {
+<span class="nc" id="L359">        _delAction = action;</span>
+<span class="nc bnc" id="L360" title="All 2 branches missed.">        if (action == ACTION_NONE)</span>
+<span class="nc" id="L361">            _upAction = ACTION_NONE;</span>
+<span class="nc bnc" id="L362" title="All 2 branches missed.">        else if (_upAction == ACTION_NONE)</span>
+<span class="nc" id="L363">            _upAction = ACTION_RESTRICT;</span>
+<span class="nc" id="L364">    }</span>
+
+    /**
+     * Return the update action for the key. Will be one of:
+     * {@link #ACTION_NONE}, {@link #ACTION_RESTRICT},
+     * {@link #ACTION_CASCADE}, {@link #ACTION_NULL}, {@link #ACTION_DEFAULT}.
+     */
+    public int getUpdateAction() {
+<span class="nc" id="L372">        return _upAction;</span>
+    }
+
+    /**
+     * Set the update action for the key. Must be one of:
+     * {@link #ACTION_NONE}, {@link #ACTION_RESTRICT},
+     * {@link #ACTION_CASCADE}, {@link #ACTION_NULL}, {@link #ACTION_DEFAULT}.
+     */
+    public void setUpdateAction(int action) {
+<span class="nc" id="L381">        _upAction = action;</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">        if (action == ACTION_NONE)</span>
+<span class="nc" id="L383">            _delAction = ACTION_NONE;</span>
+<span class="nc bnc" id="L384" title="All 2 branches missed.">        else if (_delAction == ACTION_NONE)</span>
+<span class="nc" id="L385">            _delAction = ACTION_RESTRICT;</span>
+<span class="nc" id="L386">    }</span>
+
+    /**
+     * Return the foreign key's 0-based index in the owning table.
+     */
+    public int getIndex() {
+<span class="nc" id="L392">        Table table = getTable();</span>
+<span class="nc bnc" id="L393" title="All 2 branches missed.">        if (table != null)</span>
+<span class="nc" id="L394">            table.indexForeignKeys();</span>
+<span class="nc" id="L395">        return _index;</span>
+    }
+
+    /**
+     * Set the foreign key's 0-based index in the owning table.
+     */
+    void setIndex(int index) {
+<span class="nc" id="L402">        _index = index;</span>
+<span class="nc" id="L403">    }</span>
+
+    /**
+     * Return the primary key column joined to the given local column.
+     */
+    public Column getPrimaryKeyColumn(Column local) {
+<span class="nc bnc" id="L409" title="All 2 branches missed.">        return (_joins == null) ? null : (Column) _joins.get(local);</span>
+    }
+
+    /**
+     * Return the local column joined to the given primary key column.
+     */
+    public Column getColumn(Column pk) {
+<span class="nc bnc" id="L416" title="All 2 branches missed.">        return (_joinsPK == null) ? null : (Column) _joinsPK.get(pk);</span>
+    }
+
+    /**
+     * Return the constant value assigned to the given local column.
+     */
+    public Object getConstant(Column local) {
+<span class="nc bnc" id="L423" title="All 2 branches missed.">        return (_consts == null) ? null : _consts.get(local);</span>
+    }
+
+    /**
+     * Return the constant value assigned to the given primary key column.
+     */
+    public Object getPrimaryKeyConstant(Column pk) {
+<span class="nc bnc" id="L430" title="All 2 branches missed.">        return (_constsPK == null) ? null : _constsPK.get(pk);</span>
+    }
+
+    /**
+     * Return the local columns in the foreign key local table order.
+     */
+    public Column[] getColumns() {
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        if (_locals == null)</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">            _locals = (_joins == null) ? Schemas.EMPTY_COLUMNS : (Column[])</span>
+<span class="nc" id="L439">                _joins.keySet().toArray(new Column[_joins.size()]);</span>
+<span class="nc" id="L440">        return _locals;</span>
+    }
+
+    /**
+     * Return the constant values assigned to the local columns
+     * returned by {@link #getConstantColumns}.
+     */
+    public Object[] getConstants() {
+<span class="nc bnc" id="L448" title="All 2 branches missed.">        if (_constVals == null)</span>
+<span class="nc bnc" id="L449" title="All 2 branches missed.">            _constVals = (_consts == null) ? Schemas.EMPTY_VALUES</span>
+<span class="nc" id="L450">                : _consts.values().toArray();</span>
+<span class="nc" id="L451">        return _constVals;</span>
+    }
+
+    /**
+     * Return the constant values assigned to the primary key columns
+     * returned by {@link #getConstantPrimaryKeyColumns}.
+     */
+    public Object[] getPrimaryKeyConstants() {
+<span class="nc bnc" id="L459" title="All 2 branches missed.">        if (_constValsPK == null)</span>
+<span class="nc bnc" id="L460" title="All 2 branches missed.">            _constValsPK = (_constsPK == null) ? Schemas.EMPTY_VALUES</span>
+<span class="nc" id="L461">                : _constsPK.values().toArray();</span>
+<span class="nc" id="L462">        return _constValsPK;</span>
+    }
+
+    /**
+     * Return true if the fk includes the given local column.
+     */
+    public boolean containsColumn(Column col) {
+<span class="nc bnc" id="L469" title="All 4 branches missed.">        return _joins != null &amp;&amp; _joins.containsKey(col);</span>
+    }
+
+    /**
+     * Return true if the fk includes the given primary key column.
+     */
+    public boolean containsPrimaryKeyColumn(Column col) {
+<span class="nc bnc" id="L476" title="All 4 branches missed.">        return _joinsPK != null &amp;&amp; _joinsPK.containsKey(col);</span>
+    }
+
+    /**
+     * Return true if the fk includes the given local column.
+     */
+    public boolean containsConstantColumn(Column col) {
+<span class="nc bnc" id="L483" title="All 4 branches missed.">        return _consts != null &amp;&amp; _consts.containsKey(col);</span>
+    }
+
+    /**
+     * Return true if the fk includes the given primary key column.
+     */
+    public boolean containsConstantPrimaryKeyColumn(Column col) {
+<span class="nc bnc" id="L490" title="All 4 branches missed.">        return _constsPK != null &amp;&amp; _constsPK.containsKey(col);</span>
+    }
+
+    /**
+     * Return the foreign columns in the foreign key, in join-order with
+     * the result of {@link #getColumns}.
+     */
+    public Column[] getPrimaryKeyColumns() {
+<span class="nc bnc" id="L498" title="All 2 branches missed.">        if (_pks == null)</span>
+<span class="nc bnc" id="L499" title="All 2 branches missed.">            _pks = (_joins == null) ? Schemas.EMPTY_COLUMNS : (Column[])</span>
+<span class="nc" id="L500">                _joins.values().toArray(new Column[_joins.size()]);</span>
+<span class="nc" id="L501">        return _pks;</span>
+    }
+
+    /**
+     * Return the local columns that we link to using constant values.
+     */
+    public Column[] getConstantColumns() {
+<span class="nc bnc" id="L508" title="All 2 branches missed.">        if (_constCols == null)</span>
+<span class="nc bnc" id="L509" title="All 2 branches missed.">            _constCols = (_consts == null) ? Schemas.EMPTY_COLUMNS : (Column[])</span>
+<span class="nc" id="L510">                _consts.keySet().toArray(new Column[_consts.size()]);</span>
+<span class="nc" id="L511">        return _constCols;</span>
+    }
+
+    /**
+     * Return the primary key columns that we link to using constant values.
+     */
+    public Column[] getConstantPrimaryKeyColumns() {
+<span class="nc bnc" id="L518" title="All 2 branches missed.">        if (_constColsPK == null)</span>
+<span class="nc bnc" id="L519" title="All 2 branches missed.">            _constColsPK = (_constsPK == null) ? Schemas.EMPTY_COLUMNS :</span>
+<span class="nc" id="L520">                (Column[]) _constsPK.keySet().toArray</span>
+<span class="nc" id="L521">                    (new Column[_constsPK.size()]);</span>
+<span class="nc" id="L522">        return _constColsPK;</span>
+    }
+
+    /**
+     * Set the foreign key's joins.
+     */
+    public void setJoins(Column[] cols, Column[] pkCols) {
+<span class="nc" id="L529">        Column[] cur = getColumns();</span>
+<span class="nc bnc" id="L530" title="All 2 branches missed.">        for (int i = 0; i &lt; cur.length; i++)</span>
+<span class="nc" id="L531">            removeJoin(cur[i]);</span>
+
+<span class="nc bnc" id="L533" title="All 2 branches missed.">        if (cols != null)</span>
+<span class="nc bnc" id="L534" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L535">                join(cols[i], pkCols[i]);</span>
+<span class="nc" id="L536">    }</span>
+
+    /**
+     * Set the foreign key's constant joins.
+     */
+    public void setConstantJoins(Object[] consts, Column[] pkCols) {
+<span class="nc" id="L542">        Column[] cur = getConstantPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L543" title="All 2 branches missed.">        for (int i = 0; i &lt; cur.length; i++)</span>
+<span class="nc" id="L544">            removeJoin(cur[i]);</span>
+
+<span class="nc bnc" id="L546" title="All 2 branches missed.">        if (consts != null)</span>
+<span class="nc bnc" id="L547" title="All 2 branches missed.">            for (int i = 0; i &lt; consts.length; i++)</span>
+<span class="nc" id="L548">                joinConstant(consts[i], pkCols[i]);</span>
+<span class="nc" id="L549">    }</span>
+
+    /**
+     * Set the foreign key's constant joins.
+     */
+    public void setConstantJoins(Column[] cols, Object[] consts) {
+<span class="nc" id="L555">        Column[] cur = getConstantColumns();</span>
+<span class="nc bnc" id="L556" title="All 2 branches missed.">        for (int i = 0; i &lt; cur.length; i++)</span>
+<span class="nc" id="L557">            removeJoin(cur[i]);</span>
+
+<span class="nc bnc" id="L559" title="All 2 branches missed.">        if (consts != null)</span>
+<span class="nc bnc" id="L560" title="All 2 branches missed.">            for (int i = 0; i &lt; consts.length; i++)</span>
+<span class="nc" id="L561">                joinConstant(cols[i], consts[i]);</span>
+<span class="nc" id="L562">    }</span>
+
+    /**
+     * Join a local column to a primary key column of another table.
+     */
+    public void join(Column local, Column toPK) {
+<span class="nc bnc" id="L568" title="All 2 branches missed.">        if (!Objects.equals(local.getTable(), getTable()))</span>
+<span class="nc" id="L569">            throw new InvalidStateException(_loc.get(&quot;table-mismatch&quot;,</span>
+<span class="nc" id="L570">                local.getTable(), getTable()));</span>
+
+<span class="nc" id="L572">        Table pkTable = toPK.getTable();</span>
+<span class="nc bnc" id="L573" title="All 4 branches missed.">        if (_pkTable != null &amp;&amp; !_pkTable.equals(pkTable))</span>
+<span class="nc" id="L574">            throw new InvalidStateException(_loc.get(&quot;fk-mismatch&quot;,</span>
+                pkTable, _pkTable));
+
+<span class="nc" id="L577">        _pkTable = pkTable;</span>
+<span class="nc bnc" id="L578" title="All 2 branches missed.">        if (_joins == null)</span>
+<span class="nc" id="L579">            _joins = new LinkedHashMap();</span>
+<span class="nc" id="L580">        _joins.put(local, toPK);</span>
+<span class="nc" id="L581">        local.addConstraint(this);</span>
+<span class="nc bnc" id="L582" title="All 2 branches missed.">        if (_joinsPK == null)</span>
+<span class="nc" id="L583">            _joinsPK = new LinkedHashMap();</span>
+<span class="nc" id="L584">        _joinsPK.put(toPK, local);</span>
+
+        // force re-cache
+<span class="nc" id="L587">        _locals = null;</span>
+<span class="nc" id="L588">        _pks = null;</span>
+<span class="nc bnc" id="L589" title="All 2 branches missed.">        if (Boolean.FALSE.equals(_autoAssign))</span>
+<span class="nc" id="L590">            _autoAssign = null;</span>
+<span class="nc" id="L591">    }</span>
+
+    /**
+     * Join a constant value to a primary key column of another table. The
+     * constant must be either a string or a number.
+     */
+    public void joinConstant(Object val, Column toPK) {
+<span class="nc" id="L598">        Table pkTable = toPK.getTable();</span>
+<span class="nc bnc" id="L599" title="All 4 branches missed.">        if (_pkTable != null &amp;&amp; !_pkTable.equals(pkTable))</span>
+<span class="nc" id="L600">            throw new InvalidStateException(_loc.get(&quot;fk-mismatch&quot;,</span>
+                pkTable, _pkTable));
+
+<span class="nc" id="L603">        _pkTable = pkTable;</span>
+<span class="nc bnc" id="L604" title="All 2 branches missed.">        if (_constsPK == null)</span>
+<span class="nc" id="L605">            _constsPK = new LinkedHashMap();</span>
+<span class="nc" id="L606">        _constsPK.put(toPK, val);</span>
+
+        // force re-cache
+<span class="nc" id="L609">        _constValsPK = null;</span>
+<span class="nc" id="L610">        _constColsPK = null;</span>
+<span class="nc" id="L611">    }</span>
+
+    /**
+     * Join a constant value to a local column of this table. The
+     * constant must be either a string or a number.
+     */
+    public void joinConstant(Column col, Object val) {
+<span class="nc bnc" id="L618" title="All 2 branches missed.">        if (_consts == null)</span>
+<span class="nc" id="L619">            _consts = new LinkedHashMap();</span>
+<span class="nc" id="L620">        _consts.put(col, val);</span>
+
+        // force re-cache
+<span class="nc" id="L623">        _constVals = null;</span>
+<span class="nc" id="L624">        _constCols = null;</span>
+<span class="nc" id="L625">    }</span>
+
+    /**
+     * Remove any joins inolving the given column.
+     *
+     * @return true if the join was removed, false if not part of the key
+     */
+    public boolean removeJoin(Column col) {
+<span class="nc" id="L633">        boolean remd = false;</span>
+        Object rem;
+
+<span class="nc bnc" id="L636" title="All 2 branches missed.">        if (_joins != null) {</span>
+<span class="nc" id="L637">            rem = _joins.remove(col);</span>
+<span class="nc" id="L638">            col.removeConstraint(this);</span>
+<span class="nc bnc" id="L639" title="All 2 branches missed.">            if (rem != null) {</span>
+<span class="nc" id="L640">                _locals = null;</span>
+<span class="nc" id="L641">                _pks = null;</span>
+<span class="nc" id="L642">                _joinsPK.remove(rem);</span>
+<span class="nc" id="L643">                remd = true;</span>
+            }
+        }
+
+<span class="nc bnc" id="L647" title="All 2 branches missed.">        if (_joinsPK != null) {</span>
+<span class="nc" id="L648">            rem = _joinsPK.remove(col);</span>
+<span class="nc bnc" id="L649" title="All 2 branches missed.">            if (rem != null) {</span>
+<span class="nc" id="L650">                _locals = null;</span>
+<span class="nc" id="L651">                _pks = null;</span>
+<span class="nc" id="L652">                _joins.remove(rem);</span>
+<span class="nc" id="L653">                remd = true;</span>
+            }
+        }
+
+<span class="nc bnc" id="L657" title="All 2 branches missed.">        if (_consts != null) {</span>
+<span class="nc bnc" id="L658" title="All 2 branches missed.">            if (_consts.remove(col) != null) {</span>
+<span class="nc" id="L659">                _constVals = null;</span>
+<span class="nc" id="L660">                _constCols = null;</span>
+<span class="nc" id="L661">                remd = true;</span>
+            }
+        }
+
+<span class="nc bnc" id="L665" title="All 2 branches missed.">        if (_constsPK != null) {</span>
+<span class="nc bnc" id="L666" title="All 2 branches missed.">            if (_constsPK.containsKey(col)) {</span>
+<span class="nc" id="L667">                _constsPK.remove(col);</span>
+<span class="nc" id="L668">                _constValsPK = null;</span>
+<span class="nc" id="L669">                _constColsPK = null;</span>
+<span class="nc" id="L670">                remd = true;</span>
+            }
+        }
+
+<span class="nc bnc" id="L674" title="All 6 branches missed.">        if ((_joins == null || _joins.isEmpty())</span>
+<span class="nc bnc" id="L675" title="All 2 branches missed.">            &amp;&amp; (_constsPK == null || _constsPK.isEmpty()))</span>
+<span class="nc" id="L676">            _pkTable = null;</span>
+<span class="nc bnc" id="L677" title="All 4 branches missed.">        if (remd &amp;&amp; Boolean.TRUE.equals(_autoAssign))</span>
+<span class="nc" id="L678">            _autoAssign = null;</span>
+<span class="nc" id="L679">        return remd;</span>
+    }
+
+    /**
+     * Returns the table this foreign key is linking to, if it is known yet.
+     */
+    public Table getPrimaryKeyTable() {
+<span class="nc" id="L686">        return _pkTable;</span>
+    }
+
+    /**
+     * Ref all columns in this key.
+     */
+    public void refColumns() {
+<span class="nc" id="L693">        Column[] cols = getColumns();</span>
+<span class="nc bnc" id="L694" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L695">            cols[i].ref();</span>
+<span class="nc" id="L696">        cols = getConstantColumns();</span>
+<span class="nc bnc" id="L697" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L698">            cols[i].ref();</span>
+<span class="nc" id="L699">    }</span>
+
+    /**
+     * Deref all columns in this key.
+     */
+    public void derefColumns() {
+<span class="nc" id="L705">        Column[] cols = getColumns();</span>
+<span class="nc bnc" id="L706" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L707">            cols[i].deref();</span>
+<span class="nc" id="L708">        cols = getConstantColumns();</span>
+<span class="nc bnc" id="L709" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L710">            cols[i].deref();</span>
+<span class="nc" id="L711">    }</span>
+
+    /**
+     * Foreign keys are equal if the satisfy the equality constraints of
+     * {@link Constraint} and they have the same local and primary key
+     * columns and action.
+     */
+    public boolean equalsForeignKey(ForeignKey fk) {
+<span class="nc bnc" id="L719" title="All 2 branches missed.">        if (fk == this)</span>
+<span class="nc" id="L720">            return true;</span>
+<span class="nc bnc" id="L721" title="All 2 branches missed.">        if (fk == null)</span>
+<span class="nc" id="L722">            return false;</span>
+
+<span class="nc bnc" id="L724" title="All 2 branches missed.">        if (getDeleteAction() != fk.getDeleteAction())</span>
+<span class="nc" id="L725">            return false;</span>
+<span class="nc bnc" id="L726" title="All 2 branches missed.">        if (isDeferred() != fk.isDeferred())</span>
+<span class="nc" id="L727">            return false;</span>
+
+<span class="nc bnc" id="L729" title="All 2 branches missed.">        if (!columnsMatch(fk.getColumns(), fk.getPrimaryKeyColumns()))</span>
+<span class="nc" id="L730">            return false;</span>
+<span class="nc bnc" id="L731" title="All 2 branches missed.">        if (!match(getConstantColumns(), fk.getConstantColumns()))</span>
+<span class="nc" id="L732">            return false;</span>
+<span class="nc bnc" id="L733" title="All 2 branches missed.">        if (!match(getConstants(), fk.getConstants()))</span>
+<span class="nc" id="L734">            return false;</span>
+<span class="nc bnc" id="L735" title="All 2 branches missed.">        if (!match(getConstantPrimaryKeyColumns(),</span>
+<span class="nc" id="L736">            fk.getConstantPrimaryKeyColumns()))</span>
+<span class="nc" id="L737">            return false;</span>
+<span class="nc bnc" id="L738" title="All 2 branches missed.">        if (!match(getPrimaryKeyConstants(), fk.getPrimaryKeyConstants()))</span>
+<span class="nc" id="L739">            return false;</span>
+<span class="nc" id="L740">        return true;</span>
+    }
+
+    /**
+     * Return true if the given local and foreign columns match those
+     * on this key. This can be used to find foreign keys given only
+     * column linking information.
+     */
+    public boolean columnsMatch(Column[] fkCols, Column[] fkPKCols) {
+<span class="nc bnc" id="L749" title="All 2 branches missed.">        return match(getColumns(), fkCols)</span>
+<span class="nc bnc" id="L750" title="All 2 branches missed.">            &amp;&amp; match(getPrimaryKeyColumns(), fkPKCols);</span>
+    }
+
+    /**
+     * Checks for non-nullable local columns.
+     */
+    public boolean hasNotNullColumns() {
+<span class="nc" id="L757">      Column[] columns = getColumns();</span>
+<span class="nc bnc" id="L758" title="All 2 branches missed.">      for (int j = 0; j &lt; columns.length; j++) {</span>
+<span class="nc bnc" id="L759" title="All 2 branches missed.">          if (columns[j].isNotNull()) {</span>
+<span class="nc" id="L760">              return true;</span>
+          }
+      }
+<span class="nc" id="L763">      return false;</span>
+    }
+
+    private static boolean match(Column[] cols, Column[] fkCols) {
+<span class="nc bnc" id="L767" title="All 2 branches missed.">        if (cols.length != fkCols.length)</span>
+<span class="nc" id="L768">            return false;</span>
+<span class="nc bnc" id="L769" title="All 2 branches missed.">        for (int i = 0; i &lt; fkCols.length; i++)</span>
+<span class="nc bnc" id="L770" title="All 2 branches missed.">            if (!hasColumn(cols, fkCols[i]))</span>
+<span class="nc" id="L771">                return false;</span>
+<span class="nc" id="L772">        return true;</span>
+    }
+
+    private static boolean hasColumn(Column[] cols, Column col) {
+<span class="nc bnc" id="L776" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L777" title="All 2 branches missed.">            if (cols[i].getQualifiedPath().equals(col.getQualifiedPath()))</span>
+<span class="nc" id="L778">                return true;</span>
+<span class="nc" id="L779">        return false;</span>
+    }
+
+    private static boolean match(Object[] vals, Object[] fkVals) {
+<span class="nc bnc" id="L783" title="All 2 branches missed.">        if (vals.length != fkVals.length)</span>
+<span class="nc" id="L784">            return false;</span>
+<span class="nc bnc" id="L785" title="All 2 branches missed.">        for (int i = 0; i &lt; vals.length; i++)</span>
+<span class="nc bnc" id="L786" title="All 2 branches missed.">            if (!Objects.equals(vals[i], fkVals[i]))</span>
+<span class="nc" id="L787">                return false;</span>
+<span class="nc" id="L788">        return true;</span>
+    }
+
+    /**
+     * Return the name of the foreignkey constraint as defined in the database.
+     * @deprecated
+     */
+    @Deprecated
+    public String loadNameFromDB(DBDictionary dbdict, Connection conn) {
+<span class="nc" id="L797">        return loadIdentifierFromDB(dbdict, conn).getName();</span>
+    }
+
+    public DBIdentifier loadIdentifierFromDB(DBDictionary dbdict, Connection conn) {
+<span class="nc bnc" id="L801" title="All 4 branches missed.">        if( isLogical() || getTable() == null)</span>
+<span class="nc" id="L802">            return DBIdentifier.NULL;</span>
+<span class="nc" id="L803">        DBIdentifier retVal = DBIdentifier.NULL;</span>
+        try{
+<span class="nc" id="L805">            Schema schema = getTable().getSchema();</span>
+<span class="nc" id="L806">            ForeignKey[] fks = dbdict.getImportedKeys(conn.getMetaData(),</span>
+<span class="nc" id="L807">                DBIdentifier.newCatalog(conn.getCatalog()), schema.getIdentifier(),</span>
+<span class="nc" id="L808">                getTable().getIdentifier(), conn, false);</span>
+<span class="nc bnc" id="L809" title="All 2 branches missed.">            for ( int i=0; i&lt; fks.length; i++) {</span>
+<span class="nc" id="L810">                Table localtable = schema.getTable(fks[i].getTableIdentifier());</span>
+<span class="nc" id="L811">                Table pkTable = schema.getTable(</span>
+<span class="nc" id="L812">                    fks[i].getPrimaryKeyTableIdentifier());</span>
+<span class="nc" id="L813">                boolean addFK = false;</span>
+<span class="nc" id="L814">                ForeignKey fkTemp = localtable.getForeignKey(</span>
+<span class="nc" id="L815">                    fks[i].getIdentifier());</span>
+<span class="nc bnc" id="L816" title="All 2 branches missed.">                if( fkTemp == null) {</span>
+<span class="nc" id="L817">                    addFK=true;</span>
+<span class="nc" id="L818">                    fkTemp = localtable.addForeignKey(</span>
+<span class="nc" id="L819">                        fks[i].getIdentifier());</span>
+<span class="nc" id="L820">                    fkTemp.setDeferred(fks[i].isDeferred());</span>
+<span class="nc" id="L821">                    fkTemp.setDeleteAction(fks[i].getDeleteAction());</span>
+                }
+<span class="nc bnc" id="L823" title="All 4 branches missed.">                if (fks[i].getColumns() == null || fks[i].getColumns().length == 0) {</span>
+                    // Singular column foreign key
+<span class="nc bnc" id="L825" title="All 2 branches missed.">                    if( ! fkTemp.containsColumn(</span>
+<span class="nc" id="L826">                        localtable.getColumn(fks[i].getColumnIdentifier())))</span>
+<span class="nc" id="L827">                    fkTemp.join(localtable.getColumn(fks[i].getColumnIdentifier()),</span>
+<span class="nc" id="L828">                        pkTable.getColumn(fks[i].getPrimaryKeyColumnIdentifier()));</span>
+                } else {
+                    // Add the multi-column foreign key, joining local and pk columns in
+                    // the temporary key
+<span class="nc" id="L832">                    Column[] locCols = fks[i].getColumns();</span>
+<span class="nc" id="L833">                    Column[] pkCols = fks[i].getPrimaryKeyColumns();</span>
+                    // Column counts must match
+<span class="nc bnc" id="L835" title="All 6 branches missed.">                    if (locCols != null &amp;&amp; pkCols != null &amp;&amp;</span>
+                        locCols.length != pkCols.length) {
+<span class="nc" id="L837">                        Log log = dbdict.getLog();</span>
+<span class="nc bnc" id="L838" title="All 2 branches missed.">                        if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L839">                            log.trace(_loc.get(&quot;fk-column-mismatch&quot;));</span>
+                        }
+                    }
+<span class="nc bnc" id="L842" title="All 2 branches missed.">                    for (int j = 0; j &lt; locCols.length; j++) {</span>
+<span class="nc bnc" id="L843" title="All 2 branches missed.">                        if( ! fkTemp.containsColumn(</span>
+<span class="nc" id="L844">                            localtable.getColumn(locCols[j].getIdentifier()))) {</span>
+<span class="nc" id="L845">                            fkTemp.join(localtable.getColumn(locCols[j].getIdentifier()),</span>
+<span class="nc" id="L846">                                pkTable.getColumn(pkCols[j].getIdentifier()));</span>
+                        }
+                    }
+                }
+<span class="nc bnc" id="L850" title="All 2 branches missed.">                if( equalsForeignKey(fkTemp))</span>
+                {
+<span class="nc bnc" id="L852" title="All 2 branches missed.">                    if(addFK)</span>
+<span class="nc" id="L853">                        localtable.removeForeignKey(fkTemp);</span>
+<span class="nc" id="L854">                    retVal = fks[i].getIdentifier();</span>
+<span class="nc" id="L855">                    break;</span>
+                }
+<span class="nc bnc" id="L857" title="All 2 branches missed.">                if(addFK)</span>
+<span class="nc" id="L858">                    localtable.removeForeignKey(fkTemp);</span>
+            }
+<span class="nc" id="L860">        } catch(Exception ex){</span>
+<span class="nc" id="L861">            Log log = dbdict.getLog();</span>
+<span class="nc bnc" id="L862" title="All 2 branches missed.">            if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L863">                log.trace(_loc.get(&quot;except-read-fk-name&quot;), ex);</span>
+            }
+<span class="nc" id="L865">        }</span>
+<span class="nc" id="L866">        return retVal;</span>
+    }
+
+    /**
+     * Joins the column of a single column FK to this FK.
+     * @param fk
+     */
+    public void addColumn(ForeignKey fk) {
+        // Convert simple name based fk to a multi-column FK if necessary.
+<span class="nc bnc" id="L875" title="All 4 branches missed.">        if (getColumns() == null || getColumns().length == 0) {</span>
+            // If this FK is single column key, covert to a multi-column key
+<span class="nc" id="L877">            Column[] keyCols = createKeyColumns(this);</span>
+<span class="nc bnc" id="L878" title="All 4 branches missed.">            if (keyCols[0] != null &amp;&amp; keyCols[1] != null) {</span>
+<span class="nc" id="L879">                setPrimaryKeyColumnIdentifier(DBIdentifier.NULL);</span>
+<span class="nc" id="L880">                setColumnIdentifier(DBIdentifier.NULL);</span>
+<span class="nc" id="L881">                join(keyCols[0], keyCols[1]);</span>
+            }
+        }
+        // Create the local and primary key columns from the fk and add them
+        // to this fk.
+<span class="nc" id="L886">        Column[] keyCols = createKeyColumns(fk);</span>
+<span class="nc bnc" id="L887" title="All 4 branches missed.">        if (keyCols[0] != null &amp;&amp; keyCols[1] != null) {</span>
+<span class="nc" id="L888">            join(keyCols[0], keyCols[1]);</span>
+        }
+<span class="nc" id="L890">    }</span>
+
+    /*
+     * Creates the local and primary key columns for a name-based fk.
+     * @return Column[] element 0 is local column
+     *                  element 1 is the primary key in another table.
+     */
+    private static Column[] createKeyColumns(ForeignKey fk) {
+<span class="nc" id="L898">        Column fkCol = null;</span>
+<span class="nc bnc" id="L899" title="All 2 branches missed.">        if (!DBIdentifier.isEmpty(fk.getColumnIdentifier())) {</span>
+<span class="nc" id="L900">            fkCol = new Column();</span>
+<span class="nc" id="L901">            fkCol.setIdentifier(fk.getColumnIdentifier());</span>
+<span class="nc" id="L902">            fkCol.setTableIdentifier(fk.getTableIdentifier());</span>
+<span class="nc" id="L903">            fkCol.setSchemaIdentifier(fk.getSchemaIdentifier());</span>
+        }
+
+<span class="nc" id="L906">        Column pkCol = null;</span>
+<span class="nc bnc" id="L907" title="All 2 branches missed.">        if (!DBIdentifier.isEmpty(fk.getPrimaryKeyColumnIdentifier())) {</span>
+<span class="nc" id="L908">            pkCol = new Column();</span>
+<span class="nc" id="L909">            pkCol.setIdentifier(fk.getPrimaryKeyColumnIdentifier());</span>
+<span class="nc" id="L910">            pkCol.setTableIdentifier(fk.getPrimaryKeyTableIdentifier());</span>
+<span class="nc" id="L911">            pkCol.setSchemaIdentifier(fk.getPrimaryKeySchemaIdentifier());</span>
+        }
+<span class="nc" id="L913">        return new Column[] { fkCol, pkCol };</span>
+    }
+
+    /*
+     * ForeignKey utility class which determines equality based upon the
+     * non-column state of the keys.
+     */
+    public static class FKMapKey {
+
+        private ForeignKey _fk;
+
+<span class="nc" id="L924">        public FKMapKey(ForeignKey fk) {</span>
+<span class="nc" id="L925">            _fk = fk;</span>
+<span class="nc" id="L926">        }</span>
+        public ForeignKey getFk() {
+<span class="nc" id="L928">            return _fk;</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc bnc" id="L933" title="All 2 branches missed.">            return getFk().getIdentifier() != null ? getFk().getIdentifier().hashCode() : getFk().hashCode();</span>
+        }
+
+        @Override
+        public boolean equals(Object fkObj) {
+<span class="nc bnc" id="L938" title="All 2 branches missed.">            if (fkObj == this) {</span>
+<span class="nc" id="L939">                return true;</span>
+            }
+<span class="nc bnc" id="L941" title="All 4 branches missed.">            if (fkObj == null || !(fkObj instanceof FKMapKey)) {</span>
+<span class="nc" id="L942">                return false;</span>
+            }
+<span class="nc" id="L944">            ForeignKey fk = ((FKMapKey)fkObj).getFk();</span>
+<span class="nc bnc" id="L945" title="All 2 branches missed.">            if (getFk().getDeleteAction() != fk.getDeleteAction())</span>
+<span class="nc" id="L946">                return false;</span>
+<span class="nc bnc" id="L947" title="All 2 branches missed.">            if (getFk().isDeferred() != fk.isDeferred())</span>
+<span class="nc" id="L948">                return false;</span>
+<span class="nc bnc" id="L949" title="All 2 branches missed.">            if (!getFk().getIdentifier().equals(fk.getIdentifier())) {</span>
+<span class="nc" id="L950">                return false;</span>
+            }
+            // Assert PK table name and schema
+<span class="nc bnc" id="L953" title="All 2 branches missed.">            if (!getFk().getPrimaryKeySchemaIdentifier().equals(fk.getPrimaryKeySchemaIdentifier()) ||</span>
+<span class="nc bnc" id="L954" title="All 2 branches missed.">                !getFk().getPrimaryKeyTableIdentifier().equals(fk.getPrimaryKeyTableIdentifier()) ||</span>
+<span class="nc bnc" id="L955" title="All 2 branches missed.">                !getFk().getSchemaIdentifier().equals(fk.getSchemaIdentifier()) ||</span>
+<span class="nc bnc" id="L956" title="All 2 branches missed.">                !getFk().getTableIdentifier().equals(fk.getTableIdentifier())) {</span>
+<span class="nc" id="L957">                return false;</span>
+            }
+<span class="nc" id="L959">            return true;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

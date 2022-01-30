@@ -1,0 +1,1087 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SchemaGenerator.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">SchemaGenerator.java</span></div><h1>SchemaGenerator.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.EventObject;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import javax.sql.DataSource;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.jdbc.identifier.Normalizer;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+
+/**
+ * The SchemaGenerator creates {@link Schema}s matching the current
+ * database. All schemas are added to the current {@link SchemaGroup}.
+ *  Note that tables whose name starts with &quot;OPENJPA_&quot; will be not be added
+ * to the database schema. This enables the creation of special tables
+ * that will never be dropped by the {@link SchemaTool}.
+ *
+ * @author Abe White
+ */
+public class SchemaGenerator {
+
+<span class="nc" id="L59">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L60">        (SchemaGenerator.class);</span>
+
+    private final DataSource _ds;
+    private final DBDictionary _dict;
+    private final Log _log;
+    private final Object[][] _allowed;
+<span class="nc" id="L66">    private boolean _indexes = true;</span>
+<span class="nc" id="L67">    private boolean _fks = true;</span>
+<span class="nc" id="L68">    private boolean _pks = true;</span>
+<span class="nc" id="L69">    private boolean _seqs = true;</span>
+<span class="nc" id="L70">    private boolean _openjpaTables = true;</span>
+<span class="nc" id="L71">    private SchemaGroup _group = null;</span>
+
+<span class="nc" id="L73">    private List&lt;Listener&gt; _listeners = null;</span>
+<span class="nc" id="L74">    private int _schemaObjects = 0;</span>
+
+<span class="nc" id="L76">    private Connection _conn = null;</span>
+
+    /**
+     * Constructor.
+     *
+     * @param conf configuration for connecting to the data store
+     */
+<span class="nc" id="L83">    public SchemaGenerator(JDBCConfiguration conf) {</span>
+        // note: we cannot assert developer capabilities in this tool like
+        // we normally do because this class is also used at runtime
+
+<span class="nc" id="L87">        _ds = conf.getDataSource2(null);</span>
+<span class="nc" id="L88">        _log = conf.getLog(JDBCConfiguration.LOG_SCHEMA);</span>
+
+        // cache this now so that if the conn pool only has 1 connection we
+        // don't conflict later with the open databasemetadata connection
+<span class="nc" id="L92">        _dict = conf.getDBDictionaryInstance();</span>
+
+        // create a table of allowed schema and tables to reflect on
+<span class="nc" id="L95">        String[] schemaArray = conf.getSchemasList();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        DBIdentifier[] names = new DBIdentifier[schemaArray == null ? 0 : schemaArray.length];</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        for (int i = 0; i &lt; names.length; i++) {</span>
+<span class="nc" id="L98">            String[] splitName = Normalizer.splitName(schemaArray[i]);</span>
+<span class="nc bnc" id="L99" title="All 4 branches missed.">            if (splitName == null || splitName.length == 0) {</span>
+<span class="nc" id="L100">                continue;</span>
+            }
+<span class="nc bnc" id="L102" title="All 2 branches missed.">            if (splitName.length == 1) {</span>
+<span class="nc" id="L103">                names[i] = DBIdentifier.newSchema(schemaArray[i]);</span>
+            } else {
+<span class="nc" id="L105">                names[i] = DBIdentifier.newTable(schemaArray[i]);</span>
+            }
+        }
+<span class="nc" id="L108">        _allowed = parseSchemasList(names);</span>
+<span class="nc" id="L109">    }</span>
+
+    /**
+     * Given a list of schema names and table names (where table names
+     * are always of the form schema.table, or just .table if the schema is
+     * unknown), creates a table mapping schema name to table list. Returns
+     * null if no args are given. If no tables are given for a particular
+     * schema, maps the schema name to null.
+     */
+    private static Object[][] parseSchemasList(DBIdentifier[] args) {
+<span class="nc bnc" id="L119" title="All 4 branches missed.">        if (args == null || args.length == 0)</span>
+<span class="nc" id="L120">            return null;</span>
+
+<span class="nc" id="L122">        Map&lt;DBIdentifier, Collection&lt;DBIdentifier&gt;&gt; schemas = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L123">        DBIdentifier schema = DBIdentifier.NULL, table = DBIdentifier.NULL;</span>
+<span class="nc" id="L124">        Collection&lt;DBIdentifier&gt; tables = null;</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        for (int i = 0; i &lt; args.length; i++) {</span>
+<span class="nc" id="L126">            QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(args[i]);</span>
+<span class="nc" id="L127">            schema = path.getSchemaName();</span>
+<span class="nc" id="L128">            table = path.getIdentifier();</span>
+
+            // if just a schema name, map schema to null
+<span class="nc bnc" id="L131" title="All 4 branches missed.">            if (DBIdentifier.isNull(table) &amp;&amp; !schemas.containsKey(schema))</span>
+<span class="nc" id="L132">                schemas.put(schema, null);</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">            else if (!DBIdentifier.isNull(table)) {</span>
+<span class="nc" id="L134">                tables = schemas.get(schema);</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">                if (tables == null) {</span>
+<span class="nc" id="L136">                    tables = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L137">                    schemas.put(schema, tables);</span>
+                }
+<span class="nc" id="L139">                tables.add(table);</span>
+            }
+        }
+
+<span class="nc" id="L143">        Object[][] parsed = new Object[schemas.size()][2];</span>
+        Map.Entry&lt;DBIdentifier, Collection&lt;DBIdentifier&gt;&gt; entry;
+<span class="nc" id="L145">        int idx = 0;</span>
+<span class="nc" id="L146">        for (Iterator&lt;Map.Entry&lt;DBIdentifier, Collection&lt;DBIdentifier&gt;&gt;&gt; itr = schemas.entrySet().iterator();</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">            itr.hasNext();) {</span>
+<span class="nc" id="L148">            entry = itr.next();</span>
+<span class="nc" id="L149">            tables = entry.getValue();</span>
+
+<span class="nc" id="L151">            parsed[idx][0] = entry.getKey();</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">            if (tables != null)</span>
+<span class="nc" id="L153">                parsed[idx][1] = tables.toArray(new DBIdentifier[tables.size()]);</span>
+<span class="nc" id="L154">            idx++;</span>
+        }
+<span class="nc" id="L156">        return parsed;</span>
+    }
+
+    /**
+     * Return whether indexes should be generated. Defaults to true.
+     */
+    public boolean getIndexes() {
+<span class="nc" id="L163">        return _indexes;</span>
+    }
+
+    /**
+     * Set whether indexes should be generated. Defaults to true.
+     */
+    public void setIndexes(boolean indexes) {
+<span class="nc" id="L170">        _indexes = indexes;</span>
+<span class="nc" id="L171">    }</span>
+
+    /**
+     * Return whether foreign keys should be generated. Defaults to true.
+     */
+    public boolean getForeignKeys() {
+<span class="nc" id="L177">        return _fks;</span>
+    }
+
+    /**
+     * Set whether foreign keys should be generated. Defaults to true.
+     */
+    public void setForeignKeys(boolean fks) {
+<span class="nc" id="L184">        _fks = fks;</span>
+<span class="nc" id="L185">    }</span>
+
+    /**
+     * Return whether primary keys should be generated. Defaults to true.
+     */
+    public boolean getPrimaryKeys() {
+<span class="nc" id="L191">        return _pks;</span>
+    }
+
+    /**
+     * Set whether primary keys should be generated. Defaults to true.
+     */
+    public void setPrimaryKeys(boolean pks) {
+<span class="nc" id="L198">        _pks = pks;</span>
+<span class="nc" id="L199">    }</span>
+
+    /**
+     * Return whether sequences should be generated. Defaults to true.
+     */
+    public boolean getSequences() {
+<span class="nc" id="L205">        return _seqs;</span>
+    }
+
+    /**
+     * Set whether sequences should be generated. Defaults to true.
+     */
+    public void setSequences(boolean seqs) {
+<span class="nc" id="L212">        _seqs = seqs;</span>
+<span class="nc" id="L213">    }</span>
+
+    /**
+     * Whether to generate info on special tables used by OpenJPA components
+     * for bookkeeping. Defaults to true.
+     */
+    public boolean getOpenJPATables() {
+<span class="nc" id="L220">        return _openjpaTables;</span>
+    }
+
+    /**
+     * Whether to generate info on special tables used by OpenJPA components
+     * for bookkeeping. Defaults to true.
+     */
+    public void setOpenJPATables(boolean openjpaTables) {
+<span class="nc" id="L228">        _openjpaTables = openjpaTables;</span>
+<span class="nc" id="L229">    }</span>
+
+    /**
+     * Return the current schema group.
+     */
+    public SchemaGroup getSchemaGroup() {
+<span class="nc bnc" id="L235" title="All 2 branches missed.">        if (_group == null)</span>
+<span class="nc" id="L236">            _group = new SchemaGroup();</span>
+<span class="nc" id="L237">        return _group;</span>
+    }
+
+    /**
+     * Set the schema group to add generated schemas to.
+     */
+    public void setSchemaGroup(SchemaGroup group) {
+<span class="nc" id="L244">        _group = group;</span>
+<span class="nc" id="L245">    }</span>
+
+    /**
+     * Generate all schemas set in the configuration. This method also
+     * calls {@link #generateIndexes}, {@link #generatePrimaryKeys}, and
+     * {@link #generateForeignKeys} automatically.
+     */
+    public void generateSchemas()
+        throws SQLException {
+<span class="nc" id="L254">        fireGenerationEvent(_loc.get(&quot;generating-schemas&quot;));</span>
+<span class="nc" id="L255">        generateSchemas((DBIdentifier[])null);</span>
+<span class="nc" id="L256">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    public void generateSchemas(String[] schemasAndTables)
+        throws SQLException {
+<span class="nc" id="L264">        generateSchemas(DBIdentifier.toArray(schemasAndTables, DBIdentifierType.TABLE));</span>
+<span class="nc" id="L265">    }</span>
+
+    /**
+     * Generate the schemas and/or tables named in the given strings.
+     * This method calls {@link #generateIndexes},
+     * {@link #generatePrimaryKeys}, and {@link #generateForeignKeys}
+     * automatically.
+     */
+    public void generateSchemas(DBIdentifier[] schemasAndTables) throws SQLException {
+<span class="nc" id="L274">        fireGenerationEvent(_loc.get(&quot;generating-schemas&quot;));</span>
+        // generate all schemas and tables
+        try {
+<span class="nc" id="L277">            getConn();</span>
+            Object[][] schemaMap;
+<span class="nc bnc" id="L279" title="All 4 branches missed.">            if (schemasAndTables == null || schemasAndTables.length == 0)</span>
+<span class="nc" id="L280">                schemaMap = _allowed;</span>
+            else
+<span class="nc" id="L282">                schemaMap = parseSchemasList(schemasAndTables);</span>
+
+<span class="nc bnc" id="L284" title="All 2 branches missed.">            if (schemaMap == null) {</span>
+<span class="nc" id="L285">                generateSchema(DBIdentifier.NULL, (DBIdentifier[]) null);</span>
+
+                // estimate the number of schema objects we will need to visit
+                // in order to estimate progress total for any listeners
+<span class="nc" id="L289">                int numTables = getTables(null).size();</span>
+<span class="nc" id="L290">                _schemaObjects +=</span>
+<span class="nc bnc" id="L291" title="All 6 branches missed.">                    numTables + (_pks ? numTables : 0) + (_indexes ? numTables : 0) + (_fks ? numTables : 0);</span>
+
+<span class="nc bnc" id="L293" title="All 2 branches missed.">                if (_pks)</span>
+<span class="nc" id="L294">                    generatePrimaryKeys(DBIdentifier.NULL, null);</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">                if (_indexes)</span>
+<span class="nc" id="L296">                    generateIndexes(DBIdentifier.NULL, null);</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">                if (_fks)</span>
+<span class="nc" id="L298">                    generateForeignKeys(DBIdentifier.NULL, null);</span>
+<span class="nc" id="L299">                return;</span>
+            }
+
+<span class="nc bnc" id="L302" title="All 2 branches missed.">            for (int i = 0; i &lt; schemaMap.length; i++) {</span>
+<span class="nc" id="L303">                generateSchema((DBIdentifier) schemaMap[i][0], (DBIdentifier[]) schemaMap[i][1]);</span>
+            }
+
+            // generate pks, indexes, fks
+<span class="nc" id="L307">            DBIdentifier schemaName = DBIdentifier.NULL;</span>
+            DBIdentifier[] tableNames;
+<span class="nc bnc" id="L309" title="All 2 branches missed.">            for (int i = 0; i &lt; schemaMap.length; i++) {</span>
+<span class="nc" id="L310">                schemaName = (DBIdentifier) schemaMap[i][0];</span>
+<span class="nc" id="L311">                tableNames = (DBIdentifier[]) schemaMap[i][1];</span>
+
+                // estimate the number of schema objects we will need to visit
+                // in order to estimate progress total for any listeners
+<span class="nc bnc" id="L315" title="All 2 branches missed.">                int numTables = (tableNames != null) ? tableNames.length : getTables(schemaName).size();</span>
+<span class="nc" id="L316">                _schemaObjects +=</span>
+<span class="nc bnc" id="L317" title="All 6 branches missed.">                    numTables + (_pks ? numTables : 0) + (_indexes ? numTables : 0) + (_fks ? numTables : 0);</span>
+
+<span class="nc bnc" id="L319" title="All 2 branches missed.">                if (_pks) {</span>
+<span class="nc" id="L320">                    generatePrimaryKeys(schemaName, tableNames);</span>
+                }
+<span class="nc bnc" id="L322" title="All 2 branches missed.">                if (_indexes) {</span>
+<span class="nc" id="L323">                    generateIndexes(schemaName, tableNames);</span>
+                }
+<span class="nc bnc" id="L325" title="All 2 branches missed.">                if (_fks) {</span>
+<span class="nc" id="L326">                    generateForeignKeys(schemaName, tableNames);</span>
+                }
+            }
+        } finally {
+<span class="nc" id="L330">            closeConn();</span>
+        }
+<span class="nc" id="L332">    }</span>
+
+    /**
+     * @param name
+     * @param tableNames
+     * @deprecated
+     */
+    @Deprecated
+    public void generateSchema(String name, String[] tableNames)
+        throws SQLException {
+<span class="nc" id="L342">        generateSchema(DBIdentifier.newSchema(name),</span>
+<span class="nc" id="L343">            DBIdentifier.toArray(tableNames, DBIdentifierType.TABLE));</span>
+<span class="nc" id="L344">    }</span>
+
+    /**
+     * Add a fully-constructed {@link Schema} matching the given database
+     * schema to the current group. No foreign keys are generated because
+     * some keys might span schemas. You must call
+     * {@link #generatePrimaryKeys}, {@link #generateIndexes}, and
+     * {@link #generateForeignKeys} separately.
+     *
+     * @param name the database name of the schema, or null for all schemas
+     * @param tableNames a list of tables to generate in the schema, or null
+     * to generate all tables
+     */
+    public void generateSchema(DBIdentifier name, DBIdentifier[] tableNames)
+        throws SQLException {
+<span class="nc" id="L359">        fireGenerationEvent(_loc.get(&quot;generating-schema&quot;, name));</span>
+
+        // generate tables, including columns and primary keys
+<span class="nc" id="L362">        DatabaseMetaData meta = _conn.getMetaData();</span>
+        try {
+<span class="nc bnc" id="L364" title="All 2 branches missed.">            if (tableNames == null)</span>
+<span class="nc" id="L365">                generateTables(name, DBIdentifier.NULL, _conn, meta);</span>
+            else
+<span class="nc bnc" id="L367" title="All 2 branches missed.">                for (int i = 0; i &lt; tableNames.length; i++)</span>
+<span class="nc" id="L368">                    generateTables(name, tableNames[i], _conn, meta);</span>
+
+<span class="nc bnc" id="L370" title="All 2 branches missed.">            if (_seqs) {</span>
+<span class="nc" id="L371">                generateSequences(name, DBIdentifier.NULL, _conn, meta);</span>
+            }
+        } finally {
+            // some databases require a commit after metadata to release locks
+            try {
+<span class="nc" id="L376">                _conn.commit();</span>
+<span class="nc" id="L377">            } catch (SQLException se) {</span>
+<span class="nc" id="L378">            }</span>
+        }
+<span class="nc" id="L380">    }</span>
+
+    /**
+     * Generate primary key information for the given schema. This method
+     * must be called in addition to {@link #generateSchema}. It should
+     * only be called after all schemas are generated. The schema name and
+     * tables array can be null to indicate that indexes should be generated
+     * for all schemas and/or tables.
+     * @deprecated
+     */
+    @Deprecated
+    public void generatePrimaryKeys(String schemaName, String[] tableNames)
+        throws SQLException {
+<span class="nc" id="L393">        generatePrimaryKeys(DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L394">            DBIdentifier.toArray(tableNames, DBIdentifierType.TABLE));</span>
+<span class="nc" id="L395">    }</span>
+
+
+    /**
+     * Generate primary key information for the given schema. This method
+     * must be called in addition to {@link #generateSchema}. It should
+     * only be called after all schemas are generated. The schema name and
+     * tables array can be null to indicate that indexes should be generated
+     * for all schemas and/or tables.
+     */
+    public void generatePrimaryKeys(DBIdentifier schemaName, DBIdentifier[] tableNames)
+        throws SQLException {
+<span class="nc" id="L407">        fireGenerationEvent(_loc.get(&quot;generating-all-primaries&quot;, schemaName));</span>
+
+<span class="nc" id="L409">        DatabaseMetaData meta = _conn.getMetaData();</span>
+        try {
+<span class="nc bnc" id="L411" title="All 2 branches missed.">            if (tableNames == null)</span>
+<span class="nc" id="L412">                generatePrimaryKeys(schemaName, null, _conn, meta);</span>
+            else
+<span class="nc bnc" id="L414" title="All 2 branches missed.">                for (int i = 0; i &lt; tableNames.length; i++)</span>
+<span class="nc" id="L415">                    generatePrimaryKeys(schemaName, tableNames[i], _conn, meta);</span>
+        } finally {
+            // some databases require a commit after metadata to release locks
+            try {
+<span class="nc" id="L419">                _conn.commit();</span>
+<span class="nc" id="L420">            } catch (SQLException se) {</span>
+<span class="nc" id="L421">            }</span>
+        }
+<span class="nc" id="L423">    }</span>
+
+    /**
+     * Generate index information for the given schema. This method
+     * must be called in addition to {@link #generateSchema}. It should
+     * only be called after all schemas are generated. The schema name and
+     * tables array can be null to indicate that indexes should be generated
+     * for all schemas and/or tables.
+     * @deprecated
+     */
+    @Deprecated
+    public void generateIndexes(String schemaName, String[] tableNames)
+        throws SQLException {
+<span class="nc" id="L436">        generateIndexes(DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L437">            DBIdentifier.toArray(tableNames, DBIdentifierType.TABLE));</span>
+<span class="nc" id="L438">    }</span>
+
+    /**
+     * Generate index information for the given schema. This method
+     * must be called in addition to {@link #generateSchema}. It should
+     * only be called after all schemas are generated. The schema name and
+     * tables array can be null to indicate that indexes should be generated
+     * for all schemas and/or tables.
+     */
+    public void generateIndexes(DBIdentifier schemaName, DBIdentifier[] tableNames)
+        throws SQLException {
+<span class="nc" id="L449">        fireGenerationEvent(_loc.get(&quot;generating-all-indexes&quot;, schemaName));</span>
+
+<span class="nc" id="L451">        DatabaseMetaData meta = _conn.getMetaData();</span>
+        try {
+<span class="nc bnc" id="L453" title="All 2 branches missed.">            if (tableNames == null)</span>
+<span class="nc" id="L454">                generateIndexes(schemaName, null, _conn, meta);</span>
+            else
+<span class="nc bnc" id="L456" title="All 2 branches missed.">                for (int i = 0; i &lt; tableNames.length; i++)</span>
+<span class="nc" id="L457">                    generateIndexes(schemaName, tableNames[i], _conn, meta);</span>
+        } finally {
+            // some databases require a commit after metadata to release locks
+            try {
+<span class="nc" id="L461">                _conn.commit();</span>
+<span class="nc" id="L462">            } catch (SQLException se) {</span>
+<span class="nc" id="L463">            }</span>
+        }
+<span class="nc" id="L465">    }</span>
+
+    /**
+     * Generate foreign key information for the given schema. This method
+     * must be called in addition to {@link #generateSchema}. It should
+     * only be called after all schemas are generated. The schema name and
+     * tables array can be null to indicate that indexes should be generated
+     * for all schemas and/or tables.
+     * @deprecated
+     */
+    @Deprecated
+    public void generateForeignKeys(String schemaName, String[] tableNames)
+        throws SQLException {
+<span class="nc" id="L478">        generateForeignKeys(DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L479">            DBIdentifier.toArray(tableNames, DBIdentifierType.TABLE));</span>
+<span class="nc" id="L480">    }</span>
+
+
+    /**
+     * Generate foreign key information for the given schema. This method
+     * must be called in addition to {@link #generateSchema}. It should
+     * only be called after all schemas are generated. The schema name and
+     * tables array can be null to indicate that indexes should be generated
+     * for all schemas and/or tables.
+     */
+    public void generateForeignKeys(DBIdentifier schemaName, DBIdentifier[] tableNames)
+        throws SQLException {
+<span class="nc" id="L492">        fireGenerationEvent(_loc.get(&quot;generating-all-foreigns&quot;, schemaName));</span>
+
+<span class="nc" id="L494">        DatabaseMetaData meta = _conn.getMetaData();</span>
+        try {
+<span class="nc bnc" id="L496" title="All 2 branches missed.">            if (tableNames == null)</span>
+<span class="nc" id="L497">                generateForeignKeys(schemaName, null, _conn, meta);</span>
+            else
+<span class="nc bnc" id="L499" title="All 2 branches missed.">                for (int i = 0; i &lt; tableNames.length; i++)</span>
+<span class="nc" id="L500">                    generateForeignKeys(schemaName, tableNames[i], _conn, meta);</span>
+        } finally {
+            // some databases require a commit after metadata to release locks
+            try {
+<span class="nc" id="L504">                _conn.commit();</span>
+<span class="nc" id="L505">            } catch (SQLException se) {</span>
+<span class="nc" id="L506">            }</span>
+        }
+<span class="nc" id="L508">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    public void generateTables(String schemaName, String tableName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L517">        generateTables(DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L518">            DBIdentifier.newTable(tableName), conn, meta);</span>
+<span class="nc" id="L519">    }</span>
+
+    /**
+     * Adds all tables matching the given name pattern to the schema.
+     */
+    public void generateTables(DBIdentifier schemaName, DBIdentifier tableName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L527">        fireGenerationEvent(_loc.get(&quot;generating-columns&quot;, schemaName,</span>
+            tableName));
+<span class="nc bnc" id="L529" title="All 2 branches missed.">        if (_log.isTraceEnabled())</span>
+<span class="nc" id="L530">            _log.trace(_loc.get(&quot;gen-tables&quot;, schemaName, tableName));</span>
+
+<span class="nc" id="L532">        Column[] cols = _dict.getColumns(meta,</span>
+<span class="nc" id="L533">            DBIdentifier.newCatalog(conn.getCatalog()), schemaName,</span>
+            tableName, null, conn);
+
+        // when we want to get all the columns for all tables, we need to build
+        // a list of tables to verify because some databases (e.g., Postgres)
+        // will include indexes in the list of columns, and there is no way to
+        // distinguish the indexes from proper columns
+<span class="nc" id="L540">        Set&lt;DBIdentifier&gt; tableNames = null;</span>
+<span class="nc bnc" id="L541" title="All 4 branches missed.">        if (DBIdentifier.isNull(tableName) || &quot;%&quot;.equals(tableName.getName())) {</span>
+<span class="nc" id="L542">            Table[] tables = _dict.getTables(meta, DBIdentifier.newCatalog(conn.getCatalog()),</span>
+                schemaName, tableName, conn);
+<span class="nc" id="L544">            tableNames = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L545" title="All 4 branches missed.">            for (int i = 0; tables != null &amp;&amp; i &lt; tables.length; i++) {</span>
+<span class="nc bnc" id="L546" title="All 2 branches missed.">                if (cols == null) {</span>
+<span class="nc" id="L547">                    tableNames.add(tables[i].getIdentifier());</span>
+                }
+                else {
+<span class="nc" id="L550">                    DBIdentifier sName = DBIdentifier.toUpper(tables[i].getIdentifier());</span>
+<span class="nc" id="L551">                    tableNames.add(sName);</span>
+                }
+            }
+        }
+
+        // if database can't handle null table name, recurse on each known name
+<span class="nc bnc" id="L557" title="All 4 branches missed.">        if (cols == null &amp;&amp; DBIdentifier.isNull(tableName)) {</span>
+<span class="nc bnc" id="L558" title="All 2 branches missed.">            for (Iterator&lt;DBIdentifier&gt; itr = tableNames.iterator(); itr.hasNext();)</span>
+<span class="nc" id="L559">                generateTables(schemaName, itr.next(), conn, meta);</span>
+<span class="nc" id="L560">            return;</span>
+        }
+
+<span class="nc" id="L563">        SchemaGroup group = getSchemaGroup();</span>
+        Schema schema;
+        Table table;
+<span class="nc" id="L566">        DBIdentifier tableSchema = DBIdentifier.NULL;</span>
+<span class="nc bnc" id="L567" title="All 2 branches missed.">        DBIdentifier baseTableName = (tableName == null) ? DBIdentifier.NULL : tableName.clone();</span>
+<span class="nc bnc" id="L568" title="All 4 branches missed.">        for (int i = 0; cols != null &amp;&amp; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L569" title="All 4 branches missed.">            if (DBIdentifier.isNull(baseTableName) || baseTableName.equals(&quot;%&quot;)) {</span>
+<span class="nc" id="L570">                tableName = cols[i].getTableIdentifier();</span>
+            } else {
+<span class="nc" id="L572">                tableName = baseTableName;</span>
+            }
+<span class="nc bnc" id="L574" title="All 2 branches missed.">            if (DBIdentifier.isNull(schemaName)) {</span>
+<span class="nc" id="L575">                tableSchema = DBIdentifier.trimToNull(cols[i].getSchemaIdentifier());</span>
+            }
+            else {
+<span class="nc" id="L578">                tableSchema = schemaName;</span>
+            }
+
+            // ignore special tables
+<span class="nc bnc" id="L582" title="All 2 branches missed.">            if (!_openjpaTables &amp;&amp;</span>
+<span class="nc bnc" id="L583" title="All 2 branches missed.">                (tableName.getName().toUpperCase(Locale.ENGLISH).startsWith(&quot;OPENJPA_&quot;)</span>
+<span class="nc bnc" id="L584" title="All 2 branches missed.">                    || tableName.getName().toUpperCase(Locale.ENGLISH).startsWith(&quot;JDO_&quot;))) // legacy</span>
+<span class="nc" id="L585">                continue;</span>
+<span class="nc bnc" id="L586" title="All 4 branches missed.">            if (_dict.isSystemTable(tableName, tableSchema, !DBIdentifier.isNull(schemaName)))</span>
+<span class="nc" id="L587">                continue;</span>
+
+            // ignore tables not in list, or not allowed by schemas property
+
+<span class="nc bnc" id="L591" title="All 2 branches missed.">            if (tableNames != null</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">                &amp;&amp; !tableNames.contains(DBIdentifier.toUpper(tableName)))</span>
+<span class="nc" id="L593">                continue;</span>
+<span class="nc bnc" id="L594" title="All 2 branches missed.">            if (!isAllowedTable(tableSchema, tableName))</span>
+<span class="nc" id="L595">                continue;</span>
+
+<span class="nc" id="L597">            schema = group.getSchema(tableSchema);</span>
+<span class="nc bnc" id="L598" title="All 2 branches missed.">            if (schema == null)</span>
+<span class="nc" id="L599">                schema = group.addSchema(tableSchema);</span>
+
+<span class="nc" id="L601">            table = schema.getTable(tableName);</span>
+<span class="nc bnc" id="L602" title="All 2 branches missed.">            if (table == null) {</span>
+<span class="nc" id="L603">                table = schema.addTable(tableName);</span>
+<span class="nc bnc" id="L604" title="All 2 branches missed.">                if (_log.isTraceEnabled())</span>
+<span class="nc" id="L605">                    _log.trace(_loc.get(&quot;col-table&quot;, table));</span>
+            }
+
+<span class="nc bnc" id="L608" title="All 2 branches missed.">            if (_log.isTraceEnabled())</span>
+<span class="nc" id="L609">                _log.trace(_loc.get(&quot;gen-column&quot;, cols[i].getIdentifier(), table));</span>
+
+<span class="nc bnc" id="L611" title="All 2 branches missed.">            if (table.getColumn(cols[i].getIdentifier()) == null) {</span>
+<span class="nc" id="L612">                table.importColumn(cols[i]);</span>
+            }
+        }
+<span class="nc" id="L615">    }</span>
+
+    /**
+     * Return whether the given table is allowed by the user's schema list.
+     */
+    private boolean isAllowedTable(DBIdentifier schema, DBIdentifier table) {
+<span class="nc bnc" id="L621" title="All 2 branches missed.">        if (_allowed == null)</span>
+<span class="nc" id="L622">            return true;</span>
+
+        // do case-insensitive comparison on allowed table and schema names
+        DBIdentifier[] tables;
+<span class="nc" id="L626">        DBIdentifier[] anySchemaTables = null;</span>
+<span class="nc bnc" id="L627" title="All 2 branches missed.">        for (int i = 0; i &lt; _allowed.length; i++) {</span>
+<span class="nc bnc" id="L628" title="All 2 branches missed.">            if (_allowed[i][0] == null) {</span>
+<span class="nc" id="L629">                anySchemaTables = (DBIdentifier[]) _allowed[i][1];</span>
+<span class="nc bnc" id="L630" title="All 2 branches missed.">                if (schema == null)</span>
+<span class="nc" id="L631">                    break;</span>
+                continue;
+            }
+<span class="nc bnc" id="L634" title="All 2 branches missed.">            if (!schema.equals(_allowed[i][0]))</span>
+<span class="nc" id="L635">                continue;</span>
+
+<span class="nc bnc" id="L637" title="All 2 branches missed.">            if (table == null)</span>
+<span class="nc" id="L638">                return true;</span>
+<span class="nc" id="L639">            tables = (DBIdentifier[]) _allowed[i][1];</span>
+<span class="nc bnc" id="L640" title="All 2 branches missed.">            if (tables == null)</span>
+<span class="nc" id="L641">                return true;</span>
+<span class="nc bnc" id="L642" title="All 2 branches missed.">            for (int j = 0; j &lt; tables.length; j++)</span>
+<span class="nc bnc" id="L643" title="All 2 branches missed.">                if (table.equals(tables[j]))</span>
+<span class="nc" id="L644">                    return true;</span>
+        }
+
+<span class="nc bnc" id="L647" title="All 2 branches missed.">        if (anySchemaTables != null) {</span>
+<span class="nc bnc" id="L648" title="All 2 branches missed.">            if (table == null)</span>
+<span class="nc" id="L649">                return true;</span>
+<span class="nc bnc" id="L650" title="All 2 branches missed.">            for (int i = 0; i &lt; anySchemaTables.length; i++)</span>
+<span class="nc bnc" id="L651" title="All 2 branches missed.">                if (table.equals(anySchemaTables[i]))</span>
+<span class="nc" id="L652">                    return true;</span>
+        }
+<span class="nc" id="L654">        return false;</span>
+    }
+
+    /**
+     * Generates table primary keys.
+     * @deprecated
+     */
+    @Deprecated
+    public void generatePrimaryKeys(String schemaName, String tableName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L665">        generatePrimaryKeys(DBIdentifier.newSchema(schemaName), DBIdentifier.newTable(tableName),</span>
+            conn, meta);
+<span class="nc" id="L667">    }</span>
+
+    public void generatePrimaryKeys(DBIdentifier schemaName, DBIdentifier tableName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L672">        fireGenerationEvent(_loc.get(&quot;generating-primary&quot;,</span>
+            schemaName, tableName));
+<span class="nc bnc" id="L674" title="All 2 branches missed.">        if (_log.isTraceEnabled())</span>
+<span class="nc" id="L675">            _log.trace(_loc.get(&quot;gen-pks&quot;, schemaName, tableName));</span>
+
+        // if looking for a non-existant table, just return
+<span class="nc" id="L678">        SchemaGroup group = getSchemaGroup();</span>
+<span class="nc bnc" id="L679" title="All 4 branches missed.">        if (tableName != null &amp;&amp; !tableName.isNull() &amp;&amp;</span>
+<span class="nc bnc" id="L680" title="All 2 branches missed.">                group.findTable(QualifiedDBIdentifier.getPath(tableName)) == null)</span>
+<span class="nc" id="L681">            return;</span>
+
+        // if the database can't use a table name wildcard, recurse on each
+        // concrete table in the requested schema(s)
+<span class="nc" id="L685">        PrimaryKey[] pks = _dict.getPrimaryKeys(meta,</span>
+<span class="nc" id="L686">            DBIdentifier.newCatalog(conn.getCatalog()),</span>
+            schemaName, tableName, conn);
+        Table table;
+<span class="nc bnc" id="L689" title="All 4 branches missed.">        if (pks == null &amp;&amp; tableName == null) {</span>
+<span class="nc" id="L690">            Collection&lt;Table&gt; tables = getTables(schemaName);</span>
+<span class="nc bnc" id="L691" title="All 2 branches missed.">            for (Iterator&lt;Table&gt; itr = tables.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L692">                table = itr.next();</span>
+<span class="nc" id="L693">                generatePrimaryKeys(table.getSchemaIdentifier(),</span>
+<span class="nc" id="L694">                    table.getIdentifier(), conn, meta);</span>
+            }
+<span class="nc" id="L696">            return;</span>
+        }
+
+        Schema schema;
+        PrimaryKey pk;
+<span class="nc" id="L701">        DBIdentifier name = DBIdentifier.NULL;</span>
+<span class="nc" id="L702">        DBIdentifier colName = DBIdentifier.NULL;</span>
+<span class="nc bnc" id="L703" title="All 4 branches missed.">        for (int i = 0; pks != null &amp;&amp; i &lt; pks.length; i++) {</span>
+<span class="nc" id="L704">            schemaName = DBIdentifier.trimToNull(pks[i].getSchemaIdentifier());</span>
+<span class="nc" id="L705">            schema = group.getSchema(schemaName);</span>
+<span class="nc bnc" id="L706" title="All 2 branches missed.">            if (schema == null)</span>
+<span class="nc" id="L707">                continue;</span>
+<span class="nc" id="L708">            table = schema.getTable(pks[i].getTableIdentifier());</span>
+<span class="nc bnc" id="L709" title="All 2 branches missed.">            if (table == null)</span>
+<span class="nc" id="L710">                continue;</span>
+
+<span class="nc" id="L712">            colName = pks[i].getColumnIdentifier();</span>
+<span class="nc" id="L713">            name = pks[i].getIdentifier();</span>
+<span class="nc bnc" id="L714" title="All 2 branches missed.">            if (_log.isTraceEnabled())</span>
+<span class="nc" id="L715">                _log.trace(_loc.get(&quot;gen-pk&quot;, name, table, colName));</span>
+
+<span class="nc" id="L717">            pk = table.getPrimaryKey();</span>
+<span class="nc bnc" id="L718" title="All 2 branches missed.">            if (pk == null)</span>
+<span class="nc" id="L719">                pk = table.addPrimaryKey(name);</span>
+<span class="nc" id="L720">            pk.addColumn(table.getColumn(colName));</span>
+        }
+<span class="nc" id="L722">    }</span>
+
+    /**
+     * Generates table indexes.
+     * @deprecated
+     */
+    @Deprecated
+    public void generateIndexes(String schemaName, String tableName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L732">        generateIndexes(DBIdentifier.newSchema(schemaName), DBIdentifier.newTable(tableName),</span>
+            conn, meta);
+<span class="nc" id="L734">    }</span>
+
+    public void generateIndexes(DBIdentifier schemaName, DBIdentifier tableName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L739">        fireGenerationEvent(_loc.get(&quot;generating-indexes&quot;,</span>
+            schemaName, tableName));
+<span class="nc bnc" id="L741" title="All 2 branches missed.">        if (_log.isTraceEnabled())</span>
+<span class="nc" id="L742">            _log.trace(_loc.get(&quot;gen-indexes&quot;, schemaName, tableName));</span>
+
+        // if looking for a non-existant table, just return
+<span class="nc" id="L745">        SchemaGroup group = getSchemaGroup();</span>
+<span class="nc bnc" id="L746" title="All 4 branches missed.">        if (tableName != null &amp;&amp; group.findTable(QualifiedDBIdentifier.getPath(tableName)) == null)</span>
+<span class="nc" id="L747">            return;</span>
+
+        // if the database can't use a table name wildcard, recurse on each
+        // concrete table in the requested schema(s)
+<span class="nc" id="L751">        Index[] idxs = _dict.getIndexInfo(meta, DBIdentifier.newCatalog(conn.getCatalog()),</span>
+            schemaName, tableName, false, true, conn);
+        Table table;
+<span class="nc bnc" id="L754" title="All 4 branches missed.">        if (idxs == null &amp;&amp; tableName == null) {</span>
+<span class="nc" id="L755">            Collection&lt;Table&gt; tables = getTables(schemaName);</span>
+<span class="nc bnc" id="L756" title="All 2 branches missed.">            for (Iterator&lt;Table&gt; itr = tables.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L757">                table = itr.next();</span>
+<span class="nc" id="L758">                generateIndexes(table.getSchemaIdentifier(),</span>
+<span class="nc" id="L759">                    table.getIdentifier(), conn, meta);</span>
+            }
+<span class="nc" id="L761">            return;</span>
+        }
+
+        Schema schema;
+        Index idx;
+<span class="nc" id="L766">        DBIdentifier name = DBIdentifier.NULL;</span>
+<span class="nc" id="L767">        DBIdentifier colName = DBIdentifier.NULL;</span>
+<span class="nc" id="L768">        DBIdentifier pkName = DBIdentifier.NULL;</span>
+<span class="nc bnc" id="L769" title="All 4 branches missed.">        for (int i = 0; idxs != null &amp;&amp; i &lt; idxs.length; i++) {</span>
+<span class="nc" id="L770">            schemaName = DBIdentifier.trimToNull(idxs[i].getSchemaIdentifier());</span>
+<span class="nc" id="L771">            schema = group.getSchema(schemaName);</span>
+<span class="nc bnc" id="L772" title="All 2 branches missed.">            if (schema == null)</span>
+<span class="nc" id="L773">                continue;</span>
+<span class="nc" id="L774">            table = schema.getTable(idxs[i].getTableIdentifier());</span>
+<span class="nc bnc" id="L775" title="All 2 branches missed.">            if (table == null)</span>
+<span class="nc" id="L776">                continue;</span>
+
+<span class="nc bnc" id="L778" title="All 2 branches missed.">            if (table.getPrimaryKey() != null)</span>
+<span class="nc" id="L779">                pkName = table.getPrimaryKey().getIdentifier();</span>
+            else
+<span class="nc" id="L781">                pkName = null;</span>
+
+            // statistics don't have names; skip them
+<span class="nc" id="L784">            name = idxs[i].getIdentifier();</span>
+<span class="nc bnc" id="L785" title="All 4 branches missed.">            if (DBIdentifier.isEmpty(name)</span>
+<span class="nc bnc" id="L786" title="All 2 branches missed.">                || (pkName != null &amp;&amp; name.equals(pkName))</span>
+<span class="nc bnc" id="L787" title="All 2 branches missed.">                || _dict.isSystemIndex(name, table))</span>
+<span class="nc" id="L788">                continue;</span>
+
+<span class="nc" id="L790">            colName = idxs[i].getColumnIdentifier();</span>
+<span class="nc bnc" id="L791" title="All 2 branches missed.">            if (table.getColumn(colName) == null)</span>
+<span class="nc" id="L792">                continue;</span>
+
+<span class="nc bnc" id="L794" title="All 2 branches missed.">            if (_log.isTraceEnabled())</span>
+<span class="nc" id="L795">                _log.trace(_loc.get(&quot;gen-index&quot;, name, table, colName));</span>
+
+            // same index may have multiple rows for multiple cols
+<span class="nc" id="L798">            idx = table.getIndex(name);</span>
+<span class="nc bnc" id="L799" title="All 2 branches missed.">            if (idx == null) {</span>
+<span class="nc" id="L800">                idx = table.addIndex(name);</span>
+<span class="nc" id="L801">                idx.setUnique(idxs[i].isUnique());</span>
+            }
+<span class="nc" id="L803">            idx.addColumn(table.getColumn(colName));</span>
+        }
+<span class="nc" id="L805">    }</span>
+
+    /**
+     * Generates table foreign keys.
+     */
+    public void generateForeignKeys(String schemaName, String tableName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L813">        generateForeignKeys(DBIdentifier.newSchema(schemaName), DBIdentifier.newTable(tableName),</span>
+            conn, meta);
+<span class="nc" id="L815">    }</span>
+
+    public void generateForeignKeys(DBIdentifier schemaName, DBIdentifier tableName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L820">        fireGenerationEvent(_loc.get(&quot;generating-foreign&quot;,</span>
+            schemaName, tableName));
+<span class="nc bnc" id="L822" title="All 2 branches missed.">        if (_log.isTraceEnabled())</span>
+<span class="nc" id="L823">            _log.trace(_loc.get(&quot;gen-fks&quot;, schemaName, tableName));</span>
+
+        // if looking for a non-existant table, just return
+<span class="nc" id="L826">        SchemaGroup group = getSchemaGroup();</span>
+<span class="nc bnc" id="L827" title="All 4 branches missed.">        if (!DBIdentifier.isNull(tableName) &amp;&amp; group.findTable(QualifiedDBIdentifier.getPath(tableName)) == null)</span>
+<span class="nc" id="L828">            return;</span>
+
+        // if the database can't use a table name wildcard, recurse on each
+        // concrete table in the requested schema(s)
+<span class="nc" id="L832">        ForeignKey[] fks = _dict.getImportedKeys(meta, DBIdentifier.newCatalog(conn.getCatalog()),</span>
+            schemaName, tableName, conn);
+        Table table;
+<span class="nc bnc" id="L835" title="All 4 branches missed.">        if (fks == null &amp;&amp; DBIdentifier.isNull(tableName)) {</span>
+<span class="nc" id="L836">            Collection&lt;Table&gt; tables = getTables(schemaName);</span>
+<span class="nc bnc" id="L837" title="All 2 branches missed.">            for (Iterator&lt;Table&gt; itr = tables.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L838">                table = itr.next();</span>
+<span class="nc" id="L839">                generateForeignKeys(table.getSchemaIdentifier(),</span>
+<span class="nc" id="L840">                    table.getIdentifier(), conn, meta);</span>
+            }
+<span class="nc" id="L842">            return;</span>
+        }
+
+        Schema schema;
+        Table pkTable;
+        ForeignKey fk;
+<span class="nc" id="L848">        DBIdentifier name = DBIdentifier.NULL;</span>
+<span class="nc" id="L849">        DBIdentifier pkSchemaName = DBIdentifier.NULL;</span>
+<span class="nc" id="L850">        DBIdentifier pkTableName = DBIdentifier.NULL;</span>
+<span class="nc" id="L851">        DBIdentifier pkColName = DBIdentifier.NULL;</span>
+<span class="nc" id="L852">        DBIdentifier fkColName = DBIdentifier.NULL;</span>
+        int seq;
+<span class="nc" id="L854">        boolean seqWas0 = false; // some drivers incorrectly start at 0</span>
+<span class="nc" id="L855">        Collection&lt;ForeignKey&gt; invalids = null;</span>
+<span class="nc bnc" id="L856" title="All 4 branches missed.">        for (int i = 0; fks != null &amp;&amp; i &lt; fks.length; i++) {</span>
+<span class="nc" id="L857">            schemaName = DBIdentifier.trimToNull(fks[i].getSchemaIdentifier());</span>
+<span class="nc" id="L858">            schema = group.getSchema(schemaName);</span>
+<span class="nc bnc" id="L859" title="All 2 branches missed.">            if (schema == null)</span>
+<span class="nc" id="L860">                continue;</span>
+<span class="nc" id="L861">            table = schema.getTable(fks[i].getTableIdentifier());</span>
+<span class="nc bnc" id="L862" title="All 2 branches missed.">            if (table == null)</span>
+<span class="nc" id="L863">                continue;</span>
+
+<span class="nc" id="L865">            name = fks[i].getIdentifier();</span>
+<span class="nc" id="L866">            fkColName = fks[i].getColumnIdentifier();</span>
+<span class="nc" id="L867">            pkColName = fks[i].getPrimaryKeyColumnIdentifier();</span>
+<span class="nc" id="L868">            seq = fks[i].getKeySequence();</span>
+<span class="nc bnc" id="L869" title="All 2 branches missed.">            if (seq == 0)</span>
+<span class="nc" id="L870">                seqWas0 = true;</span>
+<span class="nc bnc" id="L871" title="All 2 branches missed.">            if (seqWas0)</span>
+<span class="nc" id="L872">                seq++;</span>
+
+            // find pk table
+<span class="nc" id="L875">            pkSchemaName = fks[i].getPrimaryKeySchemaIdentifier();</span>
+<span class="nc bnc" id="L876" title="All 2 branches missed.">            if(_dict.getTrimSchemaName()) {</span>
+<span class="nc" id="L877">                pkSchemaName= DBIdentifier.trimToNull(pkSchemaName);</span>
+            }
+<span class="nc" id="L879">            pkTableName = fks[i].getPrimaryKeyTableIdentifier();</span>
+<span class="nc bnc" id="L880" title="All 2 branches missed.">            if (_log.isTraceEnabled())</span>
+<span class="nc" id="L881">                _log.trace(_loc.get(&quot;gen-fk&quot;, new Object[]{ name, table,</span>
+                    fkColName, pkTableName, pkColName, seq + &quot;&quot; }));
+
+<span class="nc" id="L884">            pkTable = group.findTable(QualifiedDBIdentifier.newPath(pkSchemaName, pkTableName));</span>
+<span class="nc bnc" id="L885" title="All 2 branches missed.">            if (pkTable == null)</span>
+<span class="nc" id="L886">                throw new SQLException(_loc.get(&quot;gen-nofktable&quot;,</span>
+<span class="nc" id="L887">                    table, pkTableName).getMessage());</span>
+
+            // this sucks, because it is *not* guaranteed to work;
+            // the fk resultset is ordered by primary key table, then
+            // sequence number within the foreign key (some drivers don't
+            // use sequence numbers correctly either); since fk names
+            // are allowed to be null, all this adds up to the fact
+            // that there is absolutely no way to distinguish between
+            // multiple multi-column fks to the same table; we're going
+            // to rely on fk name here and hope it works
+<span class="nc" id="L897">            fk = table.getForeignKey(name);</span>
+
+            // start a new fk?
+<span class="nc bnc" id="L900" title="All 4 branches missed.">            if (seq == 1 || fk == null) {</span>
+<span class="nc" id="L901">                fk = table.addForeignKey(name);</span>
+<span class="nc" id="L902">                fk.setDeferred(fks[i].isDeferred());</span>
+<span class="nc" id="L903">                fk.setDeleteAction(fks[i].getDeleteAction());</span>
+            }
+
+<span class="nc bnc" id="L906" title="All 4 branches missed.">            if (invalids == null || !invalids.contains(fk)) {</span>
+                try {
+<span class="nc" id="L908">                    Column fkCol = table.getColumn(fkColName);</span>
+<span class="nc bnc" id="L909" title="All 2 branches missed.">                    if (fkCol == null) {</span>
+<span class="nc" id="L910">                        throw new IllegalArgumentException(_loc.get(</span>
+<span class="nc" id="L911">                            &quot;no-column&quot;, fkColName, table.getIdentifier())</span>
+<span class="nc" id="L912">                            .getMessage());</span>
+                    }
+<span class="nc" id="L914">                    fk.join(fkCol, pkTable.getColumn(pkColName));</span>
+<span class="nc" id="L915">                } catch (IllegalArgumentException iae) {</span>
+<span class="nc bnc" id="L916" title="All 2 branches missed.">                    if (_log.isWarnEnabled())</span>
+<span class="nc" id="L917">                        _log.warn(_loc.get(&quot;bad-join&quot;, iae.toString()));</span>
+<span class="nc bnc" id="L918" title="All 2 branches missed.">                    if (invalids == null)</span>
+<span class="nc" id="L919">                        invalids = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L920">                    invalids.add(fk);</span>
+<span class="nc" id="L921">                }</span>
+            }
+        }
+
+        // remove invalid fks
+<span class="nc bnc" id="L926" title="All 2 branches missed.">        if (invalids != null) {</span>
+<span class="nc bnc" id="L927" title="All 2 branches missed.">            for (Iterator&lt;ForeignKey&gt; itr = invalids.iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L928">                fk = itr.next();</span>
+<span class="nc" id="L929">                fk.getTable().removeForeignKey(fk);</span>
+            }
+        }
+<span class="nc" id="L932">    }</span>
+
+    /**
+     * Adds all sequences matching the given name pattern to the schema.
+     * @deprecated
+     */
+    @Deprecated
+    public void generateSequences(String schemaName, String sequenceName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L942">        generateSequences(DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L943">            DBIdentifier.newSequence(sequenceName), conn, meta);</span>
+<span class="nc" id="L944">    }</span>
+
+    public void generateSequences(DBIdentifier schemaName, DBIdentifier sequenceName,
+        Connection conn, DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L949">        fireGenerationEvent(_loc.get(&quot;generating-sequences&quot;, schemaName));</span>
+<span class="nc bnc" id="L950" title="All 2 branches missed.">        if (_log.isTraceEnabled())</span>
+<span class="nc" id="L951">            _log.trace(_loc.get(&quot;gen-seqs&quot;, schemaName, sequenceName));</span>
+
+        // since all the sequences are generated under the default schema
+        // therefore, we can use the null schemaname to search
+<span class="nc" id="L955">        Sequence[] seqs = _dict.getSequences(meta, DBIdentifier.newCatalog(conn.getCatalog()),</span>
+            DBIdentifier.NULL, sequenceName, conn);
+
+<span class="nc" id="L958">        SchemaGroup group = getSchemaGroup();</span>
+        Schema schema;
+<span class="nc" id="L960">        DBIdentifier sequenceSchema = DBIdentifier.NULL;</span>
+<span class="nc bnc" id="L961" title="All 4 branches missed.">        for (int i = 0; seqs != null &amp;&amp; i &lt; seqs.length; i++) {</span>
+<span class="nc" id="L962">            sequenceName = seqs[i].getIdentifier();</span>
+<span class="nc" id="L963">            sequenceSchema = DBIdentifier.trimToNull(seqs[i].getSchemaIdentifier());</span>
+
+            // ignore special tables
+<span class="nc" id="L966">            String seqUpper = DBIdentifier.toUpper(sequenceName).getName();</span>
+<span class="nc bnc" id="L967" title="All 2 branches missed.">            if (!_openjpaTables &amp;&amp;</span>
+<span class="nc bnc" id="L968" title="All 2 branches missed.">                (seqUpper.startsWith(&quot;OPENJPA_&quot;)</span>
+<span class="nc bnc" id="L969" title="All 2 branches missed.">                    || seqUpper.startsWith(&quot;JDO_&quot;))) // legacy</span>
+<span class="nc" id="L970">                continue;</span>
+<span class="nc bnc" id="L971" title="All 4 branches missed.">            if (_dict.isSystemSequence(sequenceName, sequenceSchema,</span>
+                schemaName != null, conn))
+<span class="nc" id="L973">                continue;</span>
+<span class="nc bnc" id="L974" title="All 2 branches missed.">            if (!isAllowedTable(sequenceSchema, null))</span>
+<span class="nc" id="L975">                continue;</span>
+
+<span class="nc" id="L977">            schema = group.getSchema(sequenceSchema);</span>
+<span class="nc bnc" id="L978" title="All 2 branches missed.">            if (schema == null) {</span>
+<span class="nc" id="L979">                schema = group.addSchema(sequenceSchema);</span>
+            }
+<span class="nc bnc" id="L981" title="All 2 branches missed.">            if (schema.getSequence(sequenceName) == null) {</span>
+<span class="nc" id="L982">                schema.addSequence(sequenceName);</span>
+            }
+        }
+<span class="nc" id="L985">    }</span>
+
+    /**
+     * Notify any listeners that a schema object was generated. Returns
+     * true if generation should continue.
+     */
+    private void fireGenerationEvent(Object schemaObject)
+        throws SQLException {
+<span class="nc bnc" id="L993" title="All 2 branches missed.">        if (schemaObject == null)</span>
+<span class="nc" id="L994">            return;</span>
+<span class="nc bnc" id="L995" title="All 4 branches missed.">        if (_listeners == null || _listeners.size() == 0)</span>
+<span class="nc" id="L996">            return;</span>
+
+<span class="nc" id="L998">        Event e = new Event(schemaObject, _schemaObjects);</span>
+<span class="nc bnc" id="L999" title="All 2 branches missed.">        for (Iterator&lt;Listener&gt; i = _listeners.iterator(); i.hasNext();) {</span>
+<span class="nc" id="L1000">            Listener l = i.next();</span>
+<span class="nc bnc" id="L1001" title="All 2 branches missed.">            if (!l.schemaObjectGenerated(e))</span>
+<span class="nc" id="L1002">                throw new SQLException(_loc.get(&quot;refresh-cancelled&quot;)</span>
+<span class="nc" id="L1003">                    .getMessage());</span>
+<span class="nc" id="L1004">        }</span>
+<span class="nc" id="L1005">    }</span>
+
+    /**
+     * Adds a listener for schema generation events.
+     *
+     * @param l the listener to add
+     */
+    public void addListener(Listener l) {
+<span class="nc bnc" id="L1013" title="All 2 branches missed.">        if (_listeners == null)</span>
+<span class="nc" id="L1014">            _listeners = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L1015">        _listeners.add(l);</span>
+<span class="nc" id="L1016">    }</span>
+
+    /**
+     * Removes a schema generation listener for schema events.
+     *
+     * @param l the listener to remove
+     * @return true if it was successfully removed
+     */
+    public boolean removeListener(Listener l) {
+<span class="nc bnc" id="L1025" title="All 4 branches missed.">        return _listeners != null &amp;&amp; _listeners.remove(l);</span>
+    }
+
+    /**
+     * Return all tables for the given schema name, or all tables in
+     * the schema group if null is given.
+     */
+    private Collection&lt;Table&gt; getTables(DBIdentifier schemaName) {
+<span class="nc" id="L1033">        SchemaGroup group = getSchemaGroup();</span>
+<span class="nc bnc" id="L1034" title="All 2 branches missed.">        if (!DBIdentifier.isNull(schemaName)) {</span>
+<span class="nc" id="L1035">            Schema schema = group.getSchema(schemaName);</span>
+<span class="nc bnc" id="L1036" title="All 2 branches missed.">            if (schema == null)</span>
+<span class="nc" id="L1037">                return Collections.emptyList();</span>
+<span class="nc" id="L1038">            return Arrays.asList(schema.getTables());</span>
+        }
+
+<span class="nc" id="L1041">        Schema[] schemas = group.getSchemas();</span>
+<span class="nc" id="L1042">        Collection&lt;Table&gt; tables = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L1043" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++)</span>
+<span class="nc" id="L1044">            tables.addAll(Arrays.asList(schemas[i].getTables()));</span>
+<span class="nc" id="L1045">        return tables;</span>
+    }
+
+    /**
+     * A listener for a potentially lengthy schema generation process.
+     */
+    public interface Listener {
+
+        boolean schemaObjectGenerated(Event e);
+    }
+
+    /**
+     * An event corresponding to the generation of a schema object.
+     */
+    public static class Event extends EventObject {
+        private static final long serialVersionUID = 1L;
+        private final int _total;
+
+        public Event(Object ob, int total) {
+<span class="nc" id="L1064">            super(ob);</span>
+<span class="nc" id="L1065">            _total = total;</span>
+<span class="nc" id="L1066">        }</span>
+
+        public int getTotal() {
+<span class="nc" id="L1069">            return _total;</span>
+        }
+    }
+
+    private void getConn() throws SQLException {
+<span class="nc bnc" id="L1074" title="All 2 branches missed.">        if (_conn == null) {</span>
+<span class="nc" id="L1075">            _conn = _ds.getConnection();</span>
+        }
+<span class="nc" id="L1077">    }</span>
+
+    private void closeConn() throws SQLException {
+<span class="nc bnc" id="L1080" title="All 2 branches missed.">        if (_conn != null ) {</span>
+<span class="nc bnc" id="L1081" title="All 2 branches missed.">            if(! _conn.isClosed()) {</span>
+<span class="nc" id="L1082">                _conn.close();</span>
+            }
+        }
+<span class="nc" id="L1085">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

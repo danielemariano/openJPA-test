@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>StartsWithExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">StartsWithExpression.java</span></div><h1>StartsWithExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.meta.XMLMetaData;
+
+/**
+ * Test if one string starts with another.
+ *
+ * @author Abe White
+ */
+class StartsWithExpression
+    implements Exp {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final Val _val1;
+    private final Val _val2;
+
+    /**
+     * Constructor. Supply values.
+     */
+<span class="nc" id="L49">    public StartsWithExpression(Val val1, Val val2) {</span>
+<span class="nc" id="L50">        _val1 = val1;</span>
+<span class="nc" id="L51">        _val2 = val2;</span>
+<span class="nc" id="L52">    }</span>
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, Map contains) {
+<span class="nc" id="L56">        ExpState s1 = _val1.initialize(sel, ctx, 0);</span>
+<span class="nc" id="L57">        ExpState s2 = _val2.initialize(sel, ctx, 0);</span>
+<span class="nc" id="L58">        return new BinaryOpExpState(sel.and(s1.joins, s2.joins), s1, s2);</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer buf) {
+<span class="nc" id="L64">        BinaryOpExpState bstate = (BinaryOpExpState) state;</span>
+<span class="nc" id="L65">        _val1.calculateValue(sel, ctx, bstate.state1, _val2, bstate.state2);</span>
+<span class="nc" id="L66">        _val2.calculateValue(sel, ctx, bstate.state2, _val1, bstate.state1);</span>
+
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        if (_val1 instanceof Const</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">            &amp;&amp; ((Const) _val1).getValue(ctx, bstate.state1) == null)</span>
+<span class="nc" id="L70">            buf.append(&quot;1 &lt;&gt; 1&quot;);</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        else if (_val2 instanceof Const) {</span>
+<span class="nc" id="L72">            Object o = ((Const) _val2).getValue(ctx, bstate.state2);</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">            if (o == null)</span>
+<span class="nc" id="L74">                buf.append(&quot;1 &lt;&gt; 1&quot;);</span>
+            else {
+<span class="nc" id="L76">                Column col = null;</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">                if (_val1 instanceof PCPath) {</span>
+<span class="nc" id="L78">                    Column[] cols = ((PCPath) _val1).getColumns(bstate.state1);</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">                    if (cols.length == 1)</span>
+<span class="nc" id="L80">                        col = cols[0];</span>
+                }
+
+<span class="nc" id="L83">                _val1.appendTo(sel, ctx, bstate.state1, buf, 0);</span>
+<span class="nc" id="L84">                buf.append(&quot; LIKE &quot;);</span>
+<span class="nc" id="L85">                buf.appendValue(o.toString() + &quot;%&quot;, col);</span>
+            }
+<span class="nc" id="L87">        } else {</span>
+<span class="nc" id="L88">            String pre = null;</span>
+<span class="nc" id="L89">            String post = null;</span>
+<span class="nc" id="L90">            DBDictionary dict = ctx.store.getDBDictionary();</span>
+<span class="nc" id="L91">            String func = dict.stringLengthFunction;</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">            if (func != null) {</span>
+<span class="nc" id="L93">                int idx = func.indexOf(&quot;{0}&quot;);</span>
+<span class="nc" id="L94">                pre = func.substring(0, idx);</span>
+<span class="nc" id="L95">                post = func.substring(idx + 3);</span>
+            }
+
+            // if we can't use LIKE, we have to take the substring of the
+            // first value and compare it to the second
+<span class="nc bnc" id="L100" title="All 2 branches missed.">            dict.assertSupport(pre != null, &quot;StringLengthFunction&quot;);</span>
+<span class="nc" id="L101">            dict.substring(buf,</span>
+                new FilterValueImpl(sel, ctx, bstate.state1, _val1),
+                new ZeroFilterValue(sel, state),
+                new StringLengthFilterValue(sel, ctx, bstate.state2, pre,post));
+<span class="nc" id="L105">            buf.append(&quot; = &quot;);</span>
+<span class="nc" id="L106">            _val2.appendTo(sel, ctx, bstate.state2, buf, 0);</span>
+        }
+
+<span class="nc" id="L109">        sel.append(buf, state.joins);</span>
+<span class="nc" id="L110">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L115">        BinaryOpExpState bstate = (BinaryOpExpState) state;</span>
+<span class="nc" id="L116">        _val1.selectColumns(sel, ctx, bstate.state1, true);</span>
+<span class="nc" id="L117">        _val2.selectColumns(sel, ctx, bstate.state2, true);</span>
+<span class="nc" id="L118">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L122">        visitor.enter(this);</span>
+<span class="nc" id="L123">        _val1.acceptVisit(visitor);</span>
+<span class="nc" id="L124">        _val2.acceptVisit(visitor);</span>
+<span class="nc" id="L125">        visitor.exit(this);</span>
+<span class="nc" id="L126">    }</span>
+
+    /**
+     * Evaluates to 0.
+     */
+    private static class ZeroFilterValue
+        implements FilterValue {
+
+        private final Select _sel;
+        private final ExpState _state;
+
+<span class="nc" id="L137">        public ZeroFilterValue(Select sel, ExpState state) {</span>
+<span class="nc" id="L138">            _sel = sel;</span>
+<span class="nc" id="L139">            _state = state;</span>
+<span class="nc" id="L140">        }</span>
+
+        @Override
+        public Class getType() {
+<span class="nc" id="L144">            return int.class;</span>
+        }
+
+        @Override
+        public int length() {
+<span class="nc" id="L149">            return 1;</span>
+        }
+
+        @Override
+        public void appendTo(SQLBuffer buf) {
+<span class="nc" id="L154">            appendTo(buf, 0);</span>
+<span class="nc" id="L155">        }</span>
+
+        @Override
+        public void appendTo(SQLBuffer buf, int index) {
+<span class="nc" id="L159">            buf.appendValue(0);</span>
+<span class="nc" id="L160">        }</span>
+
+        @Override
+        public String getColumnAlias(Column col) {
+<span class="nc" id="L164">            return _sel.getColumnAlias(col, _state.joins);</span>
+        }
+
+        @Override
+        public String getColumnAlias(String col, Table table) {
+<span class="nc" id="L169">            return _sel.getColumnAlias(col, table, _state.joins);</span>
+        }
+
+        @Override
+        public Object toDataStoreValue(Object val) {
+<span class="nc" id="L174">            return val;</span>
+        }
+
+        @Override
+        public boolean isConstant() {
+<span class="nc" id="L179">            return true;</span>
+        }
+
+        @Override
+        public Object getValue() {
+<span class="nc" id="L184">            return 0;</span>
+        }
+
+        @Override
+        public Object getSQLValue() {
+<span class="nc" id="L189">            return 0;</span>
+        }
+
+        @Override
+        public boolean isPath() {
+<span class="nc" id="L194">            return false;</span>
+        }
+
+        @Override
+        public ClassMapping getClassMapping() {
+<span class="nc" id="L199">            return null;</span>
+        }
+
+        @Override
+        public FieldMapping getFieldMapping() {
+<span class="nc" id="L204">            return null;</span>
+        }
+
+        @Override
+        public PCPath getXPath() {
+<span class="nc" id="L209">            return null;</span>
+        }
+
+        @Override
+        public XMLMetaData getXmlMapping() {
+<span class="nc" id="L214">            return null;</span>
+        }
+
+        @Override
+        public boolean requiresCast() {
+<span class="nc" id="L219">            return false;</span>
+        }
+
+    }
+
+    /**
+     * Evaluates to the length of a given value.
+     */
+    private class StringLengthFilterValue
+        implements FilterValue {
+
+        private final Select _sel;
+        private final ExpContext _ctx;
+        private final ExpState _state;
+        private final String _pre;
+        private final String _post;
+
+        public StringLengthFilterValue(Select sel, ExpContext ctx,
+<span class="nc" id="L237">            ExpState state, String pre, String post){</span>
+<span class="nc" id="L238">            _sel = sel;</span>
+<span class="nc" id="L239">            _ctx = ctx;</span>
+<span class="nc" id="L240">            _state = state;</span>
+<span class="nc" id="L241">            _pre = pre;</span>
+<span class="nc" id="L242">            _post = post;</span>
+<span class="nc" id="L243">        }</span>
+
+        @Override
+        public Class getType() {
+<span class="nc" id="L247">            return int.class;</span>
+        }
+
+        @Override
+        public int length() {
+<span class="nc" id="L252">            return 1;</span>
+        }
+
+        @Override
+        public void appendTo(SQLBuffer buf) {
+<span class="nc" id="L257">            appendTo(buf, 0);</span>
+<span class="nc" id="L258">        }</span>
+
+        @Override
+        public void appendTo(SQLBuffer buf, int index) {
+<span class="nc" id="L262">            buf.append(_pre);</span>
+<span class="nc" id="L263">            _val2.appendTo(_sel, _ctx, _state, buf, index);</span>
+<span class="nc" id="L264">            buf.append(_post);</span>
+<span class="nc" id="L265">        }</span>
+
+        @Override
+        public String getColumnAlias(Column col) {
+<span class="nc" id="L269">            return _sel.getColumnAlias(col, _state.joins);</span>
+        }
+
+        @Override
+        public String getColumnAlias(String col, Table table) {
+<span class="nc" id="L274">            return _sel.getColumnAlias(col, table, _state.joins);</span>
+        }
+
+        @Override
+        public Object toDataStoreValue(Object val) {
+<span class="nc" id="L279">            return _val2.toDataStoreValue(_sel, _ctx, _state, val);</span>
+        }
+
+        @Override
+        public boolean isConstant() {
+<span class="nc" id="L284">            return false;</span>
+        }
+
+        @Override
+        public Object getValue() {
+<span class="nc" id="L289">            return null;</span>
+        }
+
+        @Override
+        public Object getSQLValue() {
+<span class="nc" id="L294">            return null;</span>
+        }
+
+        @Override
+        public boolean isPath() {
+<span class="nc" id="L299">            return false;</span>
+        }
+
+        @Override
+        public ClassMapping getClassMapping() {
+<span class="nc" id="L304">            return null;</span>
+        }
+
+        @Override
+        public FieldMapping getFieldMapping() {
+<span class="nc" id="L309">            return null;</span>
+        }
+
+        @Override
+        public PCPath getXPath() {
+<span class="nc" id="L314">            return null;</span>
+        }
+
+        @Override
+        public XMLMetaData getXmlMapping() {
+<span class="nc" id="L319">            return null;</span>
+        }
+
+        @Override
+        public boolean requiresCast() {
+<span class="nc" id="L324">            return false;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

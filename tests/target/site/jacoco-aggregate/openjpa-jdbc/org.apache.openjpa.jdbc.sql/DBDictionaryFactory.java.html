@@ -1,0 +1,676 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DBDictionaryFactory.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">DBDictionaryFactory.java</span></div><h1>DBDictionaryFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
+import java.util.Locale;
+import java.util.Objects;
+
+import javax.sql.DataSource;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.conf.PluginValue;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.util.StoreException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Factory class to instantiate a dictionary. It will use
+ * the following heuristic:
+ * &lt;ul&gt;
+ * &lt;li&gt;Check to see if there is a DictionaryClass property,
+ * and if so, use that to instantiate the dictionary.&lt;/li&gt;
+ * &lt;li&gt;Check the URL in the JDBCConfiguration against a list
+ * of pre-defined URLs for various dictionaries.&lt;/li&gt;
+ * &lt;li&gt;Check the driver in the JDBCConfiguration against a list of known
+ * patterns.&lt;/li&gt;
+ * &lt;li&gt;Acquire a connection and check its database metadata.&lt;/li&gt;
+ * &lt;li&gt;Return an instance of the generic DBDictionary.&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ * @author Marc Prud'hommeaux
+ */
+<span class="nc" id="L58">public class DBDictionaryFactory {</span>
+
+<span class="nc" id="L60">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L61">        (DBDictionaryFactory.class);</span>
+
+    /**
+     * Create the dictionary for the given class name and properties.
+     */
+    public static DBDictionary newDBDictionary(JDBCConfiguration conf,
+        String dclass, String props) {
+<span class="nc" id="L68">        return newDBDictionary(conf, dclass, props, null);</span>
+    }
+
+    /**
+     * Attempt to create the dictionary from the given connection URL and
+     * driver name, either or both of which may be null. If the dictionary
+     * cannot be calculated, returns null.
+     */
+    public static DBDictionary calculateDBDictionary(JDBCConfiguration conf,
+        String url, String driver, String props) {
+<span class="nc" id="L78">        String dclass = dictionaryClassForString(getProtocol(url), conf);</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        if (dclass == null)</span>
+<span class="nc" id="L80">            dclass = dictionaryClassForString(driver, conf);</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if (dclass == null)</span>
+<span class="nc" id="L82">            return null;</span>
+<span class="nc" id="L83">        return newDBDictionary(conf, dclass, props);</span>
+    }
+
+    /**
+     * Create the dictionary using connection metadata to determine its type.
+     */
+    public static DBDictionary newDBDictionary(JDBCConfiguration conf,
+        DataSource ds, String props) {
+<span class="nc" id="L91">        Connection conn = null;</span>
+        try {
+<span class="nc" id="L93">            conn = ds.getConnection();</span>
+<span class="nc" id="L94">            DatabaseMetaData meta = conn.getMetaData();</span>
+<span class="nc" id="L95">            String dclass = dictionaryClassForString(meta.getDatabaseProductName(), conf);</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">            if (dclass == null)</span>
+<span class="nc" id="L97">                dclass = dictionaryClassForString(getProtocol(meta.getURL()), conf);</span>
+<span class="nc bnc" id="L98" title="All 4 branches missed.">            if (dclass != null &amp;&amp; dclass.contains(&quot;MySQL&quot;)) {</span>
+                // MariaDB returns &quot;MySQL&quot; for product name, need to verify by looking at product version.
+<span class="nc" id="L100">                final String checkMariaDB = dictionaryClassForString(meta.getDatabaseProductVersion(), conf);</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">                if (checkMariaDB != null) {</span>
+<span class="nc" id="L102">                    dclass = checkMariaDB;</span>
+                }
+            }
+<span class="nc bnc" id="L105" title="All 2 branches missed.">            if (dclass == null)</span>
+<span class="nc" id="L106">                dclass = DBDictionary.class.getName();</span>
+<span class="nc" id="L107">            return newDBDictionary(conf, dclass, props, conn);</span>
+<span class="nc" id="L108">        } catch (SQLException se) {</span>
+<span class="nc" id="L109">            throw new StoreException(se).setFatal(true);</span>
+        } finally {
+<span class="nc bnc" id="L111" title="All 2 branches missed.">            if (conn != null)</span>
+                try {
+<span class="nc" id="L113">                    conn.close();</span>
+<span class="nc" id="L114">                } catch (SQLException se) {</span>
+<span class="nc" id="L115">                }</span>
+        }
+    }
+
+    /*
+     * Returns the &quot;jdbc:&quot; protocol of the url parameter. Looks for the prefix
+     * string up to the 3rd ':' or the 1st '@', '/' or '\', whichever comes
+     * first.
+     *
+     * This method is package qualified so that TestDictionaryFactory class can
+     * access and test this method behavior.
+     */
+    static String getProtocol(String url) {
+<span class="nc" id="L128">        String protocol = null;</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (!StringUtil.isEmpty(url)) {</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">            if (url.startsWith(&quot;jdbc:&quot;)) {</span>
+<span class="nc" id="L131">                int colonCount = 1;</span>
+<span class="nc" id="L132">                int next = &quot;jdbc:&quot;.length();</span>
+<span class="nc" id="L133">                int protoEnd = next;</span>
+<span class="nc bnc" id="L134" title="All 4 branches missed.">                while (colonCount &lt; 3 &amp;&amp; next &lt; url.length()) {</span>
+<span class="nc" id="L135">                    char c = url.charAt(next++);</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">                    if (c == ':') {</span>
+<span class="nc" id="L137">                        ++colonCount;</span>
+<span class="nc" id="L138">                        protoEnd = next;</span>
+<span class="nc bnc" id="L139" title="All 6 branches missed.">                    } else if (c == '@' || c == '/' || c == '\\') {</span>
+<span class="nc" id="L140">                        --next;</span>
+<span class="nc" id="L141">                        break;</span>
+                    }
+<span class="nc" id="L143">                }</span>
+<span class="nc" id="L144">                protocol = url.substring(0, protoEnd);</span>
+            }
+        }
+<span class="nc" id="L147">        return protocol;</span>
+    }
+
+    /**
+     * Create the dictionary using the given class name and properties; the
+     * connection may be null if not supplied to the factory.
+     */
+    private static DBDictionary newDBDictionary(JDBCConfiguration conf,
+        String dclass, String props, Connection conn) {
+<span class="nc" id="L156">        DBDictionary dict = null;</span>
+        try {
+<span class="nc" id="L158">            Class&lt;?&gt; c = Class.forName(dclass, true,</span>
+<span class="nc" id="L159">                AccessController.doPrivileged(</span>
+<span class="nc" id="L160">                    J2DoPrivHelper.getClassLoaderAction(</span>
+                        DBDictionary.class)));
+<span class="nc" id="L162">            dict = (DBDictionary) AccessController.doPrivileged(</span>
+<span class="nc" id="L163">                J2DoPrivHelper.newInstanceAction(c));</span>
+<span class="nc" id="L164">        } catch (ClassNotFoundException cnfe) {</span>
+            // if the dictionary was not found, make another attempt
+            // at loading the dictionary using the current thread.
+            try {
+<span class="nc" id="L168">                Class&lt;?&gt; c = Thread.currentThread().getContextClassLoader().loadClass(dclass);</span>
+<span class="nc" id="L169">                dict = (DBDictionary) AccessController.doPrivileged(</span>
+<span class="nc" id="L170">                        J2DoPrivHelper.newInstanceAction(c));</span>
+<span class="nc" id="L171">            } catch (Exception e) {</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">                if (e instanceof PrivilegedActionException)</span>
+<span class="nc" id="L173">                    e = ((PrivilegedActionException) e).getException();</span>
+<span class="nc" id="L174">                throw new UserException(e).setFatal(true);</span>
+<span class="nc" id="L175">            }</span>
+<span class="nc" id="L176">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">            if (e instanceof PrivilegedActionException)</span>
+<span class="nc" id="L178">                e = ((PrivilegedActionException) e).getException();</span>
+<span class="nc" id="L179">            throw new UserException(e).setFatal(true);</span>
+<span class="nc" id="L180">        }</span>
+
+        // warn if we could not locate the appropriate dictionary
+<span class="nc" id="L183">        Log log = conf.getLog(JDBCConfiguration.LOG_JDBC);</span>
+<span class="nc bnc" id="L184" title="All 4 branches missed.">        if (log.isWarnEnabled() &amp;&amp; dict.getClass() == DBDictionary.class)</span>
+<span class="nc" id="L185">            log.warn(_loc.get(&quot;warn-generic&quot;));</span>
+
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        if (log.isInfoEnabled()) {</span>
+<span class="nc" id="L188">            String infoString = &quot;&quot;;</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">            if (conn != null) {</span>
+                try {
+<span class="nc" id="L191">                    DatabaseMetaData meta = conn.getMetaData();</span>
+<span class="nc" id="L192">                    infoString = &quot; (&quot; + meta.getDatabaseProductName() + &quot; &quot;</span>
+<span class="nc" id="L193">                        + meta.getDatabaseProductVersion() + &quot; ,&quot;</span>
+<span class="nc" id="L194">                        + meta.getDriverName() + &quot; &quot;</span>
+<span class="nc" id="L195">                        + meta.getDriverVersion() + &quot;)&quot;;</span>
+<span class="nc" id="L196">                } catch (SQLException se) {</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">                    if (log.isTraceEnabled())</span>
+<span class="nc" id="L198">                        log.trace(se.toString(), se);</span>
+<span class="nc" id="L199">                }</span>
+            }
+
+<span class="nc" id="L202">            log.info(_loc.get(&quot;using-dict&quot;, dclass, infoString));</span>
+        }
+
+        // set the dictionary's metadata
+<span class="nc" id="L206">        Configurations.configureInstance(dict, conf, props, &quot;DBDictionary&quot;);</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">        if (conn != null) {</span>
+            try {
+<span class="nc" id="L209">                dict.connectedConfiguration(conn);</span>
+<span class="nc" id="L210">            } catch (SQLException se) {</span>
+<span class="nc" id="L211">                throw new StoreException(se).setFatal(true);</span>
+<span class="nc" id="L212">            }</span>
+        }
+<span class="nc" id="L214">        return dict;</span>
+    }
+
+    /**
+     * Guess the dictionary class name to use based on the product string.
+     */
+    static String dictionaryClassForString(String prod, JDBCConfiguration conf) {
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if (StringUtil.isEmpty(prod))</span>
+<span class="nc" id="L222">            return null;</span>
+<span class="nc" id="L223">        prod = prod.toLowerCase(Locale.ENGLISH);</span>
+
+<span class="nc" id="L225">        PluginValue dbdictionaryPlugin = ((JDBCConfigurationImpl) conf)</span>
+            .dbdictionaryPlugin;
+
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (prod.indexOf(&quot;oracle&quot;) != -1)</span>
+<span class="nc" id="L229">            return dbdictionaryPlugin.unalias(&quot;oracle&quot;);</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        if (prod.indexOf(&quot;sqlserver&quot;) != -1)</span>
+<span class="nc" id="L231">            return dbdictionaryPlugin.unalias(&quot;sqlserver&quot;);</span>
+<span class="nc bnc" id="L232" title="All 2 branches missed.">        if (prod.indexOf(&quot;jsqlconnect&quot;) != -1)</span>
+<span class="nc" id="L233">            return dbdictionaryPlugin.unalias(&quot;sqlserver&quot;);</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        if (prod.indexOf(&quot;mariadb&quot;) != -1)</span>
+<span class="nc" id="L235">            return dbdictionaryPlugin.unalias(&quot;mariadb&quot;);</span>
+<span class="nc bnc" id="L236" title="All 2 branches missed.">        if (prod.indexOf(&quot;mysql&quot;) != -1)</span>
+<span class="nc" id="L237">            return dbdictionaryPlugin.unalias(&quot;mysql&quot;);</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if (prod.indexOf(&quot;postgres&quot;) != -1)</span>
+<span class="nc" id="L239">            return dbdictionaryPlugin.unalias(&quot;postgres&quot;);</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (prod.indexOf(&quot;sybase&quot;) != -1)</span>
+<span class="nc" id="L241">            return dbdictionaryPlugin.unalias(&quot;sybase&quot;);</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        if (prod.indexOf(&quot;adaptive server&quot;) != -1)</span>
+<span class="nc" id="L243">            return dbdictionaryPlugin.unalias(&quot;sybase&quot;);</span>
+<span class="nc bnc" id="L244" title="All 4 branches missed.">        if (prod.indexOf(&quot;informix&quot;) != -1 || prod.indexOf(&quot;ids&quot;) != -1)</span>
+<span class="nc" id="L245">            return dbdictionaryPlugin.unalias(&quot;informix&quot;);</span>
+<span class="nc bnc" id="L246" title="All 2 branches missed.">        if (prod.indexOf(&quot;ingres&quot;) != -1)</span>
+<span class="nc" id="L247">            return dbdictionaryPlugin.unalias(&quot;ingres&quot;);</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (prod.indexOf(&quot;hsql&quot;) != -1)</span>
+<span class="nc" id="L249">            return dbdictionaryPlugin.unalias(&quot;hsql&quot;);</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">        if (prod.indexOf(&quot;foxpro&quot;) != -1)</span>
+<span class="nc" id="L251">            return dbdictionaryPlugin.unalias(&quot;foxpro&quot;);</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">        if (prod.indexOf(&quot;interbase&quot;) != -1)</span>
+<span class="nc" id="L253">            return InterbaseDictionary.class.getName();</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">        if (prod.indexOf(&quot;jdatastore&quot;) != -1)</span>
+<span class="nc" id="L255">            return JDataStoreDictionary.class.getName();</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">        if (prod.indexOf(&quot;borland&quot;) != -1)</span>
+<span class="nc" id="L257">            return JDataStoreDictionary.class.getName();</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">        if (prod.indexOf(&quot;access&quot;) != -1)</span>
+<span class="nc" id="L259">            return dbdictionaryPlugin.unalias(&quot;access&quot;);</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">        if (prod.indexOf(&quot;pointbase&quot;) != -1)</span>
+<span class="nc" id="L261">            return dbdictionaryPlugin.unalias(&quot;pointbase&quot;);</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        if (prod.indexOf(&quot;empress&quot;) != -1)</span>
+<span class="nc" id="L263">            return dbdictionaryPlugin.unalias(&quot;empress&quot;);</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">        if (prod.indexOf(&quot;firebird&quot;) != -1)</span>
+<span class="nc" id="L265">            return FirebirdDictionary.class.getName();</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        if (prod.indexOf(&quot;cache&quot;) != -1)</span>
+<span class="nc" id="L267">            return CacheDictionary.class.getName();</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">        if (prod.indexOf(&quot;derby&quot;) != -1)</span>
+<span class="nc" id="L269">            return dbdictionaryPlugin.unalias(&quot;derby&quot;);</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        if (prod.indexOf(&quot;sapdb&quot;) != -1) {</span>
+<span class="nc" id="L271">            return dbdictionaryPlugin.unalias(&quot;maxdb&quot;);</span>
+        }
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        if (prod.indexOf(&quot;herddb&quot;) != -1) {</span>
+<span class="nc" id="L274">            return dbdictionaryPlugin.unalias(&quot;herddb&quot;);</span>
+        }
+        // test h2 in a special way, because there's a decent chance the string
+        // h2 could appear in the URL of another database
+<span class="nc bnc" id="L278" title="All 2 branches missed.">        if (prod.indexOf(&quot;jdbc:h2:&quot;) != -1)</span>
+<span class="nc" id="L279">            return dbdictionaryPlugin.unalias(&quot;h2&quot;);</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">        if (prod.indexOf(&quot;h2 database&quot;) != -1)</span>
+<span class="nc" id="L281">            return dbdictionaryPlugin.unalias(&quot;h2&quot;);</span>
+        // test db2 last, because there's a decent chance this string could
+        // appear in the URL of another database (like if the db is named
+        // &quot;testdb2&quot; or something)
+<span class="nc bnc" id="L285" title="All 4 branches missed.">        if (prod.indexOf(&quot;db2&quot;) != -1 || prod.indexOf(&quot;as400&quot;) != -1)</span>
+<span class="nc" id="L286">            return dbdictionaryPlugin.unalias(&quot;db2&quot;);</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        if (prod.indexOf(&quot;soliddb&quot;) != -1)</span>
+<span class="nc" id="L288">            return dbdictionaryPlugin.unalias(&quot;soliddb&quot;);</span>
+
+        // known dbs that we don't support
+<span class="nc bnc" id="L291" title="All 2 branches missed.">        if (prod.indexOf(&quot;cloudscape&quot;) != -1)</span>
+<span class="nc" id="L292">            return DBDictionary.class.getName();</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">        if (prod.indexOf(&quot;daffodil&quot;) != -1)</span>
+<span class="nc" id="L294">            return DBDictionary.class.getName();</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (prod.indexOf(&quot;idb&quot;) != -1) // instantdb</span>
+<span class="nc" id="L296">            return DBDictionary.class.getName();</span>
+
+<span class="nc" id="L298">        String prodClassName = dbdictionaryPlugin.unalias(prod);</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        if (!Objects.equals(prod, prodClassName))</span>
+<span class="nc" id="L300">            return prodClassName;</span>
+
+        // give up
+<span class="nc" id="L303">        return null;</span>
+    }
+
+    /**
+     * Return a string containing all the property values of the given
+     * database metadata.
+     */
+    public static String toString(DatabaseMetaData meta)
+        throws SQLException {
+<span class="nc" id="L312">        String lineSep = J2DoPrivHelper.getLineSeparator();</span>
+<span class="nc" id="L313">        StringBuilder buf = new StringBuilder(4096);</span>
+        try {
+<span class="nc" id="L315">            buf.append(&quot;catalogSeparator: &quot;)</span>
+<span class="nc" id="L316">                .append(meta.getCatalogSeparator())</span>
+<span class="nc" id="L317">                .append(lineSep)</span>
+<span class="nc" id="L318">                .append(&quot;catalogTerm: &quot;)</span>
+<span class="nc" id="L319">                .append(meta.getCatalogTerm())</span>
+<span class="nc" id="L320">                .append(lineSep)</span>
+<span class="nc" id="L321">                .append(&quot;databaseProductName: &quot;)</span>
+<span class="nc" id="L322">                .append(meta.getDatabaseProductName())</span>
+<span class="nc" id="L323">                .append(lineSep)</span>
+<span class="nc" id="L324">                .append(&quot;databaseProductVersion: &quot;)</span>
+<span class="nc" id="L325">                .append(meta.getDatabaseProductVersion())</span>
+<span class="nc" id="L326">                .append(lineSep)</span>
+<span class="nc" id="L327">                .append(&quot;driverName: &quot;)</span>
+<span class="nc" id="L328">                .append(meta.getDriverName())</span>
+<span class="nc" id="L329">                .append(lineSep)</span>
+<span class="nc" id="L330">                .append(&quot;driverVersion: &quot;)</span>
+<span class="nc" id="L331">                .append(meta.getDriverVersion())</span>
+<span class="nc" id="L332">                .append(lineSep)</span>
+<span class="nc" id="L333">                .append(&quot;extraNameCharacters: &quot;)</span>
+<span class="nc" id="L334">                .append(meta.getExtraNameCharacters())</span>
+<span class="nc" id="L335">                .append(lineSep)</span>
+<span class="nc" id="L336">                .append(&quot;identifierQuoteString: &quot;)</span>
+<span class="nc" id="L337">                .append(meta.getIdentifierQuoteString())</span>
+<span class="nc" id="L338">                .append(lineSep)</span>
+<span class="nc" id="L339">                .append(&quot;numericFunctions: &quot;)</span>
+<span class="nc" id="L340">                .append(meta.getNumericFunctions())</span>
+<span class="nc" id="L341">                .append(lineSep)</span>
+<span class="nc" id="L342">                .append(&quot;procedureTerm: &quot;)</span>
+<span class="nc" id="L343">                .append(meta.getProcedureTerm())</span>
+<span class="nc" id="L344">                .append(lineSep)</span>
+<span class="nc" id="L345">                .append(&quot;schemaTerm: &quot;)</span>
+<span class="nc" id="L346">                .append(meta.getSchemaTerm())</span>
+<span class="nc" id="L347">                .append(lineSep)</span>
+<span class="nc" id="L348">                .append(&quot;searchStringEscape: &quot;)</span>
+<span class="nc" id="L349">                .append(meta.getSearchStringEscape())</span>
+<span class="nc" id="L350">                .append(lineSep)</span>
+<span class="nc" id="L351">                .append(&quot;sqlKeywords: &quot;)</span>
+<span class="nc" id="L352">                .append(meta.getSQLKeywords())</span>
+<span class="nc" id="L353">                .append(lineSep)</span>
+<span class="nc" id="L354">                .append(&quot;stringFunctions: &quot;)</span>
+<span class="nc" id="L355">                .append(meta.getStringFunctions())</span>
+<span class="nc" id="L356">                .append(lineSep)</span>
+<span class="nc" id="L357">                .append(&quot;systemFunctions: &quot;)</span>
+<span class="nc" id="L358">                .append(meta.getSystemFunctions())</span>
+<span class="nc" id="L359">                .append(lineSep)</span>
+<span class="nc" id="L360">                .append(&quot;timeDateFunctions: &quot;)</span>
+<span class="nc" id="L361">                .append(meta.getTimeDateFunctions())</span>
+<span class="nc" id="L362">                .append(lineSep)</span>
+<span class="nc" id="L363">                .append(&quot;url: &quot;)</span>
+<span class="nc" id="L364">                .append(meta.getURL())</span>
+<span class="nc" id="L365">                .append(lineSep)</span>
+<span class="nc" id="L366">                .append(&quot;userName: &quot;)</span>
+<span class="nc" id="L367">                .append(meta.getUserName())</span>
+<span class="nc" id="L368">                .append(lineSep)</span>
+<span class="nc" id="L369">                .append(&quot;defaultTransactionIsolation: &quot;)</span>
+<span class="nc" id="L370">                .append(meta.getDefaultTransactionIsolation())</span>
+<span class="nc" id="L371">                .append(lineSep)</span>
+<span class="nc" id="L372">                .append(&quot;driverMajorVersion: &quot;)</span>
+<span class="nc" id="L373">                .append(meta.getDriverMajorVersion())</span>
+<span class="nc" id="L374">                .append(lineSep)</span>
+<span class="nc" id="L375">                .append(&quot;driverMinorVersion: &quot;)</span>
+<span class="nc" id="L376">                .append(meta.getDriverMinorVersion())</span>
+<span class="nc" id="L377">                .append(lineSep)</span>
+<span class="nc" id="L378">                .append(&quot;maxBinaryLiteralLength: &quot;)</span>
+<span class="nc" id="L379">                .append(meta.getMaxBinaryLiteralLength())</span>
+<span class="nc" id="L380">                .append(lineSep)</span>
+<span class="nc" id="L381">                .append(&quot;maxCatalogNameLength: &quot;)</span>
+<span class="nc" id="L382">                .append(meta.getMaxCatalogNameLength())</span>
+<span class="nc" id="L383">                .append(lineSep)</span>
+<span class="nc" id="L384">                .append(&quot;maxCharLiteralLength: &quot;)</span>
+<span class="nc" id="L385">                .append(meta.getMaxCharLiteralLength())</span>
+<span class="nc" id="L386">                .append(lineSep)</span>
+<span class="nc" id="L387">                .append(&quot;maxColumnNameLength: &quot;)</span>
+<span class="nc" id="L388">                .append(meta.getMaxColumnNameLength())</span>
+<span class="nc" id="L389">                .append(lineSep)</span>
+<span class="nc" id="L390">                .append(&quot;maxColumnsInGroupBy: &quot;)</span>
+<span class="nc" id="L391">                .append(meta.getMaxColumnsInGroupBy())</span>
+<span class="nc" id="L392">                .append(lineSep)</span>
+<span class="nc" id="L393">                .append(&quot;maxColumnsInIndex: &quot;)</span>
+<span class="nc" id="L394">                .append(meta.getMaxColumnsInIndex())</span>
+<span class="nc" id="L395">                .append(lineSep)</span>
+<span class="nc" id="L396">                .append(&quot;maxColumnsInOrderBy: &quot;)</span>
+<span class="nc" id="L397">                .append(meta.getMaxColumnsInOrderBy())</span>
+<span class="nc" id="L398">                .append(lineSep)</span>
+<span class="nc" id="L399">                .append(&quot;maxColumnsInSelect: &quot;)</span>
+<span class="nc" id="L400">                .append(meta.getMaxColumnsInSelect())</span>
+<span class="nc" id="L401">                .append(lineSep)</span>
+<span class="nc" id="L402">                .append(&quot;maxColumnsInTable: &quot;)</span>
+<span class="nc" id="L403">                .append(meta.getMaxColumnsInTable())</span>
+<span class="nc" id="L404">                .append(lineSep)</span>
+<span class="nc" id="L405">                .append(&quot;maxConnections: &quot;)</span>
+<span class="nc" id="L406">                .append(meta.getMaxConnections())</span>
+<span class="nc" id="L407">                .append(lineSep)</span>
+<span class="nc" id="L408">                .append(&quot;maxCursorNameLength: &quot;)</span>
+<span class="nc" id="L409">                .append(meta.getMaxCursorNameLength())</span>
+<span class="nc" id="L410">                .append(lineSep)</span>
+<span class="nc" id="L411">                .append(&quot;maxIndexLength: &quot;)</span>
+<span class="nc" id="L412">                .append(meta.getMaxIndexLength())</span>
+<span class="nc" id="L413">                .append(lineSep)</span>
+<span class="nc" id="L414">                .append(&quot;maxProcedureNameLength: &quot;)</span>
+<span class="nc" id="L415">                .append(meta.getMaxProcedureNameLength())</span>
+<span class="nc" id="L416">                .append(lineSep)</span>
+<span class="nc" id="L417">                .append(&quot;maxRowSize: &quot;)</span>
+<span class="nc" id="L418">                .append(meta.getMaxRowSize())</span>
+<span class="nc" id="L419">                .append(lineSep)</span>
+<span class="nc" id="L420">                .append(&quot;maxSchemaNameLength: &quot;)</span>
+<span class="nc" id="L421">                .append(meta.getMaxSchemaNameLength())</span>
+<span class="nc" id="L422">                .append(lineSep)</span>
+<span class="nc" id="L423">                .append(&quot;maxStatementLength: &quot;)</span>
+<span class="nc" id="L424">                .append(meta.getMaxStatementLength())</span>
+<span class="nc" id="L425">                .append(lineSep)</span>
+<span class="nc" id="L426">                .append(&quot;maxStatements: &quot;)</span>
+<span class="nc" id="L427">                .append(meta.getMaxStatements())</span>
+<span class="nc" id="L428">                .append(lineSep)</span>
+<span class="nc" id="L429">                .append(&quot;maxTableNameLength: &quot;)</span>
+<span class="nc" id="L430">                .append(meta.getMaxTableNameLength())</span>
+<span class="nc" id="L431">                .append(lineSep)</span>
+<span class="nc" id="L432">                .append(&quot;maxTablesInSelect: &quot;)</span>
+<span class="nc" id="L433">                .append(meta.getMaxTablesInSelect())</span>
+<span class="nc" id="L434">                .append(lineSep)</span>
+<span class="nc" id="L435">                .append(&quot;maxUserNameLength: &quot;)</span>
+<span class="nc" id="L436">                .append(meta.getMaxUserNameLength())</span>
+<span class="nc" id="L437">                .append(lineSep)</span>
+<span class="nc" id="L438">                .append(&quot;isCatalogAtStart: &quot;)</span>
+<span class="nc" id="L439">                .append(meta.isCatalogAtStart())</span>
+<span class="nc" id="L440">                .append(lineSep)</span>
+<span class="nc" id="L441">                .append(&quot;isReadOnly: &quot;)</span>
+<span class="nc" id="L442">                .append(meta.isReadOnly())</span>
+<span class="nc" id="L443">                .append(lineSep)</span>
+<span class="nc" id="L444">                .append(&quot;nullPlusNonNullIsNull: &quot;)</span>
+<span class="nc" id="L445">                .append(meta.nullPlusNonNullIsNull())</span>
+<span class="nc" id="L446">                .append(lineSep)</span>
+<span class="nc" id="L447">                .append(&quot;nullsAreSortedAtEnd: &quot;)</span>
+<span class="nc" id="L448">                .append(meta.nullsAreSortedAtEnd())</span>
+<span class="nc" id="L449">                .append(lineSep)</span>
+<span class="nc" id="L450">                .append(&quot;nullsAreSortedAtStart: &quot;)</span>
+<span class="nc" id="L451">                .append(meta.nullsAreSortedAtStart())</span>
+<span class="nc" id="L452">                .append(lineSep)</span>
+<span class="nc" id="L453">                .append(&quot;nullsAreSortedHigh: &quot;)</span>
+<span class="nc" id="L454">                .append(meta.nullsAreSortedHigh())</span>
+<span class="nc" id="L455">                .append(lineSep)</span>
+<span class="nc" id="L456">                .append(&quot;nullsAreSortedLow: &quot;)</span>
+<span class="nc" id="L457">                .append(meta.nullsAreSortedLow())</span>
+<span class="nc" id="L458">                .append(lineSep)</span>
+<span class="nc" id="L459">                .append(&quot;storesLowerCaseIdentifiers: &quot;)</span>
+<span class="nc" id="L460">                .append(meta.storesLowerCaseIdentifiers())</span>
+<span class="nc" id="L461">                .append(lineSep)</span>
+<span class="nc" id="L462">                .append(&quot;storesLowerCaseQuotedIdentifiers: &quot;)</span>
+<span class="nc" id="L463">                .append(meta.storesLowerCaseQuotedIdentifiers())</span>
+<span class="nc" id="L464">                .append(lineSep)</span>
+<span class="nc" id="L465">                .append(&quot;storesMixedCaseIdentifiers: &quot;)</span>
+<span class="nc" id="L466">                .append(meta.storesMixedCaseIdentifiers())</span>
+<span class="nc" id="L467">                .append(lineSep)</span>
+<span class="nc" id="L468">                .append(&quot;storesMixedCaseQuotedIdentifiers: &quot;)</span>
+<span class="nc" id="L469">                .append(meta.storesMixedCaseQuotedIdentifiers())</span>
+<span class="nc" id="L470">                .append(lineSep)</span>
+<span class="nc" id="L471">                .append(&quot;storesUpperCaseIdentifiers: &quot;)</span>
+<span class="nc" id="L472">                .append(meta.storesUpperCaseIdentifiers())</span>
+<span class="nc" id="L473">                .append(lineSep)</span>
+<span class="nc" id="L474">                .append(&quot;storesUpperCaseQuotedIdentifiers: &quot;)</span>
+<span class="nc" id="L475">                .append(meta.storesUpperCaseQuotedIdentifiers())</span>
+<span class="nc" id="L476">                .append(lineSep)</span>
+<span class="nc" id="L477">                .append(&quot;supportsAlterTableWithAddColumn: &quot;)</span>
+<span class="nc" id="L478">                .append(meta.supportsAlterTableWithAddColumn())</span>
+<span class="nc" id="L479">                .append(lineSep)</span>
+<span class="nc" id="L480">                .append(&quot;supportsAlterTableWithDropColumn: &quot;)</span>
+<span class="nc" id="L481">                .append(meta.supportsAlterTableWithDropColumn())</span>
+<span class="nc" id="L482">                .append(lineSep)</span>
+<span class="nc" id="L483">                .append(&quot;supportsANSI92EntryLevelSQL: &quot;)</span>
+<span class="nc" id="L484">                .append(meta.supportsANSI92EntryLevelSQL())</span>
+<span class="nc" id="L485">                .append(lineSep)</span>
+<span class="nc" id="L486">                .append(&quot;supportsANSI92FullSQL: &quot;)</span>
+<span class="nc" id="L487">                .append(meta.supportsANSI92FullSQL())</span>
+<span class="nc" id="L488">                .append(lineSep)</span>
+<span class="nc" id="L489">                .append(&quot;supportsANSI92IntermediateSQL: &quot;)</span>
+<span class="nc" id="L490">                .append(meta.supportsANSI92IntermediateSQL())</span>
+<span class="nc" id="L491">                .append(lineSep)</span>
+<span class="nc" id="L492">                .append(&quot;supportsCatalogsInDataManipulation: &quot;)</span>
+<span class="nc" id="L493">                .append(meta.supportsCatalogsInDataManipulation())</span>
+<span class="nc" id="L494">                .append(lineSep)</span>
+<span class="nc" id="L495">                .append(&quot;supportsCatalogsInIndexDefinitions: &quot;)</span>
+<span class="nc" id="L496">                .append(meta.supportsCatalogsInIndexDefinitions())</span>
+<span class="nc" id="L497">                .append(lineSep)</span>
+<span class="nc" id="L498">                .append(&quot;supportsCatalogsInPrivilegeDefinitions: &quot;)</span>
+<span class="nc" id="L499">                .append(meta.supportsCatalogsInPrivilegeDefinitions())</span>
+<span class="nc" id="L500">                .append(lineSep)</span>
+<span class="nc" id="L501">                .append(&quot;supportsCatalogsInProcedureCalls: &quot;)</span>
+<span class="nc" id="L502">                .append(meta.supportsCatalogsInProcedureCalls())</span>
+<span class="nc" id="L503">                .append(lineSep)</span>
+<span class="nc" id="L504">                .append(&quot;supportsCatalogsInTableDefinitions: &quot;)</span>
+<span class="nc" id="L505">                .append(meta.supportsCatalogsInTableDefinitions())</span>
+<span class="nc" id="L506">                .append(lineSep)</span>
+<span class="nc" id="L507">                .append(&quot;supportsColumnAliasing: &quot;)</span>
+<span class="nc" id="L508">                .append(meta.supportsColumnAliasing())</span>
+<span class="nc" id="L509">                .append(lineSep)</span>
+<span class="nc" id="L510">                .append(&quot;supportsConvert: &quot;)</span>
+<span class="nc" id="L511">                .append(meta.supportsConvert())</span>
+<span class="nc" id="L512">                .append(lineSep)</span>
+<span class="nc" id="L513">                .append(&quot;supportsCoreSQLGrammar: &quot;)</span>
+<span class="nc" id="L514">                .append(meta.supportsCoreSQLGrammar())</span>
+<span class="nc" id="L515">                .append(lineSep)</span>
+<span class="nc" id="L516">                .append(&quot;supportsCorrelatedSubqueries: &quot;)</span>
+<span class="nc" id="L517">                .append(meta.supportsCorrelatedSubqueries())</span>
+<span class="nc" id="L518">                .append(lineSep)</span>
+<span class="nc" id="L519">                .append(</span>
+                    &quot;supportsDataDefinitionAndDataManipulationTransactions: &quot;)
+<span class="nc" id="L521">                .append(meta.</span>
+<span class="nc" id="L522">                    supportsDataDefinitionAndDataManipulationTransactions())</span>
+<span class="nc" id="L523">                .append(lineSep)</span>
+<span class="nc" id="L524">                .append(&quot;supportsDataManipulationTransactionsOnly: &quot;)</span>
+<span class="nc" id="L525">                .append(meta.supportsDataManipulationTransactionsOnly())</span>
+<span class="nc" id="L526">                .append(lineSep)</span>
+<span class="nc" id="L527">                .append(&quot;supportsDifferentTableCorrelationNames: &quot;)</span>
+<span class="nc" id="L528">                .append(meta.supportsDifferentTableCorrelationNames())</span>
+<span class="nc" id="L529">                .append(lineSep)</span>
+<span class="nc" id="L530">                .append(&quot;supportsExpressionsInOrderBy: &quot;)</span>
+<span class="nc" id="L531">                .append(meta.supportsExpressionsInOrderBy())</span>
+<span class="nc" id="L532">                .append(lineSep)</span>
+<span class="nc" id="L533">                .append(&quot;supportsExtendedSQLGrammar: &quot;)</span>
+<span class="nc" id="L534">                .append(meta.supportsExtendedSQLGrammar())</span>
+<span class="nc" id="L535">                .append(lineSep)</span>
+<span class="nc" id="L536">                .append(&quot;supportsFullOuterJoins: &quot;)</span>
+<span class="nc" id="L537">                .append(meta.supportsFullOuterJoins())</span>
+<span class="nc" id="L538">                .append(lineSep)</span>
+<span class="nc" id="L539">                .append(&quot;supportsGroupBy: &quot;)</span>
+<span class="nc" id="L540">                .append(meta.supportsGroupBy())</span>
+<span class="nc" id="L541">                .append(lineSep)</span>
+<span class="nc" id="L542">                .append(&quot;supportsGroupByBeyondSelect: &quot;)</span>
+<span class="nc" id="L543">                .append(meta.supportsGroupByBeyondSelect())</span>
+<span class="nc" id="L544">                .append(lineSep)</span>
+<span class="nc" id="L545">                .append(&quot;supportsGroupByUnrelated: &quot;)</span>
+<span class="nc" id="L546">                .append(meta.supportsGroupByUnrelated())</span>
+<span class="nc" id="L547">                .append(lineSep)</span>
+<span class="nc" id="L548">                .append(&quot;supportsIntegrityEnhancementFacility: &quot;)</span>
+<span class="nc" id="L549">                .append(meta.supportsIntegrityEnhancementFacility())</span>
+<span class="nc" id="L550">                .append(lineSep)</span>
+<span class="nc" id="L551">                .append(&quot;supportsLikeEscapeClause: &quot;)</span>
+<span class="nc" id="L552">                .append(meta.supportsLikeEscapeClause())</span>
+<span class="nc" id="L553">                .append(lineSep)</span>
+<span class="nc" id="L554">                .append(&quot;supportsLimitedOuterJoins: &quot;)</span>
+<span class="nc" id="L555">                .append(meta.supportsLimitedOuterJoins())</span>
+<span class="nc" id="L556">                .append(lineSep)</span>
+<span class="nc" id="L557">                .append(&quot;supportsMinimumSQLGrammar: &quot;)</span>
+<span class="nc" id="L558">                .append(meta.supportsMinimumSQLGrammar())</span>
+<span class="nc" id="L559">                .append(lineSep)</span>
+<span class="nc" id="L560">                .append(&quot;supportsMixedCaseIdentifiers: &quot;)</span>
+<span class="nc" id="L561">                .append(meta.supportsMixedCaseIdentifiers())</span>
+<span class="nc" id="L562">                .append(lineSep)</span>
+<span class="nc" id="L563">                .append(&quot;supportsMixedCaseQuotedIdentifiers: &quot;)</span>
+<span class="nc" id="L564">                .append(meta.supportsMixedCaseQuotedIdentifiers())</span>
+<span class="nc" id="L565">                .append(lineSep)</span>
+<span class="nc" id="L566">                .append(&quot;supportsMultipleResultSets: &quot;)</span>
+<span class="nc" id="L567">                .append(meta.supportsMultipleResultSets())</span>
+<span class="nc" id="L568">                .append(lineSep)</span>
+<span class="nc" id="L569">                .append(&quot;supportsMultipleTransactions: &quot;)</span>
+<span class="nc" id="L570">                .append(meta.supportsMultipleTransactions())</span>
+<span class="nc" id="L571">                .append(lineSep)</span>
+<span class="nc" id="L572">                .append(&quot;supportsNonNullableColumns: &quot;)</span>
+<span class="nc" id="L573">                .append(meta.supportsNonNullableColumns())</span>
+<span class="nc" id="L574">                .append(lineSep)</span>
+<span class="nc" id="L575">                .append(&quot;supportsOpenCursorsAcrossCommit: &quot;)</span>
+<span class="nc" id="L576">                .append(meta.supportsOpenCursorsAcrossCommit())</span>
+<span class="nc" id="L577">                .append(lineSep)</span>
+<span class="nc" id="L578">                .append(&quot;supportsOpenCursorsAcrossRollback: &quot;)</span>
+<span class="nc" id="L579">                .append(meta.supportsOpenCursorsAcrossRollback())</span>
+<span class="nc" id="L580">                .append(lineSep)</span>
+<span class="nc" id="L581">                .append(&quot;supportsOpenStatementsAcrossCommit: &quot;)</span>
+<span class="nc" id="L582">                .append(meta.supportsOpenStatementsAcrossCommit())</span>
+<span class="nc" id="L583">                .append(lineSep)</span>
+<span class="nc" id="L584">                .append(&quot;supportsOpenStatementsAcrossRollback: &quot;)</span>
+<span class="nc" id="L585">                .append(meta.supportsOpenStatementsAcrossRollback())</span>
+<span class="nc" id="L586">                .append(lineSep)</span>
+<span class="nc" id="L587">                .append(&quot;supportsOrderByUnrelated: &quot;)</span>
+<span class="nc" id="L588">                .append(meta.supportsOrderByUnrelated())</span>
+<span class="nc" id="L589">                .append(lineSep)</span>
+<span class="nc" id="L590">                .append(&quot;supportsOuterJoins: &quot;)</span>
+<span class="nc" id="L591">                .append(meta.supportsOuterJoins())</span>
+<span class="nc" id="L592">                .append(lineSep)</span>
+<span class="nc" id="L593">                .append(&quot;supportsPositionedDelete: &quot;)</span>
+<span class="nc" id="L594">                .append(meta.supportsPositionedDelete())</span>
+<span class="nc" id="L595">                .append(lineSep)</span>
+<span class="nc" id="L596">                .append(&quot;supportsPositionedUpdate: &quot;)</span>
+<span class="nc" id="L597">                .append(meta.supportsPositionedUpdate())</span>
+<span class="nc" id="L598">                .append(lineSep)</span>
+<span class="nc" id="L599">                .append(&quot;supportsSchemasInDataManipulation: &quot;)</span>
+<span class="nc" id="L600">                .append(meta.supportsSchemasInDataManipulation())</span>
+<span class="nc" id="L601">                .append(lineSep)</span>
+<span class="nc" id="L602">                .append(&quot;supportsSchemasInIndexDefinitions: &quot;)</span>
+<span class="nc" id="L603">                .append(meta.supportsSchemasInIndexDefinitions())</span>
+<span class="nc" id="L604">                .append(lineSep)</span>
+<span class="nc" id="L605">                .append(&quot;supportsSchemasInPrivilegeDefinitions: &quot;)</span>
+<span class="nc" id="L606">                .append(meta.supportsSchemasInPrivilegeDefinitions())</span>
+<span class="nc" id="L607">                .append(lineSep)</span>
+<span class="nc" id="L608">                .append(&quot;supportsSchemasInProcedureCalls: &quot;)</span>
+<span class="nc" id="L609">                .append(meta.supportsSchemasInProcedureCalls())</span>
+<span class="nc" id="L610">                .append(lineSep)</span>
+<span class="nc" id="L611">                .append(&quot;supportsSchemasInTableDefinitions: &quot;)</span>
+<span class="nc" id="L612">                .append(meta.supportsSchemasInTableDefinitions())</span>
+<span class="nc" id="L613">                .append(lineSep)</span>
+<span class="nc" id="L614">                .append(&quot;supportsSelectForUpdate: &quot;)</span>
+<span class="nc" id="L615">                .append(meta.supportsSelectForUpdate())</span>
+<span class="nc" id="L616">                .append(lineSep)</span>
+<span class="nc" id="L617">                .append(&quot;supportsStoredProcedures: &quot;)</span>
+<span class="nc" id="L618">                .append(meta.supportsStoredProcedures())</span>
+<span class="nc" id="L619">                .append(lineSep)</span>
+<span class="nc" id="L620">                .append(&quot;supportsSubqueriesInComparisons: &quot;)</span>
+<span class="nc" id="L621">                .append(meta.supportsSubqueriesInComparisons())</span>
+<span class="nc" id="L622">                .append(lineSep)</span>
+<span class="nc" id="L623">                .append(&quot;supportsSubqueriesInExists: &quot;)</span>
+<span class="nc" id="L624">                .append(meta.supportsSubqueriesInExists())</span>
+<span class="nc" id="L625">                .append(lineSep)</span>
+<span class="nc" id="L626">                .append(&quot;supportsSubqueriesInIns: &quot;)</span>
+<span class="nc" id="L627">                .append(meta.supportsSubqueriesInIns())</span>
+<span class="nc" id="L628">                .append(lineSep)</span>
+<span class="nc" id="L629">                .append(&quot;supportsSubqueriesInQuantifieds: &quot;)</span>
+<span class="nc" id="L630">                .append(meta.supportsSubqueriesInQuantifieds())</span>
+<span class="nc" id="L631">                .append(lineSep)</span>
+<span class="nc" id="L632">                .append(&quot;supportsTableCorrelationNames: &quot;)</span>
+<span class="nc" id="L633">                .append(meta.supportsTableCorrelationNames())</span>
+<span class="nc" id="L634">                .append(lineSep)</span>
+<span class="nc" id="L635">                .append(&quot;supportsTransactions: &quot;)</span>
+<span class="nc" id="L636">                .append(meta.supportsTransactions())</span>
+<span class="nc" id="L637">                .append(lineSep)</span>
+<span class="nc" id="L638">                .append(&quot;supportsUnion: &quot;)</span>
+<span class="nc" id="L639">                .append(meta.supportsUnion())</span>
+<span class="nc" id="L640">                .append(lineSep)</span>
+<span class="nc" id="L641">                .append(&quot;supportsUnionAll: &quot;)</span>
+<span class="nc" id="L642">                .append(meta.supportsUnionAll())</span>
+<span class="nc" id="L643">                .append(lineSep)</span>
+<span class="nc" id="L644">                .append(&quot;usesLocalFilePerTable: &quot;)</span>
+<span class="nc" id="L645">                .append(meta.usesLocalFilePerTable())</span>
+<span class="nc" id="L646">                .append(lineSep)</span>
+<span class="nc" id="L647">                .append(&quot;usesLocalFiles: &quot;)</span>
+<span class="nc" id="L648">                .append(meta.usesLocalFiles())</span>
+<span class="nc" id="L649">                .append(lineSep)</span>
+<span class="nc" id="L650">                .append(&quot;allProceduresAreCallable: &quot;)</span>
+<span class="nc" id="L651">                .append(meta.allProceduresAreCallable())</span>
+<span class="nc" id="L652">                .append(lineSep)</span>
+<span class="nc" id="L653">                .append(&quot;allTablesAreSelectable: &quot;)</span>
+<span class="nc" id="L654">                .append(meta.allTablesAreSelectable())</span>
+<span class="nc" id="L655">                .append(lineSep)</span>
+<span class="nc" id="L656">                .append(&quot;dataDefinitionCausesTransactionCommit: &quot;)</span>
+<span class="nc" id="L657">                .append(meta.dataDefinitionCausesTransactionCommit())</span>
+<span class="nc" id="L658">                .append(lineSep)</span>
+<span class="nc" id="L659">                .append(&quot;dataDefinitionIgnoredInTransactions: &quot;)</span>
+<span class="nc" id="L660">                .append(meta.dataDefinitionIgnoredInTransactions())</span>
+<span class="nc" id="L661">                .append(lineSep)</span>
+<span class="nc" id="L662">                .append(&quot;doesMaxRowSizeIncludeBlobs: &quot;)</span>
+<span class="nc" id="L663">                .append(meta.doesMaxRowSizeIncludeBlobs())</span>
+<span class="nc" id="L664">                .append(lineSep)</span>
+<span class="nc" id="L665">                .append(&quot;supportsBatchUpdates: &quot;)</span>
+<span class="nc" id="L666">                .append(meta.supportsBatchUpdates());</span>
+<span class="nc" id="L667">        } catch (Throwable t) {</span>
+            // maybe abstract method error for jdbc 3 metadata method, or
+            // other error
+<span class="nc" id="L670">            buf.append(lineSep).append(&quot;Caught throwable: &quot;).append(t);</span>
+<span class="nc" id="L671">        }</span>
+
+<span class="nc" id="L673">        return buf.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

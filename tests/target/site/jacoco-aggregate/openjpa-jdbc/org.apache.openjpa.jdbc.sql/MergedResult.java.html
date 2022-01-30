@@ -1,0 +1,675 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MergedResult.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">MergedResult.java</span></div><h1>MergedResult.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.io.InputStream;
+import java.io.Reader;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.Ref;
+import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.util.Calendar;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.Locale;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.util.UnsupportedException;
+
+/**
+ * Result that merges multiple result delegates. Support exists for
+ * maintaining ordering of the internally-held results, provided that each
+ * of the individual results is itself ordered.
+ *
+ * @author Abe White
+ */
+public class MergedResult implements Result {
+
+    private static final byte NEXT = 0;
+    private static final byte CURRENT = 1;
+    private static final byte DONE = 2;
+
+    private final Result[] _res;
+    private final byte[] _status;
+    private final ResultComparator _comp;
+    private final Object[] _order;
+<span class="nc" id="L67">    private int _idx = 0;</span>
+<span class="nc" id="L68">    private boolean _pushedBack = false;</span>
+
+    /**
+     * Constructor; supply delegates.
+     */
+    public MergedResult(Result[] res) {
+<span class="nc" id="L74">        this(res, null);</span>
+<span class="nc" id="L75">    }</span>
+
+    /**
+     * Constructor; supply delegates and comparator for ordering results.
+     */
+<span class="nc" id="L80">    public MergedResult(Result[] res, ResultComparator comp) {</span>
+<span class="nc" id="L81">        _res = res;</span>
+<span class="nc" id="L82">        _comp = comp;</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        _order = (comp == null) ? null : new Object[res.length];</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        _status = (comp == null) ? null : new byte[res.length];</span>
+<span class="nc" id="L85">    }</span>
+
+    @Override
+    public Object getEager(FieldMapping key) {
+<span class="nc" id="L89">        return _res[_idx].getEager(key);</span>
+    }
+
+    @Override
+    public void putEager(FieldMapping key, Object res) {
+<span class="nc" id="L94">        _res[_idx].putEager(key, res);</span>
+<span class="nc" id="L95">    }</span>
+
+    @Override
+    public Joins newJoins() {
+<span class="nc" id="L99">        return _res[_idx].newJoins();</span>
+    }
+
+    @Override
+    public void close() {
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        for (int i = 0; i &lt; _res.length; i++)</span>
+<span class="nc" id="L105">            _res[i].close();</span>
+<span class="nc" id="L106">    }</span>
+
+    @Override
+    public void setLocking(boolean locking) {
+<span class="nc" id="L110">        _res[_idx].setLocking(locking);</span>
+<span class="nc" id="L111">    }</span>
+
+    @Override
+    public boolean isLocking() {
+<span class="nc" id="L115">        return _res[_idx].isLocking();</span>
+    }
+
+    @Override
+    public boolean supportsRandomAccess()
+        throws SQLException {
+<span class="nc" id="L121">        return false;</span>
+    }
+
+    @Override
+    public boolean absolute(int row)
+        throws SQLException {
+<span class="nc" id="L127">        throw new UnsupportedException();</span>
+    }
+
+    @Override
+    public boolean next()
+        throws SQLException {
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if (_pushedBack) {</span>
+<span class="nc" id="L134">            _pushedBack = false;</span>
+<span class="nc" id="L135">            return true;</span>
+        }
+
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (_comp == null) {</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">            while (!_res[_idx].next()) {</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">                if (_idx == _res.length - 1)</span>
+<span class="nc" id="L141">                    return false;</span>
+<span class="nc" id="L142">                _idx++;</span>
+            }
+<span class="nc" id="L144">            return true;</span>
+        }
+
+        // ordering is involved; extract order values from each result
+<span class="nc" id="L148">        boolean hasValue = false;</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">        for (int i = 0; i &lt; _status.length; i++) {</span>
+<span class="nc bnc" id="L150" title="All 3 branches missed.">            switch (_status[i]) {</span>
+                case NEXT:
+<span class="nc bnc" id="L152" title="All 2 branches missed.">                    if (_res[i].next()) {</span>
+<span class="nc" id="L153">                        hasValue = true;</span>
+<span class="nc" id="L154">                        _status[i] = CURRENT;</span>
+<span class="nc" id="L155">                        _order[i] = _comp.getOrderingValue(_res[i], i);</span>
+                    } else
+<span class="nc" id="L157">                        _status[i] = DONE;</span>
+<span class="nc" id="L158">                    break;</span>
+                case CURRENT:
+<span class="nc" id="L160">                    hasValue = true;</span>
+                    break;
+            }
+        }
+
+        // all results exhausted
+<span class="nc bnc" id="L166" title="All 2 branches missed.">        if (!hasValue)</span>
+<span class="nc" id="L167">            return false;</span>
+
+        // for all results with values, find the 'least' one according to
+        // the comparator
+<span class="nc" id="L171">        int least = -1;</span>
+<span class="nc" id="L172">        Object orderVal = null;</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        for (int i = 0; i &lt; _order.length; i++) {</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">            if (_status[i] != CURRENT)</span>
+<span class="nc" id="L175">                continue;</span>
+<span class="nc bnc" id="L176" title="All 4 branches missed.">            if (least == -1 || _comp.compare(_order[i], orderVal) &lt; 0) {</span>
+<span class="nc" id="L177">                least = i;</span>
+<span class="nc" id="L178">                orderVal = _order[i];</span>
+            }
+        }
+
+        // make the current result the one with the least value, and clear
+        // the cached value for that result
+<span class="nc" id="L184">        _idx = least;</span>
+<span class="nc" id="L185">        _order[least] = null;</span>
+<span class="nc" id="L186">        _status[least] = NEXT;</span>
+<span class="nc" id="L187">        return true;</span>
+    }
+
+    @Override
+    public void pushBack()
+        throws SQLException {
+<span class="nc" id="L193">        _pushedBack = true;</span>
+<span class="nc" id="L194">    }</span>
+
+    @Override
+    public int size()
+        throws SQLException {
+<span class="nc" id="L199">        int size = 0;</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        for (int i = 0; i &lt; _res.length; i++)</span>
+<span class="nc" id="L201">            size += _res[i].size();</span>
+<span class="nc" id="L202">        return size;</span>
+    }
+
+    @Override
+    public boolean contains(Object obj)
+        throws SQLException {
+<span class="nc" id="L208">        return _res[_idx].contains(obj);</span>
+    }
+
+    @Override
+    public boolean containsAll(Object[] objs)
+        throws SQLException {
+<span class="nc" id="L214">        return _res[_idx].containsAll(objs);</span>
+    }
+
+    @Override
+    public boolean contains(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L220">        return _res[_idx].contains(col, joins);</span>
+    }
+
+    @Override
+    public boolean containsAll(Column[] cols, Joins joins)
+        throws SQLException {
+<span class="nc" id="L226">        return _res[_idx].containsAll(cols, joins);</span>
+    }
+
+    @Override
+    public ClassMapping getBaseMapping() {
+<span class="nc" id="L231">        return _res[_idx].getBaseMapping();</span>
+    }
+
+    @Override
+    public void setBaseMapping(ClassMapping mapping) {
+<span class="nc" id="L236">        _res[_idx].setBaseMapping(mapping);</span>
+<span class="nc" id="L237">    }</span>
+
+    @Override
+    public FieldMapping getMappedByFieldMapping() {
+<span class="nc" id="L241">        return _res[_idx].getMappedByFieldMapping();</span>
+    }
+
+    @Override
+    public void setMappedByFieldMapping(FieldMapping fieldMapping) {
+<span class="nc" id="L246">        _res[_idx].setMappedByFieldMapping(fieldMapping);</span>
+<span class="nc" id="L247">    }</span>
+
+    @Override
+    public Object getMappedByValue() {
+<span class="nc" id="L251">        return _res[_idx].getMappedByValue();</span>
+    }
+
+    @Override
+    public void setMappedByValue(Object mappedByValue) {
+<span class="nc" id="L256">        _res[_idx].setMappedByValue(mappedByValue);</span>
+<span class="nc" id="L257">    }</span>
+
+    @Override
+    public int indexOf() {
+<span class="nc" id="L261">        return _res[_idx].indexOf();</span>
+    }
+
+    @Override
+    public Object load(ClassMapping mapping, JDBCStore store,
+        JDBCFetchConfiguration fetch)
+        throws SQLException {
+<span class="nc" id="L268">        return _res[_idx].load(mapping, store, fetch);</span>
+    }
+
+    @Override
+    public Object load(ClassMapping mapping, JDBCStore store,
+        JDBCFetchConfiguration fetch, Joins joins)
+        throws SQLException {
+<span class="nc" id="L275">        return _res[_idx].load(mapping, store, fetch, joins);</span>
+    }
+
+    @Override
+    public Array getArray(Object obj)
+        throws SQLException {
+<span class="nc" id="L281">        return _res[_idx].getArray(obj);</span>
+    }
+
+    @Override
+    public InputStream getAsciiStream(Object obj)
+        throws SQLException {
+<span class="nc" id="L287">        return _res[_idx].getAsciiStream(obj);</span>
+    }
+
+    @Override
+    public BigDecimal getBigDecimal(Object obj)
+        throws SQLException {
+<span class="nc" id="L293">        return _res[_idx].getBigDecimal(obj);</span>
+    }
+
+    @Override
+    public BigInteger getBigInteger(Object obj)
+        throws SQLException {
+<span class="nc" id="L299">        return _res[_idx].getBigInteger(obj);</span>
+    }
+
+    @Override
+    public InputStream getBinaryStream(Object obj)
+        throws SQLException {
+<span class="nc" id="L305">        return _res[_idx].getBinaryStream(obj);</span>
+    }
+
+    @Override
+    public InputStream getLOBStream(JDBCStore store, Object obj)
+        throws SQLException {
+<span class="nc" id="L311">        return _res[_idx].getLOBStream(store, obj);</span>
+    }
+
+    @Override
+    public Blob getBlob(Object obj)
+        throws SQLException {
+<span class="nc" id="L317">        return _res[_idx].getBlob(obj);</span>
+    }
+
+    @Override
+    public boolean getBoolean(Object obj)
+        throws SQLException {
+<span class="nc" id="L323">        return _res[_idx].getBoolean(obj);</span>
+    }
+
+    @Override
+    public byte getByte(Object obj)
+        throws SQLException {
+<span class="nc" id="L329">        return _res[_idx].getByte(obj);</span>
+    }
+
+    @Override
+    public byte[] getBytes(Object obj)
+        throws SQLException {
+<span class="nc" id="L335">        return _res[_idx].getBytes(obj);</span>
+    }
+
+    @Override
+    public Calendar getCalendar(Object obj)
+        throws SQLException {
+<span class="nc" id="L341">        return _res[_idx].getCalendar(obj);</span>
+    }
+
+    @Override
+    public LocalDate getLocalDate(Object obj) throws SQLException {
+<span class="nc" id="L346">        return _res[_idx].getLocalDate(obj);</span>
+    }
+
+    @Override
+    public LocalTime getLocalTime(Object obj) throws SQLException {
+<span class="nc" id="L351">        return _res[_idx].getLocalTime(obj);</span>
+    }
+
+    @Override
+    public LocalDateTime getLocalDateTime(Object obj) throws SQLException {
+<span class="nc" id="L356">        return _res[_idx].getLocalDateTime(obj);</span>
+    }
+
+    @Override
+    public OffsetTime getOffsetTime(Object obj) throws SQLException {
+<span class="nc" id="L361">        return _res[_idx].getOffsetTime(obj);</span>
+    }
+
+    @Override
+    public OffsetDateTime getOffsetDateTime(Object obj) throws SQLException {
+<span class="nc" id="L366">        return _res[_idx].getOffsetDateTime(obj);</span>
+    }
+
+    @Override
+    public char getChar(Object obj)
+        throws SQLException {
+<span class="nc" id="L372">        return _res[_idx].getChar(obj);</span>
+    }
+
+    @Override
+    public Reader getCharacterStream(Object obj)
+        throws SQLException {
+<span class="nc" id="L378">        return _res[_idx].getCharacterStream(obj);</span>
+    }
+
+    @Override
+    public Clob getClob(Object obj)
+        throws SQLException {
+<span class="nc" id="L384">        return _res[_idx].getClob(obj);</span>
+    }
+
+    @Override
+    public Date getDate(Object obj)
+        throws SQLException {
+<span class="nc" id="L390">        return _res[_idx].getDate(obj);</span>
+    }
+
+    @Override
+    public java.sql.Date getDate(Object obj, Calendar cal)
+        throws SQLException {
+<span class="nc" id="L396">        return _res[_idx].getDate(obj, cal);</span>
+    }
+
+    @Override
+    public double getDouble(Object obj)
+        throws SQLException {
+<span class="nc" id="L402">        return _res[_idx].getDouble(obj);</span>
+    }
+
+    @Override
+    public float getFloat(Object obj)
+        throws SQLException {
+<span class="nc" id="L408">        return _res[_idx].getFloat(obj);</span>
+    }
+
+    @Override
+    public int getInt(Object obj)
+        throws SQLException {
+<span class="nc" id="L414">        return _res[_idx].getInt(obj);</span>
+    }
+
+    @Override
+    public Locale getLocale(Object obj)
+        throws SQLException {
+<span class="nc" id="L420">        return _res[_idx].getLocale(obj);</span>
+    }
+
+    @Override
+    public long getLong(Object obj)
+        throws SQLException {
+<span class="nc" id="L426">        return _res[_idx].getLong(obj);</span>
+    }
+
+    @Override
+    public Number getNumber(Object obj)
+        throws SQLException {
+<span class="nc" id="L432">        return _res[_idx].getNumber(obj);</span>
+    }
+
+    @Override
+    public Object getObject(Object obj, int metaType, Object arg)
+        throws SQLException {
+<span class="nc" id="L438">        return _res[_idx].getObject(obj, metaType, arg);</span>
+    }
+
+    @Override
+    public Object getSQLObject(Object obj, Map map)
+        throws SQLException {
+<span class="nc" id="L444">        return _res[_idx].getSQLObject(obj, map);</span>
+    }
+
+    @Override
+    public Ref getRef(Object obj, Map map)
+        throws SQLException {
+<span class="nc" id="L450">        return _res[_idx].getRef(obj, map);</span>
+    }
+
+    @Override
+    public short getShort(Object obj)
+        throws SQLException {
+<span class="nc" id="L456">        return _res[_idx].getShort(obj);</span>
+    }
+
+    @Override
+    public String getString(Object obj)
+        throws SQLException {
+<span class="nc" id="L462">        return _res[_idx].getString(obj);</span>
+    }
+
+    @Override
+    public Time getTime(Object obj, Calendar cal)
+        throws SQLException {
+<span class="nc" id="L468">        return _res[_idx].getTime(obj, cal);</span>
+    }
+
+    @Override
+    public Timestamp getTimestamp(Object obj, Calendar cal)
+        throws SQLException {
+<span class="nc" id="L474">        return _res[_idx].getTimestamp(obj, cal);</span>
+    }
+
+    @Override
+    public Array getArray(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L480">        return _res[_idx].getArray(col, joins);</span>
+    }
+
+    @Override
+    public InputStream getAsciiStream(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L486">        return _res[_idx].getAsciiStream(col, joins);</span>
+    }
+
+    @Override
+    public BigDecimal getBigDecimal(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L492">        return _res[_idx].getBigDecimal(col, joins);</span>
+    }
+
+    @Override
+    public BigInteger getBigInteger(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L498">        return _res[_idx].getBigInteger(col, joins);</span>
+    }
+
+    @Override
+    public InputStream getBinaryStream(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L504">        return _res[_idx].getBinaryStream(col, joins);</span>
+    }
+
+    @Override
+    public Blob getBlob(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L510">        return _res[_idx].getBlob(col, joins);</span>
+    }
+
+    @Override
+    public boolean getBoolean(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L516">        return _res[_idx].getBoolean(col, joins);</span>
+    }
+
+    @Override
+    public byte getByte(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L522">        return _res[_idx].getByte(col, joins);</span>
+    }
+
+    @Override
+    public byte[] getBytes(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L528">        return _res[_idx].getBytes(col, joins);</span>
+    }
+
+    @Override
+    public Calendar getCalendar(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L534">        return _res[_idx].getCalendar(col, joins);</span>
+    }
+
+    @Override
+    public char getChar(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L540">        return _res[_idx].getChar(col, joins);</span>
+    }
+
+    @Override
+    public Reader getCharacterStream(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L546">        return _res[_idx].getCharacterStream(col, joins);</span>
+    }
+
+    @Override
+    public Clob getClob(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L552">        return _res[_idx].getClob(col, joins);</span>
+    }
+
+    @Override
+    public Date getDate(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L558">        return _res[_idx].getDate(col, joins);</span>
+    }
+
+    @Override
+    public java.sql.Date getDate(Column col, Calendar cal, Joins joins)
+        throws SQLException {
+<span class="nc" id="L564">        return _res[_idx].getDate(col, cal, joins);</span>
+    }
+
+    @Override
+    public double getDouble(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L570">        return _res[_idx].getDouble(col, joins);</span>
+    }
+
+    @Override
+    public float getFloat(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L576">        return _res[_idx].getFloat(col, joins);</span>
+    }
+
+    @Override
+    public int getInt(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L582">        return _res[_idx].getInt(col, joins);</span>
+    }
+
+    @Override
+    public Locale getLocale(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L588">        return _res[_idx].getLocale(col, joins);</span>
+    }
+
+    @Override
+    public long getLong(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L594">        return _res[_idx].getLong(col, joins);</span>
+    }
+
+    @Override
+    public Number getNumber(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L600">        return _res[_idx].getNumber(col, joins);</span>
+    }
+
+    @Override
+    public Object getObject(Column col, Object arg, Joins joins)
+        throws SQLException {
+<span class="nc" id="L606">        return _res[_idx].getObject(col, arg, joins);</span>
+    }
+
+    @Override
+    public Object getSQLObject(Column col, Map map, Joins joins)
+        throws SQLException {
+<span class="nc" id="L612">        return _res[_idx].getSQLObject(col, map, joins);</span>
+    }
+
+    @Override
+    public Ref getRef(Column col, Map map, Joins joins)
+        throws SQLException {
+<span class="nc" id="L618">        return _res[_idx].getRef(col, map, joins);</span>
+    }
+
+    @Override
+    public short getShort(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L624">        return _res[_idx].getShort(col, joins);</span>
+    }
+
+    @Override
+    public String getString(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L630">        return _res[_idx].getString(col, joins);</span>
+    }
+
+    @Override
+    public Time getTime(Column col, Calendar cal, Joins joins)
+        throws SQLException {
+<span class="nc" id="L636">        return _res[_idx].getTime(col, cal, joins);</span>
+    }
+
+    @Override
+    public Timestamp getTimestamp(Column col, Calendar cal, Joins joins)
+        throws SQLException {
+<span class="nc" id="L642">        return _res[_idx].getTimestamp(col, cal, joins);</span>
+    }
+
+    @Override
+    public boolean wasNull()
+        throws SQLException {
+<span class="nc" id="L648">        return _res[_idx].wasNull();</span>
+    }
+
+    @Override
+    public void startDataRequest(Object mapping) {
+<span class="nc bnc" id="L653" title="All 2 branches missed.">        for (int i = 0; i &lt; _res.length; i++)</span>
+<span class="nc" id="L654">            _res[i].startDataRequest(mapping);</span>
+<span class="nc" id="L655">    }</span>
+
+    @Override
+    public void endDataRequest() {
+<span class="nc bnc" id="L659" title="All 2 branches missed.">        for (int i = 0; i &lt; _res.length; i++)</span>
+<span class="nc" id="L660">            _res[i].endDataRequest();</span>
+<span class="nc" id="L661">    }</span>
+
+    /**
+     * Comparator for ordering result rows.
+     */
+    public interface ResultComparator
+        extends Comparator {
+
+        /**
+         * Return the ordering value of the current row of the given result.
+         */
+        Object getOrderingValue(Result res, int idx);
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

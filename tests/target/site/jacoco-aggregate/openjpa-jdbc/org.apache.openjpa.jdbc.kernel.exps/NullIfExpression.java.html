@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>NullIfExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">NullIfExpression.java</span></div><h1>NullIfExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.sql.Raw;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.kernel.exps.Value;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * NullIf expression.
+ *
+ * @author Catalina Wei
+ */
+public class NullIfExpression
+    extends AbstractVal {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final Val _val1;
+    private final Val _val2;
+<span class="nc" id="L45">    private ClassMetaData _meta = null;</span>
+<span class="nc" id="L46">    private Class _cast = null;</span>
+<span class="nc" id="L47">    private Value other = null;</span>
+<span class="nc" id="L48">    private ExpState otherState = null;</span>
+
+    /**
+     * Constructor.
+     */
+<span class="nc" id="L53">    public NullIfExpression(Val val1, Val val2) {</span>
+<span class="nc" id="L54">        _val1 = val1;</span>
+<span class="nc" id="L55">        _val2 = val2;</span>
+<span class="nc" id="L56">    }</span>
+
+    public Val getVal1() {
+<span class="nc" id="L59">        return _val1;</span>
+    }
+
+    public Val getVal2() {
+<span class="nc" id="L63">        return _val2;</span>
+    }
+
+    @Override
+    public Class getType() {
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        if (_cast != null)</span>
+<span class="nc" id="L69">            return _cast;</span>
+<span class="nc" id="L70">        Class c1 = _val1.getType();</span>
+<span class="nc" id="L71">        Class c2 = _val2.getType();</span>
+<span class="nc" id="L72">        Class type = Filters.promote(c1, c2);</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">        if (type == Raw.class)</span>
+<span class="nc" id="L74">            return String.class;</span>
+<span class="nc" id="L75">        return type;</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L80">        ExpState s1 = _val1.initialize(sel, ctx, 0);</span>
+<span class="nc" id="L81">        ExpState s2 = _val2.initialize(sel, ctx, 0);</span>
+<span class="nc" id="L82">        return new BinaryOpExpState(sel.and(s1.joins, s2.joins), s1, s2);</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer buf, int index) {
+<span class="nc" id="L88">        BinaryOpExpState bstate = (BinaryOpExpState) state;</span>
+
+<span class="nc" id="L90">        buf.append(&quot; NULLIF(&quot;); // MySQL does not like space before bracket</span>
+
+<span class="nc" id="L92">        _val1.appendTo(sel, ctx, bstate.state1, buf, 0);</span>
+<span class="nc" id="L93">        buf.append(&quot;,&quot;);</span>
+<span class="nc" id="L94">        _val2.appendTo(sel, ctx, bstate.state2, buf, 0);</span>
+
+<span class="nc" id="L96">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L97">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L102">        BinaryOpExpState bstate = (BinaryOpExpState) state;</span>
+<span class="nc" id="L103">        _val1.selectColumns(sel, ctx, bstate.state1, true);</span>
+<span class="nc" id="L104">        _val2.selectColumns(sel, ctx, bstate.state2, true);</span>
+<span class="nc" id="L105">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L109">        visitor.enter(this);</span>
+<span class="nc" id="L110">        _val1.acceptVisit(visitor);</span>
+<span class="nc" id="L111">        _val2.acceptVisit(visitor);</span>
+<span class="nc" id="L112">        visitor.exit(this);</span>
+<span class="nc" id="L113">    }</span>
+
+    @Override
+    public int getId() {
+<span class="nc" id="L117">        return Val.NULLIF_VAL;</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L123">        BinaryOpExpState bstate = (BinaryOpExpState) state;</span>
+<span class="nc" id="L124">        _val1.calculateValue(sel, ctx, bstate.state1, _val2, bstate.state2);</span>
+<span class="nc" id="L125">        _val2.calculateValue(sel, ctx, bstate.state2, _val1, bstate.state1);</span>
+<span class="nc" id="L126">    }</span>
+
+    @Override
+    public void groupBy(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L130">        sel.groupBy(newSQLBuffer(sel, ctx, state));</span>
+<span class="nc" id="L131">    }</span>
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L135">        return 1;</span>
+    }
+
+    private SQLBuffer newSQLBuffer(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L139">        calculateValue(sel, ctx, state, null, null);</span>
+<span class="nc" id="L140">        SQLBuffer buf = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L141">        appendTo(sel, ctx, state, buf, 0);</span>
+<span class="nc" id="L142">        return buf;</span>
+    }
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res)
+        throws SQLException {
+<span class="nc" id="L148">        return Filters.convert(res.getObject(this,</span>
+<span class="nc" id="L149">            JavaSQLTypes.JDBC_DEFAULT, null), getType());</span>
+    }
+
+    @Override
+    public void orderBy(Select sel, ExpContext ctx, ExpState state,
+        boolean asc) {
+<span class="nc" id="L155">        sel.orderBy(newSQLBuffer(sel, ctx, state), asc, false, getSelectAs());</span>
+<span class="nc" id="L156">    }</span>
+
+    @Override
+    public void select(Select sel, ExpContext ctx, ExpState state, boolean pks){
+<span class="nc" id="L160">        sel.select(newSQLBuffer(sel, ctx, state), this);</span>
+<span class="nc" id="L161">    }</span>
+
+    @Override
+    public ClassMetaData getMetaData() {
+<span class="nc" id="L165">        return _meta;</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L170">        _cast = type;</span>
+<span class="nc" id="L171">    }</span>
+
+    @Override
+    public void setMetaData(ClassMetaData meta) {
+<span class="nc" id="L175">        _meta = meta;</span>
+<span class="nc" id="L176">    }</span>
+
+    public void setOtherPath(Value other) {
+<span class="nc" id="L179">        this.other = other;</span>
+<span class="nc" id="L180">    }</span>
+
+    public Value getOtherPath() {
+<span class="nc" id="L183">        return other;</span>
+    }
+
+    public void setOtherState(ExpState otherState) {
+<span class="nc" id="L187">        this.otherState = otherState;</span>
+<span class="nc" id="L188">    }</span>
+
+    public ExpState getOtherState() {
+<span class="nc" id="L191">        return otherState;</span>
+    }
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

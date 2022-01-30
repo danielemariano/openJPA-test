@@ -1,0 +1,1172 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>LogicalUnion.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">LogicalUnion.java</span></div><h1>LogicalUnion.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.kernel.exps.Context;
+import org.apache.openjpa.kernel.exps.Value;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.UnsupportedException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * A logical union made up of multiple distinct selects whose results are
+ * combined in memory.
+ *
+ * @author Abe White
+ */
+public class LogicalUnion
+    implements Union {
+
+<span class="nc" id="L53">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L54">        (LogicalUnion.class);</span>
+
+    protected final UnionSelect[] sels;
+    protected final DBDictionary dict;
+    protected final ClassMapping[] mappings;
+<span class="nc" id="L59">    protected final BitSet desc = new BitSet();</span>
+<span class="nc" id="L60">    private boolean _distinct = true;</span>
+
+
+    /**
+     * Constructor.
+     *
+     * @param conf system configuration
+     * @param sels the number of SQL selects to union together
+     */
+    public LogicalUnion(JDBCConfiguration conf, int sels) {
+<span class="nc" id="L70">        this(conf, sels, null);</span>
+<span class="nc" id="L71">    }</span>
+
+    /**
+     * Constructor used to seed the internal selects.
+     */
+    public LogicalUnion(JDBCConfiguration conf, Select[] seeds) {
+<span class="nc" id="L77">        this(conf, seeds.length, seeds);</span>
+<span class="nc" id="L78">    }</span>
+
+    /**
+     * Delegate constructor.
+     */
+<span class="nc" id="L83">    protected LogicalUnion(JDBCConfiguration conf, int sels, Select[] seeds) {</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        if (sels == 0)</span>
+<span class="nc" id="L85">            throw new InternalException(&quot;sels == 0&quot;);</span>
+
+<span class="nc" id="L87">        dict = conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L88">        mappings = new ClassMapping[sels];</span>
+<span class="nc" id="L89">        this.sels = new UnionSelect[sels];</span>
+
+        SelectImpl seed;
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        for (int i = 0; i &lt; sels; i++) {</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">            seed = (seeds == null)</span>
+<span class="nc" id="L94">                ? (SelectImpl) conf.getSQLFactoryInstance().newSelect()</span>
+<span class="nc" id="L95">                : (SelectImpl) seeds[i];</span>
+<span class="nc" id="L96">            this.sels[i] = newUnionSelect(seed, i);</span>
+        }
+<span class="nc" id="L98">    }</span>
+
+    /**
+     * Create a new union select with the given delegate and union position.
+     */
+    protected UnionSelect newUnionSelect(SelectImpl seed, int pos) {
+<span class="nc" id="L104">        return new UnionSelect(seed, pos);</span>
+    }
+
+    @Override
+    public Select[] getSelects() {
+<span class="nc" id="L109">        return sels;</span>
+    }
+
+    @Override
+    public boolean isUnion() {
+<span class="nc" id="L114">        return false;</span>
+    }
+
+    @Override
+    public void abortUnion() {
+<span class="nc" id="L119">    }</span>
+
+    @Override
+    public String getOrdering() {
+<span class="nc" id="L123">        return null;</span>
+    }
+
+    @Override
+    public JDBCConfiguration getConfiguration() {
+<span class="nc" id="L128">        return sels[0].getConfiguration();</span>
+    }
+
+    public DBDictionary getDBDictionary() {
+<span class="nc" id="L132">        return dict;</span>
+    }
+
+    @Override
+    public SQLBuffer toSelect(boolean forUpdate, JDBCFetchConfiguration fetch) {
+<span class="nc" id="L137">        return dict.toSelect(sels[0], forUpdate, fetch);</span>
+    }
+
+    @Override
+    public SQLBuffer getSQL() {
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        return sels.length == 1 ? sels[0].getSQL() : null;</span>
+    }
+
+    @Override
+    public SQLBuffer toSelectCount() {
+<span class="nc" id="L147">        return dict.toSelectCount(sels[0]);</span>
+    }
+
+    @Override
+    public boolean getAutoDistinct() {
+<span class="nc" id="L152">        return sels[0].getAutoDistinct();</span>
+    }
+
+    @Override
+    public void setAutoDistinct(boolean distinct) {
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        for (int i = 0; i &lt; sels.length; i++)</span>
+<span class="nc" id="L158">            sels[i].setAutoDistinct(distinct);</span>
+<span class="nc" id="L159">    }</span>
+
+    @Override
+    public boolean isDistinct() {
+<span class="nc" id="L163">        return _distinct;</span>
+    }
+
+    @Override
+    public void setDistinct(boolean distinct) {
+<span class="nc" id="L168">        _distinct = distinct;</span>
+<span class="nc" id="L169">    }</span>
+
+    @Override
+    public boolean isLRS() {
+<span class="nc" id="L173">        return sels[0].isLRS();</span>
+    }
+
+    @Override
+    public void setLRS(boolean lrs) {
+<span class="nc bnc" id="L178" title="All 2 branches missed.">        for (int i = 0; i &lt; sels.length; i++)</span>
+<span class="nc" id="L179">            sels[i].setLRS(lrs);</span>
+<span class="nc" id="L180">    }</span>
+
+    @Override
+    public int getExpectedResultCount() {
+<span class="nc" id="L184">        return sels[0].getExpectedResultCount();</span>
+    }
+
+    @Override
+    public void setExpectedResultCount(int expectedResultCount,
+        boolean force) {
+<span class="nc bnc" id="L190" title="All 2 branches missed.">        for (int i = 0; i &lt; sels.length; i++)</span>
+<span class="nc" id="L191">            sels[i].setExpectedResultCount(expectedResultCount, force);</span>
+<span class="nc" id="L192">    }</span>
+
+    @Override
+    public int getJoinSyntax() {
+<span class="nc" id="L196">        return sels[0].getJoinSyntax();</span>
+    }
+
+    @Override
+    public void setJoinSyntax(int syntax) {
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        for (int i = 0; i &lt; sels.length; i++)</span>
+<span class="nc" id="L202">            sels[i].setJoinSyntax(syntax);</span>
+<span class="nc" id="L203">    }</span>
+
+    @Override
+    public boolean supportsRandomAccess(boolean forUpdate) {
+<span class="nc bnc" id="L207" title="All 2 branches missed.">        if (sels.length == 1)</span>
+<span class="nc" id="L208">            return sels[0].supportsRandomAccess(forUpdate);</span>
+<span class="nc" id="L209">        return false;</span>
+    }
+
+    @Override
+    public boolean supportsLocking() {
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (sels.length == 1)</span>
+<span class="nc" id="L215">            return sels[0].supportsLocking();</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">        for (int i = 0; i &lt; sels.length; i++)</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">            if (!sels[i].supportsLocking())</span>
+<span class="nc" id="L218">                return false;</span>
+<span class="nc" id="L219">        return true;</span>
+    }
+
+    @Override
+    public boolean hasMultipleSelects() {
+<span class="nc bnc" id="L224" title="All 4 branches missed.">        if (sels != null &amp;&amp; sels.length &gt; 1)</span>
+<span class="nc" id="L225">            return true;</span>
+<span class="nc" id="L226">        return sels[0].hasMultipleSelects();</span>
+    }
+
+    @Override
+    public int getCount(JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L232">        int count = 0;</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        for (int i = 0; i &lt; sels.length; i++)</span>
+<span class="nc" id="L234">            count += sels[i].getCount(store);</span>
+<span class="nc" id="L235">        return count;</span>
+    }
+
+    @Override
+    public Result execute(JDBCStore store, JDBCFetchConfiguration fetch)
+        throws SQLException {
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if (fetch == null)</span>
+<span class="nc" id="L242">            fetch = store.getFetchConfiguration();</span>
+<span class="nc" id="L243">        return execute(store, fetch, fetch.getReadLockLevel());</span>
+    }
+
+    @Override
+    public Result execute(JDBCStore store, JDBCFetchConfiguration fetch,
+        int lockLevel)
+        throws SQLException {
+<span class="nc bnc" id="L250" title="All 2 branches missed.">        if (fetch == null)</span>
+<span class="nc" id="L251">            fetch = store.getFetchConfiguration();</span>
+
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        if (sels.length == 1) {</span>
+<span class="nc" id="L254">            Result res = sels[0].execute(store, fetch, lockLevel);</span>
+<span class="nc" id="L255">            ((AbstractResult) res).setBaseMapping(mappings[0]);</span>
+<span class="nc" id="L256">            return res;</span>
+        }
+
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (getExpectedResultCount() == 1) {</span>
+            AbstractResult res;
+<span class="nc bnc" id="L261" title="All 2 branches missed.">            for (int i = 0; i &lt; sels.length; i++) {</span>
+<span class="nc" id="L262">                res = (AbstractResult) sels[i].execute(store, fetch,</span>
+                    lockLevel);
+<span class="nc" id="L264">                res.setBaseMapping(mappings[i]);</span>
+<span class="nc" id="L265">                res.setIndexOf(i);</span>
+
+                // if we get to the last select, just return its result
+<span class="nc bnc" id="L268" title="All 2 branches missed.">                if (i == sels.length - 1)</span>
+<span class="nc" id="L269">                    return res;</span>
+
+                // return the first result that has a row
+                try {
+<span class="nc bnc" id="L273" title="All 2 branches missed.">                    if (!res.next())</span>
+<span class="nc" id="L274">                        res.close();</span>
+                    else {
+<span class="nc" id="L276">                        res.pushBack();</span>
+<span class="nc" id="L277">                        return res;</span>
+                    }
+                }
+<span class="nc" id="L280">                catch (SQLException se) {</span>
+<span class="nc" id="L281">                    res.close();</span>
+<span class="nc" id="L282">                    throw se;</span>
+<span class="nc" id="L283">                }</span>
+            }
+        }
+
+        // create a single result from each select in our fake union, merging
+        // them as needed
+<span class="nc" id="L289">        AbstractResult[] res = new AbstractResult[sels.length];</span>
+<span class="nc" id="L290">        List[] orderIdxs = null;</span>
+        try {
+            List l;
+<span class="nc bnc" id="L293" title="All 2 branches missed.">            for (int i = 0; i &lt; res.length; i++) {</span>
+<span class="nc" id="L294">                res[i] = (AbstractResult) sels[i].execute(store, fetch,</span>
+                    lockLevel);
+<span class="nc" id="L296">                res[i].setBaseMapping(mappings[i]);</span>
+<span class="nc" id="L297">                res[i].setIndexOf(i);</span>
+
+<span class="nc" id="L299">                l = sels[i].getSelectedOrderIndexes();</span>
+<span class="nc bnc" id="L300" title="All 2 branches missed.">                if (l != null) {</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">                    if (orderIdxs == null)</span>
+<span class="nc" id="L302">                        orderIdxs = new List[sels.length];</span>
+<span class="nc" id="L303">                    orderIdxs[i] = l;</span>
+                }
+            }
+<span class="nc" id="L306">        } catch (SQLException se) {</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">            for (int i = 0; res[i] != null; i++)</span>
+<span class="nc" id="L308">                res[i].close();</span>
+<span class="nc" id="L309">            throw se;</span>
+<span class="nc" id="L310">        }</span>
+
+        // if multiple selects have ordering, use a comparator to collate
+<span class="nc" id="L313">        ResultComparator comp = null;</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">        if (orderIdxs != null)</span>
+<span class="nc" id="L315">            comp = new ResultComparator(orderIdxs, desc, dict);</span>
+<span class="nc" id="L316">        return new MergedResult(res, comp);</span>
+    }
+
+    @Override
+    public void select(Union.Selector selector) {
+<span class="nc bnc" id="L321" title="All 2 branches missed.">        for (int i = 0; i &lt; sels.length; i++)</span>
+<span class="nc" id="L322">            selector.select(sels[i], i);</span>
+<span class="nc" id="L323">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L327">        return toSelect(false, null).getSQL();</span>
+    }
+
+    /**
+     * A callback used to create the selects in a SQL union.
+     */
+    public interface Selector {
+
+        /**
+         * Populate the &lt;code&gt;i&lt;/code&gt;th select in the union.
+         */
+        void select(Select sel, int i);
+    }
+
+    /**
+     * A select that is part of a logical union.
+     */
+    public class UnionSelect
+        implements Select {
+
+        protected final SelectImpl sel;
+        protected final int pos;
+<span class="nc" id="L349">        protected int orders = 0;</span>
+<span class="nc" id="L350">        protected List orderIdxs = null;</span>
+
+<span class="nc" id="L352">        public UnionSelect(SelectImpl sel, int pos) {</span>
+<span class="nc" id="L353">            this.sel = sel;</span>
+<span class="nc" id="L354">            this.pos = pos;</span>
+<span class="nc" id="L355">            sel.setRecordOrderedIndexes(true);</span>
+<span class="nc" id="L356">        }</span>
+
+        /**
+         * Delegate select.
+         */
+        public SelectImpl getDelegate() {
+<span class="nc" id="L362">            return sel;</span>
+        }
+
+        /**
+         * Return the indexes of the data in the select clause this query is
+         * ordered by.
+         */
+        public List getSelectedOrderIndexes() {
+<span class="nc bnc" id="L370" title="All 2 branches missed.">            if (orderIdxs == null)</span>
+<span class="nc" id="L371">                orderIdxs = sel.getOrderedIndexes();</span>
+<span class="nc" id="L372">            return orderIdxs;</span>
+        }
+
+        @Override
+        public JDBCConfiguration getConfiguration() {
+<span class="nc" id="L377">            return sel.getConfiguration();</span>
+        }
+
+        @Override
+        public int indexOf() {
+<span class="nc" id="L382">            return pos;</span>
+        }
+
+        @Override
+        public SQLBuffer toSelect(boolean forUpdate,
+            JDBCFetchConfiguration fetch) {
+<span class="nc" id="L388">            return sel.toSelect(forUpdate, fetch);</span>
+        }
+
+        @Override
+        public SQLBuffer getSQL() {
+<span class="nc" id="L393">            return sel.getSQL();</span>
+        }
+
+        @Override
+        public SQLBuffer toSelectCount() {
+<span class="nc" id="L398">            return sel.toSelectCount();</span>
+        }
+
+        @Override
+        public boolean getAutoDistinct() {
+<span class="nc" id="L403">            return sel.getAutoDistinct();</span>
+        }
+
+        @Override
+        public void setAutoDistinct(boolean distinct) {
+<span class="nc" id="L408">            sel.setAutoDistinct(distinct);</span>
+<span class="nc" id="L409">        }</span>
+
+        @Override
+        public boolean isDistinct() {
+<span class="nc" id="L413">            return sel.isDistinct();</span>
+        }
+
+        @Override
+        public void setDistinct(boolean distinct) {
+<span class="nc" id="L418">            sel.setDistinct(distinct);</span>
+<span class="nc" id="L419">        }</span>
+
+        @Override
+        public boolean isLRS() {
+<span class="nc" id="L423">            return sel.isLRS();</span>
+        }
+
+        @Override
+        public void setLRS(boolean lrs) {
+<span class="nc" id="L428">            sel.setLRS(lrs);</span>
+<span class="nc" id="L429">        }</span>
+
+        @Override
+        public int getJoinSyntax() {
+<span class="nc" id="L433">            return sel.getJoinSyntax();</span>
+        }
+
+        @Override
+        public void setJoinSyntax(int joinSyntax) {
+<span class="nc" id="L438">            sel.setJoinSyntax(joinSyntax);</span>
+<span class="nc" id="L439">        }</span>
+
+        @Override
+        public boolean supportsRandomAccess(boolean forUpdate) {
+<span class="nc" id="L443">            return sel.supportsRandomAccess(forUpdate);</span>
+        }
+
+        @Override
+        public boolean supportsLocking() {
+<span class="nc" id="L448">            return sel.supportsLocking();</span>
+        }
+
+        @Override
+        public boolean hasMultipleSelects() {
+<span class="nc" id="L453">            return sel.hasMultipleSelects();</span>
+        }
+
+        @Override
+        public int getCount(JDBCStore store)
+            throws SQLException {
+<span class="nc" id="L459">            return sel.getCount(store);</span>
+        }
+
+        @Override
+        public Result execute(JDBCStore store, JDBCFetchConfiguration fetch)
+            throws SQLException {
+<span class="nc" id="L465">            return sel.execute(store, fetch);</span>
+        }
+
+        @Override
+        public Result execute(JDBCStore store, JDBCFetchConfiguration fetch,
+            int lockLevel)
+            throws SQLException {
+<span class="nc" id="L472">            return sel.execute(store, fetch, lockLevel);</span>
+        }
+
+        @Override
+        public List getSubselects() {
+<span class="nc" id="L477">            return Collections.EMPTY_LIST;</span>
+        }
+
+        @Override
+        public Select getParent() {
+<span class="nc" id="L482">            return null;</span>
+        }
+
+        @Override
+        public String getSubselectPath() {
+<span class="nc" id="L487">            return null;</span>
+        }
+
+        @Override
+        public void setParent(Select parent, String path) {
+<span class="nc" id="L492">            throw new UnsupportedException(_loc.get(&quot;union-element&quot;));</span>
+        }
+
+        @Override
+        public void setHasSubselect(boolean hasSub) {
+<span class="nc" id="L497">            sel.setHasSubselect(hasSub);</span>
+<span class="nc" id="L498">        }</span>
+
+        @Override
+        public boolean getHasSubselect() {
+<span class="nc" id="L502">            return sel.getHasSubselect();</span>
+        }
+
+        @Override
+        public Select getFromSelect() {
+<span class="nc" id="L507">            return null;</span>
+        }
+
+        @Override
+        public void setFromSelect(Select sel) {
+<span class="nc" id="L512">            throw new UnsupportedException(_loc.get(&quot;union-element&quot;));</span>
+        }
+
+        @Override
+        public boolean hasEagerJoin(boolean toMany) {
+<span class="nc" id="L517">            return sel.hasEagerJoin(toMany);</span>
+        }
+
+        @Override
+        public boolean hasJoin(boolean toMany) {
+<span class="nc" id="L522">            return sel.hasJoin(toMany);</span>
+        }
+
+        @Override
+        public boolean isSelected(Table table) {
+<span class="nc" id="L527">            return sel.isSelected(table);</span>
+        }
+
+        @Override
+        public Collection getTableAliases() {
+<span class="nc" id="L532">            return sel.getTableAliases();</span>
+        }
+
+        @Override
+        public List getSelects() {
+<span class="nc" id="L537">            return sel.getSelects();</span>
+        }
+
+        @Override
+        public List getSelectAliases() {
+<span class="nc" id="L542">            return sel.getSelectAliases();</span>
+        }
+
+        @Override
+        public List getIdentifierAliases() {
+<span class="nc" id="L547">            return sel.getIdentifierAliases();</span>
+        }
+
+        @Override
+        public SQLBuffer getOrdering() {
+<span class="nc" id="L552">            return sel.getOrdering();</span>
+        }
+
+        @Override
+        public SQLBuffer getGrouping() {
+<span class="nc" id="L557">            return sel.getGrouping();</span>
+        }
+
+        @Override
+        public SQLBuffer getWhere() {
+<span class="nc" id="L562">            return sel.getWhere();</span>
+        }
+
+        @Override
+        public SQLBuffer getHaving() {
+<span class="nc" id="L567">            return sel.getHaving();</span>
+        }
+
+        @Override
+        public void addJoinClassConditions() {
+<span class="nc" id="L572">            sel.addJoinClassConditions();</span>
+<span class="nc" id="L573">        }</span>
+
+        @Override
+        public Joins getJoins() {
+<span class="nc" id="L577">            return sel.getJoins();</span>
+        }
+
+        @Override
+        public Iterator getJoinIterator() {
+<span class="nc" id="L582">            return sel.getJoinIterator();</span>
+        }
+
+        @Override
+        public long getStartIndex() {
+<span class="nc" id="L587">            return sel.getStartIndex();</span>
+        }
+
+        @Override
+        public long getEndIndex() {
+<span class="nc" id="L592">            return sel.getEndIndex();</span>
+        }
+
+        @Override
+        public void setRange(long start, long end) {
+<span class="nc" id="L597">            sel.setRange(start, end);</span>
+<span class="nc" id="L598">        }</span>
+
+        @Override
+        public String getColumnAlias(Column col) {
+<span class="nc" id="L602">            return sel.getColumnAlias(col);</span>
+        }
+
+        @Override
+        public String getColumnAlias(Column col, Joins joins) {
+<span class="nc" id="L607">            return sel.getColumnAlias(col, joins);</span>
+        }
+
+        @Override
+        public String getColumnAlias(Column col, Object alias) {
+<span class="nc" id="L612">            return sel.getColumnAlias(col, alias);</span>
+        }
+
+        @Override
+        public String getColumnAlias(String col, Table table) {
+<span class="nc" id="L617">            return sel.getColumnAlias(col, table);</span>
+        }
+
+        @Override
+        public String getColumnAlias(String col, Table table, Joins joins) {
+<span class="nc" id="L622">            return sel.getColumnAlias(col, table, joins);</span>
+        }
+
+        @Override
+        public boolean isAggregate() {
+<span class="nc" id="L627">            return sel.isAggregate();</span>
+        }
+
+        @Override
+        public void setAggregate(boolean agg) {
+<span class="nc" id="L632">            sel.setAggregate(agg);</span>
+<span class="nc" id="L633">        }</span>
+
+        @Override
+        public boolean isLob() {
+<span class="nc" id="L637">            return sel.isLob();</span>
+        }
+
+        @Override
+        public void setLob(boolean lob) {
+<span class="nc" id="L642">            sel.setLob(lob);</span>
+<span class="nc" id="L643">        }</span>
+
+        @Override
+        public void selectPlaceholder(String sql) {
+<span class="nc" id="L647">            sel.selectPlaceholder(sql);</span>
+<span class="nc" id="L648">        }</span>
+
+        @Override
+        public void clearSelects() {
+<span class="nc" id="L652">            sel.clearSelects();</span>
+<span class="nc" id="L653">        }</span>
+
+        @Override
+        public boolean select(SQLBuffer sql, Object id) {
+<span class="nc" id="L657">            return sel.select(sql, id);</span>
+        }
+
+        @Override
+        public boolean select(SQLBuffer sql, Object id, Joins joins) {
+<span class="nc" id="L662">            return sel.select(sql, id, joins);</span>
+        }
+
+        @Override
+        public boolean select(String sql, Object id) {
+<span class="nc" id="L667">            return sel.select(sql, id);</span>
+        }
+
+        @Override
+        public boolean select(String sql, Object id, Joins joins) {
+<span class="nc" id="L672">            return sel.select(sql, id, joins);</span>
+        }
+
+        @Override
+        public boolean select(Column col) {
+<span class="nc" id="L677">            return sel.select(col);</span>
+        }
+
+        @Override
+        public boolean select(Column col, Joins joins) {
+<span class="nc" id="L682">            return sel.select(col, joins);</span>
+        }
+
+        @Override
+        public int select(Column[] cols) {
+<span class="nc" id="L687">            return sel.select(cols);</span>
+        }
+
+        @Override
+        public int select(Column[] cols, Joins joins) {
+<span class="nc" id="L692">            return sel.select(cols, joins);</span>
+        }
+
+        @Override
+        public void select(ClassMapping mapping, int subclasses,
+            JDBCStore store, JDBCFetchConfiguration fetch, int eager) {
+<span class="nc" id="L698">            select(mapping, subclasses, store, fetch, eager, null, false);</span>
+<span class="nc" id="L699">        }</span>
+
+        @Override
+        public void select(ClassMapping mapping, int subclasses,
+            JDBCStore store, JDBCFetchConfiguration fetch, int eager,
+            Joins joins) {
+<span class="nc" id="L705">            select(mapping, subclasses, store, fetch, eager, joins, false);</span>
+<span class="nc" id="L706">        }</span>
+
+        private void select(ClassMapping mapping, int subclasses,
+            JDBCStore store, JDBCFetchConfiguration fetch, int eager,
+            Joins joins, boolean identifier) {
+            // if this is the first (primary) mapping selected for this
+            // SELECT, record it so we can figure out what the result type is
+            // since the discriminator might not be selected
+<span class="nc bnc" id="L714" title="All 2 branches missed.">            if (mappings[pos] == null)</span>
+<span class="nc" id="L715">                mappings[pos] = mapping;</span>
+
+<span class="nc" id="L717">            sel.select(this, mapping, subclasses, store, fetch, eager,</span>
+                joins, identifier);
+<span class="nc" id="L719">        }</span>
+
+        @Override
+        public boolean selectIdentifier(Column col) {
+<span class="nc" id="L723">            return sel.selectIdentifier(col);</span>
+        }
+
+        @Override
+        public boolean selectIdentifier(Column col, Joins joins) {
+<span class="nc" id="L728">            return sel.selectIdentifier(col, joins);</span>
+        }
+
+        @Override
+        public int selectIdentifier(Column[] cols) {
+<span class="nc" id="L733">            return sel.selectIdentifier(cols);</span>
+        }
+
+        @Override
+        public int selectIdentifier(Column[] cols, Joins joins) {
+<span class="nc" id="L738">            return sel.selectIdentifier(cols, joins);</span>
+        }
+
+        @Override
+        public void selectIdentifier(ClassMapping mapping, int subclasses,
+            JDBCStore store, JDBCFetchConfiguration fetch, int eager) {
+<span class="nc" id="L744">            select(mapping, subclasses, store, fetch, eager, null, true);</span>
+<span class="nc" id="L745">        }</span>
+
+        @Override
+        public void selectIdentifier(ClassMapping mapping, int subclasses,
+            JDBCStore store, JDBCFetchConfiguration fetch, int eager,
+            Joins joins) {
+<span class="nc" id="L751">            select(mapping, subclasses, store, fetch, eager, joins, true);</span>
+<span class="nc" id="L752">        }</span>
+
+        @Override
+        public int selectPrimaryKey(ClassMapping mapping) {
+<span class="nc" id="L756">            return sel.selectPrimaryKey(mapping);</span>
+        }
+
+        @Override
+        public int selectPrimaryKey(ClassMapping mapping, Joins joins) {
+<span class="nc" id="L761">            return sel.selectPrimaryKey(mapping, joins);</span>
+        }
+
+        @Override
+        public int orderByPrimaryKey(ClassMapping mapping, boolean asc,
+            boolean select) {
+<span class="nc" id="L767">            return orderByPrimaryKey(mapping, asc, null, select);</span>
+        }
+
+        @Override
+        public int orderByPrimaryKey(ClassMapping mapping, boolean asc,
+            Joins joins, boolean select) {
+<span class="nc" id="L773">            ClassMapping pks = mapping;</span>
+<span class="nc bnc" id="L774" title="All 2 branches missed.">            while (!pks.isPrimaryKeyObjectId(true))</span>
+<span class="nc" id="L775">                pks = pks.getJoinablePCSuperclassMapping();</span>
+<span class="nc" id="L776">            Column[] cols = pks.getPrimaryKeyColumns();</span>
+<span class="nc" id="L777">            recordOrderColumns(cols, asc);</span>
+<span class="nc" id="L778">            return sel.orderByPrimaryKey(mapping, asc, joins, select,</span>
+<span class="nc" id="L779">                isUnion());</span>
+        }
+
+        /**
+         * Record that we're ordering by a SQL expression.
+         */
+        protected void recordOrder(Object ord, boolean asc) {
+<span class="nc bnc" id="L786" title="All 2 branches missed.">            if (ord == null)</span>
+<span class="nc" id="L787">                return;</span>
+<span class="nc" id="L788">            orderIdxs = null;</span>
+
+<span class="nc" id="L790">            int idx = orders++;</span>
+<span class="nc bnc" id="L791" title="All 4 branches missed.">            if (desc.get(idx) &amp;&amp; asc)</span>
+<span class="nc" id="L792">                throw new UserException(_loc.get(&quot;incompat-ordering&quot;));</span>
+<span class="nc bnc" id="L793" title="All 2 branches missed.">            if (!asc)</span>
+<span class="nc" id="L794">                desc.set(idx);</span>
+<span class="nc" id="L795">        }</span>
+
+        /**
+         * Record that we're ordering by the given columns.
+         */
+        protected void recordOrderColumns(Column[] cols, boolean asc) {
+<span class="nc bnc" id="L801" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L802">                recordOrder(cols[i], asc);</span>
+<span class="nc" id="L803">        }</span>
+
+        @Override
+        public boolean orderBy(Column col, boolean asc, boolean select) {
+<span class="nc" id="L807">            return orderBy(col, asc, null, select);</span>
+        }
+
+        @Override
+        public boolean orderBy(Column col, boolean asc, Joins joins,
+            boolean select) {
+<span class="nc" id="L813">            recordOrder(col, asc);</span>
+<span class="nc" id="L814">            return sel.orderBy(col, asc, joins, select, isUnion());</span>
+        }
+
+        @Override
+        public int orderBy(Column[] cols, boolean asc, boolean select) {
+<span class="nc" id="L819">            return orderBy(cols, asc, null, select);</span>
+        }
+
+        @Override
+        public int orderBy(Column[] cols, boolean asc, Joins joins,
+            boolean select) {
+<span class="nc" id="L825">            recordOrderColumns(cols, asc);</span>
+<span class="nc" id="L826">            return sel.orderBy(cols, asc, joins, select, isUnion());</span>
+        }
+
+        @Override
+        public boolean orderBy(SQLBuffer sql, boolean asc, boolean select,
+            Value selAs) {
+<span class="nc" id="L832">            return orderBy(sql, asc, null, select, selAs);</span>
+        }
+
+        @Override
+        public boolean orderBy(SQLBuffer sql, boolean asc, Joins joins,
+            boolean select, Value selAs) {
+<span class="nc" id="L838">            recordOrder(sql.getSQL(false), asc);</span>
+<span class="nc" id="L839">            return sel.orderBy(sql, asc, joins, select, isUnion(), selAs);</span>
+        }
+
+        @Override
+        public boolean orderBy(String sql, boolean asc, boolean select) {
+<span class="nc" id="L844">            return orderBy(sql, asc, null, select);</span>
+        }
+
+        @Override
+        public boolean orderBy(String sql, boolean asc, Joins joins,
+            boolean select) {
+<span class="nc" id="L850">            recordOrder(sql, asc);</span>
+<span class="nc" id="L851">            return sel.orderBy(sql, asc, joins, select, isUnion());</span>
+        }
+
+        @Override
+        public void clearOrdering() {
+<span class="nc" id="L856">            sel.clearOrdering();</span>
+<span class="nc" id="L857">        }</span>
+
+        @Override
+        public void wherePrimaryKey(Object oid, ClassMapping mapping,
+            JDBCStore store) {
+<span class="nc" id="L862">            sel.wherePrimaryKey(oid, mapping, store);</span>
+<span class="nc" id="L863">        }</span>
+
+        @Override
+        public void whereForeignKey(ForeignKey fk, Object oid,
+            ClassMapping mapping, JDBCStore store) {
+<span class="nc" id="L868">            sel.whereForeignKey(fk, oid, mapping, store);</span>
+<span class="nc" id="L869">        }</span>
+
+        @Override
+        public void where(Joins joins) {
+<span class="nc" id="L873">            sel.where(joins);</span>
+<span class="nc" id="L874">        }</span>
+
+        @Override
+        public void where(SQLBuffer sql) {
+<span class="nc" id="L878">            sel.where(sql);</span>
+<span class="nc" id="L879">        }</span>
+
+        @Override
+        public void where(SQLBuffer sql, Joins joins) {
+<span class="nc" id="L883">            sel.where(sql, joins);</span>
+<span class="nc" id="L884">        }</span>
+
+        @Override
+        public void where(String sql) {
+<span class="nc" id="L888">            sel.where(sql);</span>
+<span class="nc" id="L889">        }</span>
+
+        @Override
+        public void where(String sql, Joins joins) {
+<span class="nc" id="L893">            sel.where(sql, joins);</span>
+<span class="nc" id="L894">        }</span>
+
+        @Override
+        public void having(SQLBuffer sql) {
+<span class="nc" id="L898">            sel.having(sql);</span>
+<span class="nc" id="L899">        }</span>
+
+        @Override
+        public void having(SQLBuffer sql, Joins joins) {
+<span class="nc" id="L903">            sel.having(sql, joins);</span>
+<span class="nc" id="L904">        }</span>
+
+        @Override
+        public void having(String sql) {
+<span class="nc" id="L908">            sel.having(sql);</span>
+<span class="nc" id="L909">        }</span>
+
+        @Override
+        public void having(String sql, Joins joins) {
+<span class="nc" id="L913">            sel.having(sql, joins);</span>
+<span class="nc" id="L914">        }</span>
+
+        @Override
+        public void groupBy(SQLBuffer sql) {
+<span class="nc" id="L918">            sel.groupBy(sql);</span>
+<span class="nc" id="L919">        }</span>
+
+        @Override
+        public void groupBy(SQLBuffer sql, Joins joins) {
+<span class="nc" id="L923">            sel.groupBy(sql, joins);</span>
+<span class="nc" id="L924">        }</span>
+
+        @Override
+        public void groupBy(String sql) {
+<span class="nc" id="L928">            sel.groupBy(sql);</span>
+<span class="nc" id="L929">        }</span>
+
+        @Override
+        public void groupBy(String sql, Joins joins) {
+<span class="nc" id="L933">            sel.groupBy(sql, joins);</span>
+<span class="nc" id="L934">        }</span>
+
+        @Override
+        public void groupBy(Column col) {
+<span class="nc" id="L938">            sel.groupBy(col);</span>
+<span class="nc" id="L939">        }</span>
+
+        @Override
+        public void groupBy(Column col, Joins joins) {
+<span class="nc" id="L943">            sel.groupBy(col, joins);</span>
+<span class="nc" id="L944">        }</span>
+
+        @Override
+        public void groupBy(Column[] cols) {
+<span class="nc" id="L948">            sel.groupBy(cols);</span>
+<span class="nc" id="L949">        }</span>
+
+        @Override
+        public void groupBy(Column[] cols, Joins joins) {
+<span class="nc" id="L953">            sel.groupBy(cols, joins);</span>
+<span class="nc" id="L954">        }</span>
+
+        @Override
+        public void groupBy(ClassMapping mapping, int subclasses,
+            JDBCStore store, JDBCFetchConfiguration fetch) {
+<span class="nc" id="L959">            sel.groupBy(mapping, subclasses, store, fetch);</span>
+<span class="nc" id="L960">        }</span>
+
+        @Override
+        public void groupBy(ClassMapping mapping, int subclasses,
+            JDBCStore store, JDBCFetchConfiguration fetch, Joins joins) {
+<span class="nc" id="L965">            sel.groupBy(mapping, subclasses, store, fetch, joins);</span>
+<span class="nc" id="L966">        }</span>
+
+        @Override
+        public SelectExecutor whereClone(int sels) {
+<span class="nc" id="L970">            return sel.whereClone(sels);</span>
+        }
+
+        @Override
+        public SelectExecutor fullClone(int sels) {
+<span class="nc" id="L975">            return sel.fullClone(sels);</span>
+        }
+
+        @Override
+        public SelectExecutor eagerClone(FieldMapping key, int eagerType,
+            boolean toMany, int sels) {
+<span class="nc" id="L981">            SelectExecutor ex = sel.eagerClone(key, eagerType, toMany, sels);</span>
+<span class="nc bnc" id="L982" title="All 2 branches missed.">            return (ex == sel) ? this : ex;</span>
+        }
+
+        @Override
+        public SelectExecutor getEager(FieldMapping key) {
+<span class="nc" id="L987">            SelectExecutor ex = sel.getEager(key);</span>
+<span class="nc bnc" id="L988" title="All 2 branches missed.">            return (ex == sel) ? this : ex;</span>
+        }
+
+        @Override
+        public Joins newJoins() {
+<span class="nc" id="L993">            return sel.newJoins();</span>
+        }
+
+        @Override
+        public Joins newOuterJoins() {
+<span class="nc" id="L998">            return sel.newOuterJoins();</span>
+        }
+
+        @Override
+        public void append(SQLBuffer buf, Joins joins) {
+<span class="nc" id="L1003">            sel.append(buf, joins);</span>
+<span class="nc" id="L1004">        }</span>
+
+        @Override
+        public Joins and(Joins joins1, Joins joins2) {
+<span class="nc" id="L1008">            return sel.and(joins1, joins2);</span>
+        }
+
+        @Override
+        public Joins or(Joins joins1, Joins joins2) {
+<span class="nc" id="L1013">            return sel.or(joins1, joins2);</span>
+        }
+
+        @Override
+        public Joins outer(Joins joins) {
+<span class="nc" id="L1018">            return sel.outer(joins);</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L1023">            return sel.toString();</span>
+        }
+
+        @Override
+        public int getExpectedResultCount() {
+<span class="nc" id="L1028">            return sel.getExpectedResultCount();</span>
+        }
+
+        @Override
+        public void setExpectedResultCount(int expectedResultCount,
+            boolean force) {
+<span class="nc" id="L1034">            sel.setExpectedResultCount(expectedResultCount, force);</span>
+<span class="nc" id="L1035">        }</span>
+
+        @Override
+        public void setContext(Context context) {
+<span class="nc" id="L1039">            sel.setContext(context);</span>
+<span class="nc" id="L1040">        }</span>
+
+        @Override
+        public Context ctx() {
+<span class="nc" id="L1044">            return sel.ctx();</span>
+        }
+
+        @Override
+        public void setSchemaAlias(String schemaAlias) {
+<span class="nc" id="L1049">            sel.setSchemaAlias(schemaAlias);</span>
+<span class="nc" id="L1050">        }</span>
+
+        @Override
+        public void logEagerRelations() {
+<span class="nc" id="L1054">            sel.logEagerRelations();</span>
+<span class="nc" id="L1055">        }</span>
+        @Override
+        public void setTablePerClassMeta(ClassMapping meta) {
+<span class="nc" id="L1058">        }</span>
+
+        @Override
+        public ClassMapping getTablePerClassMeta() {
+<span class="nc" id="L1062">            return sel.getTablePerClassMeta();</span>
+        }
+
+        @Override
+        public void setJoinedTableClassMeta(List meta) {
+<span class="nc" id="L1067">            sel.setJoinedTableClassMeta(meta);</span>
+<span class="nc" id="L1068">        }</span>
+
+        @Override
+        public List getJoinedTableClassMeta() {
+<span class="nc" id="L1072">            return sel.getJoinedTableClassMeta();</span>
+        }
+
+        @Override
+        public void setExcludedJoinedTableClassMeta(List meta) {
+<span class="nc" id="L1077">            sel.setExcludedJoinedTableClassMeta(meta);</span>
+<span class="nc" id="L1078">        }</span>
+
+        @Override
+        public List getExcludedJoinedTableClassMeta() {
+<span class="nc" id="L1082">            return sel.getExcludedJoinedTableClassMeta();</span>
+        }
+
+        @Override
+        public DBDictionary getDictionary() {
+<span class="nc" id="L1087">            return dict;</span>
+        }
+    }
+
+    /**
+     * Comparator for collating ordered results when faking a union.
+     */
+    private static class ResultComparator
+        implements MergedResult.ResultComparator {
+
+        private final List[] _orders;
+        private final BitSet _desc;
+        private final DBDictionary _dict;
+
+<span class="nc" id="L1101">        public ResultComparator(List[] orders, BitSet desc, DBDictionary dict) {</span>
+<span class="nc" id="L1102">            _orders = orders;</span>
+<span class="nc" id="L1103">            _desc = desc;</span>
+<span class="nc" id="L1104">            _dict = dict;</span>
+<span class="nc" id="L1105">        }</span>
+
+        @Override
+        public Object getOrderingValue(Result res, int idx) {
+            // if one value just return it
+<span class="nc" id="L1110">            ResultSet rs = ((ResultSetResult) res).getResultSet();</span>
+<span class="nc bnc" id="L1111" title="All 2 branches missed.">            if (_orders[idx].size() == 1)</span>
+<span class="nc" id="L1112">                return getOrderingValue(rs, _orders[idx].get(0));</span>
+
+            // return array of values
+<span class="nc" id="L1115">            Object[] vals = new Object[_orders[idx].size()];</span>
+<span class="nc bnc" id="L1116" title="All 2 branches missed.">            for (int i = 0; i &lt; vals.length; i++)</span>
+<span class="nc" id="L1117">                vals[i] = getOrderingValue(rs, _orders[idx].get(i));</span>
+<span class="nc" id="L1118">            return vals;</span>
+        }
+
+        /**
+         * Extract value at given index from result set.
+         */
+        private Object getOrderingValue(ResultSet rs, Object i) {
+            try {
+<span class="nc" id="L1126">                return _dict.getObject(rs, ((Integer) i).intValue() + 1, null);</span>
+<span class="nc" id="L1127">            } catch (SQLException se) {</span>
+<span class="nc" id="L1128">                throw SQLExceptions.getStore(se, _dict);</span>
+            }
+        }
+
+        @Override
+        public int compare(Object o1, Object o2) {
+<span class="nc bnc" id="L1134" title="All 2 branches missed.">            if (o1 == o2)</span>
+<span class="nc" id="L1135">                return 0;</span>
+<span class="nc bnc" id="L1136" title="All 2 branches missed.">            if (o1 == null)</span>
+<span class="nc bnc" id="L1137" title="All 2 branches missed.">                return (_desc.get(0)) ? -1 : 1;</span>
+<span class="nc bnc" id="L1138" title="All 2 branches missed.">            if (o2 == null)</span>
+<span class="nc bnc" id="L1139" title="All 2 branches missed.">                return (_desc.get(0)) ? 1 : -1;</span>
+
+            int cmp;
+<span class="nc bnc" id="L1142" title="All 2 branches missed.">            if (!(o1 instanceof Object[])) {</span>
+<span class="nc bnc" id="L1143" title="All 2 branches missed.">                if (!(o2 instanceof Object[])) {</span>
+<span class="nc" id="L1144">                    cmp = ((Comparable) o1).compareTo(o2);</span>
+<span class="nc bnc" id="L1145" title="All 2 branches missed.">                    return (_desc.get(0)) ? -cmp : cmp;</span>
+                }
+
+<span class="nc" id="L1148">                cmp = ((Comparable) o1).compareTo(((Object[]) o2)[0]);</span>
+<span class="nc bnc" id="L1149" title="All 2 branches missed.">                if (cmp != 0)</span>
+<span class="nc bnc" id="L1150" title="All 2 branches missed.">                    return (_desc.get(0)) ? -cmp : cmp;</span>
+<span class="nc" id="L1151">                return -1;</span>
+            }
+
+<span class="nc bnc" id="L1154" title="All 2 branches missed.">            if (!(o2 instanceof Object[])) {</span>
+<span class="nc" id="L1155">                cmp = ((Comparable) ((Object[]) o1)[0]).compareTo(o2);</span>
+<span class="nc bnc" id="L1156" title="All 2 branches missed.">                if (cmp != 0)</span>
+<span class="nc bnc" id="L1157" title="All 2 branches missed.">                    return (_desc.get(0)) ? -cmp : cmp;</span>
+<span class="nc" id="L1158">                return 1;</span>
+            }
+
+<span class="nc" id="L1161">            Object[] a1 = (Object[]) o1;</span>
+<span class="nc" id="L1162">            Object[] a2 = (Object[]) o2;</span>
+<span class="nc bnc" id="L1163" title="All 2 branches missed.">            for (int i = 0; i &lt; a1.length; i++) {</span>
+<span class="nc" id="L1164">                cmp = ((Comparable) a1[i]).compareTo(a2[i]);</span>
+<span class="nc bnc" id="L1165" title="All 2 branches missed.">                if (cmp != 0)</span>
+<span class="nc bnc" id="L1166" title="All 2 branches missed.">                    return (_desc.get(i)) ? -cmp : cmp;</span>
+            }
+<span class="nc" id="L1168">            return a1.length - a2.length;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

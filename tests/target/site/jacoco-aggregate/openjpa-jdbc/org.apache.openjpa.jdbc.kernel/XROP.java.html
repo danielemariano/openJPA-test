@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>XROP.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">XROP.java</span></div><h1>XROP.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+
+import java.sql.CallableStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.meta.QueryResultMapping;
+import org.apache.openjpa.jdbc.sql.ResultSetResult;
+import org.apache.openjpa.lib.rop.BatchedResultObjectProvider;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * Gets multiple Result Object Providers each with different mapping.
+ *
+ * @author Pinaki Poddar
+ *
+ */
+public class XROP implements BatchedResultObjectProvider {
+    private final CallableStatement stmt;
+    private final JDBCFetchConfiguration fetch;
+    private final List&lt;QueryResultMapping&gt; _multi;
+    private final List&lt;Class&lt;?&gt;&gt; _resultClasses;
+    private int index;
+    private final JDBCStore store;
+    // Result of first execution
+    private boolean executionResult;
+
+    public XROP(List&lt;QueryResultMapping&gt; mappings, List&lt;Class&lt;?&gt;&gt; classes,
+                JDBCStore store, JDBCFetchConfiguration fetch,
+<span class="nc" id="L51">                CallableStatement stmt) {</span>
+<span class="nc" id="L52">        _multi = mappings;</span>
+<span class="nc" id="L53">        _resultClasses = classes;</span>
+<span class="nc" id="L54">        this.stmt = stmt;</span>
+<span class="nc" id="L55">        this.fetch = fetch;</span>
+<span class="nc" id="L56">        this.store = store;</span>
+<span class="nc" id="L57">    }</span>
+
+    /**
+     * Does not support random access.
+     */
+    @Override
+    public boolean supportsRandomAccess() {
+<span class="nc" id="L64">        return false;</span>
+    }
+
+    /**
+     * Opens this provider by executing the underlying Statment.
+     * The result of execution is memorized.
+     */
+    @Override
+    public void open() throws Exception {
+<span class="nc" id="L73">        executionResult = stmt.execute();</span>
+<span class="nc" id="L74">    }</span>
+
+    /**
+     * Gets the current result set, wraps it with a {@link ResultSetResult}, then wraps
+     * again with appropriate ROP based on the result set mapping.
+     * &lt;br&gt;
+     * The ResultSet and the associated connection must not be closed.
+     *
+     * @return a provider or null if the underlying statement has no more results.
+     */
+    @Override
+    public ResultObjectProvider getResultObject() throws Exception {
+<span class="nc" id="L86">        ResultSet rs = stmt.getResultSet();</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">        if (rs == null)</span>
+<span class="nc" id="L88">            return null;</span>
+
+<span class="nc" id="L90">        ResultSetResult res = new ResultSetResult(rs, store.getDBDictionary());</span>
+<span class="nc" id="L91">        res.setCloseConnection(false);</span>
+<span class="nc" id="L92">        res.setCloseStatement(false);</span>
+        try {
+<span class="nc bnc" id="L94" title="All 4 branches missed.">            if (_resultClasses != null &amp;&amp; _resultClasses.size() &gt; index) {</span>
+<span class="nc" id="L95">                Class&lt;?&gt; mapping = _resultClasses.get(index);</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">                if (mapping != null) {</span>
+<span class="nc" id="L97">                    return new GenericResultObjectProvider(mapping, store, fetch, res);</span>
+                }
+            }
+<span class="nc bnc" id="L100" title="All 4 branches missed.">            if (_multi != null &amp;&amp; _multi.size() &gt; index) {</span>
+<span class="nc" id="L101">                QueryResultMapping mapping = _multi.get(index);</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">                if (mapping != null) {</span>
+<span class="nc" id="L103">                    return new MappedQueryResultObjectProvider(mapping, store, fetch, res);</span>
+                }
+            }
+<span class="nc" id="L106">            return new SQLProjectionResultObjectProvider(store, fetch, res, null);</span>
+        } finally {
+<span class="nc" id="L108">            index++;</span>
+        }
+    }
+
+
+    /**
+     * Closes the underlying statement.
+     */
+    @Override
+    public void close() throws Exception {
+<span class="nc" id="L118">        stmt.close();</span>
+<span class="nc" id="L119">    }</span>
+
+    /**
+     * Affirms if more result sets are available.
+     * &lt;br&gt;
+     * &lt;b.NOTE&lt;/b&gt;: The side effect is to advance to the statement's next result.
+     */
+    @Override
+    public boolean hasMoreResults() {
+        try {
+<span class="nc" id="L129">            return stmt.getMoreResults();</span>
+<span class="nc" id="L130">        } catch (SQLException e) {</span>
+<span class="nc" id="L131">            return false;</span>
+        }
+    }
+
+    @Override
+    public boolean getExecutionResult() {
+<span class="nc" id="L137">        return executionResult;</span>
+    }
+
+    /**
+     * Gets the update count, provided the current result of the statement is not a result set.
+     */
+    @Override
+    public int getUpdateCount() {
+        try {
+<span class="nc" id="L146">            return stmt.getUpdateCount();</span>
+<span class="nc" id="L147">        } catch (SQLException e) {</span>
+<span class="nc" id="L148">            return -1;</span>
+        }
+    }
+
+    @Override
+    public Object getOut(String name) {
+        try {
+<span class="nc" id="L155">            return stmt.getObject(name);</span>
+<span class="nc" id="L156">        } catch (SQLException e) {</span>
+<span class="nc" id="L157">            return null;</span>
+        }
+    }
+
+    @Override
+    public Object getOut(int position) {
+        try {
+<span class="nc" id="L164">            return stmt.getObject(position);</span>
+<span class="nc" id="L165">        } catch (SQLException e) {</span>
+<span class="nc" id="L166">            return null;</span>
+        }
+    }
+
+    /**
+     * Throws exception.
+     */
+    @Override
+    public boolean next() throws Exception {
+<span class="nc" id="L175">        throw new InternalException();</span>
+    }
+
+    /**
+     * Returns false.
+     */
+    @Override
+    public boolean absolute(int pos) throws Exception {
+<span class="nc" id="L183">        return false;</span>
+    }
+
+    /**
+     * Returns {@code -1}.
+     */
+    @Override
+    public int size() throws Exception {
+<span class="nc" id="L191">        return -1;</span>
+    }
+
+    /**
+     * Throws exception.
+     */
+    @Override
+    public void reset() throws Exception {
+<span class="nc" id="L199">        throw new InternalException();</span>
+    }
+
+    @Override
+    public void handleCheckedException(Exception e) {
+<span class="nc" id="L204">        throw new RuntimeException(e);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

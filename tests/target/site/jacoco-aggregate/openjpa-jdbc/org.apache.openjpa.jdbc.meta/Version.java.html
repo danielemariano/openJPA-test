@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Version.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">Version.java</span></div><h1>Version.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.sql.SQLException;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.Schemas;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.MetaDataContext;
+import org.apache.openjpa.meta.MetaDataModes;
+import org.apache.openjpa.meta.MetaDataRepository;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * Handles optimistic lock versioning for a class.
+ *
+ * @author Abe White
+ */
+public class Version
+    implements VersionStrategy, MetaDataContext, MetaDataModes {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L52">    private static final Localizer _loc = Localizer.forPackage(Version.class);</span>
+
+    private final ClassMapping _mapping;
+    private final VersionMappingInfo _info;
+<span class="nc" id="L56">    private VersionStrategy _strategy = null;</span>
+<span class="nc" id="L57">    private int _resMode = MODE_NONE;</span>
+
+<span class="nc" id="L59">    private Column[] _cols = Schemas.EMPTY_COLUMNS;</span>
+<span class="nc" id="L60">    private ColumnIO _io = null;</span>
+<span class="nc" id="L61">    private Index _idx = null;</span>
+
+    /**
+     * Constructor. Supply owning mapping.
+     */
+<span class="nc" id="L66">    public Version(ClassMapping mapping) {</span>
+<span class="nc" id="L67">        _mapping = mapping;</span>
+<span class="nc" id="L68">        _info = getMappingRepository().newMappingInfo(this);</span>
+<span class="nc" id="L69">    }</span>
+
+    @Override
+    public MetaDataRepository getRepository() {
+<span class="nc" id="L73">        return _mapping.getRepository();</span>
+    }
+
+    public MappingRepository getMappingRepository() {
+<span class="nc" id="L77">        return _mapping.getMappingRepository();</span>
+    }
+
+    /**
+     * Return the owning mapping.
+     */
+    public ClassMapping getClassMapping() {
+<span class="nc" id="L84">        return _mapping;</span>
+    }
+
+    /**
+     * The strategy used for versioning.
+     */
+    public VersionStrategy getStrategy() {
+<span class="nc" id="L91">        return _strategy;</span>
+    }
+
+    /**
+     * The strategy used for versioning. The &lt;code&gt;adapt&lt;/code&gt;
+     * parameter determines whether to adapt when mapping the strategy;
+     * use null if the strategy should not be mapped.
+     */
+    public void setStrategy(VersionStrategy strategy, Boolean adapt) {
+        // set strategy first so we can access it during mapping
+<span class="nc" id="L101">        VersionStrategy orig = _strategy;</span>
+<span class="nc" id="L102">        _strategy = strategy;</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if (strategy != null) {</span>
+            try {
+<span class="nc" id="L105">                strategy.setVersion(this);</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">                if (adapt != null)</span>
+<span class="nc" id="L107">                    strategy.map(adapt.booleanValue());</span>
+<span class="nc" id="L108">            } catch (RuntimeException re) {</span>
+                // reset strategy
+<span class="nc" id="L110">                _strategy = orig;</span>
+<span class="nc" id="L111">                throw re;</span>
+<span class="nc" id="L112">            }</span>
+        }
+<span class="nc" id="L114">    }</span>
+
+    /**
+     * Raw mapping data.
+     */
+    public VersionMappingInfo getMappingInfo() {
+<span class="nc" id="L120">        return _info;</span>
+    }
+
+    /**
+     * Columns used for versioning.
+     */
+    public Column[] getColumns() {
+<span class="nc" id="L127">        return _cols;</span>
+    }
+
+    /**
+     * Columns used for versioning.
+     */
+    public void setColumns(Column[] cols) {
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (cols == null)</span>
+<span class="nc" id="L135">            cols = Schemas.EMPTY_COLUMNS;</span>
+<span class="nc" id="L136">        _cols = cols;</span>
+<span class="nc" id="L137">    }</span>
+
+    /**
+     * I/O information on the version columns.
+     */
+    public ColumnIO getColumnIO() {
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        return (_io == null) ? ColumnIO.UNRESTRICTED : _io;</span>
+    }
+
+    /**
+     * I/O information on the version columns.
+     */
+    public void setColumnIO(ColumnIO io) {
+<span class="nc" id="L150">        _io = io;</span>
+<span class="nc" id="L151">    }</span>
+
+    /**
+     * Index on the version columns, or null if none.
+     */
+    public Index getIndex() {
+<span class="nc" id="L157">        return _idx;</span>
+    }
+
+    /**
+     * Index on the version columns, or null if none.
+     */
+    public void setIndex(Index idx) {
+<span class="nc" id="L164">        _idx = idx;</span>
+<span class="nc" id="L165">    }</span>
+
+    /**
+     * Increment the reference count of used schema components.
+     */
+    public void refSchemaComponents() {
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        for (int i = 0; i &lt; _cols.length; i++)</span>
+<span class="nc" id="L172">            _cols[i].ref();</span>
+<span class="nc" id="L173">    }</span>
+
+    /**
+     * Clear mapping information, including strategy.
+     */
+    public void clearMapping() {
+<span class="nc" id="L179">        _strategy = null;</span>
+<span class="nc" id="L180">        _cols = Schemas.EMPTY_COLUMNS;</span>
+<span class="nc" id="L181">        _idx = null;</span>
+<span class="nc" id="L182">        _info.clear();</span>
+<span class="nc" id="L183">        setResolve(MODE_MAPPING | MODE_MAPPING_INIT, false);</span>
+<span class="nc" id="L184">    }</span>
+
+    /**
+     * Update {@link MappingInfo} with our current mapping information.
+     */
+    public void syncMappingInfo() {
+<span class="nc" id="L190">        _info.syncWith(this);</span>
+
+        // setup the version field with our mapping info
+<span class="nc" id="L193">        FieldMapping fm = _mapping.getVersionFieldMapping();</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if (fm != null) {</span>
+            // erase explicit strategy if it is standard version strategy for
+            // field type
+<span class="nc bnc" id="L197" title="All 2 branches missed.">            if (_info.getStrategy() != null</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">                &amp;&amp; _info.getStrategy().equals(getMappingRepository().</span>
+<span class="nc" id="L199">                defaultStrategy(this, fm).getAlias()))</span>
+<span class="nc" id="L200">                _info.setStrategy(null);</span>
+
+<span class="nc" id="L202">            fm.getMappingInfo().clear();</span>
+<span class="nc" id="L203">            fm.getValueInfo().clear();</span>
+<span class="nc" id="L204">            fm.getKeyMapping().getValueInfo().clear();</span>
+<span class="nc" id="L205">            fm.getElementMapping().getValueInfo().clear();</span>
+<span class="nc" id="L206">            fm.getValueInfo().copy(_info);</span>
+<span class="nc" id="L207">            _info.clear();</span>
+        }
+<span class="nc" id="L209">    }</span>
+
+    /**
+     * Resolve mode.
+     */
+    public int getResolve() {
+<span class="nc" id="L215">        return _resMode;</span>
+    }
+
+    /**
+     * Resolve mode.
+     */
+    public void setResolve(int mode) {
+<span class="nc" id="L222">        _resMode = mode;</span>
+<span class="nc" id="L223">    }</span>
+
+    /**
+     * Resolve mode.
+     */
+    public void setResolve(int mode, boolean on) {
+<span class="nc bnc" id="L229" title="All 2 branches missed.">        if (mode == MODE_NONE)</span>
+<span class="nc" id="L230">            _resMode = mode;</span>
+<span class="nc bnc" id="L231" title="All 2 branches missed.">        else if (on)</span>
+<span class="nc" id="L232">            _resMode |= mode;</span>
+        else
+<span class="nc" id="L234">            _resMode &amp;= ~mode;</span>
+<span class="nc" id="L235">    }</span>
+
+    /**
+     * Resolve mapping information.
+     */
+    public boolean resolve(int mode) {
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if ((_resMode &amp; mode) == mode)</span>
+<span class="nc" id="L242">            return true;</span>
+<span class="nc" id="L243">        int cur = _resMode;</span>
+<span class="nc" id="L244">        _resMode |= mode;</span>
+<span class="nc bnc" id="L245" title="All 4 branches missed.">        if ((mode &amp; MODE_MAPPING) != 0 &amp;&amp; (cur &amp; MODE_MAPPING) == 0)</span>
+<span class="nc" id="L246">            resolveMapping();</span>
+<span class="nc bnc" id="L247" title="All 4 branches missed.">        if ((mode &amp; MODE_MAPPING_INIT) != 0 &amp;&amp; (cur &amp; MODE_MAPPING_INIT) == 0)</span>
+<span class="nc" id="L248">            _strategy.initialize();</span>
+<span class="nc" id="L249">        return false;</span>
+    }
+
+    /**
+     * Setup mapping.
+     */
+    private void resolveMapping() {
+        // if there is a version field, copy mapping info from it
+<span class="nc" id="L257">        FieldMapping fm = _mapping.getVersionFieldMapping();</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">        if (fm != null)</span>
+<span class="nc" id="L259">            _info.copy(fm.getValueInfo());</span>
+
+        // map strategy
+<span class="nc" id="L262">        MappingRepository repos = getMappingRepository();</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">        if (_strategy == null)</span>
+<span class="nc" id="L264">            repos.getStrategyInstaller().installStrategy(this);</span>
+<span class="nc" id="L265">        Log log = repos.getLog();</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        if (log.isTraceEnabled())</span>
+<span class="nc" id="L267">            log.trace(_loc.get(&quot;strategy&quot;, this, _strategy.getAlias()));</span>
+
+        // mark columns as mapped
+<span class="nc" id="L270">        Column[] cols = getColumns();</span>
+<span class="nc" id="L271">        ColumnIO io = getColumnIO();</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L273" title="All 2 branches missed.">            if (io.isInsertable(i, false))</span>
+<span class="nc" id="L274">                cols[i].setFlag(Column.FLAG_DIRECT_INSERT, true);</span>
+<span class="nc bnc" id="L275" title="All 2 branches missed.">            if (io.isUpdatable(i, false))</span>
+<span class="nc" id="L276">                cols[i].setFlag(Column.FLAG_DIRECT_UPDATE, true);</span>
+        }
+<span class="nc" id="L278">    }</span>
+
+    //////////////////////////////////
+    // VersionStrategy implementation
+    //////////////////////////////////
+
+    @Override
+    public String getAlias() {
+<span class="nc" id="L286">        return assertStrategy().getAlias();</span>
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc" id="L291">        assertStrategy().map(adapt);</span>
+<span class="nc" id="L292">    }</span>
+
+    @Override
+    public void initialize() {
+<span class="nc" id="L296">        assertStrategy().initialize();</span>
+<span class="nc" id="L297">    }</span>
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L302">        assertStrategy().insert(sm, store, rm);</span>
+<span class="nc" id="L303">    }</span>
+
+    @Override
+    public void update(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L308">        assertStrategy().update(sm, store, rm);</span>
+<span class="nc" id="L309">    }</span>
+
+    @Override
+    public void delete(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L314">        assertStrategy().delete(sm, store, rm);</span>
+<span class="nc" id="L315">    }</span>
+
+    @Override
+    public Boolean isCustomInsert(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L319">        return assertStrategy().isCustomInsert(sm, store);</span>
+    }
+
+    @Override
+    public Boolean isCustomUpdate(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L324">        return assertStrategy().isCustomUpdate(sm, store);</span>
+    }
+
+    @Override
+    public Boolean isCustomDelete(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L329">        return assertStrategy().isCustomDelete(sm, store);</span>
+    }
+
+    @Override
+    public void customInsert(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L335">        assertStrategy().customInsert(sm, store);</span>
+<span class="nc" id="L336">    }</span>
+
+    @Override
+    public void customUpdate(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L341">        assertStrategy().customUpdate(sm, store);</span>
+<span class="nc" id="L342">    }</span>
+
+    @Override
+    public void customDelete(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L347">        assertStrategy().customDelete(sm, store);</span>
+<span class="nc" id="L348">    }</span>
+
+    @Override
+    public void setVersion(Version owner) {
+<span class="nc" id="L352">        assertStrategy().setVersion(owner);</span>
+<span class="nc" id="L353">    }</span>
+
+    @Override
+    public boolean select(Select sel, ClassMapping mapping) {
+<span class="nc" id="L357">        return assertStrategy().select(sel, mapping);</span>
+    }
+
+    @Override
+    public Object load(OpenJPAStateManager sm, JDBCStore store, Result res)
+        throws SQLException {
+<span class="nc" id="L363">        return assertStrategy().load(sm, store, res);</span>
+    }
+
+    @Override
+    public Object load(OpenJPAStateManager sm, JDBCStore store, Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L369">        return assertStrategy().load(sm, store, res, joins);</span>
+    }
+
+    @Override
+    public void afterLoad(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L374">        assertStrategy().afterLoad(sm, store);</span>
+<span class="nc" id="L375">    }</span>
+
+    @Override
+    public boolean checkVersion(OpenJPAStateManager sm, JDBCStore store,
+        boolean updateVersion)
+        throws SQLException {
+<span class="nc" id="L381">        return assertStrategy().checkVersion(sm, store, updateVersion);</span>
+    }
+
+    @Override
+    public int compareVersion(Object v1, Object v2) {
+<span class="nc" id="L386">        return assertStrategy().compareVersion(v1, v2);</span>
+    }
+
+    private VersionStrategy assertStrategy() {
+<span class="nc bnc" id="L390" title="All 2 branches missed.">        if (_strategy == null)</span>
+<span class="nc" id="L391">            throw new InternalException();</span>
+<span class="nc" id="L392">        return _strategy;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L397">        return _mapping + &quot;&lt;version&gt;&quot;;</span>
+    }
+
+    /**
+     * @return a Map&lt;Column,Object&gt; specifying how to update each version
+     * column in this instance during a bulk update.
+     *
+     * @since 1.0.0
+     */
+    @Override
+    public Map&lt;Column,?&gt; getBulkUpdateValues() {
+<span class="nc" id="L408">        return _strategy.getBulkUpdateValues();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

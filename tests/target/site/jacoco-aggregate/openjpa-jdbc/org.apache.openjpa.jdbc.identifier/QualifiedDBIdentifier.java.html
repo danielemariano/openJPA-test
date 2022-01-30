@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>QualifiedDBIdentifier.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.identifier</a> &gt; <span class="el_source">QualifiedDBIdentifier.java</span></div><h1>QualifiedDBIdentifier.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.identifier;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.openjpa.lib.identifier.Identifier;
+
+/**
+ * This class extends DBIdentifier to provide support for qualified identifiers
+ * such as schema qualified tables and table qualified columns.  It provides methods
+ * to create qualified identifiers from individual identifiers.
+ *
+ */
+public class QualifiedDBIdentifier extends DBIdentifier implements Identifier, Cloneable, Serializable {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="fc" id="L37">    private DBIdentifier _schemaName = DBIdentifier.NULL;  // The schema name</span>
+    // The table name if the object (column, constraint) is qualified by a table name
+<span class="fc" id="L39">    private DBIdentifier _objectTableName = DBIdentifier.NULL;</span>
+
+
+<span class="fc" id="L42">    protected QualifiedDBIdentifier(DBIdentifier... sNames) {</span>
+<span class="fc" id="L43">        setPath(sNames);</span>
+<span class="fc" id="L44">    }</span>
+
+    /**
+     * Creates a qualified identifier based upon an array of DBIdentifiers.  Identifiers
+     * must be specified in order.
+     * @param names
+     */
+    public static QualifiedDBIdentifier newPath(DBIdentifier...names) {
+<span class="fc" id="L52">        return new QualifiedDBIdentifier(names);</span>
+    }
+
+    /**
+     * Set the identifiers that make up the path.  Identifiers must be specified
+     * in path order.  (ex. [ table, column ] )
+     * @param sNames
+     */
+    public void setPath(DBIdentifier...sNames) {
+<span class="fc" id="L61">        resetNames();</span>
+<span class="fc bfc" id="L62" title="All 4 branches covered.">        if (sNames == null || sNames.length == 0) {</span>
+<span class="fc" id="L63">            return;</span>
+        }
+
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        if (sNames.length == 1) {</span>
+<span class="fc" id="L67">            DBIdentifier sName = sNames[0];</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">            if (sName.getType() == DBIdentifierType.SCHEMA) {</span>
+<span class="fc" id="L69">                setSchemaName(sName.clone());</span>
+            }
+<span class="fc" id="L71">            setName(sName.clone());</span>
+<span class="fc" id="L72">            setType(sName.getType());</span>
+<span class="fc" id="L73">            return;</span>
+        }
+
+<span class="fc bfc" id="L76" title="All 2 branches covered.">        for (int i = (sNames.length - 1); i &gt;= 0; i--) {</span>
+<span class="fc" id="L77">            DBIdentifier sName = sNames[i];</span>
+<span class="fc bfc" id="L78" title="All 2 branches covered.">            if (DBIdentifier.isNull(sName)) {</span>
+<span class="fc" id="L79">                continue;</span>
+            }
+
+<span class="pc bpc" id="L82" title="1 of 4 branches missed.">            if (i == (sNames.length - 1) &amp;&amp; sNames.length != 1) {</span>
+<span class="fc" id="L83">                setName(sName.clone());</span>
+            } else {
+<span class="fc bfc" id="L85" title="All 2 branches covered.">                if (sName.getType() == DBIdentifierType.SCHEMA) {</span>
+<span class="fc" id="L86">                    setSchemaName(sName.clone());</span>
+                }
+<span class="fc bfc" id="L88" title="All 2 branches covered.">                else if (sName.getType() == DBIdentifierType.TABLE) {</span>
+<span class="fc" id="L89">                    setObjectTableName(sName.clone());</span>
+                }
+            }
+        }
+<span class="fc" id="L93">    }</span>
+
+    // Reset the path names
+    private void resetNames() {
+<span class="fc" id="L97">        _schemaName = DBIdentifier.NULL;</span>
+<span class="fc" id="L98">        _objectTableName = DBIdentifier.NULL;</span>
+<span class="fc" id="L99">    }</span>
+
+    /**
+     * Splits a qualified path into separate identifiers.
+     * @param sName
+     */
+    public static DBIdentifier[] splitPath(DBIdentifier sName) {
+<span class="fc bfc" id="L106" title="All 4 branches covered.">        if (sName instanceof QualifiedDBIdentifier &amp;&amp; sName.getType() != DBIdentifierType.SCHEMA) {</span>
+<span class="fc" id="L107">            QualifiedDBIdentifier path = (QualifiedDBIdentifier)sName;</span>
+<span class="fc" id="L108">            List&lt;DBIdentifier&gt; names = new ArrayList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L110" title="All 2 branches covered.">            if (!DBIdentifier.isNull(path.getSchemaName())) {</span>
+<span class="fc" id="L111">                names.add(path.getSchemaName().clone());</span>
+            }
+<span class="fc bfc" id="L113" title="All 2 branches covered.">            if (!DBIdentifier.isNull(path.getObjectTableName())) {</span>
+<span class="fc" id="L114">                names.add(path.getObjectTableName().clone());</span>
+            }
+<span class="fc bfc" id="L116" title="All 2 branches covered.">            if (!DBIdentifier.isNull(path.getIdentifier())) {</span>
+<span class="fc" id="L117">                names.add(((DBIdentifier)path).clone());</span>
+            }
+<span class="fc" id="L119">            return names.toArray(new DBIdentifier[names.size()]);</span>
+        }
+<span class="fc bfc" id="L121" title="All 2 branches covered.">        if (sName instanceof DBIdentifier) {</span>
+<span class="fc" id="L122">            return new DBIdentifier[] { sName.clone() };</span>
+        }
+<span class="fc" id="L124">        return new DBIdentifier[] {};</span>
+    }
+
+    /**
+     * Creates a qualified path from an identifier.
+     * @param sName
+     */
+    public static QualifiedDBIdentifier getPath(DBIdentifier sName) {
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (sName instanceof QualifiedDBIdentifier) {</span>
+<span class="nc" id="L133">            return (QualifiedDBIdentifier)sName.clone();</span>
+        }
+<span class="nc" id="L135">        return QualifiedDBIdentifier.newPath(sName);</span>
+    }
+
+    /**
+     *Sets the schema component of the path.
+     */
+    public void setSchemaName(DBIdentifier schemaName) {
+<span class="fc" id="L142">        _schemaName = schemaName;</span>
+<span class="fc" id="L143">    }</span>
+
+    /**
+     * Gets the schema component of the path.
+     */
+    public DBIdentifier getSchemaName() {
+<span class="fc" id="L149">        return _schemaName;</span>
+    }
+
+    /**
+     * Sets the object table name component of the path, if the path
+     * is a table qualified identifier such as a constraint or column.
+     */
+    public void setObjectTableName(DBIdentifier objectName) {
+<span class="fc" id="L157">        _objectTableName = objectName;</span>
+<span class="fc" id="L158">    }</span>
+
+
+    /**
+     * Gets the object table name component of the path, if the path
+     * is a table qualified identifier such as a constraint or column.
+     */
+    public DBIdentifier getObjectTableName() {
+<span class="fc" id="L166">        return _objectTableName;</span>
+    }
+
+    /**
+     * Returns true if this object is not qualified by a schema component.
+     */
+    public boolean isUnqualifiedObject() {
+<span class="nc" id="L173">        return DBIdentifier.isNull(getSchemaName());</span>
+    }
+
+    /**
+     * Returns true if this object is not qualified by a table or schema
+     * component.
+     */
+    public boolean isUnqualifiedColumn() {
+<span class="nc bnc" id="L181" title="All 4 branches missed.">        return DBIdentifier.isNull(getObjectTableName()) &amp;&amp; DBIdentifier.isNull(getSchemaName());</span>
+    }
+
+    /**
+     * Equality operator.
+     */
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        if (obj == null) {</span>
+<span class="nc" id="L190">            return false;</span>
+        }
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if (obj instanceof QualifiedDBIdentifier) {</span>
+<span class="nc" id="L193">            QualifiedDBIdentifier sPath = (QualifiedDBIdentifier)obj;</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">            return DBIdentifier.equal(sPath.getSchemaName(), getSchemaName()) &amp;&amp;</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">                DBIdentifier.equal(sPath.getObjectTableName(), getObjectTableName()) &amp;&amp;</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">                DBIdentifier.equal(sPath, this);</span>
+
+        }
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        else if (obj instanceof DBIdentifier) {</span>
+<span class="nc" id="L200">            DBIdentifier sName = (DBIdentifier)obj;</span>
+<span class="nc" id="L201">            return DBIdentifier.equal(sName, this);</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        } else if (obj instanceof String) {</span>
+<span class="nc" id="L203">            return obj.equals(this.getName());</span>
+        }
+<span class="nc" id="L205">        throw new IllegalArgumentException(&quot;Cannot compare to type: &quot; + obj.getClass().getName());</span>
+    }
+
+    /**
+     * Compares two qualified identifiers for equality.
+     * @param path1
+     * @param path2
+     */
+    public static boolean pathEqual(QualifiedDBIdentifier path1, QualifiedDBIdentifier path2) {
+<span class="nc bnc" id="L214" title="All 4 branches missed.">        if (path1 == null &amp;&amp; path2 == null) {</span>
+<span class="nc" id="L215">            return true;</span>
+        }
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (path1 == null) {</span>
+<span class="nc" id="L218">            return false;</span>
+        }
+<span class="nc" id="L220">        DBIdentifier[] names1 = QualifiedDBIdentifier.splitPath(path1);</span>
+<span class="nc" id="L221">        DBIdentifier[] names2 = QualifiedDBIdentifier.splitPath(path2);</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        if (names1.length != names2.length) {</span>
+<span class="nc" id="L223">            return false;</span>
+        }
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        for (int i = 0; i &lt; names1.length; i++) {</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">            if (!DBIdentifier.equal(names1[i], names2[i])) {</span>
+<span class="nc" id="L227">                return false;</span>
+            }
+        }
+<span class="nc" id="L230">        return true;</span>
+    }
+
+    /**
+     * Returns a fully qualified name as a string.
+     */
+    @Override
+    public String toString() {
+<span class="nc" id="L238">        return getName();</span>
+    }
+
+    /**
+     * Returns the fully qualified name as a string
+     */
+    @Override
+    public String getName() {
+        // If no schema or object or table qualifier, return the base name
+<span class="fc bfc" id="L247" title="All 4 branches covered.">        if (DBIdentifier.isEmpty(_schemaName) &amp;&amp; DBIdentifier.isEmpty(_objectTableName)) {</span>
+<span class="fc" id="L248">            return getBaseName();</span>
+        }
+<span class="fc" id="L250">        DBIdentifier[] names = QualifiedDBIdentifier.splitPath(this);</span>
+<span class="fc" id="L251">        return DBIdentifier.join(names);</span>
+    }
+
+    /**
+     * Returns the base name of this qualified name.  For example, if the
+     * qualified name is a schema qualified table, the table name is returned.
+     */
+    public String getBaseName() {
+<span class="fc" id="L259">        return super.getName();</span>
+    }
+
+    /**
+     * Returns this object as a DBIdentifier.
+     */
+    public DBIdentifier getIdentifier() {
+<span class="fc" id="L266">        return this;</span>
+    }
+
+    /**
+     * Set the name of this qualified identifier.  Splits the string into
+     * multiple components.  This method assumes the type does not change.
+     */
+    @Override
+    public void setName(String name) {
+        // Split apart name into components
+<span class="nc" id="L276">        DBIdentifier[] sNames = DBIdentifier.split(getType(), name);</span>
+<span class="nc" id="L277">        setPath(sNames);</span>
+<span class="nc" id="L278">    }</span>
+
+    /**
+     * Set the base name component of this compound identifier
+     * @param name
+     */
+    protected void setBaseName(String name) {
+<span class="fc" id="L285">        super.setName(name);</span>
+<span class="fc" id="L286">    }</span>
+
+    /**
+     * Returns the length of the qualified identifier, including delimiters
+     * and name separators.
+     */
+    @Override
+    public int length() {
+<span class="nc" id="L294">        String name = getName();</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (name == null) {</span>
+<span class="nc" id="L296">            return 0;</span>
+        }
+<span class="nc" id="L298">        return name.length();</span>
+    }
+
+    /**
+     * Compares this identifier with another identifier.
+     */
+    @Override
+    public int compareTo(Identifier o) {
+<span class="nc bnc" id="L306" title="All 2 branches missed.">        if (o instanceof DBIdentifier) {</span>
+<span class="nc bnc" id="L307" title="All 4 branches missed.">            if (o == null || o == DBIdentifier.NULL)</span>
+<span class="nc" id="L308">                return -1;</span>
+<span class="nc" id="L309">            return super.compareTo(o);</span>
+        }
+<span class="nc" id="L311">        return getName().compareTo(o.getName());</span>
+    }
+
+    /**
+     * Returns true if all identifiers within this compound identifier are
+     * delimited. Otherwise, false.
+     */
+    @Override
+    public boolean isDelimited() {
+<span class="nc bnc" id="L320" title="All 2 branches missed.">        if (DBIdentifier.isEmpty(this)) {</span>
+<span class="nc" id="L321">            return false;</span>
+        }
+<span class="nc bnc" id="L323" title="All 2 branches missed.">        if (!DBIdentifier.isNull(getObjectTableName())) {</span>
+<span class="nc bnc" id="L324" title="All 2 branches missed.">            if (!Normalizer.isDelimited(getObjectTableName().getName())) {</span>
+<span class="nc" id="L325">                return false;</span>
+            }
+        }
+<span class="nc bnc" id="L328" title="All 2 branches missed.">        if (!DBIdentifier.isNull(getSchemaName())) {</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">            if (!Normalizer.isDelimited(getSchemaName().getName())) {</span>
+<span class="nc" id="L330">                return false;</span>
+            }
+        }
+<span class="nc" id="L333">        return super.isDelimited();</span>
+    }
+
+    /**
+     * Returns a new unqualified name based on this instance.
+     */
+    @Override
+    public DBIdentifier getUnqualifiedName() {
+<span class="nc" id="L341">        QualifiedDBIdentifier newName = (QualifiedDBIdentifier)clone();</span>
+<span class="nc" id="L342">        newName.setObjectTableName(DBIdentifier.NULL);</span>
+<span class="nc" id="L343">        newName.setSchemaName(DBIdentifier.NULL);</span>
+<span class="nc" id="L344">        return newName;</span>
+    }
+
+    /**
+     * Creates a clone of this identifier.
+     */
+    @Override
+    public QualifiedDBIdentifier clone() {
+<span class="fc" id="L352">        QualifiedDBIdentifier sPath = new QualifiedDBIdentifier();</span>
+<span class="fc" id="L353">        sPath.setObjectTableName(getObjectTableName().clone());</span>
+<span class="fc" id="L354">        sPath.setSchemaName(getSchemaName().clone());</span>
+<span class="fc" id="L355">        sPath.setBaseName(super.getName());</span>
+<span class="fc" id="L356">        sPath.setType(getType());</span>
+<span class="fc" id="L357">        sPath.setIgnoreCase(getIgnoreCase());</span>
+<span class="fc" id="L358">        return sPath;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

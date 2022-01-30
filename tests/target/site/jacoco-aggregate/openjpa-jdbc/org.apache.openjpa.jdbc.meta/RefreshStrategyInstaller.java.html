@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>RefreshStrategyInstaller.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">RefreshStrategyInstaller.java</span></div><h1>RefreshStrategyInstaller.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.MetaDataModes;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Attempts to install using the given mapping information. If that
+ * fails, clears the mapping information and constructs new mappings.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+public class RefreshStrategyInstaller
+    extends StrategyInstaller {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L37">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L38">        (RefreshStrategyInstaller.class);</span>
+
+    /**
+     * Constructor; supply configuration.
+     */
+    public RefreshStrategyInstaller(MappingRepository repos) {
+<span class="nc" id="L44">        super(repos);</span>
+<span class="nc" id="L45">    }</span>
+
+    @Override
+    public boolean isAdapting() {
+<span class="nc" id="L49">        return true;</span>
+    }
+
+    @Override
+    public void installStrategy(ClassMapping cls) {
+<span class="nc" id="L54">        ClassStrategy strat = repos.namedStrategy(cls);</span>
+<span class="nc bnc" id="L55" title="All 2 branches missed.">        if (strat == null)</span>
+<span class="nc" id="L56">            strat = repos.defaultStrategy(cls, true);</span>
+        try {
+<span class="nc" id="L58">            cls.setStrategy(strat, Boolean.TRUE);</span>
+<span class="nc" id="L59">        } catch (MetaDataException mde) {</span>
+            // if this is a custom strategy, don't attempt to override
+<span class="nc bnc" id="L61" title="All 2 branches missed.">            if (isCustomStrategy(strat))</span>
+<span class="nc" id="L62">                throw mde;</span>
+
+<span class="nc" id="L64">            repos.getLog().warn(_loc.get(&quot;fatal-change&quot;, cls,</span>
+<span class="nc" id="L65">                mde.getMessage()));</span>
+<span class="nc" id="L66">            cls.clearMapping();</span>
+<span class="nc" id="L67">            cls.setStrategy(repos.defaultStrategy(cls, true), Boolean.TRUE);</span>
+<span class="nc" id="L68">        }</span>
+<span class="nc" id="L69">        cls.setSourceMode(MetaDataModes.MODE_MAPPING, true);</span>
+<span class="nc" id="L70">    }</span>
+
+    @Override
+    public void installStrategy(FieldMapping field) {
+<span class="nc" id="L74">        FieldStrategy strategy = repos.namedStrategy(field, true);</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if (strategy == null)</span>
+<span class="nc" id="L76">            strategy = repos.defaultStrategy(field, true, true);</span>
+        try {
+<span class="nc" id="L78">            field.setStrategy(strategy, Boolean.TRUE);</span>
+<span class="nc" id="L79">        } catch (MetaDataException mde) {</span>
+            // if this is a custom strategy, don't override
+<span class="nc bnc" id="L81" title="All 2 branches missed.">            if (isCustomStrategy(strategy))</span>
+<span class="nc" id="L82">                throw mde;</span>
+
+<span class="nc" id="L84">            repos.getLog().warn(_loc.get(&quot;fatal-change&quot;, field,</span>
+<span class="nc" id="L85">                mde.getMessage()));</span>
+<span class="nc" id="L86">            field.clearMapping();</span>
+<span class="nc" id="L87">            field.setHandler(null);</span>
+<span class="nc" id="L88">            field.getKeyMapping().setHandler(null);</span>
+<span class="nc" id="L89">            field.getElementMapping().setHandler(null);</span>
+<span class="nc" id="L90">            field.setStrategy(repos.defaultStrategy(field, true, true),</span>
+                Boolean.TRUE);
+<span class="nc" id="L92">        }</span>
+<span class="nc" id="L93">    }</span>
+
+    @Override
+    public void installStrategy(Version version) {
+<span class="nc" id="L97">        VersionStrategy strat = repos.namedStrategy(version);</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if (strat == null)</span>
+<span class="nc" id="L99">            strat = repos.defaultStrategy(version, true);</span>
+        try {
+<span class="nc" id="L101">            version.setStrategy(strat, Boolean.TRUE);</span>
+<span class="nc" id="L102">        } catch (MetaDataException mde) {</span>
+            // if this is a custom strategy, don't attempt to override
+<span class="nc bnc" id="L104" title="All 2 branches missed.">            if (isCustomStrategy(strat))</span>
+<span class="nc" id="L105">                throw mde;</span>
+
+<span class="nc" id="L107">            repos.getLog().warn(_loc.get(&quot;fatal-change&quot;, version,</span>
+<span class="nc" id="L108">                mde.getMessage()));</span>
+<span class="nc" id="L109">            version.clearMapping();</span>
+<span class="nc" id="L110">            version.setStrategy(repos.defaultStrategy(version, true),</span>
+                Boolean.TRUE);
+<span class="nc" id="L112">        }</span>
+<span class="nc" id="L113">    }</span>
+
+    @Override
+    public void installStrategy(Discriminator discrim) {
+<span class="nc" id="L117">        DiscriminatorStrategy strat = repos.namedStrategy(discrim);</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        if (strat == null)</span>
+<span class="nc" id="L119">            strat = repos.defaultStrategy(discrim, true);</span>
+        try {
+<span class="nc" id="L121">            discrim.setStrategy(strat, Boolean.TRUE);</span>
+<span class="nc" id="L122">        } catch (MetaDataException mde) {</span>
+            // if this is a custom strategy, don't attempt to override
+<span class="nc bnc" id="L124" title="All 2 branches missed.">            if (isCustomStrategy(strat))</span>
+<span class="nc" id="L125">                throw mde;</span>
+
+<span class="nc" id="L127">            repos.getLog().warn(_loc.get(&quot;fatal-change&quot;, discrim,</span>
+<span class="nc" id="L128">                mde.getMessage()));</span>
+
+            // retain old discriminator version, if any
+<span class="nc" id="L131">            String val = discrim.getMappingInfo().getValue();</span>
+<span class="nc" id="L132">            discrim.clearMapping();</span>
+<span class="nc" id="L133">            discrim.getMappingInfo().setValue(val);</span>
+<span class="nc" id="L134">            discrim.setStrategy(repos.defaultStrategy(discrim, true),</span>
+                Boolean.TRUE);
+<span class="nc" id="L136">        }</span>
+<span class="nc" id="L137">    }</span>
+
+    /**
+     * Return true if the given strategy is not a built-in type.
+     */
+    private static boolean isCustomStrategy(Strategy strat) {
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        return !strat.getClass().getName().startsWith(&quot;org.apache.openjpa.&quot;);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

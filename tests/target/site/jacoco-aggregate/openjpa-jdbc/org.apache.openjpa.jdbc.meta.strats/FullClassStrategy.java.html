@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FullClassStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">FullClassStrategy.java</span></div><h1>FullClassStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.ClassMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.ValueStrategies;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Mapping for when the class maps all fields to its own table.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L47">public class FullClassStrategy</span>
+    extends AbstractClassStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    public static final String ALIAS = &quot;full&quot;;
+
+<span class="nc" id="L55">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L56">        (FullClassStrategy.class);</span>
+
+    @Override
+    public String getAlias() {
+<span class="nc" id="L60">        return ALIAS;</span>
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (cls.getEmbeddingMetaData() != null)</span>
+<span class="nc" id="L66">            throw new MetaDataException(_loc.get(&quot;not-full&quot;, cls));</span>
+
+<span class="nc" id="L68">        ClassMapping sup = cls.getMappedPCSuperclassMapping();</span>
+<span class="nc" id="L69">        ClassMappingInfo info = cls.getMappingInfo();</span>
+<span class="nc bnc" id="L70" title="All 4 branches missed.">        if (sup != null &amp;&amp; info.isJoinedSubclass())</span>
+<span class="nc" id="L71">            throw new MetaDataException(_loc.get(&quot;not-full&quot;, cls));</span>
+
+<span class="nc" id="L73">        info.assertNoJoin(cls, true);</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        info.assertNoForeignKey(cls, !adapt);</span>
+<span class="nc" id="L75">        info.assertNoIndex(cls, false);</span>
+<span class="nc" id="L76">        info.assertNoUnique(cls, false);</span>
+
+        // find class table
+<span class="nc" id="L79">        Table table = info.getTable(cls, adapt);</span>
+
+        // find primary key column
+<span class="nc" id="L82">        Column[] pkCols = null;</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if (cls.getIdentityType() == ClassMetaData.ID_DATASTORE) {</span>
+<span class="nc" id="L84">            Column id = new Column();</span>
+<span class="nc" id="L85">            DBDictionary dict = cls.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            DBIdentifier idName = DBIdentifier.newColumn(&quot;id&quot;, dict != null ? dict.delimitAll() : false);</span>
+<span class="nc" id="L87">            id.setIdentifier(idName);</span>
+<span class="nc" id="L88">            id.setJavaType(JavaTypes.LONG);</span>
+<span class="nc" id="L89">            id.setComment(&quot;datastore id&quot;);</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">            if (cls.getIdentityStrategy() == ValueStrategies.AUTOASSIGN)</span>
+<span class="nc" id="L91">                id.setAutoAssigned(true);</span>
+<span class="nc" id="L92">            id.setNotNull(true);</span>
+<span class="nc" id="L93">            pkCols = info.getDataStoreIdColumns(cls, new Column[]{ id },</span>
+                table, adapt);
+<span class="nc" id="L95">            cls.setPrimaryKeyColumns(pkCols);</span>
+<span class="nc" id="L96">            cls.setColumnIO(info.getColumnIO());</span>
+        }
+<span class="nc" id="L98">        cls.setTable(table);</span>
+
+        // add a primary key if we don't have one already
+<span class="nc" id="L101">        PrimaryKey pk = table.getPrimaryKey();</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if (pk == null) {</span>
+<span class="nc" id="L103">            DBIdentifier pkname = DBIdentifier.NULL;</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">            if (adapt)</span>
+<span class="nc" id="L105">                pkname = cls.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L106">                    getPrimaryKeyIdentifier(cls, table);</span>
+<span class="nc" id="L107">            pk = table.addPrimaryKey(pkname);</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">            pk.setLogical(!adapt);</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">            if (pkCols != null)</span>
+<span class="nc" id="L110">                pk.setColumns(pkCols);</span>
+        }
+
+        // set joinable
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (cls.getIdentityType() == ClassMetaData.ID_DATASTORE)</span>
+<span class="nc" id="L115">            cls.setJoinable(cls.getPrimaryKeyColumns()[0],</span>
+                new IdentityJoinable(cls));
+<span class="nc" id="L117">    }</span>
+
+    @Override
+    public boolean supportsEagerSelect(Select sel, OpenJPAStateManager sm,
+        JDBCStore store, ClassMapping base, JDBCFetchConfiguration fetch) {
+<span class="nc" id="L122">        return false;</span>
+    }
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L128">        Row row = rm.getRow(cls.getTable(), Row.ACTION_INSERT, sm, true);</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (cls.getIdentityType() == ClassMetaData.ID_DATASTORE)</span>
+<span class="nc" id="L130">            row.setPrimaryKey(cls.getColumnIO(), sm);</span>
+<span class="nc" id="L131">    }</span>
+
+    @Override
+    public void update(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L136">        Row row = rm.getRow(cls.getTable(), Row.ACTION_UPDATE, sm, false);</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">        if (row != null)</span>
+<span class="nc" id="L138">            row.wherePrimaryKey(sm);</span>
+<span class="nc" id="L139">    }</span>
+
+    @Override
+    public void delete(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L144">        Row row = rm.getRow(cls.getTable(), Row.ACTION_DELETE, sm, true);</span>
+<span class="nc" id="L145">        row.wherePrimaryKey(sm);</span>
+<span class="nc" id="L146">    }</span>
+
+    @Override
+    public boolean isPrimaryKeyObjectId(boolean hasAll) {
+<span class="nc" id="L150">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

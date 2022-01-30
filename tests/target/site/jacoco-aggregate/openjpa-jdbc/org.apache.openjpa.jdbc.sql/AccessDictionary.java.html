@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AccessDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">AccessDictionary.java</span></div><h1>AccessDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.schema.Column;
+
+/**
+ * Dictionary for Access via DataDirect SequeLink and DataDirect ODBC
+ * FoxPro driver. This will not work with any other combination of JDBC/ODBC
+ * server and ODBC driver.
+ */
+public class AccessDictionary
+    extends DBDictionary {
+
+<span class="nc" id="L34">    public AccessDictionary() {</span>
+<span class="nc" id="L35">        platform = &quot;Microsoft Access&quot;;</span>
+<span class="nc" id="L36">        joinSyntax = SYNTAX_TRADITIONAL;</span>
+<span class="nc" id="L37">        validationSQL = &quot;SELECT 1&quot;;</span>
+<span class="nc" id="L38">        reservedWordSet.add(&quot;VALUE&quot;);</span>
+        // OpenJPA-2045: NAME has been removed from common reserved words to
+        // only specific dictionaries
+<span class="nc" id="L41">        reservedWordSet.add(&quot;NAME&quot;);</span>
+
+<span class="nc" id="L43">        supportsAutoAssign = true;</span>
+<span class="nc" id="L44">        autoAssignTypeName = &quot;COUNTER&quot;;</span>
+<span class="nc" id="L45">        lastGeneratedKeyQuery = &quot;SELECT @@identity&quot;;</span>
+<span class="nc" id="L46">        maxTableNameLength = 64;</span>
+<span class="nc" id="L47">        maxColumnNameLength = 64;</span>
+<span class="nc" id="L48">        maxIndexNameLength = 64;</span>
+<span class="nc" id="L49">        maxConstraintNameLength = 64;</span>
+
+<span class="nc" id="L51">        useGetBytesForBlobs = true;</span>
+<span class="nc" id="L52">        useGetBestRowIdentifierForPrimaryKeys = true;</span>
+
+<span class="nc" id="L54">        binaryTypeName = &quot;LONGBINARY&quot;;</span>
+<span class="nc" id="L55">        blobTypeName = &quot;LONGBINARY&quot;;</span>
+<span class="nc" id="L56">        longVarbinaryTypeName = &quot;LONGBINARY&quot;;</span>
+<span class="nc" id="L57">        clobTypeName = &quot;LONGCHAR&quot;;</span>
+<span class="nc" id="L58">        longVarcharTypeName = &quot;LONGCHAR&quot;;</span>
+<span class="nc" id="L59">        bigintTypeName = &quot;REAL&quot;;</span>
+<span class="nc" id="L60">        numericTypeName = &quot;REAL&quot;;</span>
+<span class="nc" id="L61">        integerTypeName = &quot;INTEGER&quot;;</span>
+<span class="nc" id="L62">        smallintTypeName = &quot;SMALLINT&quot;;</span>
+<span class="nc" id="L63">        tinyintTypeName = &quot;SMALLINT&quot;;</span>
+
+<span class="nc" id="L65">        supportsForeignKeys = false;</span>
+<span class="nc" id="L66">        supportsDeferredConstraints = false;</span>
+<span class="nc" id="L67">        maxIndexesPerTable = 32;</span>
+
+<span class="nc" id="L69">        substringFunctionName = &quot;MID&quot;;</span>
+
+<span class="nc" id="L71">        setLeadingDelimiter(&quot;[&quot;);</span>
+<span class="nc" id="L72">        setTrailingDelimiter(&quot;]&quot;);</span>
+<span class="nc" id="L73">    }</span>
+
+
+    @Override
+    public void setLong(PreparedStatement stmnt, int idx, long val, Column col)
+        throws SQLException {
+        // the access driver disallows setLong for some reason; use
+        // setInt if possible, otherwise use setDouble
+
+<span class="nc bnc" id="L82" title="All 4 branches missed.">        if (val &lt; Integer.MAX_VALUE &amp;&amp; val &gt; Integer.MIN_VALUE)</span>
+<span class="nc" id="L83">            stmnt.setInt(idx, (int) val);</span>
+        else
+<span class="nc" id="L85">            stmnt.setDouble(idx, val);</span>
+<span class="nc" id="L86">    }</span>
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

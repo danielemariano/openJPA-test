@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>UntypedPCValueHandler.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">UntypedPCValueHandler.java</span></div><h1>UntypedPCValueHandler.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.enhance.PersistenceCapable;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.RelationId;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.ImplHelper;
+import org.apache.openjpa.util.StoreException;
+
+/**
+ * Handler for unknown persistence-capable object fields that stores
+ * stringified oids.
+ *
+ */
+<span class="nc" id="L44">public class UntypedPCValueHandler</span>
+    extends AbstractValueHandler
+    implements RelationId {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L50">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L51">        (UntypedPCValueHandler.class);</span>
+<span class="nc" id="L52">    private static final UntypedPCValueHandler _instance =</span>
+        new UntypedPCValueHandler();
+
+    /**
+     * Singleton instance.
+     */
+    public static UntypedPCValueHandler getInstance() {
+<span class="nc" id="L59">        return _instance;</span>
+    }
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Column[] map(ValueMapping vm, String name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L69">        DBDictionary dict = vm.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        DBIdentifier colName = DBIdentifier.newColumn(name, dict != null ? dict.delimitAll() : false);</span>
+<span class="nc" id="L71">        return map(vm, colName, io, adapt);</span>
+    }
+
+    public Column[] map(ValueMapping vm, DBIdentifier name, ColumnIO io,
+        boolean adapt) {
+<span class="nc" id="L76">        Column col = new Column();</span>
+<span class="nc" id="L77">        col.setIdentifier(name);</span>
+<span class="nc" id="L78">        col.setJavaType(JavaTypes.STRING);</span>
+<span class="nc" id="L79">        col.setRelationId(true);</span>
+<span class="nc" id="L80">        return new Column[]{ col };</span>
+    }
+
+    @Override
+    public boolean isVersionable(ValueMapping vm) {
+<span class="nc" id="L85">        return true;</span>
+    }
+
+    @Override
+    public boolean objectValueRequiresLoad(ValueMapping vm) {
+<span class="nc" id="L90">        return true;</span>
+    }
+
+    @Override
+    public Object toDataStoreValue(ValueMapping vm, Object val,
+        JDBCStore store) {
+        // in the past we've been lenient about being able to translate objects
+        // from other persistence contexts, so try to get sm directly from
+        // instance before asking our context
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if (ImplHelper.isManageable(val)) {</span>
+<span class="nc" id="L100">            PersistenceCapable pc = ImplHelper.toPersistenceCapable(val,</span>
+<span class="nc" id="L101">                store.getConfiguration());</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">            if (pc.pcGetStateManager() != null)</span>
+<span class="nc" id="L103">                return pc.pcGetStateManager();</span>
+        }
+<span class="nc" id="L105">        return RelationStrategies.getStateManager(val, store.getContext());</span>
+    }
+
+    @Override
+    public Object toObjectValue(ValueMapping vm, Object val,
+        OpenJPAStateManager sm, JDBCStore store, JDBCFetchConfiguration fetch)
+        throws SQLException {
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L113">            return null;</span>
+
+<span class="nc" id="L115">        String str = (String) val;</span>
+<span class="nc" id="L116">        int idx = str.indexOf(':');</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        if (idx == -1)</span>
+<span class="nc" id="L118">            throw new StoreException(_loc.get(&quot;oid-invalid&quot;, str, vm));</span>
+<span class="nc" id="L119">        String clsName = str.substring(0, idx);</span>
+<span class="nc" id="L120">        String oidStr = str.substring(idx + 1);</span>
+
+<span class="nc" id="L122">        StoreContext ctx = store.getContext();</span>
+<span class="nc" id="L123">        ClassLoader loader = store.getConfiguration().</span>
+<span class="nc" id="L124">            getClassResolverInstance().getClassLoader(vm.getType(),</span>
+<span class="nc" id="L125">            ctx.getClassLoader());</span>
+<span class="nc" id="L126">        Class cls = null;</span>
+        try {
+<span class="nc" id="L128">            cls = Class.forName(clsName, true, loader);</span>
+<span class="nc" id="L129">        } catch (ClassNotFoundException cnfe) {</span>
+<span class="nc" id="L130">            throw new StoreException(cnfe);</span>
+<span class="nc" id="L131">        }</span>
+
+<span class="nc" id="L133">        Object oid = ctx.newObjectId(cls, oidStr);</span>
+<span class="nc" id="L134">        return store.find(oid, vm, fetch);</span>
+    }
+
+    @Override
+    public Object toRelationDataStoreValue(OpenJPAStateManager sm, Column col) {
+<span class="nc bnc" id="L139" title="All 4 branches missed.">        if (sm == null || sm.getObjectId() == null)</span>
+<span class="nc" id="L140">            return null;</span>
+<span class="nc" id="L141">        return sm.getMetaData().getDescribedType().getName() + &quot;:&quot;</span>
+<span class="nc" id="L142">            + sm.getObjectId().toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

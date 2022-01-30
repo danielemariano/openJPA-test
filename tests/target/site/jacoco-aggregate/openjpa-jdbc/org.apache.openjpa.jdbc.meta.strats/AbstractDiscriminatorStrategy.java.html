@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AbstractDiscriminatorStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">AbstractDiscriminatorStrategy.java</span></div><h1>AbstractDiscriminatorStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.lang.reflect.Modifier;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Discriminator;
+import org.apache.openjpa.jdbc.meta.DiscriminatorStrategy;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+
+/**
+ * No-op strategy for easy extension.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L40">public abstract class AbstractDiscriminatorStrategy</span>
+    extends AbstractStrategy
+    implements DiscriminatorStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L47">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L48">        (AbstractDiscriminatorStrategy.class);</span>
+
+    /**
+     * The owning discriminator.
+     */
+<span class="nc" id="L53">    protected Discriminator disc = null;</span>
+
+    /**
+     * Whether the owning class is final.
+     */
+<span class="nc" id="L58">    protected boolean isFinal = false;</span>
+
+    @Override
+    public void setDiscriminator(Discriminator owner) {
+<span class="nc" id="L62">        disc = owner;</span>
+<span class="nc" id="L63">        ClassMapping cls = disc.getClassMapping();</span>
+<span class="nc" id="L64">        isFinal = Modifier.isFinal(cls.getDescribedType().getModifiers());</span>
+<span class="nc" id="L65">    }</span>
+
+    @Override
+    public boolean select(Select sel, ClassMapping mapping) {
+<span class="nc" id="L69">        return false;</span>
+    }
+
+    /**
+     * By default, logs a warning that this discriminator cannot calculate
+     * its list of subclasses on its own.
+     */
+    @Override
+    public void loadSubclasses(JDBCStore store)
+        throws SQLException, ClassNotFoundException {
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        if (!isFinal) {</span>
+<span class="nc" id="L80">            Log log = disc.getMappingRepository().getLog();</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">            if (log.isWarnEnabled())</span>
+<span class="nc" id="L82">                log.warn(_loc.get(&quot;cant-init-subs&quot;, disc.getClassMapping()));</span>
+        }
+
+        // don't need to call this method again
+<span class="nc" id="L86">        disc.setSubclassesLoaded(true);</span>
+<span class="nc" id="L87">    }</span>
+
+    @Override
+    public Class getClass(JDBCStore store, ClassMapping base, Result result)
+        throws SQLException, ClassNotFoundException {
+<span class="nc" id="L92">        return base.getDescribedType();</span>
+    }
+
+    @Override
+    public boolean hasClassConditions(ClassMapping base, boolean subs) {
+<span class="nc" id="L97">        return false;</span>
+    }
+
+    @Override
+    public SQLBuffer getClassConditions(Select sel, Joins joins,
+        ClassMapping base, boolean subs) {
+<span class="nc" id="L103">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

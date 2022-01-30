@@ -1,0 +1,343 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>H2Dictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">H2Dictionary.java</span></div><h1>H2Dictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.Locale;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.exps.FilterValue;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.StoreException;
+
+/**
+ * Dictionary for H2 ({@link http://www.h2database.com}).
+ *
+ * @since 0.9.7
+ */
+public class H2Dictionary extends DBDictionary {
+
+<span class="nc" id="L51">    public H2Dictionary() {</span>
+<span class="nc" id="L52">        platform = &quot;H2&quot;;</span>
+<span class="nc" id="L53">        validationSQL = &quot;CALL 1&quot;;</span>
+<span class="nc" id="L54">        closePoolSQL = &quot;SHUTDOWN&quot;;</span>
+
+<span class="nc" id="L56">        supportsAutoAssign = true;</span>
+<span class="nc" id="L57">        lastGeneratedKeyQuery = &quot;CALL IDENTITY()&quot;;</span>
+<span class="nc" id="L58">        autoAssignClause = &quot;IDENTITY&quot;;</span>
+<span class="nc" id="L59">        autoAssignTypeName = &quot;INTEGER&quot;;</span>
+<span class="nc" id="L60">        nextSequenceQuery = &quot;CALL NEXT VALUE FOR {0}&quot;;</span>
+
+<span class="nc" id="L62">        stringLengthFunction = &quot;LENGTH({0})&quot;;</span>
+<span class="nc" id="L63">        trimLeadingFunction = &quot;LTRIM({0})&quot;;</span>
+<span class="nc" id="L64">        trimTrailingFunction = &quot;RTRIM({0})&quot;;</span>
+<span class="nc" id="L65">        trimBothFunction = &quot;TRIM({0})&quot;;</span>
+
+<span class="nc" id="L67">        supportsSelectStartIndex = true;</span>
+<span class="nc" id="L68">        supportsSelectEndIndex = true;</span>
+<span class="nc" id="L69">        rangePosition = RANGE_POST_LOCK;</span>
+<span class="nc" id="L70">        supportsDeferredConstraints = false;</span>
+
+<span class="nc" id="L72">        supportsNullTableForGetPrimaryKeys = true;</span>
+<span class="nc" id="L73">        supportsNullTableForGetIndexInfo = true;</span>
+
+<span class="nc" id="L75">        supportsLockingWithOuterJoin = false;</span>
+<span class="nc" id="L76">        supportsLockingWithInnerJoin = false;</span>
+
+        // no timezone support for time in h2
+<span class="nc" id="L79">        timeWithZoneTypeName = &quot;TIME&quot;;</span>
+
+<span class="nc" id="L81">        reservedWordSet.addAll(Arrays.asList(new String[] {</span>
+                &quot;ALL&quot;,
+                &quot;CHECK&quot;,
+                &quot;CONSTRAINT&quot;,
+                &quot;CROSS&quot;,
+                &quot;CURRENT_DATE&quot;,
+                &quot;CURRENT_TIME&quot;,
+                &quot;CURRENT_TIMESTAMP&quot;,
+                &quot;DISTINCT&quot;,
+                &quot;EXCEPT&quot;,
+                &quot;EXISTS&quot;,
+                &quot;FALSE&quot;,
+                &quot;FETCH&quot;,
+                &quot;FOR&quot;,
+                &quot;FOREIGN&quot;,
+                &quot;FROM&quot;,
+                &quot;FULL&quot;,
+                &quot;GROUP&quot;,
+                &quot;HAVING&quot;,
+                &quot;INNER&quot;,
+                &quot;INTERSECT&quot;,
+                &quot;IS&quot;,
+                &quot;JOIN&quot;,
+                &quot;LIKE&quot;,
+                &quot;LIMIT&quot;,
+                &quot;MINUS&quot;,
+                &quot;NATURAL&quot;,
+                &quot;NOT&quot;,
+                &quot;NULL&quot;,
+                &quot;OFFSET&quot;,
+                &quot;ON&quot;,
+                &quot;ORDER&quot;,
+                &quot;PRIMARY&quot;,
+                &quot;ROWNUM&quot;,
+                &quot;SELECT&quot;,
+                &quot;SYSDATE&quot;,
+                &quot;SYSTIME&quot;,
+                &quot;SYSTIMESTAMP&quot;,
+                &quot;TODAY&quot;,
+                &quot;TRUE&quot;,
+                &quot;UNION&quot;,
+                &quot;UNIQUE&quot;,
+                &quot;WHERE&quot;,
+                &quot;WITH&quot;
+        }));
+
+        // reservedWordSet subset that CANNOT be used as valid column names
+        // (i.e., without surrounding them with double-quotes)
+<span class="nc" id="L129">        invalidColumnWordSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;ORDER&quot;,
+        }));
+
+<span class="nc" id="L133">    }</span>
+
+    @Override
+    public int getJDBCType(int metaTypeCode, boolean lob) {
+<span class="nc" id="L137">        int type = super.getJDBCType(metaTypeCode, lob);</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        switch (type) {</span>
+        case Types.BIGINT:
+<span class="nc bnc" id="L140" title="All 2 branches missed.">            if (metaTypeCode == JavaTypes.BIGINTEGER)</span>
+<span class="nc" id="L141">                return Types.NUMERIC;</span>
+            break;
+        }
+<span class="nc" id="L144">        return type;</span>
+    }
+
+    @Override
+    public int getPreferredType(int type) {
+<span class="nc bnc" id="L149" title="All 2 branches missed.">        if(type == Types.BIT)</span>
+<span class="nc" id="L150">            return Types.BOOLEAN;</span>
+<span class="nc" id="L151">        return type;</span>
+    }
+
+    @Override
+    public String[] getAddPrimaryKeySQL(PrimaryKey pk) {
+<span class="nc" id="L156">        return new String[0];</span>
+    }
+
+    @Override
+    public String[] getDropPrimaryKeySQL(PrimaryKey pk) {
+<span class="nc" id="L161">        return new String[0];</span>
+    }
+
+    @Override
+    public String[] getAddColumnSQL(Column column) {
+<span class="nc" id="L166">        return new String[] {</span>
+<span class="nc" id="L167">            &quot;ALTER TABLE &quot; + getFullName(column.getTable(), false)</span>
+<span class="nc" id="L168">                + &quot; ADD COLUMN &quot; + getDeclareColumnSQL(column, true)</span>
+        };
+    }
+
+    @Override
+    public String[] getCreateTableSQL(Table table) {
+<span class="nc" id="L174">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L175">        buf.append(&quot;CREATE TABLE &quot;).append(getFullName(table, false))</span>
+<span class="nc" id="L176">            .append(&quot; (&quot;);</span>
+
+<span class="nc" id="L178">        Column[] cols = table.getColumns();</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">            if (i &gt; 0)</span>
+<span class="nc" id="L181">                buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L182">            buf.append(getDeclareColumnSQL(cols[i], false));</span>
+        }
+
+<span class="nc" id="L185">        PrimaryKey pk = table.getPrimaryKey();</span>
+        String pkStr;
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        if (pk != null) {</span>
+<span class="nc" id="L188">            pkStr = getPrimaryKeyConstraintSQL(pk);</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">            if (!StringUtil.isEmpty(pkStr))</span>
+<span class="nc" id="L190">                buf.append(&quot;, &quot;).append(pkStr);</span>
+        }
+
+<span class="nc" id="L193">        Unique[] unqs = table.getUniques();</span>
+        String unqStr;
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        for (int i = 0; i &lt; unqs.length; i++) {</span>
+<span class="nc" id="L196">            unqStr = getUniqueConstraintSQL(unqs[i]);</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">            if (unqStr != null)</span>
+<span class="nc" id="L198">                buf.append(&quot;, &quot;).append(unqStr);</span>
+        }
+
+<span class="nc" id="L201">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L202">        return new String[] { buf.toString() };</span>
+    }
+
+    @Override
+    protected String getPrimaryKeyConstraintSQL(PrimaryKey pk) {
+<span class="nc" id="L207">        Column[] cols = pk.getColumns();</span>
+<span class="nc bnc" id="L208" title="All 4 branches missed.">        if (cols.length == 1 &amp;&amp; cols[0].isAutoAssigned())</span>
+<span class="nc" id="L209">            return null;</span>
+<span class="nc" id="L210">        return super.getPrimaryKeyConstraintSQL(pk);</span>
+    }
+
+    @Override
+    public boolean isSystemIndex(String name, Table table) {
+<span class="nc" id="L215">        return name.toUpperCase(Locale.ENGLISH).startsWith(&quot;SYSTEM_&quot;);</span>
+    }
+
+    @Override
+    public boolean isSystemIndex(DBIdentifier name, Table table) {
+<span class="nc bnc" id="L220" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L221">            return false;</span>
+        }
+<span class="nc" id="L223">        return name.getName().toUpperCase(Locale.ENGLISH).startsWith(&quot;SYSTEM_&quot;);</span>
+    }
+
+    @Override
+    protected String getSequencesSQL(String schemaName, String sequenceName) {
+<span class="nc" id="L228">        return getSequencesSQL(DBIdentifier.newSchema(schemaName), DBIdentifier.newSequence(sequenceName));</span>
+    }
+
+    @Override
+    protected String getSequencesSQL(DBIdentifier schemaName, DBIdentifier sequenceName) {
+<span class="nc" id="L233">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L234">        buf.append(&quot;SELECT SEQUENCE_SCHEMA, SEQUENCE_NAME FROM &quot;)</span>
+<span class="nc" id="L235">            .append(&quot;INFORMATION_SCHEMA.SEQUENCES&quot;);</span>
+<span class="nc bnc" id="L236" title="All 4 branches missed.">        if (!DBIdentifier.isNull(schemaName) || !DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L237">            buf.append(&quot; WHERE &quot;);</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if (!DBIdentifier.isNull(schemaName)) {</span>
+<span class="nc" id="L239">            buf.append(&quot;SEQUENCE_SCHEMA = ?&quot;);</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">            if (!DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L241">                buf.append(&quot; AND &quot;);</span>
+        }
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        if (!DBIdentifier.isNull(sequenceName))</span>
+<span class="nc" id="L244">            buf.append(&quot;SEQUENCE_NAME = ?&quot;);</span>
+<span class="nc" id="L245">        return buf.toString();</span>
+    }
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, String catalog,
+        String schemaName, String tableName, String columnName, Connection conn)
+        throws SQLException {
+<span class="nc" id="L252">        return getColumns(meta, DBIdentifier.newCatalog(catalog), DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L253">            DBIdentifier.newTable(tableName), DBIdentifier.newColumn(columnName), conn);</span>
+    }
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, DBIdentifier catalog,
+        DBIdentifier schemaName, DBIdentifier tableName, DBIdentifier columnName, Connection conn)
+        throws SQLException {
+<span class="nc" id="L260">        Column[] cols = super.getColumns(meta, catalog, schemaName, tableName,</span>
+            columnName, conn);
+<span class="nc" id="L262">        return cols;</span>
+    }
+
+    @Override
+    public void setLocalDate(PreparedStatement stmnt, int idx, LocalDate val, Column col) throws SQLException {
+<span class="nc" id="L267">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L268">    }</span>
+
+    @Override
+    public LocalDate getLocalDate(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L272">        return rs.getObject(column, LocalDate.class);</span>
+    }
+
+    @Override
+    public void setLocalTime(PreparedStatement stmnt, int idx, LocalTime val, Column col) throws SQLException {
+<span class="nc" id="L277">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L278">    }</span>
+
+    @Override
+    public LocalTime getLocalTime(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L282">        return rs.getObject(column, LocalTime.class);</span>
+    }
+
+    @Override
+    public void setLocalDateTime(PreparedStatement stmnt, int idx, LocalDateTime val, Column col) throws SQLException {
+<span class="nc" id="L287">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L288">    }</span>
+
+    @Override
+    public LocalDateTime getLocalDateTime(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L292">        return rs.getObject(column, LocalDateTime.class);</span>
+    }
+
+    @Override
+    public void setOffsetDateTime(PreparedStatement stmnt, int idx, OffsetDateTime val, Column col) throws SQLException {
+<span class="nc" id="L297">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L298">    }</span>
+
+    /**
+     * h2 does intentionally not support {@code getTimestamp()} for 'TIME WITH TIME ZONE' columns.
+     * See h2 ticket #413.
+     */
+    @Override
+    public OffsetDateTime getOffsetDateTime(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L306">        return rs.getObject(column, OffsetDateTime.class);</span>
+    }
+
+    @Override
+    protected void appendSelectRange(SQLBuffer buf, long start, long end,
+        boolean subselect) {
+<span class="nc bnc" id="L312" title="All 2 branches missed.">        if (end != Long.MAX_VALUE)</span>
+<span class="nc" id="L313">            buf.append(&quot; LIMIT &quot;).appendValue(end - start);</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">        if (start != 0) {</span>
+<span class="nc" id="L315">            buf.append(&quot; OFFSET &quot;).appendValue(start);</span>
+        }
+<span class="nc" id="L317">    }</span>
+
+    @Override
+    public void indexOf(SQLBuffer buf, FilterValue str, FilterValue find,
+        FilterValue start) {
+<span class="nc" id="L322">        buf.append(&quot;LOCATE(&quot;);</span>
+<span class="nc" id="L323">        find.appendTo(buf);</span>
+<span class="nc" id="L324">        buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L325">        str.appendTo(buf);</span>
+<span class="nc bnc" id="L326" title="All 2 branches missed.">        if (start != null) {</span>
+<span class="nc" id="L327">            buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L328">            start.appendTo(buf);</span>
+        }
+<span class="nc" id="L330">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L331">    }</span>
+
+    @Override
+    public boolean isFatalException(int subtype, SQLException ex) {
+<span class="nc" id="L335">        int errorCode = ex.getErrorCode();</span>
+<span class="nc bnc" id="L336" title="All 8 branches missed.">        if ((subtype == StoreException.QUERY || subtype == StoreException.LOCK)</span>
+            &amp;&amp; (57014 == errorCode || 50200 == errorCode)) {
+<span class="nc" id="L338">            return false;</span>
+        }
+<span class="nc" id="L340">        return super.isFatalException(subtype, ex);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

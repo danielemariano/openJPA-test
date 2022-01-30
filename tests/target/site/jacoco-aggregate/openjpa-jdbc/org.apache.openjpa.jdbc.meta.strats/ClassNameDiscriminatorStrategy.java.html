@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ClassNameDiscriminatorStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">ClassNameDiscriminatorStrategy.java</span></div><h1>ClassNameDiscriminatorStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * Stores the class name along with each database object record.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L42">public class ClassNameDiscriminatorStrategy</span>
+    extends InValueDiscriminatorStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L48">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L49">        (ClassNameDiscriminatorStrategy.class);</span>
+
+    public static final String ALIAS = &quot;class-name&quot;;
+
+    @Override
+    public String getAlias() {
+<span class="nc" id="L55">        return ALIAS;</span>
+    }
+
+    @Override
+    protected int getJavaType() {
+<span class="nc" id="L60">        return JavaTypes.STRING;</span>
+    }
+
+    @Override
+    protected Object getDiscriminatorValue(ClassMapping cls) {
+<span class="nc" id="L65">        return cls.getDescribedType().getName();</span>
+    }
+
+    @Override
+    protected Class getClass(Object val, JDBCStore store)
+        throws ClassNotFoundException {
+<span class="nc" id="L71">        ClassLoader loader = getClassLoader(store);</span>
+<span class="nc" id="L72">        return Class.forName((String) val, true, loader);</span>
+    }
+
+    @Override
+    public void loadSubclasses(JDBCStore store)
+        throws SQLException, ClassNotFoundException {
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        if (isFinal) {</span>
+<span class="nc" id="L79">            disc.setSubclassesLoaded(true);</span>
+<span class="nc" id="L80">            return;</span>
+        }
+
+<span class="nc" id="L83">        Column col = disc.getColumns()[0];</span>
+<span class="nc" id="L84">        DBDictionary dict = store.getDBDictionary();</span>
+<span class="nc" id="L85">        JDBCFetchConfiguration fetch = store.getFetchConfiguration();</span>
+<span class="nc" id="L86">        SQLBuffer select = dict.toSelect(new SQLBuffer(dict).append(col),</span>
+<span class="nc" id="L87">            fetch, new SQLBuffer(dict).append(col.getTable()), null, null,</span>
+            null, null, true, false, 0, Long.MAX_VALUE);
+
+<span class="nc" id="L90">        Log log = disc.getMappingRepository().getLog();</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if (log.isTraceEnabled())</span>
+<span class="nc" id="L92">            log.trace(_loc.get(&quot;load-subs&quot;, col.getTable().getFullName()));</span>
+
+<span class="nc" id="L94">        ClassLoader loader = getClassLoader(store);</span>
+<span class="nc" id="L95">        Connection conn = store.getConnection();</span>
+<span class="nc" id="L96">        PreparedStatement stmnt = null;</span>
+<span class="nc" id="L97">        ResultSet rs = null;</span>
+        try {
+<span class="nc" id="L99">            stmnt = select.prepareStatement(conn);</span>
+<span class="nc" id="L100">            dict.setTimeouts(stmnt, fetch, false);</span>
+<span class="nc" id="L101">            rs = stmnt.executeQuery();</span>
+            String className;
+<span class="nc bnc" id="L103" title="All 2 branches missed.">            while (rs.next()) {</span>
+<span class="nc" id="L104">                className = dict.getString(rs, 1);</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">                if (StringUtil.isEmpty(className))</span>
+<span class="nc" id="L106">                    throw new ClassNotFoundException(_loc.get(&quot;no-class-name&quot;,</span>
+<span class="nc" id="L107">                        disc.getClassMapping(), col).getMessage());</span>
+<span class="nc" id="L108">                Class.forName(className, true, loader);</span>
+            }
+<span class="nc" id="L110">            disc.setSubclassesLoaded(true);</span>
+        } finally {
+<span class="nc bnc" id="L112" title="All 2 branches missed.">            if (rs != null)</span>
+                try {
+<span class="nc" id="L114">                    rs.close();</span>
+<span class="nc" id="L115">                } catch (SQLException se) {</span>
+<span class="nc" id="L116">                }</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            if (stmnt != null)</span>
+                try {
+<span class="nc" id="L119">                    stmnt.close();</span>
+<span class="nc" id="L120">                } catch (SQLException se) {</span>
+<span class="nc" id="L121">                }</span>
+            try {
+<span class="nc" id="L123">                conn.close();</span>
+<span class="nc" id="L124">            } catch (SQLException se) {</span>
+<span class="nc" id="L125">            }</span>
+        }
+<span class="nc" id="L127">    }</span>
+
+    /**
+     * Return the class loader to use for loading class names.
+     */
+    private ClassLoader getClassLoader(JDBCStore store) {
+<span class="nc" id="L133">        return store.getConfiguration().getClassResolverInstance().</span>
+<span class="nc" id="L134">            getClassLoader(disc.getClassMapping().getDescribedType(),</span>
+<span class="nc" id="L135">                store.getContext().getClassLoader());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

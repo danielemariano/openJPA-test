@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JDBCRelatedFieldOrder.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">JDBCRelatedFieldOrder.java</span></div><h1>JDBCRelatedFieldOrder.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.util.Comparator;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Use the database to order by a field in the related type.
+ *
+ * @author Abe White
+ */
+class JDBCRelatedFieldOrder implements JDBCOrder {
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L37">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L38">        (JDBCRelatedFieldOrder.class);</span>
+
+    private final FieldMapping _fm;
+    private final boolean _asc;
+
+    public JDBCRelatedFieldOrder(FieldMapping owner, FieldMapping rel,
+<span class="nc" id="L44">        boolean asc) {</span>
+<span class="nc bnc" id="L45" title="All 4 branches missed.">        if (!rel.isInDefaultFetchGroup() &amp;&amp; !rel.isPrimaryKey())</span>
+<span class="nc" id="L46">            throw new MetaDataException(_loc.get(&quot;nondfg-field-orderable&quot;,</span>
+<span class="nc" id="L47">                owner, rel.getName()));</span>
+
+<span class="nc" id="L49">        _fm = rel;</span>
+<span class="nc" id="L50">        _asc = asc;</span>
+<span class="nc" id="L51">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public String getName() {
+<span class="nc" id="L59">        return _fm.getName();</span>
+    }
+
+    @Override
+    public DBIdentifier getIdentifier() {
+<span class="nc" id="L64">        return DBIdentifier.newColumn(_fm.getName());</span>
+    }
+
+    @Override
+    public boolean isAscending() {
+<span class="nc" id="L69">        return _asc;</span>
+    }
+
+    @Override
+    public Comparator&lt;?&gt; getComparator() {
+<span class="nc" id="L74">        return null;</span>
+    }
+
+    @Override
+    public boolean isInRelation() {
+<span class="nc" id="L79">        return true;</span>
+    }
+
+    @Override
+    public void order(Select sel, ClassMapping elem, Joins joins) {
+<span class="nc" id="L84">        FieldMapping fm = _fm;</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (elem != null) {</span>
+<span class="nc" id="L86">            fm = getOrderByField(elem, fm);</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">            if (fm == null)</span>
+<span class="nc" id="L88">                fm = elem.getFieldMapping(_fm.getIndex());</span>
+        }
+<span class="nc" id="L90">        sel.orderBy(fm.getColumns(), _asc, joins, false);</span>
+<span class="nc" id="L91">    }</span>
+
+    private FieldMapping getOrderByField(ClassMapping elem, FieldMapping fm) {
+<span class="nc" id="L94">        ClassMapping owner = (ClassMapping)_fm.getDefiningMetaData();</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        if (owner.getDescribedType() == elem.getDescribedType())</span>
+<span class="nc" id="L96">            return elem.getFieldMapping(_fm.getIndex());</span>
+        else {
+<span class="nc" id="L98">            FieldMapping fms[] = elem.getFieldMappings();</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">            for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc" id="L100">                ValueMapping vm = (ValueMapping)fms[i].getValue();</span>
+<span class="nc" id="L101">                ClassMapping clm = (ClassMapping)vm.getEmbeddedMetaData();</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">                if (clm != null) {</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                    if (clm.getDescribedType() == owner.getDescribedType()) {</span>
+<span class="nc" id="L104">                        return owner.getFieldMapping(_fm.getIndex());</span>
+                    } else {
+<span class="nc" id="L106">                        FieldMapping fm1 = getOrderByField(clm, fm);</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">                        if (fm1 != null)</span>
+<span class="nc" id="L108">                            return fm1;</span>
+                    }
+                }
+            }
+        }
+<span class="nc" id="L113">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

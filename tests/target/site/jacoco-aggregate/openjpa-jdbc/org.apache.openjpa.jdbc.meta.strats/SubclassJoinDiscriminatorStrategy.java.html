@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SubclassJoinDiscriminatorStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">SubclassJoinDiscriminatorStrategy.java</span></div><h1>SubclassJoinDiscriminatorStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.DiscriminatorMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.JoinSyntaxes;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Discriminator strategy that outer joins to all possible subclass tables
+ * to determine the class of an instance. This indicator type should only
+ * be used with vertical inheritance hierarchies.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L43">public class SubclassJoinDiscriminatorStrategy</span>
+    extends AbstractDiscriminatorStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+    public static final String ALIAS = &quot;subclass-join&quot;;
+
+<span class="nc" id="L51">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L52">        (SubclassJoinDiscriminatorStrategy.class);</span>
+
+    @Override
+    public String getAlias() {
+<span class="nc" id="L56">        return ALIAS;</span>
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc" id="L61">        ClassMapping cls = disc.getClassMapping();</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        if (cls.getJoinablePCSuperclassMapping() != null</span>
+<span class="nc bnc" id="L63" title="All 2 branches missed.">            || cls.getEmbeddingMetaData() != null)</span>
+<span class="nc" id="L64">            throw new MetaDataException(_loc.get(&quot;not-base-disc&quot;, cls));</span>
+
+<span class="nc" id="L66">        DiscriminatorMappingInfo info = disc.getMappingInfo();</span>
+<span class="nc" id="L67">        info.assertNoSchemaComponents(disc, true);</span>
+
+        // make sure outer joins are supported
+<span class="nc" id="L70">        DBDictionary dict = cls.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        if (dict.joinSyntax == JoinSyntaxes.SYNTAX_TRADITIONAL)</span>
+<span class="nc" id="L72">            throw new MetaDataException(_loc.get(&quot;outer-join-support&quot;, cls));</span>
+<span class="nc" id="L73">    }</span>
+
+    @Override
+    public boolean select(Select sel, ClassMapping mapping) {
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        if (isFinal)</span>
+<span class="nc" id="L78">            return false;</span>
+
+        // make sure to select our first pk col so that we detect it as
+        // non-null in getClass; if we have no superclass we don't need to
+        // do this because the base class always selects its pks anyway
+<span class="nc" id="L83">        boolean seld = false;</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        if (mapping.getPrimaryKeyColumns().length &gt; 0</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">            &amp;&amp; mapping.getJoinablePCSuperclassMapping() != null) {</span>
+<span class="nc" id="L86">            sel.select(mapping.getPrimaryKeyColumns()[0]);</span>
+<span class="nc" id="L87">            seld = true;</span>
+        }
+
+<span class="nc" id="L90">        ClassMapping[] subs = mapping.getJoinablePCSubclassMappings();</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if (subs.length == 0)</span>
+<span class="nc" id="L92">            return seld;</span>
+
+        // outer join to each subclass and select its first pk col;
+        // the subclass array is already ordered in levels of inheritance, so
+        // each subclass only has to join from its direct superclass
+        Column[] pks;
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        for (int i = 0; i &lt; subs.length; i++) {</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">            if (subs[i].getJoinablePCSuperclassMapping() == null)</span>
+<span class="nc" id="L100">                continue;</span>
+
+<span class="nc" id="L102">            pks = subs[i].getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">            if (pks.length &gt; 0) {</span>
+<span class="nc" id="L104">                sel.select(pks[0], subs[i].joinSuperclass</span>
+<span class="nc" id="L105">                    (sel.newJoins(), true));</span>
+<span class="nc" id="L106">                seld = true;</span>
+            }
+        }
+<span class="nc" id="L109">        return seld;</span>
+    }
+
+    @Override
+    public Class getClass(JDBCStore store, ClassMapping base, Result res)
+        throws SQLException, ClassNotFoundException {
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        if (isFinal)</span>
+<span class="nc" id="L116">            return base.getDescribedType();</span>
+
+        // find the most derived class with a non-null pk col in the result.
+        // note that we don't perform any joins here, taking advantage of the
+        // fact that result joins are unnecessary when there is no relation
+        // involved; we're cheating a little
+<span class="nc" id="L122">        ClassMapping[] subs = base.getJoinablePCSubclassMappings();</span>
+<span class="nc" id="L123">        Class derived = base.getDescribedType();</span>
+        Column[] pks;
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        for (int i = 0; i &lt; subs.length; i++) {</span>
+<span class="nc" id="L126">            pks = subs[i].getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">            if (pks.length == 0)</span>
+<span class="nc" id="L128">                continue;</span>
+
+            // possible that a sibling class cols were already discovered, in
+            // which case we can skip this sub
+<span class="nc bnc" id="L132" title="All 2 branches missed.">            if (!derived.isAssignableFrom(subs[i].getDescribedType()))</span>
+<span class="nc" id="L133">                continue;</span>
+
+            // see if all pk cols are non-null
+<span class="nc bnc" id="L136" title="All 2 branches missed.">            if (res.contains(pks[0])</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                &amp;&amp; res.getObject(pks[0], -1, null) != null)</span>
+<span class="nc" id="L138">                derived = subs[i].getDescribedType();</span>
+        }
+<span class="nc" id="L140">        return derived;</span>
+    }
+
+    @Override
+    public boolean hasClassConditions(ClassMapping base, boolean subclasses) {
+<span class="nc bnc" id="L145" title="All 4 branches missed.">        if (isFinal || subclasses)</span>
+<span class="nc" id="L146">            return false;</span>
+<span class="nc" id="L147">        ClassMapping[] subs = base.getJoinablePCSubclassMappings();</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        if (subs.length == 0)</span>
+<span class="nc" id="L149">            return false;</span>
+<span class="nc" id="L150">        return true;</span>
+    }
+
+    @Override
+    public SQLBuffer getClassConditions(Select sel, Joins joins,
+        ClassMapping base, boolean subclasses) {
+        // add conditions making sure no subclass tables have records for
+        // this instance
+<span class="nc" id="L158">        ClassMapping[] subs = base.getJoinablePCSubclassMappings();</span>
+<span class="nc" id="L159">        SQLBuffer buf = null;</span>
+        Column[] pks;
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        for (int i = 0; i &lt; subs.length; i++) {</span>
+<span class="nc" id="L162">            pks = subs[i].getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">            if (pks.length == 0)</span>
+<span class="nc" id="L164">                continue;</span>
+
+<span class="nc bnc" id="L166" title="All 2 branches missed.">            if (buf == null) {</span>
+                // make sure the base class is aliased first so that we don't
+                // end up with our outer joins before the inner ones
+<span class="nc" id="L169">                buf = new SQLBuffer(sel.getConfiguration().</span>
+<span class="nc" id="L170">                    getDBDictionaryInstance());</span>
+<span class="nc" id="L171">                sel.getColumnAlias(base.getPrimaryKeyColumns()[0], joins);</span>
+            } else
+<span class="nc" id="L173">                buf.append(&quot; AND &quot;);</span>
+<span class="nc" id="L174">            buf.append(sel.getColumnAlias(pks[0], joins)).append(&quot; IS NULL&quot;);</span>
+        }
+<span class="nc" id="L176">        return buf;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

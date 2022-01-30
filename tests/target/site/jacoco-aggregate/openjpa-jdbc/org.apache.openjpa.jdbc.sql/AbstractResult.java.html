@@ -1,0 +1,1081 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AbstractResult.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">AbstractResult.java</span></div><h1>AbstractResult.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.io.InputStream;
+import java.io.Reader;
+import java.io.StringReader;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.Ref;
+import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.kernel.JDBCStoreManager;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.kernel.exps.Context;
+import org.apache.openjpa.lib.util.Closeable;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.UnsupportedException;
+
+/**
+ * A {@link Result} implementation designed to be subclassed easily by
+ * implementations. All &lt;code&gt;get&amp;lt;type&amp;gt;&lt;/code&gt; calls are delegated to
+ * the {@link #getObjectInternal(Object,int,Object,Joins)} method, which
+ * should be implemented by subclasses along with {@link #nextInternal},
+ * {@link #containsInternal}, and {@link Result#size}.
+ *  Most of the methods of this class will accept return values from
+ * {@link #getObjectInternal(Object,int,Object,Joins)} that are not exactly
+ * the right type. For example, any numeric type can be returned as any
+ * {@link Number} type, and dates, locales, characters, and booleans can be
+ * returned as strings.
+ *
+ * @author Abe White
+ * @see ResultSetResult
+ */
+<span class="nc" id="L76">public abstract class AbstractResult</span>
+    implements Result {
+
+<span class="nc" id="L79">    private static final Joins JOINS = new NoOpJoins();</span>
+
+<span class="nc" id="L81">    private Map _eager = null;</span>
+<span class="nc" id="L82">    private ClassMapping _base = null;</span>
+<span class="nc" id="L83">    private int _index = 0;</span>
+<span class="nc" id="L84">    private boolean _gotEager = false;</span>
+<span class="nc" id="L85">    private boolean _wasNull = false;</span>
+<span class="nc" id="L86">    private boolean _locking = false;</span>
+<span class="nc" id="L87">    private boolean _ignoreNext = false;</span>
+<span class="nc" id="L88">    private boolean _last = false;</span>
+<span class="nc" id="L89">    private FieldMapping _mappedByFieldMapping = null;</span>
+<span class="nc" id="L90">    private Object _mappedByValue = null;</span>
+
+    @Override
+    public Object getEager(FieldMapping key) {
+<span class="nc" id="L94">        Map map = getEagerMap(true);</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        return (map == null) ? null : map.get(key);</span>
+    }
+
+    @Override
+    public void putEager(FieldMapping key, Object res) {
+<span class="nc" id="L100">        Map map = getEagerMap(false);</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">        if (map == null) {</span>
+<span class="nc" id="L102">            map = new HashMap();</span>
+<span class="nc" id="L103">            setEagerMap(map);</span>
+        }
+<span class="nc" id="L105">        map.put(key, res);</span>
+<span class="nc" id="L106">    }</span>
+
+    /**
+     * Raw eager information. May be null.
+     *
+     * @param client whether the client is accessing eager information
+     */
+    protected Map getEagerMap(boolean client) {
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (client)</span>
+<span class="nc" id="L115">            _gotEager = true;</span>
+<span class="nc" id="L116">        return _eager;</span>
+    }
+
+    /**
+     * Raw eager information.
+     */
+    protected void setEagerMap(Map eager) {
+<span class="nc" id="L123">        _eager = eager;</span>
+<span class="nc" id="L124">    }</span>
+
+    /**
+     * Closes all eager results.
+     */
+    @Override
+    public void close() {
+<span class="nc" id="L131">        closeEagerMap(_eager);</span>
+<span class="nc" id="L132">        _mappedByFieldMapping = null;</span>
+<span class="nc" id="L133">        _mappedByValue = null;</span>
+<span class="nc" id="L134">    }</span>
+
+    /**
+     * Close all results in eager map.
+     */
+    protected void closeEagerMap(Map eager) {
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        if (eager != null) {</span>
+            Object res;
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            for (Iterator itr = eager.values().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L143">                res = itr.next();</span>
+<span class="nc bnc" id="L144" title="All 4 branches missed.">                if (res != this &amp;&amp; res instanceof Closeable)</span>
+                    try {
+<span class="nc" id="L146">                        ((Closeable) res).close();</span>
+<span class="nc" id="L147">                    } catch (Exception e) {</span>
+<span class="nc" id="L148">                    }</span>
+            }
+        }
+<span class="nc" id="L151">    }</span>
+
+    /**
+     * Returns false by default.
+     */
+    @Override
+    public boolean supportsRandomAccess()
+        throws SQLException {
+<span class="nc" id="L159">        return false;</span>
+    }
+
+    @Override
+    public boolean absolute(int row)
+        throws SQLException {
+<span class="nc" id="L165">        _gotEager = false;</span>
+<span class="nc" id="L166">        return absoluteInternal(row);</span>
+    }
+
+    /**
+     * Throws an exception by default.
+     */
+    protected boolean absoluteInternal(int row)
+        throws SQLException {
+<span class="nc" id="L174">        throw new UnsupportedException();</span>
+    }
+
+    @Override
+    public boolean next()
+        throws SQLException {
+<span class="nc" id="L180">        _gotEager = false;</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (_ignoreNext) {</span>
+<span class="nc" id="L182">            _ignoreNext = false;</span>
+<span class="nc" id="L183">            return _last;</span>
+        }
+<span class="nc" id="L185">        _last = nextInternal();</span>
+<span class="nc" id="L186">        return _last;</span>
+    }
+
+    /**
+     * Advance this row.
+     */
+    protected abstract boolean nextInternal()
+        throws SQLException;
+
+    @Override
+    public void pushBack()
+        throws SQLException {
+<span class="nc" id="L198">        _ignoreNext = true;</span>
+<span class="nc" id="L199">    }</span>
+
+    /**
+     * Returns a no-op joins object by default.
+     */
+    @Override
+    public Joins newJoins() {
+<span class="nc" id="L206">        return JOINS;</span>
+    }
+
+    @Override
+    public boolean contains(Object obj)
+        throws SQLException {
+<span class="nc" id="L212">        return containsInternal(obj, null);</span>
+    }
+
+    @Override
+    public boolean containsAll(Object[] objs)
+        throws SQLException {
+<span class="nc" id="L218">        return containsAllInternal(objs, null);</span>
+    }
+
+    @Override
+    public boolean contains(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L224">        return containsInternal(col, joins);</span>
+    }
+
+    @Override
+    public boolean containsAll(Column[] cols, Joins joins)
+        throws SQLException {
+<span class="nc" id="L230">        return containsAllInternal(cols, joins);</span>
+    }
+
+    /**
+     * Return whether this result contains data for the given id or column.
+     * The id or column has not beed passed through {@link #translate}.
+     */
+    protected abstract boolean containsInternal(Object obj, Joins joins)
+        throws SQLException;
+
+    /**
+     * Return whether this result contains data for all the given ids or
+     * columns. The ids or columns have not been passed through
+     * {@link #translate}. Delegates to {@link #containsInternal} by default.
+     */
+    protected boolean containsAllInternal(Object[] objs, Joins joins)
+        throws SQLException {
+<span class="nc bnc" id="L247" title="All 2 branches missed.">        for (int i = 0; i &lt; objs.length; i++)</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">            if (!containsInternal(objs[i], joins))</span>
+<span class="nc" id="L249">                return false;</span>
+<span class="nc" id="L250">        return true;</span>
+    }
+
+    @Override
+    public ClassMapping getBaseMapping() {
+        // if we've returned an eager result this call might be for that eager
+        // result instead of our primary mapping, so return null
+<span class="nc bnc" id="L257" title="All 2 branches missed.">        return (_gotEager) ? null : _base;</span>
+    }
+
+    @Override
+    public void setBaseMapping(ClassMapping base) {
+<span class="nc" id="L262">        _base = base;</span>
+<span class="nc" id="L263">    }</span>
+
+    @Override
+    public FieldMapping getMappedByFieldMapping() {
+<span class="nc" id="L267">        return _mappedByFieldMapping;</span>
+    }
+
+    @Override
+    public void setMappedByFieldMapping(FieldMapping fieldMapping) {
+<span class="nc" id="L272">        _mappedByFieldMapping = fieldMapping;</span>
+<span class="nc" id="L273">    }</span>
+
+    @Override
+    public Object getMappedByValue() {
+<span class="nc" id="L277">        return _mappedByValue;</span>
+    }
+
+    @Override
+    public void setMappedByValue(Object mappedByValue) {
+<span class="nc" id="L282">        _mappedByValue = mappedByValue;</span>
+<span class="nc" id="L283">    }</span>
+
+    @Override
+    public int indexOf() {
+<span class="nc" id="L287">        return _index;</span>
+    }
+
+    public void setIndexOf(int idx) {
+<span class="nc" id="L291">        _index = idx;</span>
+<span class="nc" id="L292">    }</span>
+
+    @Override
+    public Object load(ClassMapping mapping, JDBCStore store,
+        JDBCFetchConfiguration fetch)
+        throws SQLException {
+<span class="nc" id="L298">        return load(mapping, store, fetch, null);</span>
+    }
+
+    @Override
+    public Object load(ClassMapping mapping, JDBCStore store,
+        JDBCFetchConfiguration fetch, Joins joins)
+        throws SQLException {
+<span class="nc" id="L305">        return ((JDBCStoreManager) store).load(mapping, fetch, null, this);</span>
+    }
+
+    @Override
+    public Array getArray(Object obj)
+        throws SQLException {
+<span class="nc" id="L311">        return getArrayInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public Array getArray(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L317">        return getArrayInternal(translate(col, joins), joins);</span>
+    }
+
+    protected Array getArrayInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L322">        return (Array) checkNull(getObjectInternal(obj,</span>
+            JavaSQLTypes.SQL_ARRAY, null, joins));
+    }
+
+    @Override
+    public InputStream getAsciiStream(Object obj)
+        throws SQLException {
+<span class="nc" id="L329">        return getAsciiStreamInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public InputStream getAsciiStream(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L335">        return getAsciiStreamInternal(translate(col, joins), joins);</span>
+    }
+
+    protected InputStream getAsciiStreamInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L340">        return (InputStream) checkNull(getObjectInternal(obj,</span>
+            JavaSQLTypes.ASCII_STREAM, null, joins));
+    }
+
+    @Override
+    public BigDecimal getBigDecimal(Object obj)
+        throws SQLException {
+<span class="nc" id="L347">        return getBigDecimalInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public BigDecimal getBigDecimal(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L353">        return getBigDecimalInternal(translate(col, joins), joins);</span>
+    }
+
+    protected BigDecimal getBigDecimalInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L358">        Object val = checkNull(getObjectInternal(obj,</span>
+            JavaTypes.BIGDECIMAL, null, joins));
+<span class="nc bnc" id="L360" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L361">            return null;</span>
+<span class="nc bnc" id="L362" title="All 2 branches missed.">        if (val instanceof BigDecimal)</span>
+<span class="nc" id="L363">            return (BigDecimal) val;</span>
+<span class="nc" id="L364">        return new BigDecimal(val.toString());</span>
+    }
+
+    @Override
+    public BigInteger getBigInteger(Object obj)
+        throws SQLException {
+<span class="nc" id="L370">        return getBigIntegerInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public BigInteger getBigInteger(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L376">        return getBigIntegerInternal(translate(col, joins), joins);</span>
+    }
+
+    protected BigInteger getBigIntegerInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L381">        Object val = checkNull(getObjectInternal(obj,</span>
+            JavaTypes.BIGINTEGER, null, joins));
+<span class="nc bnc" id="L383" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L384">            return null;</span>
+<span class="nc bnc" id="L385" title="All 2 branches missed.">        if (val instanceof BigInteger)</span>
+<span class="nc" id="L386">            return (BigInteger) val;</span>
+<span class="nc" id="L387">        return new BigInteger(val.toString());</span>
+    }
+
+    @Override
+    public InputStream getBinaryStream(Object obj)
+        throws SQLException {
+<span class="nc" id="L393">        return getBinaryStreamInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public InputStream getBinaryStream(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L399">        return getBinaryStreamInternal(translate(col, joins), joins);</span>
+    }
+
+    @Override
+    public InputStream getLOBStream(JDBCStore store, Object obj)
+        throws SQLException {
+<span class="nc" id="L405">        return getLOBStreamInternal(store, translate(obj, null), null);</span>
+    }
+
+    protected InputStream getBinaryStreamInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L410">        return (InputStream) checkNull(getObjectInternal(obj,</span>
+            JavaSQLTypes.BINARY_STREAM, null, joins));
+    }
+
+    protected InputStream getLOBStreamInternal(JDBCStore store, Object obj,
+        Joins joins) throws SQLException {
+<span class="nc" id="L416">        return (InputStream) checkNull(getStreamInternal(store, obj,</span>
+            JavaSQLTypes.BINARY_STREAM, null, joins));
+    }
+
+    @Override
+    public Blob getBlob(Object obj)
+        throws SQLException {
+<span class="nc" id="L423">        return getBlobInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public Blob getBlob(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L429">        return getBlobInternal(translate(col, joins), joins);</span>
+    }
+
+    protected Blob getBlobInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L434">        return (Blob) checkNull(getObjectInternal(obj, JavaSQLTypes.BLOB,</span>
+            null, joins));
+    }
+
+    @Override
+    public boolean getBoolean(Object obj)
+        throws SQLException {
+<span class="nc" id="L441">        return getBooleanInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public boolean getBoolean(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L447">        return getBooleanInternal(translate(col, joins), joins);</span>
+    }
+
+    protected boolean getBooleanInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L452">        Object val = checkNull(getObjectInternal(obj, JavaTypes.BOOLEAN,</span>
+            null, joins));
+<span class="nc bnc" id="L454" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L455">            return false;</span>
+<span class="nc" id="L456">        return Boolean.valueOf(val.toString()).booleanValue();</span>
+    }
+
+    @Override
+    public byte getByte(Object obj)
+        throws SQLException {
+<span class="nc" id="L462">        return getByteInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public byte getByte(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L468">        return getByteInternal(translate(col, joins), joins);</span>
+    }
+
+    protected byte getByteInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L473">        Number val = (Number) checkNull(getObjectInternal(obj,</span>
+            JavaTypes.BYTE, null, joins));
+<span class="nc bnc" id="L475" title="All 2 branches missed.">        return (val == null) ? 0 : val.byteValue();</span>
+    }
+
+    @Override
+    public byte[] getBytes(Object obj)
+        throws SQLException {
+<span class="nc" id="L481">        return getBytesInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public byte[] getBytes(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L487">        return getBytesInternal(translate(col, joins), joins);</span>
+    }
+
+    protected byte[] getBytesInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L492">        return (byte[]) checkNull(getObjectInternal(obj,</span>
+            JavaSQLTypes.BYTES, null, joins));
+    }
+
+    @Override
+    public Calendar getCalendar(Object obj)
+        throws SQLException {
+<span class="nc" id="L499">        return getCalendarInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public Calendar getCalendar(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L505">        return getCalendarInternal(translate(col, joins), joins);</span>
+    }
+
+    protected Calendar getCalendarInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L510">        Object val = checkNull(getObjectInternal(obj, JavaTypes.CALENDAR, null, joins));</span>
+<span class="nc bnc" id="L511" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L512">            return null;</span>
+<span class="nc bnc" id="L513" title="All 2 branches missed.">        if (val instanceof Calendar)</span>
+<span class="nc" id="L514">            return (Calendar) val;</span>
+
+<span class="nc" id="L516">        Calendar cal = Calendar.getInstance();</span>
+<span class="nc" id="L517">        cal.setTime(new Date(val.toString()));</span>
+<span class="nc" id="L518">        return cal;</span>
+    }
+
+    @Override
+    public LocalDate getLocalDate(Object obj) throws SQLException {
+<span class="nc" id="L523">        return getLocalDateInternal(translate(obj, null), null);</span>
+    }
+
+    protected LocalDate getLocalDateInternal(Object obj, Joins joins) throws SQLException {
+<span class="nc" id="L527">        Object val = checkNull(getObjectInternal(obj, JavaTypes.LOCAL_DATE, null, joins));</span>
+<span class="nc bnc" id="L528" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L529">            return null;</span>
+<span class="nc bnc" id="L530" title="All 2 branches missed.">        if (val instanceof LocalDate)</span>
+<span class="nc" id="L531">            return (LocalDate) val;</span>
+
+<span class="nc" id="L533">        return LocalDate.parse(val.toString());</span>
+    }
+
+    @Override
+    public LocalTime getLocalTime(Object obj) throws SQLException {
+<span class="nc" id="L538">        return getLocalTimeInternal(translate(obj, null), null);</span>
+    }
+
+    protected LocalTime getLocalTimeInternal(Object obj, Joins joins) throws SQLException {
+<span class="nc" id="L542">        Object val = checkNull(getObjectInternal(obj, JavaTypes.LOCAL_TIME, null, joins));</span>
+<span class="nc bnc" id="L543" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L544">            return null;</span>
+<span class="nc bnc" id="L545" title="All 2 branches missed.">        if (val instanceof LocalTime)</span>
+<span class="nc" id="L546">            return (LocalTime) val;</span>
+
+<span class="nc" id="L548">        return LocalTime.parse(val.toString());</span>
+    }
+
+    @Override
+    public LocalDateTime getLocalDateTime(Object obj) throws SQLException {
+<span class="nc" id="L553">        return getLocalDateTimeInternal(translate(obj, null), null);</span>
+    }
+
+    protected LocalDateTime getLocalDateTimeInternal(Object obj, Joins joins) throws SQLException {
+<span class="nc" id="L557">        Object val = checkNull(getObjectInternal(obj, JavaTypes.LOCAL_DATETIME, null, joins));</span>
+<span class="nc bnc" id="L558" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L559">            return null;</span>
+<span class="nc bnc" id="L560" title="All 2 branches missed.">        if (val instanceof LocalDateTime)</span>
+<span class="nc" id="L561">            return (LocalDateTime) val;</span>
+
+<span class="nc" id="L563">        return LocalDateTime.parse(val.toString());</span>
+    }
+
+    @Override
+    public OffsetTime getOffsetTime(Object obj) throws SQLException {
+<span class="nc" id="L568">        return getOffsetTimeInternal(translate(obj, null), null);</span>
+    }
+
+    protected OffsetTime getOffsetTimeInternal(Object obj, Joins joins) throws SQLException {
+<span class="nc" id="L572">        Object val = checkNull(getObjectInternal(obj, JavaTypes.OFFSET_TIME, null, joins));</span>
+<span class="nc bnc" id="L573" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L574">            return null;</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">        if (val instanceof OffsetTime)</span>
+<span class="nc" id="L576">            return (OffsetTime) val;</span>
+
+<span class="nc" id="L578">        return OffsetTime.parse(val.toString());</span>
+    }
+
+    @Override
+    public OffsetDateTime getOffsetDateTime(Object obj) throws SQLException {
+<span class="nc" id="L583">        return getOffsetDateTimeInternal(translate(obj, null), null);</span>
+    }
+
+    protected OffsetDateTime getOffsetDateTimeInternal(Object obj, Joins joins) throws SQLException {
+<span class="nc" id="L587">        Object val = checkNull(getObjectInternal(obj, JavaTypes.OFFSET_DATETIME, null, joins));</span>
+<span class="nc bnc" id="L588" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L589">            return null;</span>
+<span class="nc bnc" id="L590" title="All 2 branches missed.">        if (val instanceof OffsetDateTime)</span>
+<span class="nc" id="L591">            return (OffsetDateTime) val;</span>
+
+<span class="nc" id="L593">        return OffsetDateTime.parse(val.toString());</span>
+    }
+
+    @Override
+    public char getChar(Object obj)
+        throws SQLException {
+<span class="nc" id="L599">        return getCharInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public char getChar(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L605">        return getCharInternal(translate(col, joins), joins);</span>
+    }
+
+    protected char getCharInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L610">        Object val = checkNull(getObjectInternal(obj, JavaTypes.CHAR,</span>
+            null, joins));
+<span class="nc bnc" id="L612" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L613">            return 0;</span>
+<span class="nc bnc" id="L614" title="All 2 branches missed.">        if (val instanceof Character)</span>
+<span class="nc" id="L615">            return ((Character) val).charValue();</span>
+
+<span class="nc" id="L617">        String str = val.toString();</span>
+<span class="nc bnc" id="L618" title="All 2 branches missed.">        return (str.length() == 0) ? 0 : str.charAt(0);</span>
+    }
+
+    @Override
+    public Reader getCharacterStream(Object obj)
+        throws SQLException {
+<span class="nc" id="L624">        return getCharacterStreamInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public Reader getCharacterStream(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L630">        return getCharacterStreamInternal(translate(col, joins), joins);</span>
+    }
+
+    protected Reader getCharacterStreamInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L635">        Object val = checkNull(getObjectInternal(obj,</span>
+            JavaSQLTypes.CHAR_STREAM, null, joins));
+<span class="nc bnc" id="L637" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L638">            return null;</span>
+<span class="nc bnc" id="L639" title="All 2 branches missed.">        if (val instanceof Reader)</span>
+<span class="nc" id="L640">            return (Reader) val;</span>
+<span class="nc" id="L641">        return new StringReader(val.toString());</span>
+    }
+
+    @Override
+    public Clob getClob(Object obj)
+        throws SQLException {
+<span class="nc" id="L647">        return getClobInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public Clob getClob(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L653">        return getClobInternal(translate(col, joins), joins);</span>
+    }
+
+    protected Clob getClobInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L658">        return (Clob) checkNull(getObjectInternal(obj, JavaSQLTypes.CLOB,</span>
+            null, joins));
+    }
+
+    @Override
+    public Date getDate(Object obj)
+        throws SQLException {
+<span class="nc" id="L665">        return getDateInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public Date getDate(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L671">        return getDateInternal(translate(col, joins), joins);</span>
+    }
+
+    protected Date getDateInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L676">        Object val = checkNull(getObjectInternal(obj, JavaTypes.DATE, null, joins));</span>
+<span class="nc bnc" id="L677" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L678">            return null;</span>
+<span class="nc bnc" id="L679" title="All 2 branches missed.">        if (val instanceof Date)</span>
+<span class="nc" id="L680">            return (Date) val;</span>
+<span class="nc" id="L681">        return new Date(val.toString());</span>
+    }
+
+    @Override
+    public java.sql.Date getDate(Object obj, Calendar cal)
+        throws SQLException {
+<span class="nc" id="L687">        return getDateInternal(translate(obj, null), cal, null);</span>
+    }
+
+    @Override
+    public java.sql.Date getDate(Column col, Calendar cal, Joins joins)
+        throws SQLException {
+<span class="nc" id="L693">        return getDateInternal(translate(col, joins), cal, joins);</span>
+    }
+
+    protected java.sql.Date getDateInternal(Object obj, Calendar cal, Joins joins)
+        throws SQLException {
+<span class="nc" id="L698">        return (java.sql.Date) checkNull(getObjectInternal(obj,</span>
+            JavaSQLTypes.SQL_DATE, cal, joins));
+    }
+
+    @Override
+    public double getDouble(Object obj)
+        throws SQLException {
+<span class="nc" id="L705">        return getDoubleInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public double getDouble(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L711">        return getDoubleInternal(translate(col, joins), joins);</span>
+    }
+
+    protected double getDoubleInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L716">        Number val = (Number) checkNull(getObjectInternal(obj,</span>
+            JavaTypes.DOUBLE, null, joins));
+<span class="nc bnc" id="L718" title="All 2 branches missed.">        return (val == null) ? 0 : val.doubleValue();</span>
+    }
+
+    @Override
+    public float getFloat(Object obj)
+        throws SQLException {
+<span class="nc" id="L724">        return getFloatInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public float getFloat(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L730">        return getFloatInternal(translate(col, joins), joins);</span>
+    }
+
+    protected float getFloatInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L735">        Number val = (Number) checkNull(getObjectInternal(obj,</span>
+            JavaTypes.FLOAT, null, joins));
+<span class="nc bnc" id="L737" title="All 2 branches missed.">        return (val == null) ? 0 : val.floatValue();</span>
+    }
+
+    @Override
+    public int getInt(Object obj)
+        throws SQLException {
+<span class="nc" id="L743">        return getIntInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public int getInt(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L749">        return getIntInternal(translate(col, joins), joins);</span>
+    }
+
+    protected int getIntInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L754">        Number val = (Number) checkNull(getObjectInternal(obj,</span>
+            JavaTypes.INT, null, joins));
+<span class="nc bnc" id="L756" title="All 2 branches missed.">        return (val == null) ? 0 : val.intValue();</span>
+    }
+
+    @Override
+    public Locale getLocale(Object obj)
+        throws SQLException {
+<span class="nc" id="L762">        return getLocaleInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public Locale getLocale(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L768">        return getLocaleInternal(translate(col, joins), joins);</span>
+    }
+
+    protected Locale getLocaleInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L773">        Object val = checkNull(getObjectInternal(obj, JavaTypes.LOCALE,</span>
+            null, joins));
+<span class="nc bnc" id="L775" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L776">            return null;</span>
+<span class="nc bnc" id="L777" title="All 2 branches missed.">        if (val instanceof Locale)</span>
+<span class="nc" id="L778">            return (Locale) val;</span>
+<span class="nc" id="L779">        String[] vals = StringUtil.split(val.toString(), &quot;_&quot;, 0);</span>
+<span class="nc bnc" id="L780" title="All 2 branches missed.">        if (vals.length &lt; 2)</span>
+<span class="nc" id="L781">            throw new SQLException(val.toString());</span>
+<span class="nc bnc" id="L782" title="All 2 branches missed.">        if (vals.length == 2)</span>
+<span class="nc" id="L783">            return new Locale(vals[0], vals[1]);</span>
+<span class="nc" id="L784">        return new Locale(vals[0], vals[1], vals[2]);</span>
+    }
+
+    @Override
+    public long getLong(Object obj)
+        throws SQLException {
+<span class="nc" id="L790">        return getLongInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public long getLong(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L796">        return getLongInternal(translate(col, joins), joins);</span>
+    }
+
+    protected long getLongInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L801">        Number val = (Number) checkNull(getObjectInternal(obj,</span>
+            JavaTypes.LONG, null, joins));
+<span class="nc bnc" id="L803" title="All 2 branches missed.">        return (val == null) ? 0 : val.longValue();</span>
+    }
+
+    @Override
+    public Number getNumber(Object obj)
+        throws SQLException {
+<span class="nc" id="L809">        return getNumberInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public Number getNumber(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L815">        return getNumberInternal(translate(col, joins), joins);</span>
+    }
+
+    protected Number getNumberInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L820">        Object val = checkNull(getObjectInternal(obj,</span>
+            JavaTypes.NUMBER, null, joins));
+<span class="nc bnc" id="L822" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L823">            return null;</span>
+<span class="nc bnc" id="L824" title="All 2 branches missed.">        if (val instanceof Number)</span>
+<span class="nc" id="L825">            return (Number) val;</span>
+<span class="nc" id="L826">        return new BigDecimal(val.toString());</span>
+    }
+
+    @Override
+    public Object getObject(Object obj, int metaType, Object arg)
+        throws SQLException {
+<span class="nc" id="L832">        return getObjectInternal(obj, metaType, arg, null);</span>
+    }
+
+    @Override
+    public Object getObject(Column col, Object arg, Joins joins)
+        throws SQLException {
+<span class="nc" id="L838">        return getObjectInternal(col, col.getJavaType(),</span>
+            arg, joins);
+    }
+
+    /**
+     * Return the value stored in the given id or column.
+     */
+    protected abstract Object getObjectInternal(Object obj, int metaType,
+        Object arg, Joins joins)
+        throws SQLException;
+
+    protected abstract Object getStreamInternal(JDBCStore store, Object obj,
+            int metaType, Object arg, Joins joins) throws SQLException;
+
+    @Override
+    public Object getSQLObject(Object obj, Map map)
+        throws SQLException {
+<span class="nc" id="L855">        return getSQLObjectInternal(translate(obj, null), map, null);</span>
+    }
+
+    @Override
+    public Object getSQLObject(Column col, Map map, Joins joins)
+        throws SQLException {
+<span class="nc" id="L861">        return getSQLObjectInternal(translate(col, joins), map, joins);</span>
+    }
+
+    protected Object getSQLObjectInternal(Object obj, Map map, Joins joins)
+        throws SQLException {
+<span class="nc" id="L866">        return checkNull(getObjectInternal(obj, JavaSQLTypes.SQL_OBJECT,</span>
+            map, joins));
+    }
+
+    @Override
+    public Ref getRef(Object obj, Map map)
+        throws SQLException {
+<span class="nc" id="L873">        return getRefInternal(translate(obj, null), map, null);</span>
+    }
+
+    @Override
+    public Ref getRef(Column col, Map map, Joins joins)
+        throws SQLException {
+<span class="nc" id="L879">        return getRefInternal(translate(col, joins), map, joins);</span>
+    }
+
+    protected Ref getRefInternal(Object obj, Map map, Joins joins)
+        throws SQLException {
+<span class="nc" id="L884">        return (Ref) checkNull(getObjectInternal(obj, JavaSQLTypes.REF,</span>
+            map, joins));
+    }
+
+    @Override
+    public short getShort(Object obj)
+        throws SQLException {
+<span class="nc" id="L891">        return getShortInternal(translate(obj, null), null);</span>
+    }
+
+    @Override
+    public short getShort(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L897">        return getShortInternal(translate(col, joins), joins);</span>
+    }
+
+    protected short getShortInternal(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L902">        Number val = (Number) checkNull(getObjectInternal(obj,</span>
+            JavaTypes.SHORT, null, joins));
+<span class="nc bnc" id="L904" title="All 2 branches missed.">        return (val == null) ? 0 : val.shortValue();</span>
+    }
+
+    @Override
+    public String getString(Object obj)
+        throws SQLException {
+<span class="nc bnc" id="L910" title="All 2 branches missed.">        return getStringInternal(translate(obj, null), null,</span>
+<span class="nc bnc" id="L911" title="All 2 branches missed.">            obj instanceof Column &amp;&amp; ((Column) obj).getType() == Types.CLOB);</span>
+    }
+
+    @Override
+    public String getString(Column col, Joins joins)
+        throws SQLException {
+<span class="nc" id="L917">        return getStringInternal(translate(col, joins), joins,</span>
+<span class="nc bnc" id="L918" title="All 2 branches missed.">            col.getType() == Types.CLOB);</span>
+    }
+
+    protected String getStringInternal(Object obj, Joins joins, boolean isClobString)
+        throws SQLException {
+<span class="nc" id="L923">        Object val = checkNull(getObjectInternal(obj, JavaTypes.STRING,</span>
+            null, joins));
+<span class="nc bnc" id="L925" title="All 2 branches missed.">        return (val == null) ? null : val.toString();</span>
+    }
+
+    @Override
+    public Time getTime(Object obj, Calendar cal)
+        throws SQLException {
+<span class="nc" id="L931">        return getTimeInternal(translate(obj, null), cal, null);</span>
+    }
+
+    @Override
+    public Time getTime(Column col, Calendar cal, Joins joins)
+        throws SQLException {
+<span class="nc" id="L937">        return getTimeInternal(translate(col, joins), cal, joins);</span>
+    }
+
+    protected Time getTimeInternal(Object obj, Calendar cal, Joins joins)
+        throws SQLException {
+<span class="nc" id="L942">        return (Time) checkNull(getObjectInternal(obj, JavaSQLTypes.TIME,</span>
+            cal, joins));
+    }
+
+    @Override
+    public Timestamp getTimestamp(Object obj, Calendar cal)
+        throws SQLException {
+<span class="nc" id="L949">        return getTimestampInternal(translate(obj, null), cal, null);</span>
+    }
+
+    @Override
+    public Timestamp getTimestamp(Column col, Calendar cal, Joins joins)
+        throws SQLException {
+<span class="nc" id="L955">        return getTimestampInternal(translate(col, joins), cal, joins);</span>
+    }
+
+    protected Timestamp getTimestampInternal(Object obj, Calendar cal,
+        Joins joins)
+        throws SQLException {
+<span class="nc" id="L961">        return (Timestamp) checkNull(getObjectInternal(obj,</span>
+            JavaSQLTypes.TIMESTAMP, cal, joins));
+    }
+
+    @Override
+    public boolean wasNull()
+        throws SQLException {
+<span class="nc" id="L968">        return _wasNull;</span>
+    }
+
+    protected Object checkNull(Object val) {
+<span class="nc bnc" id="L972" title="All 2 branches missed.">        _wasNull = (val == null);</span>
+<span class="nc" id="L973">        return val;</span>
+    }
+
+    @Override
+    public void setLocking(boolean locking) {
+<span class="nc" id="L978">        _locking = locking;</span>
+<span class="nc" id="L979">    }</span>
+
+    @Override
+    public boolean isLocking() {
+<span class="nc" id="L983">        return _locking;</span>
+    }
+
+    @Override
+    public void startDataRequest(Object mapping) {
+<span class="nc" id="L988">    }</span>
+
+    @Override
+    public void endDataRequest() {
+<span class="nc" id="L992">    }</span>
+
+    /**
+     * Translate the user-given id or column. This method is called before
+     * delegating to any &lt;code&gt;get*Internal&lt;/code&gt; methods with the exception of
+     * &lt;code&gt;getObjectInternal&lt;/code&gt;. Return the
+     * original value by default.
+     */
+    protected Object translate(Object obj, Joins joins)
+        throws SQLException {
+<span class="nc" id="L1002">        return obj;</span>
+    }
+
+    /**
+     * Do-nothing joins implementation.
+     */
+    private static class NoOpJoins
+        implements Joins {
+
+        @Override
+        public boolean isEmpty() {
+<span class="nc" id="L1013">            return true;</span>
+        }
+
+        @Override
+        public boolean isOuter() {
+<span class="nc" id="L1018">            return false;</span>
+        }
+
+        @Override
+        public Joins crossJoin(Table localTable, Table foreignTable) {
+<span class="nc" id="L1023">            return this;</span>
+        }
+
+        @Override
+        public Joins join(ForeignKey fk, boolean inverse, boolean toMany) {
+<span class="nc" id="L1028">            return this;</span>
+        }
+
+        @Override
+        public Joins outerJoin(ForeignKey fk, boolean inverse, boolean toMany) {
+<span class="nc" id="L1033">            return this;</span>
+        }
+
+        @Override
+        public Joins joinRelation(String name, ForeignKey fk,
+            ClassMapping target, int subs, boolean inverse, boolean toMany) {
+<span class="nc" id="L1039">            return this;</span>
+        }
+
+        @Override
+        public Joins outerJoinRelation(String name, ForeignKey fk,
+            ClassMapping target, int subs, boolean inverse, boolean toMany) {
+<span class="nc" id="L1045">            return this;</span>
+        }
+
+        @Override
+        public Joins setVariable(String var) {
+<span class="nc" id="L1050">            return this;</span>
+        }
+
+        @Override
+        public Joins setSubselect(String alias) {
+<span class="nc" id="L1055">            return this;</span>
+        }
+
+        @Override
+        public Joins setJoinContext(Context context) {
+<span class="nc" id="L1060">            return this;</span>
+        }
+
+        public void appendTo(SQLBuffer buf) {
+<span class="nc" id="L1064">        }</span>
+
+        @Override
+        public Joins setCorrelatedVariable(String var) {
+<span class="nc" id="L1068">            return this;</span>
+        }
+
+        @Override
+        public String getCorrelatedVariable() {
+<span class="nc" id="L1073">            return null;</span>
+        }
+
+        @Override
+        public void moveJoinsToParent() {
+<span class="nc" id="L1078">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

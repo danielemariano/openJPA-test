@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FoxProDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">FoxProDictionary.java</span></div><h1>FoxProDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+
+/**
+ * Dictionary for Visual FoxPro via DataDirect SequeLink
+ * and DataDirect ODBC FoxPro driver. This will not
+ * work with any other combination of JDBC/ODBC server and ODBC driver.
+ *  FoxPro has the following limitations:
+ * &lt;ul&gt;
+ * &lt;li&gt;Primary Keys and indexes cannot be created via JDBC&lt;/li&gt;
+ * &lt;li&gt;Only has fixed-length char fields: all strings must be
+ * trimmed in result sets&lt;/li&gt;
+ * &lt;li&gt;Does not have sufficient support for foreign keys&lt;/li&gt;
+ * &lt;li&gt;ODBC driver cannot handle certain Aggregate functions.&lt;/li&gt;
+ * &lt;li&gt;Locking is extremeley unreliable. Multiple clients
+ * accessing single datastore may result in concurrency
+ * data validity errors.&lt;/li&gt;
+ * &lt;/ul&gt;
+ */
+public class FoxProDictionary
+    extends DBDictionary {
+
+<span class="nc" id="L52">    public FoxProDictionary() {</span>
+<span class="nc" id="L53">        platform = &quot;Visual FoxPro&quot;;</span>
+<span class="nc" id="L54">        joinSyntax = SYNTAX_TRADITIONAL;</span>
+
+<span class="nc" id="L56">        supportsForeignKeys = false;</span>
+<span class="nc" id="L57">        supportsDeferredConstraints = false;</span>
+<span class="nc" id="L58">        maxTableNameLength = 30;</span>
+<span class="nc" id="L59">        maxColumnNameLength = 30;</span>
+<span class="nc" id="L60">        maxIndexNameLength = 8;</span>
+<span class="nc" id="L61">        maxConstraintNameLength = 8;</span>
+
+<span class="nc" id="L63">        binaryTypeName = &quot;GENERAL&quot;;</span>
+<span class="nc" id="L64">        blobTypeName = &quot;GENERAL&quot;;</span>
+<span class="nc" id="L65">        longVarbinaryTypeName = &quot;GENERAL&quot;;</span>
+<span class="nc" id="L66">        clobTypeName = &quot;MEMO&quot;;</span>
+<span class="nc" id="L67">        longVarcharTypeName = &quot;MEMO&quot;;</span>
+<span class="nc" id="L68">        dateTypeName = &quot;TIMESTAMP&quot;;</span>
+<span class="nc" id="L69">        timeTypeName = &quot;TIMESTAMP&quot;;</span>
+<span class="nc" id="L70">        varcharTypeName = &quot;CHARACTER{0}&quot;;</span>
+<span class="nc" id="L71">        bigintTypeName = &quot;DOUBLE&quot;;</span>
+<span class="nc" id="L72">        numericTypeName = &quot;INTEGER&quot;;</span>
+<span class="nc" id="L73">        smallintTypeName = &quot;INTEGER&quot;;</span>
+<span class="nc" id="L74">        bitTypeName = &quot;NUMERIC(1)&quot;;</span>
+<span class="nc" id="L75">        integerTypeName = &quot;INTEGER&quot;;</span>
+<span class="nc" id="L76">        tinyintTypeName = &quot;INTEGER&quot;;</span>
+<span class="nc" id="L77">        decimalTypeName = &quot;DOUBLE&quot;;</span>
+<span class="nc" id="L78">        doubleTypeName = &quot;DOUBLE&quot;;</span>
+<span class="nc" id="L79">        realTypeName = &quot;DOUBLE&quot;;</span>
+<span class="nc" id="L80">        floatTypeName = &quot;NUMERIC(19,16)&quot;;</span>
+
+        // the max character literal length is actually 254, but for primary
+        // keys, it is 240; default to that length so users can add PKs later
+<span class="nc" id="L84">        characterColumnSize = 240;</span>
+
+        // OpenJPA-2045: NAME has been removed from common reserved words to
+        // only specific dictionaries
+<span class="nc" id="L88">        reservedWordSet.add(&quot;NAME&quot;);</span>
+<span class="nc" id="L89">    }</span>
+
+    @Override
+    public String getString(ResultSet rs, int column)
+        throws SQLException {
+        // foxpro doesn't auto-truncate values.
+<span class="nc" id="L95">        String str = rs.getString(column);</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        if (str != null)</span>
+<span class="nc" id="L97">            str = str.trim();</span>
+<span class="nc" id="L98">        return str;</span>
+    }
+
+    @Override
+    public void setNull(PreparedStatement stmnt, int idx, int colType,
+        Column col)
+        throws SQLException {
+        // ensure that blob/clob is handled with safe methods.
+<span class="nc bnc" id="L106" title="All 3 branches missed.">        switch (colType) {</span>
+            case Types.BLOB:
+<span class="nc" id="L108">                stmnt.setBytes(idx, null);</span>
+<span class="nc" id="L109">                break;</span>
+            case Types.CLOB:
+<span class="nc" id="L111">                stmnt.setString(idx, null);</span>
+<span class="nc" id="L112">                break;</span>
+            default:
+<span class="nc" id="L114">                super.setNull(stmnt, idx, colType, col);</span>
+        }
+<span class="nc" id="L116">    }</span>
+
+    @Override
+    protected String appendSize(Column col, String typeName) {
+        // foxpro does not like unsized column declarations.
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (col.getSize() == 0) {</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">            if (&quot;CHARACTER&quot;.equals(typeName))</span>
+<span class="nc" id="L123">                col.setSize(240);</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">            else if (&quot;NUMERIC&quot;.equals(typeName))</span>
+<span class="nc" id="L125">                col.setSize(19);</span>
+        }
+<span class="nc" id="L127">        return super.appendSize(col, typeName);</span>
+    }
+
+    @Override
+    protected String getPrimaryKeyConstraintSQL(PrimaryKey pk) {
+        // this foxpro driver combination does not support primary keys
+<span class="nc" id="L133">        return null;</span>
+    }
+
+    @Override
+    public String[] getCreateIndexSQL(Index index) {
+        // foxpro JDBC access does not allow the creation of indexes
+<span class="nc" id="L139">        return new String[0];</span>
+    }
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, String catalog,
+        String schemaName, String tableName, String columnName, Connection conn)
+        throws SQLException {
+<span class="nc" id="L146">        return getColumns(meta, DBIdentifier.newCatalog(catalog), DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L147">            DBIdentifier.newTable(tableName), DBIdentifier.newColumn(columnName), conn);</span>
+    }
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, DBIdentifier catalog,
+        DBIdentifier schemaName, DBIdentifier tableName, DBIdentifier columnName, Connection conn)
+        throws SQLException {
+        try {
+<span class="nc" id="L155">            Column[] cols = super.getColumns(meta, catalog, schemaName,</span>
+                tableName, columnName, conn);
+<span class="nc bnc" id="L157" title="All 4 branches missed.">            for (int i = 0; cols != null &amp;&amp; i &lt; cols.length; i++) {</span>
+                // foxpro returns an odd type &quot;11&quot; code for DATETIME fields
+<span class="nc bnc" id="L159" title="All 2 branches missed.">                if (cols[i].getType() == 11)</span>
+<span class="nc" id="L160">                    cols[i].setType(Types.TIMESTAMP);</span>
+                    // MEMO maps to LONGVARCHAR during reverse analysis
+<span class="nc bnc" id="L162" title="All 2 branches missed.">                else if (&quot;MEMO&quot;.equals(cols[i].getTypeIdentifier().getName()))</span>
+<span class="nc" id="L163">                    cols[i].setType(Types.CLOB);</span>
+            }
+<span class="nc" id="L165">            return cols;</span>
+<span class="nc" id="L166">        } catch (SQLException se) {</span>
+            // foxpro throws an exception if the table specified in the
+            // column list is not found
+<span class="nc bnc" id="L169" title="All 2 branches missed.">            if (se.getErrorCode() == 562)</span>
+<span class="nc" id="L170">                return null;</span>
+<span class="nc" id="L171">            throw se;</span>
+        }
+    }
+
+    @Override
+    public PrimaryKey[] getPrimaryKeys(DatabaseMetaData meta, String catalog,
+        String schemaName, String tableName, Connection conn)
+        throws SQLException {
+        // this combination does not reliably return PK information
+<span class="nc" id="L180">        return null;</span>
+    }
+
+    @Override
+    public PrimaryKey[] getPrimaryKeys(DatabaseMetaData meta, DBIdentifier catalog,
+        DBIdentifier schemaName, DBIdentifier tableName, Connection conn)
+        throws SQLException {
+        // this combination does not reliably return PK information
+<span class="nc" id="L188">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

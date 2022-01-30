@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SQLProjectionResultObjectProvider.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">SQLProjectionResultObjectProvider.java</span></div><h1>SQLProjectionResultObjectProvider.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.sql.ResultSetResult;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.kernel.ResultPacker;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.util.StoreException;
+import org.apache.openjpa.util.UnsupportedException;
+
+/**
+ * Provides all column data in a {@link ResultSet}.
+ *
+ * @author Abe White
+ */
+class SQLProjectionResultObjectProvider
+    implements ResultObjectProvider {
+
+    private final JDBCStore _store;
+    private final JDBCFetchConfiguration _fetch;
+    private final ResultSetResult _res;
+    private final ResultPacker _packer;
+    private final int _cols;
+
+    /**
+     * Constructor.
+     *
+     * @param res the result data
+     * @param cls the result class; may be null for the default
+     */
+    public SQLProjectionResultObjectProvider(JDBCStore store,
+        JDBCFetchConfiguration fetch, ResultSetResult res, Class cls)
+<span class="nc" id="L55">        throws SQLException {</span>
+<span class="nc" id="L56">        _store = store;</span>
+<span class="nc" id="L57">        _fetch = fetch;</span>
+
+<span class="nc" id="L59">        ResultSetMetaData meta = res.getResultSet().getMetaData();</span>
+<span class="nc" id="L60">        _res = res;</span>
+<span class="nc" id="L61">        _cols = meta.getColumnCount();</span>
+
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if (cls != null) {</span>
+<span class="nc" id="L64">            String[] aliases = new String[_cols];</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">            for (int i = 0; i &lt; _cols; i++)</span>
+<span class="nc" id="L66">                aliases[i] = meta.getColumnLabel(i + 1);</span>
+<span class="nc" id="L67">            _packer = new ResultPacker(null, aliases, cls);</span>
+<span class="nc" id="L68">        } else</span>
+<span class="nc" id="L69">            _packer = null;</span>
+<span class="nc" id="L70">    }</span>
+
+    @Override
+    public boolean supportsRandomAccess() {
+        try {
+<span class="nc" id="L75">            return _res.supportsRandomAccess();</span>
+<span class="nc" id="L76">        } catch (Throwable t) {</span>
+<span class="nc" id="L77">            return false;</span>
+        }
+    }
+
+    @Override
+    public void open() {
+<span class="nc" id="L83">    }</span>
+
+    @Override
+    public Object getResultObject()
+        throws SQLException {
+<span class="nc bnc" id="L88" title="All 2 branches missed.">        if (_cols == 1) {</span>
+<span class="nc" id="L89">            Object val = _res.getObject(1,</span>
+                JavaSQLTypes.JDBC_DEFAULT, null);
+<span class="nc bnc" id="L91" title="All 2 branches missed.">            return (_packer == null) ? val : _packer.pack(val);</span>
+        }
+
+<span class="nc" id="L94">        Object[] vals = new Object[_cols];</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        for (int i = 0; i &lt; vals.length; i++)</span>
+<span class="nc" id="L96">            vals[i] = _res.getObject(i + 1,</span>
+                JavaSQLTypes.JDBC_DEFAULT, null);
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        return (_packer == null) ? vals : _packer.pack(vals);</span>
+    }
+
+    @Override
+    public boolean next()
+        throws SQLException {
+<span class="nc" id="L104">        return _res.next();</span>
+    }
+
+    @Override
+    public boolean absolute(int pos)
+        throws SQLException {
+<span class="nc" id="L110">        return _res.absolute(pos);</span>
+    }
+
+    @Override
+    public int size()
+        throws SQLException {
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (_fetch.getLRSSize() == LRSSizes.SIZE_UNKNOWN</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            || !supportsRandomAccess())</span>
+<span class="nc" id="L118">            return Integer.MAX_VALUE;</span>
+<span class="nc" id="L119">        return _res.size();</span>
+    }
+
+    @Override
+    public void reset() {
+<span class="nc" id="L124">        throw new UnsupportedException();</span>
+    }
+
+    @Override
+    public void close() {
+<span class="nc" id="L129">        _res.close();</span>
+<span class="nc" id="L130">    }</span>
+
+    @Override
+    public void handleCheckedException(Exception e) {
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (e instanceof SQLException)</span>
+<span class="nc" id="L135">            throw SQLExceptions.getStore((SQLException) e,</span>
+<span class="nc" id="L136">                _store.getDBDictionary());</span>
+<span class="nc" id="L137">        throw new StoreException(e);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,468 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>InformixDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">InformixDictionary.java</span></div><h1>InformixDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.jdbc.kernel.exps.FilterValue;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.ReferenceHashSet;
+import org.apache.openjpa.util.StoreException;
+import org.apache.openjpa.util.UnsupportedException;
+
+/**
+ * Dictionary for Informix database. Notable features:
+ * &lt;ul&gt;
+ * &lt;li&gt;Informix does not allow pessimistic locking on scrollable result
+ * sets.&lt;/li&gt;
+ * &lt;li&gt;SET LOCK MODE TO WAIT N statements are issued to wait on locks. See
+ * {@link #lockWaitSeconds} and {@link #lockModeEnabled}.&lt;/li&gt;
+ * &lt;li&gt;LOCK MODE ROW is used by default for table creation to allow the
+ * maximum concurrency.&lt;/li&gt;
+ * &lt;/ul&gt;
+ */
+public class InformixDictionary
+    extends DBDictionary {
+
+    public static final String VENDOR_IBM = &quot;ibm&quot;;
+
+    /**
+     * If true, then we will issue a &quot;SET LOCK MODE TO WAIT N&quot;
+     * statement whenever we create a {@link Connection}, in order
+     * allow waiting on locks.
+     */
+<span class="nc" id="L69">    public boolean lockModeEnabled = false;</span>
+
+    /**
+     * If {@link #lockModeEnabled} is &lt;code&gt;true&lt;/code&gt;, then this
+     * parameter specifies the number of seconds we will wait to
+     * obtain a lock for inserts and pessimistic locking.
+     */
+<span class="nc" id="L76">    public int lockWaitSeconds = 30;</span>
+
+    /**
+     * Informix JDBC metadata for all known drivers returns with the
+     * table catalog and the table schema name swapped. A &lt;code&gt;true&lt;/code&gt;
+     * value for this property indicates that they should be reversed.
+     */
+<span class="nc" id="L83">    public boolean swapSchemaAndCatalog = true;</span>
+
+<span class="nc" id="L85">    protected boolean useJCC = false;</span>
+    // weak set of connections we've already executed lock mode sql on
+<span class="nc" id="L87">    private final Collection _seenConnections = Collections.synchronizedSet(</span>
+            new ReferenceHashSet(ReferenceStrength.WEAK));
+
+<span class="nc" id="L90">    public boolean disableRetainUpdateLocksSQL=false;</span>
+
+<span class="nc" id="L92">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L93">        (InformixDictionary.class);</span>
+
+<span class="nc" id="L95">    public InformixDictionary() {</span>
+<span class="nc" id="L96">        platform = &quot;Informix&quot;;</span>
+<span class="nc" id="L97">        validationSQL = &quot;SELECT FIRST 1 CURRENT TIMESTAMP &quot;</span>
+            + &quot;FROM informix.systables&quot;;
+
+<span class="nc" id="L100">        supportsAutoAssign = true;</span>
+<span class="nc" id="L101">        autoAssignTypeName = &quot;serial&quot;;</span>
+<span class="nc" id="L102">        lastGeneratedKeyQuery = &quot;SELECT FIRST 1 DBINFO('sqlca.sqlerrd1') &quot;</span>
+            + &quot;FROM informix.systables&quot;;
+
+        // informix actually does support deferred constraints, but not
+        // in the table definition; deferred constraints can be activated by
+        // invoking &quot;set constraints all deferred&quot; on the connection, which
+        // we don't do yet
+<span class="nc" id="L109">        supportsDeferredConstraints = false;</span>
+<span class="nc" id="L110">        constraintNameMode = CONS_NAME_AFTER;</span>
+
+        // informix supports &quot;CLOB&quot; type, but any attempt to insert
+        // into them raises: &quot;java.sql.SQLException: Can't convert fromnull&quot;
+<span class="nc" id="L114">        useGetStringForClobs = true;</span>
+<span class="nc" id="L115">        longVarcharTypeName = &quot;TEXT&quot;;</span>
+<span class="nc" id="L116">        clobTypeName = &quot;TEXT&quot;;</span>
+<span class="nc" id="L117">        smallintTypeName = &quot;INT8&quot;;</span>
+<span class="nc" id="L118">        tinyintTypeName = &quot;INT8&quot;;</span>
+<span class="nc" id="L119">        floatTypeName = &quot;FLOAT&quot;;</span>
+<span class="nc" id="L120">        bitTypeName = &quot;BOOLEAN&quot;;</span>
+<span class="nc" id="L121">        blobTypeName = &quot;BYTE&quot;;</span>
+<span class="nc" id="L122">        doubleTypeName = &quot;NUMERIC(32,20)&quot;;</span>
+<span class="nc" id="L123">        dateTypeName = &quot;DATE&quot;;</span>
+<span class="nc" id="L124">        timeTypeName = &quot;DATETIME HOUR TO SECOND&quot;;</span>
+<span class="nc" id="L125">        timestampTypeName = &quot;DATETIME YEAR TO FRACTION(3)&quot;;</span>
+<span class="nc" id="L126">        doubleTypeName = &quot;NUMERIC(32,20)&quot;;</span>
+<span class="nc" id="L127">        floatTypeName = &quot;REAL&quot;;</span>
+<span class="nc" id="L128">        bigintTypeName = &quot;NUMERIC(32,0)&quot;;</span>
+<span class="nc" id="L129">        doubleTypeName = &quot;DOUBLE PRECISION&quot;;</span>
+<span class="nc" id="L130">        fixedSizeTypeNameSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;BYTE&quot;, &quot;DOUBLE PRECISION&quot;, &quot;INTERVAL&quot;, &quot;SMALLFLOAT&quot;, &quot;TEXT&quot;,
+            &quot;INT8&quot;,
+        }));
+
+        // OpenJPA-2045: NAME has been removed from common reserved words to
+        // only specific dictionaries
+<span class="nc" id="L137">        reservedWordSet.add(&quot;NAME&quot;);</span>
+
+<span class="nc" id="L139">        supportsLockingWithDistinctClause = false;</span>
+<span class="nc" id="L140">        supportsLockingWithMultipleTables = false;</span>
+<span class="nc" id="L141">        supportsLockingWithOrderClause = false;</span>
+
+        // the informix JDBC drivers have problems with using the
+        // schema name in reflection on columns and tables
+<span class="nc" id="L145">        supportsSchemaForGetColumns = false;</span>
+<span class="nc" id="L146">        supportsSchemaForGetTables = false;</span>
+
+        // Informix doesn't support aliases in deletes if the table has an index
+<span class="nc" id="L149">        allowsAliasInBulkClause = false;</span>
+
+        // Informix doesn't understand &quot;X CROSS JOIN Y&quot;, but it does understand
+        // the equivalent &quot;X JOIN Y ON 1 = 1&quot;
+<span class="nc" id="L153">        crossJoinClause = &quot;JOIN&quot;;</span>
+<span class="nc" id="L154">        requiresConditionForCrossJoin = true;</span>
+
+<span class="nc" id="L156">        concatenateFunction = &quot;CONCAT({0},{1})&quot;;</span>
+<span class="nc" id="L157">        nextSequenceQuery = &quot;SELECT {0}.NEXTVAL FROM SYSTABLES WHERE TABID=1&quot;;</span>
+<span class="nc" id="L158">        supportsCorrelatedSubselect = false;</span>
+<span class="nc" id="L159">        swapSchemaAndCatalog = false;</span>
+
+        // Informix does not support foreign key delete action NULL or DEFAULT
+<span class="nc" id="L162">        supportsNullDeleteAction = false;</span>
+<span class="nc" id="L163">        supportsDefaultDeleteAction = false;</span>
+
+<span class="nc" id="L165">        trimSchemaName = true;</span>
+<span class="nc" id="L166">    }</span>
+
+    @Override
+    public void connectedConfiguration(Connection conn)
+        throws SQLException {
+<span class="nc" id="L171">        super.connectedConfiguration(conn);</span>
+
+<span class="nc" id="L173">        DatabaseMetaData meta = conn.getMetaData();</span>
+<span class="nc" id="L174">        String driverName = meta.getDriverName();</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        if (driverName != null) {</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">            if (driverName.equals(&quot;IBM DB2 JDBC Universal Driver Architecture&quot;))</span>
+            {
+<span class="nc" id="L178">                driverVendor = VENDOR_IBM;</span>
+<span class="nc" id="L179">                useJCC = true;</span>
+<span class="nc" id="L180">                setIdentifierCase(meta);</span>
+            }
+<span class="nc bnc" id="L182" title="All 2 branches missed.">            else if (driverName.equals(&quot;IBM Informix JDBC Driver for IBM Informix Dynamic Server&quot;)) {</span>
+<span class="nc" id="L183">                setIdentifierCase(meta);</span>
+<span class="nc" id="L184">                driverVendor = VENDOR_IBM;</span>
+            }
+<span class="nc bnc" id="L186" title="All 2 branches missed.">            else if (&quot;Informix&quot;.equalsIgnoreCase(driverName))</span>
+<span class="nc" id="L187">                driverVendor = VENDOR_DATADIRECT;</span>
+            else
+<span class="nc" id="L189">                driverVendor = VENDOR_OTHER;</span>
+        } else
+<span class="nc" id="L191">            driverVendor = VENDOR_OTHER;</span>
+
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        if (isJDBC3) {</span>
+<span class="nc" id="L194">            conn.setHoldability(ResultSet.HOLD_CURSORS_OVER_COMMIT);</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">            if (log.isTraceEnabled())</span>
+<span class="nc" id="L196">                log.trace(_loc.get(&quot;connection-defaults&quot;, new Object[]{</span>
+<span class="nc" id="L197">                    conn.getAutoCommit(), conn.getHoldability(),</span>
+<span class="nc" id="L198">                    conn.getTransactionIsolation()}));</span>
+        }
+<span class="nc" id="L200">    }</span>
+
+    private void setIdentifierCase(DatabaseMetaData meta) {
+        try {
+            // lower case identifiers is the default for the JCC and newer
+            // Informix JDBC drivers
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            if (meta.storesLowerCaseIdentifiers()) {</span>
+<span class="nc" id="L207">                schemaCase = SCHEMA_CASE_LOWER;</span>
+            }
+<span class="nc bnc" id="L209" title="All 2 branches missed.">            else if (meta.storesMixedCaseIdentifiers()) {</span>
+<span class="nc" id="L210">                schemaCase = SCHEMA_CASE_PRESERVE;</span>
+            }
+            // otherwise, use the default (upper)
+        }
+<span class="nc" id="L214">        catch (SQLException e) {</span>
+<span class="nc" id="L215">            getLog().warn(&quot;cannot-determine-identifier-base-case&quot;);</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">            if (getLog().isTraceEnabled()) {</span>
+<span class="nc" id="L217">                getLog().trace(e.toString(), e);</span>
+            }
+<span class="nc" id="L219">        }</span>
+<span class="nc" id="L220">    }</span>
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, String catalog,
+        String schemaName, String tableName, String columnName, Connection conn)
+        throws SQLException {
+<span class="nc" id="L226">        return getColumns(meta, DBIdentifier.newCatalog(catalog),</span>
+<span class="nc" id="L227">            DBIdentifier.newSchema(schemaName),DBIdentifier.newTable(tableName),</span>
+<span class="nc" id="L228">            DBIdentifier.newColumn(columnName), conn);</span>
+    }
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, DBIdentifier catalog,
+        DBIdentifier schemaName, DBIdentifier tableName, DBIdentifier columnName, Connection conn)
+        throws SQLException {
+<span class="nc" id="L235">        Column[] cols = super.getColumns(meta, catalog, schemaName, tableName,</span>
+            columnName, conn);
+
+        // treat logvarchar as clob
+<span class="nc bnc" id="L239" title="All 4 branches missed.">        for (int i = 0; cols != null &amp;&amp; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">            if (cols[i].getType() == Types.LONGVARCHAR)</span>
+<span class="nc" id="L241">                cols[i].setType(Types.CLOB);</span>
+<span class="nc" id="L242">        return cols;</span>
+    }
+
+    @Override
+    public Column newColumn(ResultSet colMeta)
+        throws SQLException {
+<span class="nc" id="L248">        Column col = super.newColumn(colMeta);</span>
+<span class="nc bnc" id="L249" title="All 2 branches missed.">        if (swapSchemaAndCatalog)</span>
+<span class="nc" id="L250">            col.setSchemaIdentifier(fromDBName(colMeta.getString(&quot;TABLE_CAT&quot;), DBIdentifierType.CATALOG));</span>
+<span class="nc" id="L251">        return col;</span>
+    }
+
+    @Override
+    public PrimaryKey newPrimaryKey(ResultSet pkMeta)
+        throws SQLException {
+<span class="nc" id="L257">        PrimaryKey pk = super.newPrimaryKey(pkMeta);</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">        if (swapSchemaAndCatalog)</span>
+<span class="nc" id="L259">            pk.setSchemaIdentifier(fromDBName(pkMeta.getString(&quot;TABLE_CAT&quot;), DBIdentifierType.CATALOG));</span>
+<span class="nc" id="L260">        return pk;</span>
+    }
+
+    @Override
+    public Index newIndex(ResultSet idxMeta)
+        throws SQLException {
+<span class="nc" id="L266">        Index idx = super.newIndex(idxMeta);</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        if (swapSchemaAndCatalog)</span>
+<span class="nc" id="L268">            idx.setSchemaIdentifier(fromDBName(idxMeta.getString(&quot;TABLE_CAT&quot;), DBIdentifierType.CATALOG));</span>
+<span class="nc" id="L269">        return idx;</span>
+    }
+
+    @Override
+    public void setBoolean(PreparedStatement stmnt, int idx, boolean val,
+        Column col)
+        throws SQLException {
+        // informix actually requires that a boolean be set: it cannot
+        // handle a numeric argument
+<span class="nc bnc" id="L278" title="All 2 branches missed.">        stmnt.setString(idx, val ? &quot;t&quot; : &quot;f&quot;);</span>
+<span class="nc" id="L279">    }</span>
+
+    @Override
+    public String[] getCreateTableSQL(Table table) {
+<span class="nc" id="L283">        String[] create = super.getCreateTableSQL(table);</span>
+<span class="nc" id="L284">        create[0] = create[0] + &quot; LOCK MODE ROW&quot;;</span>
+<span class="nc" id="L285">        return create;</span>
+    }
+
+    @Override
+    public String[] getAddPrimaryKeySQL(PrimaryKey pk) {
+<span class="nc" id="L290">        String pksql = getPrimaryKeyConstraintSQL(pk);</span>
+<span class="nc bnc" id="L291" title="All 2 branches missed.">        if (pksql == null)</span>
+<span class="nc" id="L292">            return new String[0];</span>
+<span class="nc" id="L293">        return new String[]{ &quot;ALTER TABLE &quot;</span>
+<span class="nc" id="L294">            + getFullName(pk.getTable(), false) + &quot; ADD CONSTRAINT &quot; + pksql };</span>
+    }
+
+    @Override
+    public String[] getAddForeignKeySQL(ForeignKey fk) {
+<span class="nc" id="L299">        String fksql = getForeignKeyConstraintSQL(fk);</span>
+<span class="nc bnc" id="L300" title="All 2 branches missed.">        if (fksql == null)</span>
+<span class="nc" id="L301">            return new String[0];</span>
+<span class="nc" id="L302">        return new String[]{ &quot;ALTER TABLE &quot;</span>
+<span class="nc" id="L303">            + getFullName(fk.getTable(), false) + &quot; ADD CONSTRAINT &quot; + fksql };</span>
+    }
+
+    @Override
+    public boolean supportsRandomAccessResultSet(Select sel,
+        boolean forUpdate) {
+<span class="nc bnc" id="L309" title="All 4 branches missed.">        return !forUpdate &amp;&amp; !sel.isLob()</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">            &amp;&amp; super.supportsRandomAccessResultSet(sel, forUpdate);</span>
+    }
+
+    @Override
+    public Connection decorate(Connection conn)
+        throws SQLException {
+<span class="nc" id="L316">        conn = super.decorate(conn);</span>
+<span class="nc bnc" id="L317" title="All 4 branches missed.">        if (isJDBC3 &amp;&amp; conn.getHoldability() !=</span>
+            ResultSet.HOLD_CURSORS_OVER_COMMIT) {
+<span class="nc" id="L319">            conn.setHoldability(ResultSet.HOLD_CURSORS_OVER_COMMIT);</span>
+<span class="nc bnc" id="L320" title="All 2 branches missed.">            if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L321">                log.trace(_loc.get(&quot;connection-defaults&quot;, new Object[]{</span>
+<span class="nc" id="L322">                    conn.getAutoCommit(), conn.getHoldability(),</span>
+<span class="nc" id="L323">                    conn.getTransactionIsolation()}));</span>
+            }
+        }
+
+        // if we haven't already done so, initialize the lock mode of the
+        // connection
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if (_seenConnections.add(conn)) {</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">            if (lockModeEnabled) {</span>
+<span class="nc" id="L331">                String sql = &quot;SET LOCK MODE TO WAIT&quot;;</span>
+<span class="nc bnc" id="L332" title="All 2 branches missed.">                if (lockWaitSeconds &gt; 0)</span>
+<span class="nc" id="L333">                    sql = sql + &quot; &quot; + lockWaitSeconds;</span>
+<span class="nc" id="L334">                execute(sql, conn, true);</span>
+            }
+
+<span class="nc bnc" id="L337" title="All 2 branches missed.">            if (!disableRetainUpdateLocksSQL){</span>
+<span class="nc" id="L338">                String sql = &quot;SET ENVIRONMENT RETAINUPDATELOCKS 'ALL'&quot;;</span>
+<span class="nc" id="L339">                execute(sql, conn, false);</span>
+            }
+        }
+
+        // the datadirect driver requires that we issue a rollback before using
+        // each connection
+<span class="nc bnc" id="L345" title="All 2 branches missed.">        if (VENDOR_DATADIRECT.equalsIgnoreCase(driverVendor))</span>
+            try {
+<span class="nc" id="L347">                conn.rollback();</span>
+<span class="nc" id="L348">            } catch (SQLException se) {</span>
+<span class="nc" id="L349">            }</span>
+<span class="nc" id="L350">        return conn;</span>
+    }
+
+    private void execute(String sql, Connection conn, boolean throwExc) {
+<span class="nc" id="L354">        Statement stmnt = null;</span>
+        try {
+<span class="nc" id="L356">            stmnt = conn.createStatement();</span>
+<span class="nc" id="L357">            stmnt.executeUpdate(sql);</span>
+<span class="nc" id="L358">        } catch (SQLException se) {</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">            if (throwExc)</span>
+<span class="nc" id="L360">                throw SQLExceptions.getStore(se, this);</span>
+            else {
+<span class="nc bnc" id="L362" title="All 2 branches missed.">                if (log.isTraceEnabled())</span>
+<span class="nc" id="L363">                    log.trace(_loc.get(&quot;can-not-execute&quot;, sql));</span>
+            }
+        } finally {
+<span class="nc bnc" id="L366" title="All 2 branches missed.">            if (stmnt != null)</span>
+                try {
+<span class="nc" id="L368">                    stmnt.close();</span>
+<span class="nc" id="L369">                } catch (SQLException se) {</span>
+<span class="nc" id="L370">                }</span>
+        }
+<span class="nc" id="L372">    }</span>
+
+    @Override
+    public void indexOf(SQLBuffer buf, FilterValue str, FilterValue find,
+        FilterValue start) {
+<span class="nc" id="L377">        throw new UnsupportedException(_loc.get(&quot;function-not-supported&quot;,</span>
+<span class="nc" id="L378">                getClass(), &quot;LOCATE&quot;));</span>
+    }
+
+    @Override
+    public boolean needsToCreateIndex(Index idx, Table table) {
+       // Informix will automatically create a unique index for the
+       // primary key, so don't create another index again
+<span class="nc" id="L385">       PrimaryKey pk = table.getPrimaryKey();</span>
+<span class="nc bnc" id="L386" title="All 4 branches missed.">       if (pk != null &amp;&amp; idx.columnsMatch(pk.getColumns()))</span>
+<span class="nc" id="L387">           return false;</span>
+<span class="nc" id="L388">       return true;</span>
+    }
+
+    public boolean useJCC() {
+<span class="nc" id="L392">        return useJCC;</span>
+    }
+
+    /**
+     * Return DB specific schemaCase
+     */
+    @Override
+    public String getSchemaCase(){
+<span class="nc" id="L400">        return schemaCase;</span>
+    }
+
+    @Override
+    public boolean isFatalException(int subtype, SQLException ex) {
+
+        // SQL State of IX000 is a general purpose Informix error code
+        // category, so only return Boolean.TRUE if we match SQL Codes
+        // recoverable = Boolean.FALSE;
+<span class="nc bnc" id="L409" title="All 6 branches missed.">        if ((subtype == StoreException.LOCK &amp;&amp; checkNestedErrorCodes(ex, &quot;IX000&quot;, -154))</span>
+<span class="nc bnc" id="L410" title="All 2 branches missed.">          ||(subtype == StoreException.QUERY &amp;&amp; ex.getErrorCode() == -213)) {</span>
+<span class="nc" id="L411">            return false;</span>
+        }
+
+<span class="nc" id="L414">        return super.isFatalException(subtype, ex);</span>
+    }
+
+    /**
+     * Specialized matchErrorState method for Informix.  Informix exceptions are
+     * typically nested multiple levels deep.  Correct determination of the exception type requires
+     * inspection of nested exceptions to determine the root cause. A list of Informix (IDS v10) error codes
+     * can be found here:
+     *
+     * http://publib.boulder.ibm.com/infocenter/idshelp/v10/index.jsp?topic=/com.ibm.em.doc/errors_ids100.html
+     *
+     * @param errorStates classification of SQL error states by their specific nature. The keys of the
+     * map represent one of the constants defined in {@link StoreException}. The value corresponding to
+     * a key represent the set of SQL Error States representing specific category of database error.
+     * This supplied map is sourced from &lt;code&gt;sql-error-state-codes.xml&lt;/xml&gt; and filtered the
+     * error states for the current database.
+     *
+     * @param ex original SQL Exception as raised by the database driver.
+     *
+     * @return A constant indicating the category of error as defined in {@link StoreException}.
+     */
+    @Override
+    protected int matchErrorState(Map&lt;Integer,Set&lt;String&gt;&gt; errorStates, SQLException ex) {
+        // Informix SQLState IX000 is a general SQLState that applies to many possible conditions
+        // If the underlying cause is also an IX000 with error code:
+        // -107 ISAM error: record is locked. || -154 ISAM error: Lock Timeout Expired.
+        // the exception type is LOCK.
+<span class="nc bnc" id="L441" title="All 2 branches missed.">        if (checkNestedErrorCodes(ex, &quot;IX000&quot;, -107, -154)) {</span>
+<span class="nc" id="L442">           return StoreException.LOCK;</span>
+        }
+<span class="nc" id="L444">        return super.matchErrorState(errorStates, ex);</span>
+    }
+
+    private boolean checkNestedErrorCodes(SQLException ex, String sqlState, int...errorCodes) {
+<span class="nc" id="L448">        SQLException cause = ex;</span>
+<span class="nc" id="L449">        int level = 0;</span>
+        // Query at most 5 exceptions deep to prevent infinite iteration exception loops
+        // Typically, the root exception is at level 3.
+<span class="nc bnc" id="L452" title="All 4 branches missed.">        while (cause != null &amp;&amp; level &lt; 5) {</span>
+<span class="nc" id="L453">            String errorState = cause.getSQLState();</span>
+<span class="nc bnc" id="L454" title="All 4 branches missed.">            if (sqlState == null || sqlState.equals(errorState)) {</span>
+<span class="nc bnc" id="L455" title="All 2 branches missed.">                for (int ec : errorCodes) {</span>
+<span class="nc bnc" id="L456" title="All 2 branches missed.">                    if (cause.getErrorCode() == ec) {</span>
+<span class="nc" id="L457">                        return true;</span>
+                    }
+                }
+            }
+<span class="nc" id="L461">            cause = cause.getNextException();</span>
+<span class="nc" id="L462">            level++;</span>
+<span class="nc" id="L463">        }</span>
+<span class="nc" id="L464">        return false;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

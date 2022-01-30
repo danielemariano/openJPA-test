@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Const.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">Const.java</span></div><h1>Const.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.sql.SQLException;
+import java.util.Collection;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.exps.Constant;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * A literal or parameter in the filter.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L37">abstract class Const</span>
+    extends AbstractVal
+    implements Constant {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L43">    private ClassMetaData _meta = null;</span>
+
+    @Override
+    public ClassMetaData getMetaData() {
+<span class="nc" id="L47">        return _meta;</span>
+    }
+
+    @Override
+    public void setMetaData(ClassMetaData meta) {
+<span class="nc" id="L52">        _meta = meta;</span>
+<span class="nc" id="L53">    }</span>
+
+    /**
+     * Return the SQL value of this constant.
+     */
+    public Object getSQLValue(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L59">        return getValue(ctx, state);</span>
+    }
+
+    /**
+     * Return true if this constant's SQL value is equivalent to NULL.
+     */
+    public boolean isSQLValueNull(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L66">        Object val = getSQLValue(sel, ctx, state);</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L68">            return true;</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        if (!(val instanceof Object[]))</span>
+<span class="nc" id="L70">            return false;</span>
+
+        // all-null array is considered null
+<span class="nc" id="L73">        Object[] arr = (Object[]) val;</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        for (int i = 0; i &lt; arr.length; i++)</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">            if (arr[i] != null)</span>
+<span class="nc" id="L76">                return false;</span>
+<span class="nc" id="L77">        return true;</span>
+    }
+
+    /**
+     * Return the value of this constant.  May be more robust than the
+     * parameters-only form.
+     */
+    public Object getValue(ExpContext ctx, ExpState state) {
+<span class="nc" id="L85">        return getValue(ctx.params);</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L90">        return new ConstExpState();</span>
+    }
+
+    /**
+     * Constant expression state.
+     */
+<span class="nc" id="L96">    protected static class ConstExpState</span>
+        extends ExpState {
+
+<span class="nc" id="L99">        public Column[] cols = null;</span>
+
+        /**
+         * Return the column for the value at the specified index, or null.
+         */
+        public Column getColumn(int index) {
+<span class="nc bnc" id="L105" title="All 4 branches missed.">            return (cols != null &amp;&amp; cols.length &gt; index) ? cols[index] : null;</span>
+        }
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (other instanceof PCPath)</span>
+<span class="nc" id="L113">            ((ConstExpState) state).cols = ((PCPath) other).</span>
+<span class="nc" id="L114">                getColumns(otherState);</span>
+<span class="nc" id="L115">    }</span>
+
+    @Override
+    public void select(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L120">        sel.select(newSQLBuffer(sel, ctx, state), this);</span>
+<span class="nc" id="L121">    }</span>
+
+    private SQLBuffer newSQLBuffer(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L124">        calculateValue(sel, ctx, state, null, null);</span>
+<span class="nc" id="L125">        SQLBuffer buf = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L126">        appendTo(sel, ctx, state, buf, 0);</span>
+<span class="nc" id="L127">        return buf;</span>
+    }
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L133">    }</span>
+
+    @Override
+    public void groupBy(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L137">        sel.groupBy(newSQLBuffer(sel, ctx, state));</span>
+<span class="nc" id="L138">    }</span>
+
+    @Override
+    public void orderBy(Select sel, ExpContext ctx, ExpState state,
+        boolean asc) {
+<span class="nc" id="L143">        sel.orderBy(newSQLBuffer(sel, ctx, state), asc, false, getSelectAs());</span>
+<span class="nc" id="L144">    }</span>
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res)
+        throws SQLException {
+<span class="nc" id="L149">        return getValue(ctx, state);</span>
+    }
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L154">        return 1;</span>
+    }
+
+    @Override
+    public void appendIsEmpty(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L160">        Object obj = getValue(ctx, state);</span>
+<span class="nc bnc" id="L161" title="All 4 branches missed.">        if (obj instanceof Collection &amp;&amp; ((Collection) obj).isEmpty())</span>
+<span class="nc" id="L162">            sql.append(TRUE);</span>
+<span class="nc bnc" id="L163" title="All 4 branches missed.">        else if (obj instanceof Map &amp;&amp; ((Map) obj).isEmpty())</span>
+<span class="nc" id="L164">            sql.append(TRUE);</span>
+        else
+<span class="nc" id="L166">            sql.append(FALSE);</span>
+<span class="nc" id="L167">    }</span>
+
+    @Override
+    public void appendIsNotEmpty(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql){
+<span class="nc" id="L172">        Object obj = getValue(ctx, state);</span>
+<span class="nc bnc" id="L173" title="All 4 branches missed.">        if (obj instanceof Collection &amp;&amp; ((Collection) obj).isEmpty())</span>
+<span class="nc" id="L174">            sql.append(FALSE);</span>
+<span class="nc bnc" id="L175" title="All 4 branches missed.">        else if (obj instanceof Map &amp;&amp; ((Map) obj).isEmpty())</span>
+<span class="nc" id="L176">            sql.append(FALSE);</span>
+        else
+<span class="nc" id="L178">            sql.append(TRUE);</span>
+<span class="nc" id="L179">    }</span>
+
+    @Override
+    public void appendSize(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc" id="L184">        Object obj = getValue(ctx, state);</span>
+<span class="nc bnc" id="L185" title="All 2 branches missed.">        if (obj instanceof Collection)</span>
+<span class="nc" id="L186">            sql.appendValue(((Collection) obj).size());</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        else if (obj instanceof Map)</span>
+<span class="nc" id="L188">            sql.appendValue(((Map) obj).size());</span>
+        else
+<span class="nc" id="L190">            sql.append(&quot;1&quot;);</span>
+<span class="nc" id="L191">    }</span>
+
+    @Override
+    public void appendIsNull(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        if (isSQLValueNull(sel, ctx, state))</span>
+<span class="nc" id="L197">            sql.append(TRUE);</span>
+        else
+<span class="nc" id="L199">            sql.append(FALSE);</span>
+<span class="nc" id="L200">    }</span>
+
+    @Override
+    public void appendIsNotNull(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql) {
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if (!isSQLValueNull(sel, ctx, state))</span>
+<span class="nc" id="L206">            sql.append(TRUE);</span>
+        else
+<span class="nc" id="L208">            sql.append(FALSE);</span>
+<span class="nc" id="L209">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

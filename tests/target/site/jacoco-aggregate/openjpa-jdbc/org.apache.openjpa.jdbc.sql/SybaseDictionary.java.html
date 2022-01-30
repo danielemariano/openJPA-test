@@ -1,0 +1,499 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SybaseDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">SybaseDictionary.java</span></div><h1>SybaseDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Arrays;
+import java.util.Locale;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.jdbc.kernel.exps.FilterValue;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.PrimaryKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.lib.jdbc.DelegatingConnection;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.StoreException;
+
+/**
+ * Dictionary for Sybase.
+ *  The main point of interest is that by default, every table
+ * that is created will have a unique column named &quot;UNQ_INDEX&quot; of
+ * the &quot;IDENTITY&quot; type. OpenJPA will not ever utilize this column. However,
+ * due to internal Sybase restrictions, this column is required
+ * in order to support pessimistic (datastore) locking, since Sybase
+ * requires that any tables in a &quot;SELECT ... FOR UPDATE&quot; clause have
+ * a unique index that is &lt;strong&gt;not&lt;/strong&gt; included in the list
+ * of columns, as described in the
+ * &lt;a href=&quot;http://www.sybase.com/detail/1,6904,1023075,00.html&quot;
+ * &gt;Sybase documentation&lt;/a&gt;. This behavior can be surpressed by setting the
+ * dictionary property &lt;code&gt;CreateIdentityColumn=false&lt;/code&gt;. The
+ * name of the unique column can be changed by setting the property
+ * &lt;code&gt;IdentityColumnName=COLUMN_NAME&lt;/code&gt;.
+ *  A good Sybase type reference is can be found &lt;a
+ * href=&quot;http://www.ispirer.com/doc/sqlways36/sybase/syb_dtypes.html&quot;&gt;here&lt;/a&gt;.
+ */
+public class SybaseDictionary
+    extends AbstractSQLServerDictionary {
+
+<span class="nc" id="L65">    private static Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L66">        (SybaseDictionary.class);</span>
+
+<span class="nc" id="L68">    public static String RIGHT_TRUNCATION_ON_SQL = &quot;set string_rtruncation on&quot;;</span>
+<span class="nc" id="L69">    public static String NUMERIC_TRUNCATION_OFF_SQL = &quot;set arithabort numeric_truncation off&quot;;</span>
+
+    /**
+     * If true, then whenever the &lt;code&gt;schematool&lt;/code&gt; creates a
+     * table, it will append an additional IDENTITY column to the
+     * table's creation SQL. This is so Sybase will be able to
+     * perform &lt;code&gt;SELECT...FOR UPDATE&lt;/code&gt; statements.
+     */
+<span class="nc" id="L77">    public boolean createIdentityColumn = true;</span>
+
+    /**
+     * If {@link #createIdentityColumn} is true, then the
+     * &lt;code&gt;identityColumnName&lt;/code&gt; will be the name of the
+     * additional unique column that will be created.
+     */
+<span class="nc" id="L84">    public String identityColumnName = &quot;UNQ_INDEX&quot;;</span>
+
+    /**
+     * If true, Sybase will ignore numeric truncation on insert or
+     * update operations.  Otherwise, the operation will fail. The default
+     * value, false is in accordance with SQL92.
+     */
+<span class="nc" id="L91">    public boolean ignoreNumericTruncation = false;</span>
+
+<span class="nc" id="L93">    public SybaseDictionary() {</span>
+<span class="nc" id="L94">        platform = &quot;Sybase&quot;;</span>
+<span class="nc" id="L95">        schemaCase = SCHEMA_CASE_PRESERVE;</span>
+<span class="nc" id="L96">        forUpdateClause = &quot;FOR UPDATE AT ISOLATION SERIALIZABLE&quot;;</span>
+
+<span class="nc" id="L98">        supportsLockingWithDistinctClause = false;</span>
+<span class="nc" id="L99">        supportsNullTableForGetColumns = false;</span>
+<span class="nc" id="L100">        requiresAliasForSubselect = true;</span>
+<span class="nc" id="L101">        requiresAutoCommitForMetaData = true;</span>
+
+<span class="nc" id="L103">        maxTableNameLength = 30;</span>
+<span class="nc" id="L104">        maxColumnNameLength = 30;</span>
+<span class="nc" id="L105">        maxIndexNameLength = 30;</span>
+<span class="nc" id="L106">        maxConstraintNameLength = 30;</span>
+
+<span class="nc" id="L108">        bigintTypeName = &quot;NUMERIC(38)&quot;;</span>
+<span class="nc" id="L109">        bitTypeName = &quot;TINYINT&quot;;</span>
+
+        // Sybase doesn't understand &quot;X CROSS JOIN Y&quot;, but it does understand
+        // the equivalent &quot;X JOIN Y ON 1 = 1&quot;
+<span class="nc" id="L113">        crossJoinClause = &quot;JOIN&quot;;</span>
+<span class="nc" id="L114">        requiresConditionForCrossJoin = true;</span>
+
+        // these tables should not be reflected on
+<span class="nc" id="L117">        systemTableSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;IJDBC_FUNCTION_ESCAPES&quot;, &quot;JDBC_FUNCTION_ESCAPES&quot;,
+            &quot;SPT_IJDBC_CONVERSION&quot;, &quot;SPT_IJDBC_MDA&quot;, &quot;SPT_IJDBC_TABLE_TYPES&quot;,
+            &quot;SPT_JDBC_CONVERSION&quot;, &quot;SPT_JDBC_TABLE_TYPES&quot;, &quot;SPT_JTEXT&quot;,
+            &quot;SPT_LIMIT_TYPES&quot;, &quot;SPT_MDA&quot;, &quot;SPT_MONITOR&quot;, &quot;SPT_VALUES&quot;,
+            &quot;SYBLICENSESLOG&quot;,
+        }));
+
+        // reserved words specified at:
+        // http://manuals.sybase.com/onlinebooks/group-as/asg1250e/refman/@Generic__BookTextView/26603
+<span class="nc" id="L127">        reservedWordSet.addAll(Arrays.asList(new String[]{</span>
+            &quot;ARITH_OVERFLOW&quot;, &quot;BREAK&quot;, &quot;BROWSE&quot;, &quot;BULK&quot;, &quot;CHAR_CONVERT&quot;,
+            &quot;CHECKPOINT&quot;, &quot;CLUSTERED&quot;, &quot;COMPUTE&quot;, &quot;CONFIRM&quot;, &quot;CONTROLROW&quot;,
+            &quot;DATABASE&quot;, &quot;DBCC&quot;, &quot;DETERMINISTIC&quot;, &quot;DISK DISTINCT&quot;, &quot;DUMMY&quot;,
+            &quot;DUMP&quot;, &quot;ENDTRAN&quot;, &quot;ERRLVL&quot;, &quot;ERRORDATA&quot;, &quot;ERROREXIT&quot;, &quot;EXCLUSIVE&quot;,
+            &quot;EXIT&quot;, &quot;EXP_ROW_SIZE&quot;, &quot;FILLFACTOR&quot;, &quot;FUNC&quot;, &quot;FUNCTION&quot;,
+            &quot;HOLDLOCK&quot;, &quot;IDENTITY_GAP&quot;, &quot;IDENTITY_INSERT&quot;, &quot;IDENTITY_START&quot;,
+            &quot;IF&quot;, &quot;INDEX&quot;, &quot;INOUT&quot;, &quot;INSTALL&quot;, &quot;INTERSECT&quot;, &quot;JAR&quot;, &quot;KILL&quot;,
+            &quot;LINENO&quot;, &quot;LOAD&quot;, &quot;LOCK&quot;, &quot;MAX_ROWS_PER_PAGE&quot;, &quot;MIRROR&quot;,
+            &quot;MIRROREXIT&quot;, &quot;MODIFY&quot;, &quot;NEW&quot;, &quot;NOHOLDLOCK&quot;, &quot;NONCLUSTERED&quot;,
+            &quot;NUMERIC_TRUNCATION&quot;, &quot;OFF&quot;, &quot;OFFSETS&quot;, &quot;ONCE&quot;, &quot;ONLINE&quot;, &quot;OUT&quot;,
+            &quot;OVER&quot;, &quot;PARTITION&quot;, &quot;PERM&quot;, &quot;PERMANENT&quot;, &quot;PLAN&quot;, &quot;PRINT&quot;, &quot;PROC&quot;,
+            &quot;PROCESSEXIT&quot;, &quot;PROXY_TABLE&quot;, &quot;QUIESCE&quot;, &quot;RAISERROR&quot;, &quot;READ&quot;,
+            &quot;READPAST&quot;, &quot;READTEXT&quot;, &quot;RECONFIGURE&quot;, &quot;REFERENCES REMOVE&quot;, &quot;REORG&quot;,
+            &quot;REPLACE&quot;, &quot;REPLICATION&quot;, &quot;RESERVEPAGEGAP&quot;, &quot;RETURN&quot;, &quot;RETURNS&quot;,
+            &quot;ROLE&quot;, &quot;ROWCOUNT&quot;, &quot;RULE&quot;, &quot;SAVE&quot;, &quot;SETUSER&quot;, &quot;SHARED&quot;,
+            &quot;SHUTDOWN&quot;, &quot;SOME&quot;, &quot;STATISTICS&quot;, &quot;STRINGSIZE&quot;, &quot;STRIPE&quot;,
+            &quot;SYB_IDENTITY&quot;, &quot;SYB_RESTREE&quot;, &quot;SYB_TERMINATE&quot;, &quot;TEMP&quot;, &quot;TEXTSIZE&quot;,
+            &quot;TRAN&quot;, &quot;TRIGGER&quot;, &quot;TRUNCATE&quot;, &quot;TSEQUAL&quot;, &quot;UNPARTITION&quot;, &quot;USE&quot;,
+            &quot;USER_OPTION&quot;, &quot;WAITFOR&quot;, &quot;WHILE&quot;, &quot;WRITETEXT&quot;,
+        }));
+
+        // Sybase does not allow reserved words to be used as column names.
+<span class="nc" id="L150">        invalidColumnWordSet.addAll(reservedWordSet);</span>
+
+        // Sybase does not support foreign key delete/update action NULL,
+        // DEFAULT, CASCADE
+<span class="nc" id="L154">        supportsNullDeleteAction = false;</span>
+<span class="nc" id="L155">        supportsDefaultDeleteAction = false;</span>
+<span class="nc" id="L156">        supportsCascadeDeleteAction = false;</span>
+<span class="nc" id="L157">        supportsNullUpdateAction = false;</span>
+<span class="nc" id="L158">        supportsDefaultUpdateAction = false;</span>
+<span class="nc" id="L159">        supportsCascadeUpdateAction = false;</span>
+
+<span class="nc" id="L161">        fixedSizeTypeNameSet.remove(&quot;NUMERIC&quot;);</span>
+<span class="nc" id="L162">    }</span>
+
+    @Override
+    public int getJDBCType(int metaTypeCode, boolean lob) {
+<span class="nc bnc" id="L166" title="All 2 branches missed.">        switch (metaTypeCode) {</span>
+            // the default mapping for BYTE is a TINYINT, but Sybase's TINYINT
+            // type can't handle the complete range for a Java byte
+            case JavaTypes.BYTE:
+            case JavaTypes.BYTE_OBJ:
+<span class="nc" id="L171">                return getPreferredType(Types.SMALLINT);</span>
+            default:
+<span class="nc" id="L173">                return super.getJDBCType(metaTypeCode, lob);</span>
+        }
+    }
+
+    @Override
+    public void setBigInteger(PreparedStatement stmnt, int idx, BigInteger val,
+        Column col)
+        throws SQLException {
+        // setBigDecimal doesn't work here: in one case, a stored value
+        // of 7799438514924349440 turns into 7799438514924349400
+        // setObject gets around this in the Sybase JDBC drivers
+<span class="nc" id="L184">        setObject(stmnt, idx, new BigDecimal(val), Types.BIGINT, col);</span>
+<span class="nc" id="L185">    }</span>
+
+    @Override
+    public String[] getCreateTableSQL(Table table) {
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        if (!createIdentityColumn)</span>
+<span class="nc" id="L190">            return super.getCreateTableSQL(table);</span>
+
+<span class="nc" id="L192">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L193">        buf.append(&quot;CREATE TABLE &quot;).append(getFullName(table, false)).</span>
+<span class="nc" id="L194">            append(&quot; (&quot;);</span>
+
+<span class="nc" id="L196">        Column[] cols = table.getColumns();</span>
+
+<span class="nc" id="L198">        boolean hasIdentity = false;</span>
+
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+            // can only have one identity column
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            if (cols[i].isAutoAssigned()) {</span>
+<span class="nc" id="L203">                hasIdentity = true;</span>
+            }
+
+            // The column may exist if dropping and recreating a table.
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            if(cols[i].getIdentifier().getName().equals(identityColumnName)) {</span>
+<span class="nc" id="L208">                hasIdentity=true;</span>
+                // column type may be lost when recreating - reset to NUMERIC
+<span class="nc bnc" id="L210" title="All 2 branches missed.">                if(cols[i].getType() != Types.NUMERIC) { // should check if compatible</span>
+<span class="nc" id="L211">                    cols[i].setType(Types.NUMERIC);</span>
+                }
+            }
+
+<span class="nc bnc" id="L215" title="All 2 branches missed.">            buf.append(i == 0 ? &quot;&quot; : &quot;, &quot;);</span>
+<span class="nc" id="L216">            buf.append(getDeclareColumnSQL(cols[i], false));</span>
+        }
+
+        // add an identity column if we do not already have one
+<span class="nc bnc" id="L220" title="All 2 branches missed.">        if (!hasIdentity)</span>
+<span class="nc" id="L221">            buf.append(&quot;, &quot;).append(identityColumnName).</span>
+<span class="nc" id="L222">                append(&quot; NUMERIC IDENTITY UNIQUE&quot;);</span>
+
+<span class="nc" id="L224">        PrimaryKey pk = table.getPrimaryKey();</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (pk != null)</span>
+<span class="nc" id="L226">            buf.append(&quot;, &quot;).append(getPrimaryKeyConstraintSQL(pk));</span>
+
+<span class="nc" id="L228">        Unique[] unqs = table.getUniques();</span>
+        String unqStr;
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        for (int i = 0; i &lt; unqs.length; i++) {</span>
+<span class="nc" id="L231">            unqStr = getUniqueConstraintSQL(unqs[i]);</span>
+<span class="nc bnc" id="L232" title="All 2 branches missed.">            if (unqStr != null)</span>
+<span class="nc" id="L233">                buf.append(&quot;, &quot;).append(unqStr);</span>
+        }
+
+<span class="nc" id="L236">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L237">        return new String[]{ buf.toString() };</span>
+    }
+
+    @Override
+    protected String getDeclareColumnSQL(Column col, boolean alter) {
+<span class="nc" id="L242">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L243">        buf.append(getColumnDBName(col)).append(&quot; &quot;);</span>
+<span class="nc" id="L244">        buf.append(getTypeName(col));</span>
+
+        // can't add constraints to a column we're adding after table
+        // creation, cause some data might already be inserted
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (!alter) {</span>
+<span class="nc bnc" id="L249" title="All 4 branches missed.">            if (col.getDefaultString() != null &amp;&amp; !col.isAutoAssigned())</span>
+<span class="nc" id="L250">                buf.append(&quot; DEFAULT &quot;).append(col.getDefaultString());</span>
+<span class="nc bnc" id="L251" title="All 2 branches missed.">            if (col.isAutoAssigned())</span>
+<span class="nc" id="L252">                buf.append(&quot; IDENTITY&quot;);</span>
+        }
+
+<span class="nc bnc" id="L255" title="All 2 branches missed.">        if (col.isNotNull())</span>
+<span class="nc" id="L256">            buf.append(&quot; NOT NULL&quot;);</span>
+<span class="nc bnc" id="L257" title="All 2 branches missed.">        else if (!col.isPrimaryKey()) {</span>
+            // sybase forces you to explicitly specify that
+            // you will allow NULL values
+<span class="nc" id="L260">            buf.append(&quot; NULL&quot;);</span>
+        }
+
+<span class="nc" id="L263">        return buf.toString();</span>
+    }
+
+    @Override
+    public String[] getDropColumnSQL(Column column) {
+        // Sybase uses &quot;ALTER TABLE DROP &lt;COLUMN_NAME&gt;&quot; rather than the
+        // usual &quot;ALTER TABLE DROP COLUMN &lt;COLUMN_NAME&gt;&quot;
+<span class="nc" id="L270">        return new String[]{ &quot;ALTER TABLE &quot;</span>
+<span class="nc" id="L271">            + getFullName(column.getTable(), false) + &quot; DROP &quot; + getColumnDBName(column) };</span>
+    }
+
+    @Override
+    public void refSchemaComponents(Table table) {
+        // note that we use getColumns() rather than getting the column by name
+        // because under some circumstances this method is called under the
+        // dynamic schema factory, where getting a column by name creates
+        // that column
+<span class="nc" id="L280">        Column[] cols = table.getColumns();</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">            if (identityColumnName.equalsIgnoreCase(cols[i].getIdentifier().getName()))</span>
+<span class="nc" id="L283">                cols[i].ref();</span>
+<span class="nc" id="L284">    }</span>
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L288">        super.endConfiguration();</span>
+
+        // warn about jdbc compliant flag
+<span class="nc" id="L291">        String url = conf.getConnectionURL();</span>
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        if (!StringUtil.isEmpty(url)</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">            &amp;&amp; url.toLowerCase(Locale.ENGLISH).indexOf(&quot;jdbc:sybase:tds&quot;) != -1</span>
+<span class="nc bnc" id="L294" title="All 2 branches missed.">            &amp;&amp; url.toLowerCase(Locale.ENGLISH).indexOf(&quot;be_as_jdbc_compliant_as_possible=&quot;)</span>
+            == -1) {
+<span class="nc" id="L296">            log.warn(_loc.get(&quot;sybase-compliance&quot;, url));</span>
+        }
+<span class="nc" id="L298">    }</span>
+
+    @Override
+    public Connection decorate(Connection conn)
+        throws SQLException {
+<span class="nc" id="L303">        conn = super.decorate(conn);</span>
+<span class="nc" id="L304">        Connection savedConn = conn;</span>
+
+//        if(ignoreConnectionSetup) {
+//            if(conn instanceof DelegatingConnection) {
+//                conn = ((DelegatingConnection)conn).getInnermostDelegate();
+//            }
+//        }
+
+        // In order for Sybase to raise the truncation exception when the
+        // string length is greater than the column length for Char, VarChar,
+        // Binary, VarBinary, the &quot;set string_rtruncation on&quot; must be executed.
+        // This setting is effective for the duration of current connection.
+<span class="nc bnc" id="L316" title="All 2 branches missed.">        if (setStringRightTruncationOn) {</span>
+<span class="nc" id="L317">            PreparedStatement stmnt = prepareStatement(conn, RIGHT_TRUNCATION_ON_SQL);</span>
+<span class="nc" id="L318">            stmnt.execute();</span>
+<span class="nc" id="L319">            stmnt.close();</span>
+        }
+
+        // By default, Sybase will fail to insert or update if a numeric
+        // truncation occurs as a result of, for example, loss of decimal
+        // precision.  This setting specifies that the operation should not
+        // fail if a numeric truncation occurs.
+<span class="nc bnc" id="L326" title="All 2 branches missed.">        if (ignoreNumericTruncation) {</span>
+<span class="nc" id="L327">            PreparedStatement stmnt = prepareStatement(conn, NUMERIC_TRUNCATION_OFF_SQL);</span>
+<span class="nc" id="L328">            stmnt.execute();</span>
+<span class="nc" id="L329">            stmnt.close();</span>
+        }
+
+
+<span class="nc" id="L333">        return new SybaseConnection(savedConn);</span>
+    }
+
+    /**
+     * Helper method obtains a string value from a given column in a ResultSet. Strings provided are column names,
+     * jdbcName will be tried first if an SQLException occurs we'll try the sybase name.
+     */
+    protected String getStringFromResultSet(ResultSet rs, String jdbcName, String sybaseName) throws SQLException {
+        try {
+<span class="nc" id="L342">            return rs.getString(jdbcName);</span>
+        }
+<span class="nc" id="L344">        catch(SQLException sqle) {</span>
+            // if the generic JDBC identifier isn't found an SQLException will be thrown
+            // try the Sybase specific id
+<span class="nc" id="L347">            return rs.getString(sybaseName);</span>
+        }
+    }
+    /**
+     * Helper method obtains a boolean value from a given column in a ResultSet. Strings provided are column names,
+     * jdbcName will be tried first if an SQLException occurs we'll try the sybase name.
+     */
+    protected boolean getBooleanFromResultSet(ResultSet rs, String jdbcName, String sybaseName) throws SQLException {
+        try {
+<span class="nc" id="L356">            return rs.getBoolean(jdbcName);</span>
+        }
+<span class="nc" id="L358">        catch(SQLException sqle) {</span>
+            // if the generic JDBC identifier isn't found an SQLException will be thrown
+            // try the Sybase specific id
+<span class="nc" id="L361">            return rs.getBoolean(sybaseName);</span>
+        }
+    }
+
+    /**
+     * Create a new primary key from the information in the schema metadata.
+     */
+    @Override
+    protected PrimaryKey newPrimaryKey(ResultSet pkMeta)
+        throws SQLException {
+<span class="nc" id="L371">        PrimaryKey pk = new PrimaryKey();</span>
+<span class="nc" id="L372">        pk.setSchemaIdentifier(fromDBName(getStringFromResultSet(pkMeta, &quot;TABLE_SCHEM&quot;, &quot;table_owner&quot;),</span>
+            DBIdentifierType.SCHEMA));
+<span class="nc" id="L374">        pk.setTableIdentifier(fromDBName(getStringFromResultSet(pkMeta, &quot;TABLE_NAME&quot;, &quot;table_name&quot;),</span>
+            DBIdentifierType.TABLE));
+<span class="nc" id="L376">        pk.setColumnIdentifier(fromDBName(getStringFromResultSet(pkMeta, &quot;COLUMN_NAME&quot;, &quot;column_name&quot;),</span>
+            DBIdentifierType.COLUMN));
+<span class="nc" id="L378">        pk.setIdentifier(fromDBName(getStringFromResultSet(pkMeta, &quot;PK_NAME&quot;, &quot;index_name&quot;),</span>
+            DBIdentifierType.CONSTRAINT));
+<span class="nc" id="L380">        return pk;</span>
+    }
+
+    /**
+     * Create a new index from the information in the index metadata.
+     */
+    @Override
+    protected Index newIndex(ResultSet idxMeta)
+        throws SQLException {
+<span class="nc" id="L389">        Index idx = new Index();</span>
+<span class="nc" id="L390">        idx.setSchemaIdentifier(fromDBName(getStringFromResultSet(idxMeta, &quot;TABLE_SCHEM&quot;, &quot;table_owner&quot;),</span>
+            DBIdentifierType.SCHEMA));
+<span class="nc" id="L392">        idx.setTableIdentifier(fromDBName(getStringFromResultSet(idxMeta, &quot;TABLE_NAME&quot;, &quot;table_name&quot;),</span>
+            DBIdentifierType.TABLE));
+<span class="nc" id="L394">        idx.setColumnIdentifier(fromDBName(getStringFromResultSet(idxMeta, &quot;COLUMN_NAME&quot;, &quot;column_name&quot;),</span>
+            DBIdentifierType.COLUMN));
+<span class="nc" id="L396">        idx.setIdentifier(fromDBName(getStringFromResultSet(idxMeta, &quot;INDEX_NAME&quot;, &quot;index_name&quot;),</span>
+            DBIdentifierType.INDEX));
+<span class="nc bnc" id="L398" title="All 2 branches missed.">        idx.setUnique(!getBooleanFromResultSet(idxMeta, &quot;NON_UNIQUE&quot;, &quot;non_unique&quot;));</span>
+<span class="nc" id="L399">        return idx;</span>
+    }
+
+    @Override
+    public boolean isFatalException(int subtype, SQLException ex) {
+<span class="nc bnc" id="L404" title="All 2 branches missed.">        if (subtype == StoreException.LOCK) {</span>
+<span class="nc" id="L405">            SQLException next = ex.getNextException();</span>
+<span class="nc bnc" id="L406" title="All 2 branches missed.">            if(&quot;JZ0TO&quot;.equals(next.getSQLState())) {</span>
+<span class="nc" id="L407">                return false; // query timeout</span>
+            }
+        }
+<span class="nc" id="L410">        return super.isFatalException(subtype, ex);</span>
+    }
+
+    /**
+     * Connection wrapper to cache the {@link Connection#getCatalog} result,
+     * which takes a very long time with the Sybase Connection (and
+     * which we frequently invoke).
+     */
+    protected static class SybaseConnection
+        extends DelegatingConnection {
+
+<span class="nc" id="L421">        private String _catalog = null;</span>
+
+        public SybaseConnection(Connection conn) {
+<span class="nc" id="L424">            super(conn);</span>
+<span class="nc" id="L425">        }</span>
+
+        @Override
+        public String getCatalog()
+            throws SQLException {
+<span class="nc bnc" id="L430" title="All 2 branches missed.">            if (_catalog == null)</span>
+<span class="nc" id="L431">                _catalog = super.getCatalog();</span>
+<span class="nc" id="L432">            return _catalog;</span>
+        }
+
+        @Override
+        public void setAutoCommit(boolean autocommit)
+            throws SQLException {
+            // the sybase jdbc driver demands that the Connection always
+            // be rolled back before autocommit status changes. Failure to
+            // do so will yield &quot;SET CHAINED command not allowed within
+            // multi-statement transaction.&quot; exceptions
+            try {
+<span class="nc" id="L443">                super.setAutoCommit(autocommit);</span>
+<span class="nc" id="L444">            } catch (SQLException e) {</span>
+                // failed for some reason: try rolling back and then
+                // setting autocommit again.
+<span class="nc bnc" id="L447" title="All 2 branches missed.">                if (autocommit)</span>
+<span class="nc" id="L448">                    super.commit();</span>
+                else
+<span class="nc" id="L450">                    super.rollback();</span>
+<span class="nc" id="L451">                super.setAutoCommit(autocommit);</span>
+<span class="nc" id="L452">            }</span>
+<span class="nc" id="L453">        }</span>
+    }
+
+    @Override
+    public String getIsNullSQL(String colAlias, int colType)  {
+<span class="nc bnc" id="L458" title="All 2 branches missed.">        switch(colType) {</span>
+            case Types.BLOB:
+            case Types.CLOB:
+<span class="nc" id="L461">                return String.format(&quot;datalength(%s) = 0&quot;, colAlias);</span>
+        }
+<span class="nc" id="L463">        return super.getIsNullSQL(colAlias, colType);</span>
+    }
+
+    @Override
+    public String getIsNotNullSQL(String colAlias, int colType) {
+<span class="nc bnc" id="L468" title="All 2 branches missed.">        switch(colType) {</span>
+            case Types.BLOB:
+            case Types.CLOB:
+<span class="nc" id="L471">                return String.format(&quot;datalength(%s) != 0&quot;, colAlias);</span>
+        }
+<span class="nc" id="L473">        return super.getIsNotNullSQL(colAlias, colType);</span>
+    }
+
+    @Override
+    public String getIdentityColumnName() {
+<span class="nc" id="L478">        return identityColumnName;</span>
+    }
+
+    @Override
+    public void indexOf(SQLBuffer buf, FilterValue str, FilterValue find,
+        FilterValue start) {
+<span class="nc" id="L484">        buf.append(&quot;(CHARINDEX(&quot;);</span>
+<span class="nc" id="L485">        find.appendTo(buf);</span>
+<span class="nc" id="L486">        buf.append(&quot;, &quot;);</span>
+<span class="nc bnc" id="L487" title="All 2 branches missed.">        if (start != null)</span>
+<span class="nc" id="L488">            substring(buf, str, start, null);</span>
+        else
+<span class="nc" id="L490">            str.appendTo(buf);</span>
+<span class="nc" id="L491">        buf.append(&quot;)&quot;);</span>
+<span class="nc bnc" id="L492" title="All 2 branches missed.">        if (start != null) {</span>
+<span class="nc" id="L493">            buf.append(&quot; - 1 + &quot;);</span>
+<span class="nc" id="L494">            start.appendTo(buf);</span>
+        }
+<span class="nc" id="L496">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L497">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

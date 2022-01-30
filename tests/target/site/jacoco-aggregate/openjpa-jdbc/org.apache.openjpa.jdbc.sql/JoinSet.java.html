@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JoinSet.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">JoinSet.java</span></div><h1>JoinSet.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+
+/**
+ * Set type that recognizes that inner joins should take precedence
+ * over otherwise equal outer joins.
+ *
+ * @author Abe White
+ */
+class JoinSet {
+
+    // the joins are stored as an adjacency list graph.  it's a reasonably
+    // efficient representation with O(1) lookup, add, remove operations for
+    // typical sets of joins, and it means we'd have to create a graph anyway
+    // when joinIterator() is called
+<span class="nc" id="L41">    private final List _graph = new ArrayList();</span>
+<span class="nc" id="L42">    private int _size = 0;</span>
+<span class="nc" id="L43">    private List _sorted = null;</span>
+
+<span class="nc" id="L45">    public JoinSet() {</span>
+<span class="nc" id="L46">    }</span>
+
+<span class="nc" id="L48">    public JoinSet(JoinSet copy) {</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">        for (int i = 0; i &lt; copy._graph.size(); i++) {</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">            if (copy._graph.get(i) == null)</span>
+<span class="nc" id="L51">                _graph.add(null);</span>
+            else
+<span class="nc" id="L53">                _graph.add(((Node) copy._graph.get(i)).clone());</span>
+        }
+<span class="nc" id="L55">        _size = copy._size;</span>
+<span class="nc" id="L56">        _sorted = copy._sorted;</span>
+<span class="nc" id="L57">    }</span>
+
+    /**
+     * Return the recorded join matching the given join's aliases.
+     */
+    public Join getRecordedJoin(Join join) {
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if (join == null)</span>
+<span class="nc" id="L64">            return null;</span>
+<span class="nc" id="L65">        Node node = getNode(join, join.getIndex1());</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        return (node == null) ? null : node.join;</span>
+    }
+
+    /**
+     * Return the node for the specified join and index.
+     */
+    private Node getNode(Join join, int idx) {
+<span class="nc bnc" id="L73" title="All 2 branches missed.">        if (_graph.size() &lt;= idx)</span>
+<span class="nc" id="L74">            return null;</span>
+<span class="nc" id="L75">        Node node = (Node) _graph.get(idx);</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        for (; node != null; node = node.next)</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">            if (node.join.equals(join))</span>
+<span class="nc" id="L78">                return node;</span>
+<span class="nc" id="L79">        return null;</span>
+    }
+
+    /**
+     * Return the logical last join.
+     */
+    public Join last() {
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if (_size == 0)</span>
+<span class="nc" id="L87">            return null;</span>
+<span class="nc" id="L88">        Node node = (Node) _graph.get(_graph.size() - 1);</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        while (node.next != null)</span>
+<span class="nc" id="L90">            node = node.next;</span>
+<span class="nc" id="L91">        return node.join;</span>
+    }
+
+    /**
+     * Iterator over joins that prepares them for SQL translation.
+     */
+    public Iterator joinIterator() {
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if (_size &lt; 2)</span>
+<span class="nc" id="L99">            return iterator();</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">        if (_sorted != null)</span>
+<span class="nc" id="L101">            return _sorted.iterator();</span>
+
+<span class="nc" id="L103">        List sorted = new ArrayList(_size);</span>
+<span class="nc" id="L104">        LinkedList queue = new LinkedList();</span>
+<span class="nc" id="L105">        BitSet seen = new BitSet(_graph.size() * _graph.size()</span>
+<span class="nc" id="L106">            + _graph.size());</span>
+
+        // traverse graph
+        Node n;
+        int idx, sidx;
+<span class="nc bnc" id="L111" title="All 2 branches missed.">        for (int i = 0; i &lt; _graph.size(); i++) {</span>
+            // seed queue with next set of disconnected joins
+<span class="nc bnc" id="L113" title="All 2 branches missed.">            for (n = (Node) _graph.get(i); n != null; n = n.next) {</span>
+<span class="nc" id="L114">                sidx = getSeenIndex(n.join);</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">                if (!seen.get(sidx)) {</span>
+<span class="nc" id="L116">                    seen.set(sidx);</span>
+<span class="nc" id="L117">                    queue.add(n);</span>
+                }
+            }
+<span class="nc bnc" id="L120" title="All 2 branches missed.">            if (queue.isEmpty())</span>
+<span class="nc" id="L121">                continue;</span>
+
+            // traverse from those joins to reachables
+<span class="nc bnc" id="L124" title="All 2 branches missed.">            while (!queue.isEmpty()) {</span>
+<span class="nc" id="L125">                n = (Node) queue.removeFirst();</span>
+
+                // don't repeat a join to a table we've already joined, but
+                // do traverse through it in the graph (the first indexes of
+                // the seeen bitset are reserved for joined-to tables)
+<span class="nc bnc" id="L130" title="All 2 branches missed.">                idx = (n.forward) ? n.join.getIndex2() : n.join.getIndex1();</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">                if (!seen.get(idx)) {</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">                    sorted.add((n.forward) ? n.join : n.join.reverse());</span>
+<span class="nc" id="L133">                    seen.set(idx);</span>
+                }
+
+<span class="nc bnc" id="L136" title="All 2 branches missed.">                for (n = (Node) _graph.get(idx); n != null; n = n.next) {</span>
+<span class="nc" id="L137">                    sidx = getSeenIndex(n.join);</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">                    if (!seen.get(sidx)) {</span>
+<span class="nc" id="L139">                        seen.set(sidx);</span>
+<span class="nc" id="L140">                        queue.add(n);</span>
+                    }
+                }
+            }
+        }
+<span class="nc" id="L145">        _sorted = sorted;</span>
+<span class="nc" id="L146">        return _sorted.iterator();</span>
+    }
+
+    /**
+     * We create a unique index for recording seen nodes by
+     * treating the joined indexes as a base (max-index) number.
+     */
+    private int getSeenIndex(Join join) {
+        // we reserve indexes 0..._graph.size() for joined tables
+<span class="nc" id="L155">        return join.getIndex1() * _graph.size() + join.getIndex2()</span>
+<span class="nc" id="L156">            + _graph.size();</span>
+    }
+
+    public boolean add(Join join) {
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (join.getType() == Join.TYPE_OUTER) {</span>
+            // outer shouldn't override any other join type
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            if (!contains(join)) {</span>
+<span class="nc" id="L163">                addNode(join);</span>
+<span class="nc" id="L164">                return true;</span>
+            }
+<span class="nc" id="L166">            return false;</span>
+        }
+
+        // replace any existing join with this one
+<span class="nc" id="L170">        Node node = getNode(join, join.getIndex1());</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        if (node != null) {</span>
+<span class="nc" id="L172">            node.join = join;</span>
+<span class="nc" id="L173">            getNode(join, join.getIndex2()).join = join;</span>
+<span class="nc" id="L174">            _sorted = null;</span>
+        } else
+<span class="nc" id="L176">            addNode(join);</span>
+<span class="nc" id="L177">        return true;</span>
+    }
+
+    public boolean addAll(JoinSet js) {
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (js.isEmpty())</span>
+<span class="nc" id="L182">            return false;</span>
+
+<span class="nc" id="L184">        boolean added = false;</span>
+<span class="nc bnc" id="L185" title="All 2 branches missed.">        for (Iterator itr = js.iterator(); itr.hasNext();)</span>
+<span class="nc bnc" id="L186" title="All 4 branches missed.">            added = add((Join) itr.next()) || added;</span>
+<span class="nc" id="L187">        return added;</span>
+    }
+
+    /**
+     * Add the give join to our graph.
+     */
+    private void addNode(Join join) {
+<span class="nc" id="L194">        _sorted = null;</span>
+
+<span class="nc" id="L196">        int size = Math.max(join.getIndex1(), join.getIndex2()) + 1;</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        while (_graph.size() &lt; size)</span>
+<span class="nc" id="L198">            _graph.add(null);</span>
+
+<span class="nc" id="L200">        Node node = (Node) _graph.get(join.getIndex1());</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (node == null)</span>
+<span class="nc" id="L202">            _graph.set(join.getIndex1(), new Node(join, true));</span>
+        else {
+<span class="nc bnc" id="L204" title="All 2 branches missed.">            while (node.next != null)</span>
+<span class="nc" id="L205">                node = node.next;</span>
+<span class="nc" id="L206">            node.next = new Node(join, true);</span>
+        }
+
+<span class="nc" id="L209">        node = (Node) _graph.get(join.getIndex2());</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (node == null)</span>
+<span class="nc" id="L211">            _graph.set(join.getIndex2(), new Node(join, false));</span>
+        else {
+<span class="nc bnc" id="L213" title="All 2 branches missed.">            while (node.next != null)</span>
+<span class="nc" id="L214">                node = node.next;</span>
+<span class="nc" id="L215">            node.next = new Node(join, false);</span>
+        }
+<span class="nc" id="L217">        _size++;</span>
+<span class="nc" id="L218">    }</span>
+
+    public Iterator iterator() {
+<span class="nc" id="L221">        return new Iterator() {</span>
+<span class="nc" id="L222">            private Node _next = null;</span>
+<span class="nc" id="L223">            private int _idx = -1;</span>
+
+            @Override
+            public boolean hasNext() {
+<span class="nc bnc" id="L227" title="All 2 branches missed.">                if (_next != null)</span>
+<span class="nc" id="L228">                    return true;</span>
+
+<span class="nc bnc" id="L230" title="All 2 branches missed.">                while (++_idx &lt; _graph.size()) {</span>
+<span class="nc" id="L231">                    _next = (Node) _graph.get(_idx);</span>
+<span class="nc bnc" id="L232" title="All 4 branches missed.">                    while (_next != null &amp;&amp; !_next.forward)</span>
+<span class="nc" id="L233">                        _next = _next.next;</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">                    if (_next != null)</span>
+<span class="nc" id="L235">                        return true;</span>
+                }
+<span class="nc" id="L237">                return false;</span>
+            }
+
+            @Override
+            public Object next() {
+<span class="nc bnc" id="L242" title="All 2 branches missed.">                if (!hasNext())</span>
+<span class="nc" id="L243">                    throw new NoSuchElementException();</span>
+<span class="nc" id="L244">                Join j = _next.join;</span>
+                do {
+<span class="nc" id="L246">                    _next = _next.next;</span>
+<span class="nc bnc" id="L247" title="All 4 branches missed.">                } while (_next != null &amp;&amp; !_next.forward);</span>
+<span class="nc" id="L248">                return j;</span>
+            }
+
+            @Override
+            public void remove() {
+<span class="nc" id="L253">                throw new UnsupportedOperationException();</span>
+            }
+        };
+    }
+
+    public boolean remove(Join join) {
+<span class="nc bnc" id="L259" title="All 4 branches missed.">        if (join == null || _graph.size() &lt;= join.getIndex1())</span>
+<span class="nc" id="L260">            return false;</span>
+<span class="nc bnc" id="L261" title="All 2 branches missed.">        if (remove(join, join.getIndex1())) {</span>
+<span class="nc" id="L262">            _size--;</span>
+<span class="nc" id="L263">            return remove(join, join.getIndex2());</span>
+        }
+<span class="nc" id="L265">        return false;</span>
+    }
+
+    /**
+     * Each join is recorded one at its first index and once at its second;
+     * remove the join at one of its indexes.
+     */
+    private boolean remove(Join join, int idx) {
+<span class="nc" id="L273">        Node node = (Node) _graph.get(idx);</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">        for (Node prev = null; node != null; prev = node, node = node.next) {</span>
+<span class="nc bnc" id="L275" title="All 2 branches missed.">            if (!node.join.equals(join))</span>
+<span class="nc" id="L276">                continue;</span>
+
+<span class="nc bnc" id="L278" title="All 2 branches missed.">            if (prev != null)</span>
+<span class="nc" id="L279">                prev.next = node.next;</span>
+            else {
+<span class="nc" id="L281">                _graph.set(idx, node.next);</span>
+                // trim to size
+<span class="nc bnc" id="L283" title="All 4 branches missed.">                while (!_graph.isEmpty() &amp;&amp; _graph.get(idx) == null</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">                    &amp;&amp; idx == _graph.size() - 1)</span>
+<span class="nc" id="L285">                    _graph.remove(idx--);</span>
+            }
+<span class="nc" id="L287">            return true;</span>
+        }
+<span class="nc" id="L289">        return false;</span>
+    }
+
+    public boolean removeAll(JoinSet js) {
+<span class="nc" id="L293">        boolean remd = false;</span>
+<span class="nc bnc" id="L294" title="All 2 branches missed.">        for (Iterator itr = js.iterator(); itr.hasNext();)</span>
+<span class="nc bnc" id="L295" title="All 4 branches missed.">            remd = remove((Join) itr.next()) || remd;</span>
+<span class="nc" id="L296">        return remd;</span>
+    }
+
+    public boolean retainAll(JoinSet js) {
+<span class="nc" id="L300">        boolean remd = false;</span>
+        Join join;
+<span class="nc bnc" id="L302" title="All 2 branches missed.">        for (Iterator itr = iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L303">            join = (Join) itr.next();</span>
+<span class="nc bnc" id="L304" title="All 2 branches missed.">            if (!js.contains(join))</span>
+<span class="nc" id="L305">                remd = remove(join);</span>
+        }
+<span class="nc" id="L307">        return remd;</span>
+    }
+
+    public void clear() {
+<span class="nc" id="L311">        _graph.clear();</span>
+<span class="nc" id="L312">        _sorted = null;</span>
+<span class="nc" id="L313">        _size = 0;</span>
+<span class="nc" id="L314">    }</span>
+
+    public boolean contains(Join join) {
+<span class="nc bnc" id="L317" title="All 2 branches missed.">        return getRecordedJoin(join) != null;</span>
+    }
+
+    public boolean containsAll(JoinSet js) {
+<span class="nc bnc" id="L321" title="All 4 branches missed.">        if (js._size &gt; _size || js._graph.size() &gt; _graph.size())</span>
+<span class="nc" id="L322">            return false;</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">        for (Iterator itr = js.iterator(); itr.hasNext();)</span>
+<span class="nc bnc" id="L324" title="All 2 branches missed.">            if (!contains((Join) itr.next()))</span>
+<span class="nc" id="L325">                return false;</span>
+<span class="nc" id="L326">        return true;</span>
+    }
+
+    public boolean isEmpty() {
+<span class="nc bnc" id="L330" title="All 2 branches missed.">        return _size == 0;</span>
+    }
+
+    public int size() {
+<span class="nc" id="L334">        return _size;</span>
+    }
+
+    @Override
+    public boolean equals(Object other) {
+<span class="nc bnc" id="L339" title="All 2 branches missed.">        if (other == this)</span>
+<span class="nc" id="L340">            return true;</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        if (!(other instanceof JoinSet))</span>
+<span class="nc" id="L342">            return false;</span>
+<span class="nc" id="L343">        return _graph.equals(((JoinSet) other)._graph);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L348">        return _graph.hashCode();</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L353">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L354">        buf.append(&quot;[&quot;);</span>
+<span class="nc bnc" id="L355" title="All 2 branches missed.">        for (Iterator itr = iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L356">            buf.append(&quot;&lt;&quot;).append(itr.next()).append(&quot;&gt;&quot;);</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">            if (itr.hasNext())</span>
+<span class="nc" id="L358">                buf.append(&quot;, &quot;);</span>
+        }
+<span class="nc" id="L360">        return buf.append(&quot;]&quot;).toString();</span>
+    }
+
+    /**
+     * A graph node.
+     */
+    private static class Node
+        implements Cloneable {
+
+        public Join join;
+        public Node next;
+        public boolean forward;
+
+<span class="nc" id="L373">        public Node(Join join, boolean forward) {</span>
+<span class="nc" id="L374">            this.join = join;</span>
+<span class="nc" id="L375">            this.forward = forward;</span>
+<span class="nc" id="L376">        }</span>
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L380">            int rs = 17;</span>
+<span class="nc" id="L381">            rs = 37 * rs + join.hashCode();</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">            if (next != null)</span>
+<span class="nc" id="L383">                rs = 37 * rs + next.hashCode();</span>
+<span class="nc" id="L384">            return rs;</span>
+        }
+
+        @Override
+        public boolean equals(Object other) {
+<span class="nc bnc" id="L389" title="All 2 branches missed.">            if (!(other instanceof Node))</span>
+<span class="nc" id="L390">                return false;</span>
+<span class="nc" id="L391">            Node node = (Node) other;</span>
+<span class="nc bnc" id="L392" title="All 2 branches missed.">            return Objects.equals(join, node.join)</span>
+<span class="nc bnc" id="L393" title="All 2 branches missed.">                &amp;&amp; Objects.equals(next, node.next);</span>
+        }
+
+        @Override
+        public Object clone() {
+            try {
+<span class="nc" id="L399">                Node node = (Node) super.clone();</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">                if (node.next != null)</span>
+<span class="nc" id="L401">                    node.next = (Node) node.next.clone();</span>
+<span class="nc" id="L402">                return node;</span>
+<span class="nc" id="L403">            } catch (CloneNotSupportedException cnse) {</span>
+                // can't happen
+<span class="nc" id="L405">                return null;</span>
+            }
+        }
+
+        @Override
+        public String toString() {
+<span class="nc bnc" id="L411" title="All 2 branches missed.">            return join + &quot;(&quot; + ((forward) ? &quot;forward&quot; : &quot;backward&quot;) + &quot;)&quot;</span>
+                + &quot;; next: &quot; + next;
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

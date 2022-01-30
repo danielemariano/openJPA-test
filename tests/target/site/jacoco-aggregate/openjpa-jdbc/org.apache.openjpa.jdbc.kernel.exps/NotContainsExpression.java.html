@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>NotContainsExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">NotContainsExpression.java</span></div><h1>NotContainsExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+
+/**
+ * Negates a contains expression using a subselect to make sure no
+ * elements meet the criteria.
+ *
+ * @author Abe White
+ */
+class NotContainsExpression
+    implements Exp {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final Exp _exp;
+
+    /**
+     * Constructor. Supply the expression to negate.
+     */
+<span class="nc" id="L44">    public NotContainsExpression(Exp exp) {</span>
+<span class="nc" id="L45">        _exp = exp;</span>
+<span class="nc" id="L46">    }</span>
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, Map contains) {
+<span class="nc" id="L50">        return new NotContainsExpState(contains);</span>
+    }
+
+    /**
+     * Expression state.
+     */
+    private static class NotContainsExpState
+        extends ExpState {
+
+        public final Map contains;
+
+<span class="nc" id="L61">        public NotContainsExpState(Map contains) {</span>
+<span class="nc" id="L62">            this.contains = contains;</span>
+<span class="nc" id="L63">        }</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer buf) {
+<span class="nc" id="L69">        DBDictionary dict = ctx.store.getDBDictionary();</span>
+<span class="nc" id="L70">        dict.assertSupport(dict.supportsSubselect, &quot;SupportsSubselect&quot;);</span>
+
+<span class="nc" id="L72">        Select sub = ctx.store.getSQLFactory().newSelect();</span>
+<span class="nc" id="L73">        sub.setParent(sel, null);</span>
+        // this subselect has the same context as its parent
+<span class="nc" id="L75">        sub.setContext(sel.ctx());</span>
+        // the context select should still belong to parent
+<span class="nc" id="L77">        sub.ctx().setSelect(sel);</span>
+<span class="nc" id="L78">        ExpState estate = _exp.initialize(sub, ctx, ((NotContainsExpState)</span>
+            state).contains);
+<span class="nc" id="L80">        sub.where(sub.and(null, estate.joins));</span>
+
+<span class="nc" id="L82">        SQLBuffer where = new SQLBuffer(dict).append(&quot;(&quot;);</span>
+<span class="nc" id="L83">        _exp.appendTo(sub, ctx, estate, where);</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        if (where.getSQL().length() &gt; 1)</span>
+<span class="nc" id="L85">            sub.where(where.append(&quot;)&quot;));</span>
+
+<span class="nc" id="L87">        buf.append(&quot;0 = &quot;);</span>
+<span class="nc" id="L88">        buf.appendCount(sub, ctx.fetch);</span>
+<span class="nc" id="L89">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L94">        ExpState estate = _exp.initialize(sel, ctx, ((NotContainsExpState)</span>
+            state).contains);
+<span class="nc" id="L96">        _exp.selectColumns(sel, ctx, estate, true);</span>
+<span class="nc" id="L97">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L101">        visitor.enter(this);</span>
+<span class="nc" id="L102">        _exp.acceptVisit(visitor);</span>
+<span class="nc" id="L103">        visitor.exit(this);</span>
+<span class="nc" id="L104">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

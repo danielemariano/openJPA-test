@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DataSourceFactory.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">DataSourceFactory.java</span></div><h1>DataSourceFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.security.AccessController;
+import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.sql.DataSource;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.jdbc.ConfiguringConnectionDecorator;
+import org.apache.openjpa.lib.jdbc.ConnectionDecorator;
+import org.apache.openjpa.lib.jdbc.DecoratingDataSource;
+import org.apache.openjpa.lib.jdbc.DelegatingDataSource;
+import org.apache.openjpa.lib.jdbc.JDBCEventConnectionDecorator;
+import org.apache.openjpa.lib.jdbc.JDBCListener;
+import org.apache.openjpa.lib.jdbc.LoggingConnectionDecorator;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Options;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.util.ImplHelper;
+import org.apache.openjpa.util.OpenJPAException;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Factory for {@link DataSource} objects. The factory uses the supplied
+ * configuration to obtain a 3rd-party datasource or to create one, and
+ * to setup prepared statement caching.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L58">public class DataSourceFactory {</span>
+
+<span class="nc" id="L60">    private static final Localizer _loc = Localizer.forPackage(DataSourceFactory.class);</span>
+<span class="nc" id="L61">    protected static Localizer _eloc = Localizer.forPackage(DelegatingDataSource.class);</span>
+
+    /**
+     * Create a datasource using the given configuration.
+     */
+    public static DataSource newDataSource(JDBCConfiguration conf,
+        boolean factory2) {
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        String driver = (factory2) ? conf.getConnection2DriverName()</span>
+<span class="nc" id="L69">            : conf.getConnectionDriverName();</span>
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        if (StringUtil.isEmpty(driver))</span>
+<span class="nc" id="L71">            throw new UserException(_loc.get(&quot;no-driver&quot;, conf)).</span>
+<span class="nc" id="L72">                setFatal(true);</span>
+
+<span class="nc" id="L74">        ClassLoader loader = conf.getClassResolverInstance().</span>
+<span class="nc" id="L75">            getClassLoader(DataSourceFactory.class, null);</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        String props = (factory2) ? conf.getConnection2Properties()</span>
+<span class="nc" id="L77">            : conf.getConnectionProperties();</span>
+        try {
+            Class&lt;?&gt; driverClass;
+            try {
+<span class="nc" id="L81">                driverClass = Class.forName(driver, true, loader);</span>
+<span class="nc" id="L82">            } catch (ClassNotFoundException cnfe) {</span>
+                // try with the core class loader
+<span class="nc" id="L84">                driverClass = Class.forName(driver);</span>
+<span class="nc" id="L85">            }</span>
+
+<span class="nc bnc" id="L87" title="All 2 branches missed.">            if (Driver.class.isAssignableFrom(driverClass)) {</span>
+<span class="nc" id="L88">                DriverDataSource ds = conf.newDriverDataSourceInstance();</span>
+<span class="nc" id="L89">                ds.setClassLoader(loader);</span>
+<span class="nc" id="L90">                ds.setConnectionDriverName(driver);</span>
+<span class="nc" id="L91">                ds.setConnectionProperties(Configurations.</span>
+<span class="nc" id="L92">                    parseProperties(props));</span>
+
+<span class="nc bnc" id="L94" title="All 2 branches missed.">                if (!factory2) {</span>
+<span class="nc" id="L95">                    ds.setConnectionFactoryProperties(Configurations.</span>
+<span class="nc" id="L96">                        parseProperties(conf.getConnectionFactoryProperties()));</span>
+<span class="nc" id="L97">                    ds.setConnectionURL(conf.getConnectionURL());</span>
+<span class="nc" id="L98">                    ds.setConnectionUserName(conf.getConnectionUserName());</span>
+<span class="nc" id="L99">                    ds.setConnectionPassword(conf.getConnectionPassword());</span>
+                } else {
+<span class="nc" id="L101">                    ds.setConnectionFactoryProperties</span>
+<span class="nc" id="L102">                        (Configurations.parseProperties(conf.</span>
+<span class="nc" id="L103">                        getConnectionFactory2Properties()));</span>
+<span class="nc" id="L104">                    ds.setConnectionURL(conf.getConnection2URL());</span>
+<span class="nc" id="L105">                    ds.setConnectionUserName(conf.getConnection2UserName());</span>
+<span class="nc" id="L106">                    ds.setConnectionPassword(conf.getConnection2Password());</span>
+                }
+<span class="nc" id="L108">                return ds;</span>
+            }
+
+            // see if their driver name is actually a data source
+<span class="nc bnc" id="L112" title="All 2 branches missed.">            if (DataSource.class.isAssignableFrom(driverClass)) {</span>
+<span class="nc" id="L113">                return (DataSource) Configurations.newInstance(driver,</span>
+<span class="nc" id="L114">                    conf, props, AccessController.doPrivileged(</span>
+<span class="nc" id="L115">                        J2DoPrivHelper.getClassLoaderAction(</span>
+                            DataSource.class)));
+            }
+        }
+<span class="nc" id="L119">        catch (OpenJPAException ke) {</span>
+<span class="nc" id="L120">            throw ke;</span>
+<span class="nc" id="L121">        } catch (Exception e) {</span>
+<span class="nc" id="L122">            throw newConnectException(conf, factory2, e);</span>
+<span class="nc" id="L123">        }</span>
+
+        // not a driver or a data source; die
+<span class="nc" id="L126">        throw new UserException(_loc.get(&quot;bad-driver&quot;, driver)).setFatal(true);</span>
+    }
+
+    /**
+     * Install listeners and base decorators.
+     */
+    public static DecoratingDataSource decorateDataSource(DataSource ds,
+        JDBCConfiguration conf, boolean factory2) {
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        Options opts = Configurations.parseProperties((factory2)</span>
+<span class="nc" id="L135">            ? conf.getConnectionFactory2Properties()</span>
+<span class="nc" id="L136">            : conf.getConnectionFactoryProperties());</span>
+<span class="nc" id="L137">        Log jdbcLog = conf.getLog(JDBCConfiguration.LOG_JDBC);</span>
+<span class="nc" id="L138">        Log sqlLog = conf.getLog(JDBCConfiguration.LOG_SQL);</span>
+
+<span class="nc" id="L140">        DecoratingDataSource dds = new DecoratingDataSource(ds);</span>
+        try {
+            // add user-defined decorators
+<span class="nc" id="L143">            List&lt;ConnectionDecorator&gt; decorators = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L144">            decorators.addAll(Arrays.asList(conf.</span>
+<span class="nc" id="L145">                getConnectionDecoratorInstances()));</span>
+
+            // add jdbc events decorator
+<span class="nc" id="L148">            JDBCEventConnectionDecorator ecd =</span>
+                new JDBCEventConnectionDecorator();
+<span class="nc" id="L150">            Configurations.configureInstance(ecd, conf, opts);</span>
+<span class="nc" id="L151">            JDBCListener[] listeners = conf.getJDBCListenerInstances();</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">            for (int i = 0; i &lt; listeners.length; i++)</span>
+<span class="nc" id="L153">                ecd.addListener(listeners[i]);</span>
+<span class="nc" id="L154">            decorators.add(ecd);</span>
+
+            // ask the DriverDataSource to provide any additional decorators
+<span class="nc bnc" id="L157" title="All 2 branches missed.">            if (ds instanceof DriverDataSource) {</span>
+<span class="nc" id="L158">                List&lt;ConnectionDecorator&gt; decs = ((DriverDataSource) ds).</span>
+<span class="nc" id="L159">                    createConnectionDecorators();</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">                if (decs != null)</span>
+<span class="nc" id="L161">                    decorators.addAll(decs);</span>
+            }
+
+            // logging decorator
+<span class="nc" id="L165">            LoggingConnectionDecorator lcd =</span>
+                new LoggingConnectionDecorator();
+<span class="nc" id="L167">            Configurations.configureInstance(lcd, conf, opts);</span>
+<span class="nc" id="L168">            lcd.getLogs().setJDBCLog(jdbcLog);</span>
+<span class="nc" id="L169">            lcd.getLogs().setSQLLog(sqlLog);</span>
+<span class="nc" id="L170">            decorators.add(lcd);</span>
+
+<span class="nc" id="L172">            dds.addDecorators(decorators);</span>
+<span class="nc" id="L173">            return dds;</span>
+<span class="nc" id="L174">        } catch (OpenJPAException ke) {</span>
+<span class="nc" id="L175">            throw ke;</span>
+<span class="nc" id="L176">        } catch (Exception e) {</span>
+<span class="nc" id="L177">            throw newConnectException(conf, factory2, e);</span>
+        }
+    }
+
+    /**
+     * Install things deferred until the DBDictionary instance is available.
+     *
+     * @author Steve Kim
+     */
+    public static DecoratingDataSource installDBDictionary(DBDictionary dict,
+        DecoratingDataSource ds, final JDBCConfiguration conf,
+        boolean factory2) {
+<span class="nc" id="L189">        DataSource inner = ds.getInnermostDelegate();</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">        if (inner instanceof DriverDataSource)</span>
+<span class="nc" id="L191">            ((DriverDataSource) inner).initDBDictionary(dict);</span>
+<span class="nc" id="L192">        Connection conn = null;</span>
+
+        try {
+            // add the dictionary as a warning handler on the logging decorator
+            ConnectionDecorator cd;
+<span class="nc bnc" id="L197" title="All 2 branches missed.">            for (Iterator&lt;ConnectionDecorator&gt; itr = ds.getDecorators().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L198">                cd = itr.next();</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">                if (cd instanceof LoggingConnectionDecorator)</span>
+<span class="nc" id="L200">                    ((LoggingConnectionDecorator) cd).setWarningHandler(dict);</span>
+            }
+
+            // misc configuration connection decorator (statement timeouts,
+            // transaction isolation, etc)
+<span class="nc" id="L205">            ConfiguringConnectionDecorator ccd =</span>
+                new ConfiguringConnectionDecorator();
+<span class="nc" id="L207">            ccd.setTransactionIsolation(conf.getTransactionIsolationConstant());</span>
+
+            //OPENJPA-2517: Allow a javax.persistence.query.timeout to apply to all
+            //EM operations (not just Query operations).  Convert from milliseconds
+            //to seconds.  See DBDictionary.setQueryTimeout for similar conversions.
+            //DBDictionary.setQueryTimeout will log warnings for invalid values,
+            //therefore there is no need to do so again here.  Furthermore, there is no
+            //need to check for -1 here, ConfigurationConnectionDecorator checks for it.
+<span class="nc" id="L215">            int timeout = conf.getQueryTimeout();</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">            if (dict.allowQueryTimeoutOnFindUpdate){</span>
+<span class="nc bnc" id="L217" title="All 4 branches missed.">                if (timeout &gt; 0 &amp;&amp; timeout &lt; 1000) {</span>
+                    // round up to 1 sec
+<span class="nc" id="L219">                    timeout = 1;</span>
+                }
+<span class="nc bnc" id="L221" title="All 2 branches missed.">                else if (timeout &gt;= 1000){</span>
+<span class="nc" id="L222">                    timeout = timeout/1000;</span>
+                }
+            }
+
+<span class="nc" id="L226">            ccd.setQueryTimeout(timeout);</span>
+
+<span class="nc" id="L228">            Log log = conf.getLog(JDBCConfiguration.LOG_JDBC);</span>
+<span class="nc bnc" id="L229" title="All 4 branches missed.">            if (factory2 || !conf.isConnectionFactoryModeManaged()) {</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">                if (!dict.supportsMultipleNontransactionalResultSets)</span>
+<span class="nc" id="L231">                    ccd.setAutoCommit(Boolean.FALSE);</span>
+                else
+<span class="nc" id="L233">                    ccd.setAutoCommit(Boolean.TRUE);</span>
+                // add trace info for autoCommit setting
+<span class="nc bnc" id="L235" title="All 2 branches missed.">                if (log.isTraceEnabled())</span>
+<span class="nc" id="L236">                    log.trace(_loc.get(&quot;set-auto-commit&quot;, new Object[] {</span>
+<span class="nc" id="L237">                    dict.supportsMultipleNontransactionalResultSets}));</span>
+            }
+<span class="nc bnc" id="L239" title="All 2 branches missed.">            Options opts = Configurations.parseProperties((factory2)</span>
+<span class="nc" id="L240">                ? conf.getConnectionFactory2Properties()</span>
+<span class="nc" id="L241">                : conf.getConnectionFactoryProperties());</span>
+<span class="nc" id="L242">            Configurations.configureInstance(ccd, conf, opts);</span>
+<span class="nc" id="L243">            ds.addDecorator(ccd);</span>
+
+            // allow the dbdictionary to decorate the connection further
+<span class="nc" id="L246">            ds.addDecorator(dict);</span>
+
+            // ensure dbdictionary to process connectedConfiguration()
+<span class="nc bnc" id="L249" title="All 2 branches missed.">            if (!factory2)</span>
+<span class="nc" id="L250">                conn = ds.getConnection(conf.getConnectionUserName(), conf</span>
+<span class="nc" id="L251">                        .getConnectionPassword());</span>
+            else
+<span class="nc" id="L253">                conn = ds.getConnection(conf.getConnection2UserName(), conf</span>
+<span class="nc" id="L254">                        .getConnection2Password());</span>
+
+<span class="nc" id="L256">            return ds;</span>
+<span class="nc" id="L257">        } catch (Exception e) {</span>
+<span class="nc" id="L258">            throw newConnectException(conf, factory2, e);</span>
+        } finally {
+<span class="nc bnc" id="L260" title="All 2 branches missed.">            if (conn != null)</span>
+                try {
+<span class="nc" id="L262">                    conn.close();</span>
+<span class="nc" id="L263">                } catch (SQLException se) {</span>
+                    // ignore any exception since the connection is not going
+                    // to be used anyway
+<span class="nc" id="L266">                }</span>
+        }
+    }
+
+    static OpenJPAException newConnectException(JDBCConfiguration conf,
+                                                boolean factory2, Exception cause) {
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        return new UserException(_eloc.get(&quot;poolds-null&quot;, factory2</span>
+<span class="nc" id="L273">                ? new Object[]{conf.getConnection2DriverName(),</span>
+<span class="nc" id="L274">                conf.getConnection2URL()}</span>
+<span class="nc" id="L275">                : new Object[]{conf.getConnectionDriverName(),</span>
+<span class="nc" id="L276">                conf.getConnectionURL()}),</span>
+<span class="nc" id="L277">                cause).setFatal(true);</span>
+    }
+
+    /**
+     * Return a data source with the given user name and password
+     * pre-configured as the defaults when {@link DataSource#getConnection}
+     * is called.
+     */
+    public static DataSource defaultsDataSource(DataSource ds,
+        String user, String pass) {
+<span class="nc bnc" id="L287" title="All 4 branches missed.">        if (user == null &amp;&amp; pass == null)</span>
+<span class="nc" id="L288">            return ds;</span>
+        // also check if they are both blank strings
+<span class="nc bnc" id="L290" title="All 4 branches missed.">        if (&quot;&quot;.equals(user) &amp;&amp; &quot;&quot;.equals(pass))</span>
+<span class="nc" id="L291">            return ds;</span>
+<span class="nc" id="L292">        return new DefaultsDataSource(ds, user, pass);</span>
+    }
+
+    /**
+     * Close the given data source.
+     */
+    public static void closeDataSource(DataSource ds) {
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        if (ds instanceof DelegatingDataSource)</span>
+<span class="nc" id="L300">            ds = ((DelegatingDataSource) ds).getInnermostDelegate();</span>
+<span class="nc" id="L301">        ImplHelper.close(ds);</span>
+<span class="nc" id="L302">    }</span>
+
+    /**
+     * A data source with pre-configured default user name and password.
+     */
+    private static class DefaultsDataSource
+        extends DelegatingDataSource {
+
+        private final String _user;
+        private final String _pass;
+
+        public DefaultsDataSource(DataSource ds, String user, String pass) {
+<span class="nc" id="L314">            super(ds);</span>
+<span class="nc" id="L315">            _user = user;</span>
+<span class="nc" id="L316">            _pass = pass;</span>
+<span class="nc" id="L317">        }</span>
+
+        @Override
+        public Connection getConnection()
+            throws SQLException {
+<span class="nc" id="L322">            return super.getConnection(_user, _pass);</span>
+        }
+
+        @Override
+        public Connection getConnection(String user, String pass)
+            throws SQLException {
+<span class="nc" id="L328">            return super.getConnection(user, pass);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

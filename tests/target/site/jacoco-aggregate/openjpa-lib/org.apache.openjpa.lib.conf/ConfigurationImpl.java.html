@@ -1,0 +1,1178 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ConfigurationImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-lib</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.lib.conf</a> &gt; <span class="el_source">ConfigurationImpl.java</span></div><h1>ConfigurationImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.lib.conf;
+
+import java.awt.Image;
+import java.beans.BeanDescriptor;
+import java.beans.BeanInfo;
+import java.beans.EventSetDescriptor;
+import java.beans.IntrospectionException;
+import java.beans.Introspector;
+import java.beans.MethodDescriptor;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+import java.beans.PropertyDescriptor;
+import java.io.Externalizable;
+import java.io.File;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
+import java.io.PrintWriter;
+import java.io.Serializable;
+import java.io.StringWriter;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.security.AccessController;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.MissingResourceException;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.log.LogFactory;
+import org.apache.openjpa.lib.log.LogFactoryImpl;
+import org.apache.openjpa.lib.log.NoneLogFactory;
+import org.apache.openjpa.lib.util.Closeable;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.MultiClassLoader;
+import org.apache.openjpa.lib.util.ParseException;
+import org.apache.openjpa.lib.util.Services;
+import org.apache.openjpa.lib.util.StringDistance;
+import org.apache.openjpa.lib.util.StringUtil;
+
+/**
+ * Default implementation of the {@link Configuration} interface.
+ * Subclasses can choose to obtain configuration
+ * information from JNDI, Properties, a Bean-builder, etc. This class
+ * provides base configuration functionality, including serialization,
+ * the &lt;code&gt;equals&lt;/code&gt; and &lt;code&gt;hashCode&lt;/code&gt; contracts, and default
+ * property loading.
+ * Property descriptors for {@link Value} instances are constructed from
+ * the {@link Localizer} for the package of the configuration class. The
+ * following localized strings will be used for describing a value, where
+ * &lt;em&gt;name&lt;/em&gt; is the last token of the value's property string:
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;em&gt;name&lt;/em&gt;-name: The name that will be displayed for the
+ * option in a user interface; required.&lt;/li&gt;
+ * &lt;li&gt;&lt;em&gt;name&lt;/em&gt;-desc: A brief description of the option; required.&lt;/li&gt;
+ * &lt;li&gt;&lt;em&gt;name&lt;/em&gt;-type: The type or category name for this option;
+ * required.&lt;/li&gt;
+ * &lt;li&gt;&lt;em&gt;name&lt;/em&gt;-expert: True if this is an expert option, false
+ * otherwise; defaults to false.&lt;/li&gt;
+ * &lt;li&gt;&lt;em&gt;name&lt;/em&gt;-values: Set of expected or common values, excluding
+ * alias keys; optional.&lt;/li&gt;
+ * &lt;li&gt;&lt;em&gt;name&lt;/em&gt;-interface: The class name of an interface whose
+ * discoverable implementations should be included in the set of expected
+ * or common values; optional.&lt;/li&gt;
+ * &lt;li&gt;&lt;em&gt;name&lt;/em&gt;-cat: The hierarchical category for the property
+ * name, separated by &quot;.&quot;.
+ * &lt;li&gt;&lt;em&gt;name&lt;/em&gt;-displayorder: The order in which the property should
+ * be displayer.&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ * @author Abe White
+ */
+public class ConfigurationImpl
+    implements Configuration, Externalizable, ValueListener {
+
+<span class="nc" id="L108">    private static final String SEP = J2DoPrivHelper.getLineSeparator();</span>
+
+<span class="nc" id="L110">    private static final Localizer _loc = Localizer.forPackage(ConfigurationImpl.class);</span>
+
+    public ObjectValue logFactoryPlugin;
+    public StringValue id;
+
+<span class="nc" id="L115">    private String _product = null;</span>
+<span class="nc" id="L116">    private int _readOnlyState = INIT_STATE_LIQUID;</span>
+<span class="nc" id="L117">    private Map _props = null;</span>
+<span class="nc" id="L118">    private boolean _globals = false;</span>
+<span class="nc" id="L119">    private String _auto = null;</span>
+<span class="nc" id="L120">    private final List&lt;Value&gt; _vals = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L121">    private Set&lt;String&gt; _supportedKeys = new TreeSet&lt;&gt;();</span>
+
+    // property listener helper
+<span class="nc" id="L124">    private PropertyChangeSupport _changeSupport = null;</span>
+
+    // cache descriptors
+<span class="nc" id="L127">    private PropertyDescriptor[] _pds = null;</span>
+<span class="nc" id="L128">    private MethodDescriptor[] _mds = null;</span>
+
+    // An additional (and optional) classloader to load custom plugins.
+    private ClassLoader _userCL;
+
+    //Ant task needs to defer the resource loading
+    //until the classpath setting is loaded properly
+<span class="nc" id="L135">    private boolean _deferResourceLoading = false;</span>
+
+
+    /**
+     * Default constructor. Attempts to load default properties through
+     * system's configured {@link ProductDerivation}s.
+     */
+    public ConfigurationImpl() {
+<span class="nc" id="L143">        this(true);</span>
+<span class="nc" id="L144">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param loadGlobals whether to attempt to load the global properties
+     */
+<span class="nc" id="L151">    public ConfigurationImpl(boolean loadGlobals) {</span>
+<span class="nc" id="L152">        setProductName(&quot;openjpa&quot;);</span>
+
+<span class="nc" id="L154">        logFactoryPlugin = addPlugin(&quot;Log&quot;, true);</span>
+<span class="nc" id="L155">        String[] aliases = new String[]{</span>
+<span class="nc" id="L156">            &quot;true&quot;, LogFactoryImpl.class.getName(),</span>
+<span class="nc" id="L157">            &quot;openjpa&quot;, LogFactoryImpl.class.getName(),</span>
+            &quot;commons&quot;, &quot;org.apache.openjpa.lib.log.CommonsLogFactory&quot;,
+            &quot;log4j&quot;, &quot;org.apache.openjpa.lib.log.Log4JLogFactory&quot;,
+            &quot;slf4j&quot;, &quot;org.apache.openjpa.lib.log.SLF4JLogFactory&quot;,
+<span class="nc" id="L161">            &quot;none&quot;, NoneLogFactory.class.getName(),</span>
+<span class="nc" id="L162">            &quot;false&quot;, NoneLogFactory.class.getName(),</span>
+        };
+<span class="nc" id="L164">        logFactoryPlugin.setAliases(aliases);</span>
+<span class="nc" id="L165">        logFactoryPlugin.setDefault(aliases[0]);</span>
+<span class="nc" id="L166">        logFactoryPlugin.setString(aliases[0]);</span>
+<span class="nc" id="L167">        logFactoryPlugin.setInstantiatingGetter(&quot;getLogFactory&quot;);</span>
+
+<span class="nc" id="L169">        id = addString(&quot;Id&quot;);</span>
+
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        if (loadGlobals)</span>
+<span class="nc" id="L172">            loadGlobals();</span>
+<span class="nc" id="L173">    }</span>
+
+    /**
+     * Automatically load global values from the system's
+     * {@link ProductDerivation}s, and from System properties.
+     */
+    public boolean loadGlobals() {
+        MultiClassLoader loader = AccessController
+<span class="nc" id="L181">            .doPrivileged(J2DoPrivHelper.newMultiClassLoaderAction());</span>
+<span class="nc" id="L182">        loader.addClassLoader(AccessController.doPrivileged(</span>
+<span class="nc" id="L183">            J2DoPrivHelper.getContextClassLoaderAction()));</span>
+<span class="nc" id="L184">        loader.addClassLoader(getClass().getClassLoader());</span>
+<span class="nc" id="L185">        ConfigurationProvider provider = ProductDerivations.loadGlobals(loader);</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (provider != null)</span>
+<span class="nc" id="L187">            provider.setInto(this);</span>
+
+        // let system properties override other globals
+        try {
+<span class="nc" id="L191">            Properties systemProperties = AccessController.doPrivileged(</span>
+<span class="nc" id="L192">                    J2DoPrivHelper.getPropertiesAction());</span>
+<span class="nc" id="L193">            HashMap sysPropHM = null;</span>
+<span class="nc" id="L194">            synchronized(systemProperties) {</span>
+                // Prevent concurrent modification of systemProperties until HashMap ctor is completed.
+<span class="nc" id="L196">                sysPropHM = new HashMap(systemProperties);</span>
+<span class="nc" id="L197">            }</span>
+<span class="nc" id="L198">            fromProperties(sysPropHM);</span>
+<span class="nc" id="L199">        } catch (SecurityException se) {</span>
+            // security manager might disallow
+<span class="nc" id="L201">        }</span>
+
+<span class="nc" id="L203">        _globals = true;</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if (provider == null) {</span>
+<span class="nc" id="L205">            Log log = getConfigurationLog();</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            if (log.isTraceEnabled())</span>
+<span class="nc" id="L207">                log.trace(_loc.get(&quot;no-default-providers&quot;));</span>
+<span class="nc" id="L208">            return false;</span>
+        }
+<span class="nc" id="L210">        return true;</span>
+    }
+
+    @Override
+    public String getProductName() {
+<span class="nc" id="L215">        return _product;</span>
+    }
+
+    @Override
+    public void setProductName(String name) {
+<span class="nc" id="L220">        _product = name;</span>
+<span class="nc" id="L221">    }</span>
+
+    @Override
+    public LogFactory getLogFactory() {
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (logFactoryPlugin.get() == null)</span>
+<span class="nc" id="L226">            logFactoryPlugin.instantiate(LogFactory.class, this);</span>
+<span class="nc" id="L227">        return (LogFactory) logFactoryPlugin.get();</span>
+    }
+
+    @Override
+    public void setLogFactory(LogFactory logFactory) {
+<span class="nc" id="L232">        logFactoryPlugin.set(logFactory);</span>
+<span class="nc" id="L233">    }</span>
+
+    @Override
+    public String getLog() {
+<span class="nc" id="L237">        return logFactoryPlugin.getString();</span>
+    }
+
+    @Override
+    public void setLog(String log) {
+<span class="nc" id="L242">        logFactoryPlugin.setString(log);</span>
+<span class="nc" id="L243">    }</span>
+
+    @Override
+    public Log getLog(String category) {
+<span class="nc" id="L247">        return getLogFactory().getLog(category);</span>
+    }
+
+    @Override
+    public String getId() {
+<span class="nc" id="L252">        return id.get();</span>
+    }
+
+    @Override
+    public void setId(String id) {
+<span class="nc" id="L257">        this.id.set(id);</span>
+<span class="nc" id="L258">    }</span>
+
+    /**
+     * Returns the logging channel &lt;code&gt;openjpa.Runtime&lt;/code&gt; by default.
+     */
+    @Override
+    public Log getConfigurationLog() {
+<span class="nc" id="L265">        return getLog(&quot;openjpa.Runtime&quot;);</span>
+    }
+
+    @Override
+    public Value[] getValues() {
+<span class="nc" id="L270">        return (Value[]) _vals.toArray(new Value[_vals.size()]);</span>
+    }
+
+    /**
+     * Gets the registered Value for the given propertyName.
+     *
+     * @param property can be either fully-qualified name or the simple name
+     * with which the value has been registered. A value may have multiple
+     * equivalent names and this method searches with all equivalent names.
+     */
+    @Override
+    public Value getValue(String property) {
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        if (property == null)</span>
+<span class="nc" id="L283">            return null;</span>
+
+        // search backwards so that custom values added after construction
+        // are found quickly, since this will be the std way of accessing them
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        for (int i = _vals.size()-1; i &gt;= 0; i--) {</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">            if (_vals.get(i).matches(property))</span>
+<span class="nc" id="L289">                return _vals.get(i);</span>
+        }
+<span class="nc" id="L291">        return null;</span>
+    }
+
+    @Override
+    public void setReadOnly(int newState) {
+<span class="nc bnc" id="L296" title="All 2 branches missed.">        if (newState &gt;= _readOnlyState) {</span>
+<span class="nc" id="L297">        	_readOnlyState = newState;</span>
+        }
+<span class="nc" id="L299">    }</span>
+
+    public boolean isDeferResourceLoading() {
+<span class="nc" id="L302">        return _deferResourceLoading;</span>
+    }
+
+    public void setDeferResourceLoading(boolean deferResourceLoading) {
+<span class="nc" id="L306">        this._deferResourceLoading = deferResourceLoading;</span>
+<span class="nc" id="L307">    }</span>
+
+    @Override
+    public void instantiateAll() {
+<span class="nc" id="L311">        StringWriter errs = null;</span>
+<span class="nc" id="L312">        PrintWriter stack = null;</span>
+        String getterName;
+        Method getter;
+        Object getterTarget;
+<span class="nc bnc" id="L316" title="All 2 branches missed.">        for(Value val : _vals) {</span>
+<span class="nc" id="L317">            getterName = val.getInstantiatingGetter();</span>
+<span class="nc bnc" id="L318" title="All 2 branches missed.">            if (getterName == null)</span>
+<span class="nc" id="L319">                continue;</span>
+
+<span class="nc" id="L321">            getterTarget = this;</span>
+<span class="nc bnc" id="L322" title="All 2 branches missed.">            if (getterName.startsWith(&quot;this.&quot;)) {</span>
+<span class="nc" id="L323">                getterName = getterName.substring(&quot;this.&quot;.length());</span>
+<span class="nc" id="L324">                getterTarget = val;</span>
+            }
+
+            try {
+<span class="nc" id="L328">                getter = getterTarget.getClass().getMethod(getterName,</span>
+                    (Class[]) null);
+<span class="nc" id="L330">                getter.invoke(getterTarget, (Object[]) null);</span>
+<span class="nc" id="L331">            } catch (Throwable t) {</span>
+<span class="nc bnc" id="L332" title="All 2 branches missed.">                if (t instanceof InvocationTargetException)</span>
+<span class="nc" id="L333">                    t = ((InvocationTargetException) t).getTargetException();</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">                if (errs == null) {</span>
+<span class="nc" id="L335">                    errs = new StringWriter();</span>
+<span class="nc" id="L336">                    stack = new PrintWriter(errs);</span>
+                } else
+<span class="nc" id="L338">                    errs.write(SEP);</span>
+<span class="nc" id="L339">                t.printStackTrace(stack);</span>
+<span class="nc" id="L340">                stack.flush();</span>
+<span class="nc" id="L341">            }</span>
+<span class="nc" id="L342">        }</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">        if (errs != null)</span>
+<span class="nc" id="L344">            throw new RuntimeException(_loc.get(&quot;get-prop-errs&quot;,</span>
+<span class="nc" id="L345">                errs.toString()).getMessage());</span>
+<span class="nc" id="L346">    }</span>
+
+    @Override
+    public boolean isReadOnly() {
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        return _readOnlyState==INIT_STATE_FROZEN;</span>
+    }
+
+    @Override
+    public void addPropertyChangeListener(PropertyChangeListener listener) {
+<span class="nc bnc" id="L355" title="All 2 branches missed.">        if (_changeSupport == null)</span>
+<span class="nc" id="L356">            _changeSupport = new PropertyChangeSupport(this);</span>
+<span class="nc" id="L357">        _changeSupport.addPropertyChangeListener(listener);</span>
+<span class="nc" id="L358">    }</span>
+
+    @Override
+    public void removePropertyChangeListener(PropertyChangeListener listener) {
+<span class="nc bnc" id="L362" title="All 2 branches missed.">        if (_changeSupport != null)</span>
+<span class="nc" id="L363">            _changeSupport.removePropertyChangeListener(listener);</span>
+<span class="nc" id="L364">    }</span>
+
+    @Override
+    public void valueChanged(Value val) {
+<span class="nc bnc" id="L368" title="All 4 branches missed.">        if (_changeSupport == null &amp;&amp; _props == null)</span>
+<span class="nc" id="L369">            return;</span>
+
+<span class="nc" id="L371">        String newString = val.getString();</span>
+<span class="nc bnc" id="L372" title="All 2 branches missed.">        if (_changeSupport != null)</span>
+<span class="nc" id="L373">            _changeSupport.firePropertyChange(val.getProperty(), null, newString);</span>
+
+        // keep cached props up to date
+<span class="nc bnc" id="L376" title="All 2 branches missed.">        if (_props != null) {</span>
+<span class="nc bnc" id="L377" title="All 2 branches missed.">            if (newString == null)</span>
+<span class="nc" id="L378">                Configurations.removeProperty(val.getProperty(), _props);</span>
+<span class="nc bnc" id="L379" title="All 2 branches missed.">            else if (Configurations.containsProperty(val, _props)</span>
+<span class="nc bnc" id="L380" title="All 2 branches missed.">                || val.getDefault() == null</span>
+<span class="nc bnc" id="L381" title="All 2 branches missed.">                || !val.getDefault().equals(newString))</span>
+<span class="nc" id="L382">                setValue(_props, val);</span>
+        }
+<span class="nc" id="L384">    }</span>
+
+    /**
+     * Closes all closeable values and plugins.
+     */
+    @Override
+    public final void close() {
+<span class="nc" id="L391">        ProductDerivations.beforeClose(this);</span>
+
+<span class="nc" id="L393">        preClose();</span>
+
+        ObjectValue val;
+<span class="nc bnc" id="L396" title="All 2 branches missed.">        for(Value v : _vals) {</span>
+<span class="nc bnc" id="L397" title="All 2 branches missed.">            if (v instanceof Closeable) {</span>
+                try {
+<span class="nc" id="L399">                    ((Closeable)v).close();</span>
+                }
+<span class="nc" id="L401">                catch (Exception e) {</span>
+                    // noop
+<span class="nc" id="L403">                }</span>
+<span class="nc" id="L404">                continue;</span>
+            }
+
+<span class="nc bnc" id="L407" title="All 2 branches missed.">            if (!(v  instanceof ObjectValue))</span>
+<span class="nc" id="L408">                continue;</span>
+
+<span class="nc" id="L410">            val = (ObjectValue) v;</span>
+<span class="nc bnc" id="L411" title="All 2 branches missed.">            if (val.get() instanceof Closeable) {</span>
+                try {
+<span class="nc" id="L413">                    ((Closeable) val.get()).close();</span>
+<span class="nc" id="L414">                } catch (Exception e) {</span>
+<span class="nc" id="L415">                }</span>
+            }
+<span class="nc" id="L417">        }</span>
+<span class="nc" id="L418">    }</span>
+
+    /**
+     * Invoked by final method {@link #close} after invoking the
+     * {@link ProductDerivation#beforeConfigurationClose} callbacks
+     * but before performing internal close operations.
+     *
+     * @since 0.9.7
+     */
+    protected void preClose() {
+<span class="nc" id="L428">    }</span>
+
+    ///////////////////////////
+    // BeanInfo implementation
+    ///////////////////////////
+
+    @Override
+    public BeanInfo[] getAdditionalBeanInfo() {
+<span class="nc" id="L436">        return new BeanInfo[0];</span>
+    }
+
+    @Override
+    public BeanDescriptor getBeanDescriptor() {
+<span class="nc" id="L441">        return new BeanDescriptor(getClass());</span>
+    }
+
+    @Override
+    public int getDefaultEventIndex() {
+<span class="nc" id="L446">        return 0;</span>
+    }
+
+    @Override
+    public int getDefaultPropertyIndex() {
+<span class="nc" id="L451">        return 0;</span>
+    }
+
+    @Override
+    public EventSetDescriptor[] getEventSetDescriptors() {
+<span class="nc" id="L456">        return new EventSetDescriptor[0];</span>
+    }
+
+    @Override
+    public Image getIcon(int kind) {
+<span class="nc" id="L461">        return null;</span>
+    }
+
+    @Override
+    public synchronized MethodDescriptor[] getMethodDescriptors() {
+<span class="nc bnc" id="L466" title="All 2 branches missed.">        if (_mds != null)</span>
+<span class="nc" id="L467">            return _mds;</span>
+
+<span class="nc" id="L469">        PropertyDescriptor[] pds = getPropertyDescriptors();</span>
+<span class="nc" id="L470">        List&lt;MethodDescriptor&gt; descs = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L471" title="All 2 branches missed.">        for (int i = 0; i &lt; pds.length; i++) {</span>
+<span class="nc" id="L472">            Method write = pds[i].getWriteMethod();</span>
+<span class="nc" id="L473">            Method read = pds[i].getReadMethod();</span>
+<span class="nc bnc" id="L474" title="All 4 branches missed.">            if (read != null &amp;&amp; write != null) {</span>
+<span class="nc" id="L475">                descs.add(new MethodDescriptor(write));</span>
+<span class="nc" id="L476">                descs.add(new MethodDescriptor(read));</span>
+            }
+        }
+<span class="nc" id="L479">        _mds = (MethodDescriptor[]) descs.</span>
+<span class="nc" id="L480">            toArray(new MethodDescriptor[descs.size()]);</span>
+<span class="nc" id="L481">        return _mds;</span>
+    }
+
+    @Override
+    public synchronized PropertyDescriptor[] getPropertyDescriptors() {
+<span class="nc bnc" id="L486" title="All 2 branches missed.">        if (_pds != null)</span>
+<span class="nc" id="L487">            return _pds;</span>
+
+<span class="nc" id="L489">        _pds = new PropertyDescriptor[_vals.size()];</span>
+
+<span class="nc" id="L491">        List&lt;String&gt; failures = null;</span>
+        Value val;
+<span class="nc bnc" id="L493" title="All 2 branches missed.">        for (int i = 0; i &lt; _vals.size(); i++) {</span>
+<span class="nc" id="L494">            val = (Value) _vals.get(i);</span>
+            try {
+<span class="nc" id="L496">                _pds[i] = getPropertyDescriptor(val);</span>
+<span class="nc" id="L497">            } catch (MissingResourceException mre) {</span>
+<span class="nc bnc" id="L498" title="All 2 branches missed.">                if (failures == null)</span>
+<span class="nc" id="L499">                    failures = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L500">                failures.add(val.getProperty());</span>
+<span class="nc" id="L501">            } catch (IntrospectionException ie) {</span>
+<span class="nc bnc" id="L502" title="All 2 branches missed.">                if (failures == null)</span>
+<span class="nc" id="L503">                    failures = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L504">                failures.add(val.getProperty());</span>
+<span class="nc" id="L505">            }</span>
+        }
+<span class="nc bnc" id="L507" title="All 2 branches missed.">        if (failures != null)</span>
+<span class="nc" id="L508">            throw new ParseException(_loc.get(&quot;invalid-property-descriptors&quot;,</span>
+                failures));
+
+<span class="nc" id="L511">        return _pds;</span>
+    }
+
+    /**
+     * Create a property descriptor for the given value.
+     */
+    private PropertyDescriptor getPropertyDescriptor(Value val)
+        throws IntrospectionException {
+<span class="nc" id="L519">        String prop = val.getProperty();</span>
+<span class="nc" id="L520">        prop = prop.substring(prop.lastIndexOf('.') + 1);</span>
+
+        // set up property descriptor
+        PropertyDescriptor pd;
+        
+<span class="nc" id="L525">        pd = new PropertyDescriptor ( (String) Introspector.decapitalize(prop), getClass() );</span>
+        
+        /*try {
+            pd = new PropertyDescriptor(Introspector.decapitalize(prop),
+                getClass());
+        } catch (IntrospectionException ie) {
+            // if there aren't any methods for this value(i.e., if it's a
+            // dynamically-added value), then an IntrospectionException will
+            // be thrown. Try to create a PD with no read or write methods.
+            pd = new PropertyDescriptor(Introspector.decapitalize(prop),
+                (Method) null, (Method) null);
+        }*/
+        
+<span class="nc" id="L538">        pd.setDisplayName(findLocalized(prop + &quot;-name&quot;, true, val.getScope()));</span>
+<span class="nc" id="L539">        pd.setShortDescription(findLocalized(prop + &quot;-desc&quot;, true,</span>
+<span class="nc" id="L540">            val.getScope()));</span>
+<span class="nc" id="L541">        pd.setExpert(&quot;true&quot;.equals(findLocalized(prop + &quot;-expert&quot;, false,</span>
+<span class="nc" id="L542">            val.getScope())));</span>
+
+        try {
+<span class="nc" id="L545">            pd.setReadMethod(getClass().getMethod(&quot;get&quot;</span>
+<span class="nc" id="L546">                + StringUtil.capitalize(prop), (Class[]) null));</span>
+<span class="nc" id="L547">            pd.setWriteMethod(getClass().getMethod(&quot;set&quot;</span>
+<span class="nc" id="L548">                + StringUtil.capitalize(prop), new Class[]</span>
+<span class="nc" id="L549">                { pd.getReadMethod().getReturnType() }));</span>
+<span class="nc" id="L550">        } catch (Throwable t) {</span>
+            // if an error occurs, it might be because the value is a
+            // dynamic property.
+<span class="nc" id="L553">        }</span>
+
+<span class="nc" id="L555">        String type = findLocalized(prop + &quot;-type&quot;, true, val.getScope());</span>
+<span class="nc bnc" id="L556" title="All 2 branches missed.">        if (type != null)</span>
+<span class="nc" id="L557">            pd.setValue(ATTRIBUTE_TYPE, type);</span>
+
+<span class="nc" id="L559">        String cat = findLocalized(prop + &quot;-cat&quot;, false, val.getScope());</span>
+<span class="nc bnc" id="L560" title="All 2 branches missed.">        if (cat != null)</span>
+<span class="nc" id="L561">            pd.setValue(ATTRIBUTE_CATEGORY, cat);</span>
+
+<span class="nc" id="L563">        pd.setValue(ATTRIBUTE_XML, toXMLName(prop));</span>
+
+<span class="nc" id="L565">        String order = findLocalized(prop + &quot;-displayorder&quot;, false,</span>
+<span class="nc" id="L566">            val.getScope());</span>
+<span class="nc bnc" id="L567" title="All 2 branches missed.">        if (order != null)</span>
+<span class="nc" id="L568">            pd.setValue(ATTRIBUTE_ORDER, order);</span>
+
+        // collect allowed values from alias keys, listed values, and
+        // interface implementors
+<span class="nc" id="L572">        Collection&lt;String&gt; allowed = new TreeSet&lt;&gt;();</span>
+<span class="nc" id="L573">        List&lt;String&gt; aliases = Collections.emptyList();</span>
+<span class="nc bnc" id="L574" title="All 2 branches missed.">        if (val.getAliases() != null) {</span>
+<span class="nc" id="L575">            aliases = Arrays.asList(val.getAliases());</span>
+<span class="nc bnc" id="L576" title="All 2 branches missed.">            for (int i = 0; i &lt; aliases.size(); i += 2)</span>
+<span class="nc" id="L577">                allowed.add(aliases.get(i));</span>
+        }
+<span class="nc" id="L579">        String[] vals = StringUtil.split(findLocalized(prop</span>
+<span class="nc" id="L580">            + &quot;-values&quot;, false, val.getScope()), &quot;,&quot;, 0);</span>
+<span class="nc bnc" id="L581" title="All 2 branches missed.">        for (int i = 0; i &lt; vals.length; i++)</span>
+<span class="nc bnc" id="L582" title="All 2 branches missed.">            if (!aliases.contains(vals[i]))</span>
+<span class="nc" id="L583">                allowed.add(vals[i]);</span>
+        try {
+<span class="nc" id="L585">            Class&lt;?&gt; intf = Class.forName(findLocalized(prop</span>
+<span class="nc" id="L586">                + &quot;-interface&quot;, true, val.getScope()), false,</span>
+<span class="nc" id="L587">                getClass().getClassLoader());</span>
+<span class="nc" id="L588">            pd.setValue(ATTRIBUTE_INTERFACE, intf.getName());</span>
+<span class="nc" id="L589">            String[] impls = Services.getImplementors(intf);</span>
+<span class="nc bnc" id="L590" title="All 2 branches missed.">            for (int i = 0; i &lt; impls.length; i++)</span>
+<span class="nc bnc" id="L591" title="All 2 branches missed.">                if (!aliases.contains(impls[i]))</span>
+<span class="nc" id="L592">                    allowed.add(impls[i]);</span>
+<span class="nc" id="L593">        } catch (Throwable t) {</span>
+<span class="nc" id="L594">        }</span>
+<span class="nc bnc" id="L595" title="All 2 branches missed.">        if (!allowed.isEmpty())</span>
+<span class="nc" id="L596">            pd.setValue(ATTRIBUTE_ALLOWED_VALUES, (String[]) allowed.toArray</span>
+<span class="nc" id="L597">                (new String[allowed.size()]));</span>
+
+<span class="nc" id="L599">        return pd;</span>
+    }
+
+    /**
+     * Find the given localized string, or return null if not found.
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private String findLocalized(String key, boolean fatal, Class&lt;?&gt; scope) {
+        // find the localizer package that contains this key
+<span class="nc" id="L608">        Localizer loc = null;</span>
+
+        // check the package that the value claims to be defined in, if
+        // available, before we start guessing.
+<span class="nc bnc" id="L612" title="All 2 branches missed.">        if (scope != null) {</span>
+<span class="nc" id="L613">            loc = Localizer.forPackage(scope);</span>
+            try {
+<span class="nc" id="L615">                return loc.getFatal(key).getMessage();</span>
+<span class="nc" id="L616">            } catch (MissingResourceException mse) {</span>
+            }
+        }
+
+<span class="nc bnc" id="L620" title="All 2 branches missed.">        for (Class cls = getClass(); cls != Object.class;</span>
+<span class="nc" id="L621">            cls = cls.getSuperclass()) {</span>
+<span class="nc" id="L622">            loc = Localizer.forPackage(cls);</span>
+            try {
+<span class="nc" id="L624">                return loc.getFatal(key).getMessage();</span>
+<span class="nc" id="L625">            } catch (MissingResourceException mse) {</span>
+            }
+        }
+
+<span class="nc bnc" id="L629" title="All 2 branches missed.">        if (fatal)</span>
+<span class="nc" id="L630">            throw new MissingResourceException(key, getClass().getName(), key);</span>
+<span class="nc" id="L631">        return null;</span>
+    }
+
+    ////////////////
+    // To/from maps
+    ////////////////
+
+    /**
+     * An internal method to retrieve properties, to support 2 public methods,
+     * getAllProperties() and toProperties(boolean).
+     *
+     * @param storeDefaults
+     *            whether or not to retrieve a property if its value is the
+     *            default value.
+     */
+    @Override
+    public Map toProperties(boolean storeDefaults) {
+        // clone properties before making any modifications; we need to keep
+        // the internal properties instance consistent to maintain equals and
+        // hashcode contracts
+        Map&lt;String, String&gt; clone;
+<span class="nc bnc" id="L652" title="All 2 branches missed.">        if (_props == null)</span>
+<span class="nc" id="L653">            clone = new TreeMap&lt;&gt;();</span>
+<span class="nc bnc" id="L654" title="All 2 branches missed.">        else if (_props instanceof Properties)</span>
+<span class="nc" id="L655">            clone = (Map) ((Properties) _props).clone();</span>
+        else
+<span class="nc" id="L657">            clone = new TreeMap&lt;String, String&gt;(_props);</span>
+
+        // if no existing properties or the properties should contain entries
+        // with default values, add values to properties
+<span class="nc bnc" id="L661" title="All 4 branches missed.">        if (_props == null || storeDefaults) {</span>
+            String str;
+<span class="nc bnc" id="L663" title="All 2 branches missed.">            for (Value val : _vals) {</span>
+                // NOTE: Following was removed to hide Value.INVISIBLE properties, like connectionPassword
+                // if key in existing properties, we already know value is up to date
+                //if (_props != null &amp;&amp; Configurations.containsProperty(val, _props) &amp;&amp; val.isVisible())
+                //    continue;
+<span class="nc" id="L668">                str = val.getString();</span>
+<span class="nc bnc" id="L669" title="All 6 branches missed.">                if ((str != null &amp;&amp; (storeDefaults || !str.equals(val.getDefault()))))</span>
+<span class="nc" id="L670">                    setValue(clone, val);</span>
+<span class="nc" id="L671">            }</span>
+<span class="nc bnc" id="L672" title="All 2 branches missed.">            if (_props == null)</span>
+<span class="nc" id="L673">                _props = new TreeMap(clone);</span>
+        }
+<span class="nc" id="L675">        return clone;</span>
+    }
+
+    @Override
+    public void fromProperties(Map map) {
+<span class="nc bnc" id="L680" title="All 4 branches missed.">        if (map == null || map.isEmpty())</span>
+<span class="nc" id="L681">            return;</span>
+<span class="nc bnc" id="L682" title="All 2 branches missed.">        if (isReadOnly())</span>
+<span class="nc" id="L683">            throw new IllegalStateException(_loc.get(&quot;read-only&quot;).getMessage());</span>
+
+        // if the only previous call was to load defaults, forget them.
+        // this way we preserve the original formatting of the user's props
+        // instead of the defaults.  this is important for caching on
+        // configuration objects
+<span class="nc bnc" id="L689" title="All 2 branches missed.">        if (_globals) {</span>
+<span class="nc" id="L690">            _props = null;</span>
+<span class="nc" id="L691">            _globals = false;</span>
+        }
+
+        // copy the input to avoid mutation issues
+<span class="nc bnc" id="L695" title="All 2 branches missed.">        if (map instanceof HashMap)</span>
+<span class="nc" id="L696">            map = (Map) ((HashMap) map).clone();</span>
+<span class="nc bnc" id="L697" title="All 2 branches missed.">        else if (map instanceof Properties)</span>
+<span class="nc" id="L698">            map = (Map) ((Properties) map).clone();</span>
+        else
+<span class="nc" id="L700">            map = new LinkedHashMap(map);</span>
+
+<span class="nc" id="L702">        Map remaining = new HashMap(map);</span>
+<span class="nc" id="L703">        boolean ser = true;</span>
+        Object o;
+<span class="nc bnc" id="L705" title="All 2 branches missed.">        for (Value val : _vals) {</span>
+<span class="nc" id="L706">            o = findValue(map, val);</span>
+<span class="nc bnc" id="L707" title="All 2 branches missed.">            if (o == null)</span>
+<span class="nc" id="L708">                continue;</span>
+<span class="nc bnc" id="L709" title="All 2 branches missed.">            if (o instanceof String) {</span>
+                // OPENJPA-1830 Do not overwrite existing string values with &quot;******&quot;
+<span class="nc bnc" id="L711" title="All 2 branches missed.">                if ((!Objects.equals((String) o, val.getString())) &amp;&amp;</span>
+<span class="nc bnc" id="L712" title="All 2 branches missed.">                        (!Objects.equals((String) o, Value.INVISIBLE)))</span>
+<span class="nc" id="L713">                    val.setString((String) o);</span>
+            } else {
+<span class="nc" id="L715">                ser &amp;= o instanceof Serializable;</span>
+<span class="nc" id="L716">                val.setObject(o);</span>
+            }
+<span class="nc" id="L718">            Configurations.removeProperty(val.getProperty(), remaining);</span>
+<span class="nc" id="L719">        }</span>
+
+        // convention is to point product at a resource with the
+        // &lt;prefix&gt;.properties System property; remove that property so we
+        // we don't warn about it
+<span class="nc" id="L724">        Configurations.removeProperty(&quot;properties&quot;, remaining);</span>
+<span class="nc" id="L725">        Configurations.removeProperty(&quot;Id&quot;, remaining, map);</span>
+
+        // now warn if there are any remaining properties that there
+        // is an unhandled prop, and remove the unknown properties
+        Map.Entry entry;
+<span class="nc bnc" id="L730" title="All 2 branches missed.">        for (Iterator itr = remaining.entrySet().iterator(); itr.hasNext();) {</span>
+<span class="nc" id="L731">            entry = (Map.Entry) itr.next();</span>
+<span class="nc" id="L732">            Object key = entry.getKey();</span>
+<span class="nc bnc" id="L733" title="All 2 branches missed.">            if (key != null) {</span>
+<span class="nc" id="L734">                warnInvalidProperty((String) key);</span>
+<span class="nc" id="L735">                map.remove(key);</span>
+            }
+<span class="nc" id="L737">        }</span>
+
+        // cache properties
+<span class="nc bnc" id="L740" title="All 4 branches missed.">        if (_props == null &amp;&amp; ser)</span>
+<span class="nc" id="L741">            _props = map;</span>
+<span class="nc" id="L742">    }</span>
+
+    @Override
+    public List&lt;String&gt; getPropertyKeys(String propertyName) {
+<span class="nc" id="L746">        Value value = getValue(propertyName);</span>
+<span class="nc bnc" id="L747" title="All 2 branches missed.">        return value == null ? Collections.EMPTY_LIST : value.getPropertyKeys();</span>
+    }
+
+    /**
+     * Gets all known property keys.
+     * The keys are harvested from the property names (including the equivalent names) of the registered values.
+     * A key may be prefixed if the corresponding property name was without a prefix.
+     * @see #fixPrefix(String)
+     * The Values that are {@linkplain Value#makePrivate() marked private} are filtered out.
+     */
+    @Override
+    public Set&lt;String&gt; getPropertyKeys() {
+<span class="nc" id="L759">        synchronized (_supportedKeys) {</span>
+<span class="nc bnc" id="L760" title="All 2 branches missed.">            if (_supportedKeys.size() == 0) {</span>
+<span class="nc bnc" id="L761" title="All 2 branches missed.">                for (Value val : _vals) {</span>
+<span class="nc bnc" id="L762" title="All 2 branches missed.">                    if (val.isPrivate())</span>
+<span class="nc" id="L763">                        continue;</span>
+<span class="nc" id="L764">                    List&lt;String&gt; keys = val.getPropertyKeys();</span>
+<span class="nc bnc" id="L765" title="All 2 branches missed.">                    for (String key : keys) {</span>
+<span class="nc" id="L766">                        _supportedKeys.add(fixPrefix(key));</span>
+<span class="nc" id="L767">                    }</span>
+<span class="nc" id="L768">                }</span>
+            }
+<span class="nc" id="L770">        }</span>
+        //OJ2257: Return a copy of _supportedKeys as calls to this method (e.g.
+        //BrokerImpl.getSupportedProperties()) may add to this set.
+<span class="nc" id="L773">        return new TreeSet&lt;&gt;(_supportedKeys);</span>
+    }
+
+    /**
+     * Adds a prefix &lt;code&gt;&quot;openjpa.&quot;&lt;/code&gt; to the given key, if necessary. A key is
+     * considered without prefix if it starts neither of &lt;code&gt;&quot;openjpa.&quot;&lt;/code&gt;,
+     * &lt;code&gt;&quot;java.&quot;&lt;/code&gt; and &lt;code&gt;&quot;javax.&quot;&lt;/code&gt;.
+     */
+    String fixPrefix(String key) {
+<span class="nc bnc" id="L782" title="All 4 branches missed.">        return (key == null || hasKnownPrefix(key)) ? key : &quot;openjpa.&quot;+key;</span>
+    }
+
+    boolean hasKnownPrefix(String key) {
+<span class="nc" id="L786">        String[] prefixes = ProductDerivations.getConfigurationPrefixes();</span>
+<span class="nc bnc" id="L787" title="All 2 branches missed.">        for (String prefix : prefixes) {</span>
+<span class="nc bnc" id="L788" title="All 2 branches missed.">            if (key.startsWith(prefix))</span>
+<span class="nc" id="L789">                return true;</span>
+        }
+<span class="nc" id="L791">        return false;</span>
+    }
+
+    /**
+     * Adds &lt;code&gt;o&lt;/code&gt; to &lt;code&gt;map&lt;/code&gt; under key for &lt;code&gt;val&lt;/code&gt;.
+     * Use this method instead of attempting to add the value directly because
+     * this will account for the property prefix.
+     */
+    private void setValue(Map map, Value val) {
+<span class="nc" id="L800">        Object key = val.getLoadKey();</span>
+<span class="nc bnc" id="L801" title="All 2 branches missed.">        if (key == null) {</span>
+<span class="nc" id="L802">            List&lt;String&gt; keys = val.getPropertyKeys();</span>
+<span class="nc bnc" id="L803" title="All 2 branches missed.">            for (String k : keys) {</span>
+<span class="nc bnc" id="L804" title="All 2 branches missed.">                if (hasKnownPrefix(k)) {</span>
+<span class="nc" id="L805">                    key = k;</span>
+<span class="nc" id="L806">                    break;</span>
+                }
+<span class="nc" id="L808">            }</span>
+<span class="nc bnc" id="L809" title="All 2 branches missed.">            if (key == null) {</span>
+<span class="nc" id="L810">                key = &quot;openjpa.&quot; + val.getProperty();</span>
+            }
+        }
+<span class="nc bnc" id="L813" title="All 2 branches missed.">        Object external = val.isHidden() ? Value.INVISIBLE :</span>
+<span class="nc bnc" id="L814" title="All 2 branches missed.">            val instanceof ObjectValue ? val.getString() : val.get();</span>
+<span class="nc" id="L815">        map.put(key, external);</span>
+<span class="nc" id="L816">    }</span>
+
+    /**
+     * Look up the given value, testing all available prefixes and all possible
+     * property names. Detects if the given map contains multiple keys that
+     * are equivalent names for the given value.
+     */
+    private Object findValue(Map map, Value val) {
+<span class="nc" id="L824">        Object result = null;</span>
+<span class="nc" id="L825">        List&lt;String&gt; partialKeys = val.getPropertyKeys();</span>
+<span class="nc bnc" id="L826" title="All 2 branches missed.">        for (String partialKey : partialKeys) {</span>
+<span class="nc" id="L827">            String key = ProductDerivations.getConfigurationKey(</span>
+                partialKey, map);
+<span class="nc bnc" id="L829" title="All 2 branches missed.">            if (map.containsKey(key)) {</span>
+                // do not return immediately. Looping through all equivalent
+                // property names will detect if the Map contains multiple keys
+                // that are equivalent as it tries to set load key.
+<span class="nc" id="L833">                val.setLoadKey(key);</span>
+<span class="nc" id="L834">                result = map.get(key);</span>
+            }
+<span class="nc" id="L836">        }</span>
+<span class="nc" id="L837">        return result;</span>
+    }
+
+    /**
+     * Issue a warning that the specified property is not valid.
+     */
+    private void warnInvalidProperty(String propName) {
+<span class="nc bnc" id="L844" title="All 2 branches missed.">        if (propName != null &amp;&amp;</span>
+<span class="nc bnc" id="L845" title="All 6 branches missed.">           (propName.startsWith(&quot;java.&quot;) || propName.startsWith(&quot;javax.persistence&quot;)|| propName.startsWith(&quot;sun.&quot;)))</span>
+<span class="nc" id="L846">            return;</span>
+<span class="nc bnc" id="L847" title="All 2 branches missed.">        if (!isInvalidProperty(propName))</span>
+<span class="nc" id="L848">            return;</span>
+<span class="nc" id="L849">        Log log = getConfigurationLog();</span>
+<span class="nc bnc" id="L850" title="All 4 branches missed.">        if (log == null || !log.isWarnEnabled())</span>
+<span class="nc" id="L851">            return;</span>
+
+        // try to find the closest string to the invalid property
+        // so that we can provide a hint in case of a misspelling
+<span class="nc" id="L855">        String closest = StringDistance.getClosestLevenshteinDistance</span>
+<span class="nc" id="L856">            (propName, newPropertyList(), 15);</span>
+
+<span class="nc bnc" id="L858" title="All 2 branches missed.">        if (closest == null)</span>
+<span class="nc" id="L859">            log.warn(_loc.get(&quot;invalid-property&quot;, propName));</span>
+        else
+<span class="nc" id="L861">            log.warn(_loc.get(&quot;invalid-property-hint&quot;, propName, closest));</span>
+<span class="nc" id="L862">    }</span>
+
+    /**
+     * Return a comprehensive list of recognized map keys.
+     */
+    private Collection&lt;String&gt; newPropertyList() {
+<span class="nc" id="L868">        String[] prefixes = ProductDerivations.getConfigurationPrefixes();</span>
+<span class="nc" id="L869">        List&lt;String&gt; l = new ArrayList&lt;&gt;(_vals.size() * prefixes.length);</span>
+<span class="nc bnc" id="L870" title="All 2 branches missed.">        for(Value v : _vals) {</span>
+<span class="nc bnc" id="L871" title="All 2 branches missed.">            for (int j = 0; j &lt; prefixes.length; j++)</span>
+<span class="nc" id="L872">                l.add(prefixes[j] + &quot;.&quot; + v.getProperty());</span>
+<span class="nc" id="L873">        }</span>
+<span class="nc" id="L874">        return l;</span>
+    }
+
+    /**
+     * Returns true if the specified property name should raise a warning
+     * if it is not found in the list of known properties.
+     */
+    protected boolean isInvalidProperty(String propName) {
+        // handle warnings for openjpa.SomeString, but not for
+        // openjpa.some.subpackage.SomeString, since it might be valid for some
+        // specific implementation of OpenJPA
+<span class="nc" id="L885">        String[] prefixes = ProductDerivations.getConfigurationPrefixes();</span>
+<span class="nc bnc" id="L886" title="All 2 branches missed.">        for (String prefix : prefixes) {</span>
+<span class="nc bnc" id="L887" title="All 2 branches missed.">            if (propName.toLowerCase(Locale.ENGLISH).startsWith(prefix)</span>
+<span class="nc bnc" id="L888" title="All 2 branches missed.">                &amp;&amp; propName.length() &gt; prefix.length() + 1</span>
+<span class="nc bnc" id="L889" title="All 2 branches missed.">                &amp;&amp; propName.indexOf('.', prefix.length()) == prefix.length()</span>
+<span class="nc bnc" id="L890" title="All 2 branches missed.">                &amp;&amp; propName.indexOf('.', prefix.length() + 1) == -1</span>
+<span class="nc bnc" id="L891" title="All 2 branches missed.">                &amp;&amp; &quot;openjpa&quot;.equals(prefix))</span>
+<span class="nc" id="L892">                return true;</span>
+        }
+<span class="nc" id="L894">        return false;</span>
+    }
+
+    //////////////////////
+    // Auto-configuration
+    //////////////////////
+
+    /**
+     * This method loads the named resource as a properties file. It is
+     * useful for auto-configuration tools so users can specify a
+     * &lt;code&gt;properties&lt;/code&gt; value with the name of a resource.
+     */
+    public void setProperties(String resourceName) throws IOException {
+
+<span class="nc bnc" id="L908" title="All 2 branches missed.">        if (!_deferResourceLoading) {</span>
+<span class="nc" id="L909">            String anchor = null;</span>
+<span class="nc bnc" id="L910" title="All 2 branches missed.">            if (resourceName.indexOf(&quot;#&quot;) != -1) {</span>
+<span class="nc" id="L911">                anchor = resourceName.substring(resourceName.lastIndexOf(&quot;#&quot;) + 1);</span>
+<span class="nc" id="L912">                resourceName = resourceName.substring(0, resourceName.length() - anchor.length() - 1);</span>
+            }
+
+<span class="nc" id="L915">            ProductDerivations.load(resourceName, anchor, getClass().getClassLoader()).setInto(this);</span>
+        }
+
+<span class="nc" id="L918">        _auto = resourceName;</span>
+<span class="nc" id="L919">    }</span>
+
+    /**
+     * This method loads the named file as a properties file. It is
+     * useful for auto-configuration tools so users can specify a
+     * &lt;code&gt;propertiesFile&lt;/code&gt; value with the name of a file.
+     */
+    public void setPropertiesFile(File file) throws IOException {
+<span class="nc" id="L927">        ProductDerivations.load(file, null, getClass().getClassLoader()).</span>
+<span class="nc" id="L928">            setInto(this);</span>
+<span class="nc" id="L929">        setDeferResourceLoading(false);</span>
+<span class="nc" id="L930">        _auto = file.toString();</span>
+<span class="nc" id="L931">    }</span>
+
+    /**
+     * Return the resource that was set via auto-configuration methods
+     * {@link #setProperties} or {@link #setPropertiesFile}, or null if none.
+     */
+    public String getPropertiesResource() {
+<span class="nc" id="L938">        return _auto;</span>
+    }
+
+    /////////////
+    // Utilities
+    /////////////
+
+    /**
+     * Performs an equality check based on equality of values.
+     * {@link Value#equals(Object) Equality} of Values varies if the Value is
+     * {@link Value#isDynamic() dynamic}.
+     */
+    @Override
+    public boolean equals(Object other) {
+<span class="nc bnc" id="L952" title="All 2 branches missed.">        if (other == this)</span>
+<span class="nc" id="L953">            return true;</span>
+<span class="nc bnc" id="L954" title="All 2 branches missed.">        if (other == null)</span>
+<span class="nc" id="L955">            return false;</span>
+<span class="nc bnc" id="L956" title="All 2 branches missed.">        if (!getClass().equals(other.getClass()))</span>
+<span class="nc" id="L957">            return false;</span>
+
+        // compare properties
+<span class="nc" id="L960">        ConfigurationImpl conf = (ConfigurationImpl) other;</span>
+<span class="nc bnc" id="L961" title="All 2 branches missed.">        if (_vals.size() != conf.getValues().length)</span>
+<span class="nc" id="L962">        	return false;</span>
+<span class="nc bnc" id="L963" title="All 2 branches missed.">        for(Value v : _vals) {</span>
+<span class="nc" id="L964">            String propName = v.getProperty();</span>
+<span class="nc" id="L965">        	Value thisV = this.getValue(propName);</span>
+<span class="nc" id="L966">            Value thatV = conf.getValue(propName);</span>
+<span class="nc bnc" id="L967" title="All 2 branches missed.">        	if (!thisV.equals(thatV)) {</span>
+<span class="nc" id="L968">        		return false;</span>
+        	}
+<span class="nc" id="L970">        }</span>
+<span class="nc" id="L971">        return true;</span>
+    }
+
+    /**
+     * Computes hash code based on the hashCodes of the values.
+     * {@link Value#hashCode() HashCode} of a Value varies if the Value is
+     * {@link Value#isDynamic() dynamic}.
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L981">        int hash = 0;</span>
+<span class="nc bnc" id="L982" title="All 2 branches missed.">        for(Value v : _vals) {</span>
+<span class="nc" id="L983">        	hash += v.hashCode();</span>
+<span class="nc" id="L984">        }</span>
+<span class="nc" id="L985">        return hash;</span>
+    }
+
+    /**
+     * Convert &lt;code&gt;propName&lt;/code&gt; to a lowercase-with-hyphens-style string.
+     * This algorithm is only designed for mixes of uppercase and lowercase
+     * letters and lone digits. A more sophisticated conversion should probably
+     * be handled by a proper parser generator or regular expressions.
+     */
+    public static String toXMLName(String propName) {
+<span class="nc bnc" id="L995" title="All 2 branches missed.">        if (propName == null)</span>
+<span class="nc" id="L996">            return null;</span>
+<span class="nc" id="L997">        StringBuilder buf = new StringBuilder();</span>
+        char c;
+<span class="nc bnc" id="L999" title="All 2 branches missed.">        for (int i = 0; i &lt; propName.length(); i++) {</span>
+<span class="nc" id="L1000">            c = propName.charAt(i);</span>
+
+            // convert sequences of all-caps to downcase with dashes around
+            // them. put a trailing cap that is followed by downcase into the
+            // downcase word.
+<span class="nc bnc" id="L1005" title="All 4 branches missed.">            if (i != 0 &amp;&amp; Character.isUpperCase(c)</span>
+<span class="nc bnc" id="L1006" title="All 4 branches missed.">                &amp;&amp; (Character.isLowerCase(propName.charAt(i-1))</span>
+<span class="nc bnc" id="L1007" title="All 2 branches missed.">                || (i &gt; 1 &amp;&amp; i &lt; propName.length() - 1</span>
+<span class="nc bnc" id="L1008" title="All 2 branches missed.">                &amp;&amp; Character.isUpperCase(propName.charAt(i-1))</span>
+<span class="nc bnc" id="L1009" title="All 2 branches missed.">                &amp;&amp; Character.isLowerCase(propName.charAt(i+1)))))</span>
+<span class="nc" id="L1010">                buf.append('-');</span>
+
+            // surround sequences of digits with dashes.
+<span class="nc bnc" id="L1013" title="All 2 branches missed.">            if (i != 0</span>
+<span class="nc bnc" id="L1014" title="All 4 branches missed.">                &amp;&amp; ((!Character.isLetter(c) &amp;&amp; Character.isLetter(propName</span>
+<span class="nc" id="L1015">                    .charAt(i - 1)))</span>
+<span class="nc bnc" id="L1016" title="All 4 branches missed.">                || (Character.isLetter(c) &amp;&amp; !Character.isLetter(propName</span>
+<span class="nc" id="L1017">                    .charAt(i - 1)))))</span>
+<span class="nc" id="L1018">                buf.append('-');</span>
+
+<span class="nc" id="L1020">            buf.append(Character.toLowerCase(c));</span>
+        }
+<span class="nc" id="L1022">        return buf.toString();</span>
+    }
+
+    /**
+     * Implementation of the {@link Externalizable} interface to read from
+     * the properties written by {@link #writeExternal}.
+     */
+    @Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public void readExternal(ObjectInput in)
+        throws IOException, ClassNotFoundException {
+<span class="nc" id="L1033">        fromProperties((Map) in.readObject());</span>
+<span class="nc" id="L1034">        _props = (Map) in.readObject();</span>
+<span class="nc" id="L1035">        _globals = in.readBoolean();</span>
+<span class="nc" id="L1036">    }</span>
+
+    /**
+     * Implementation of the {@link Externalizable} interface to write
+     * the properties returned by {@link #toProperties}.
+     */
+    @Override
+    public void writeExternal(ObjectOutput out) throws IOException {
+<span class="nc" id="L1044">        out.writeObject(toProperties(true));</span>
+<span class="nc" id="L1045">        out.writeObject(_props);</span>
+<span class="nc" id="L1046">        out.writeBoolean(_globals);</span>
+<span class="nc" id="L1047">    }</span>
+
+    /**
+     * Uses {@link #toProperties} and {@link #fromProperties} to clone
+     * configuration.
+     */
+    @Override
+    public Object clone() {
+        try {
+<span class="nc" id="L1056">            Constructor cons = getClass().getConstructor</span>
+<span class="nc" id="L1057">                (new Class[]{ boolean.class });</span>
+<span class="nc" id="L1058">            ConfigurationImpl clone = (ConfigurationImpl) cons.newInstance</span>
+<span class="nc" id="L1059">                (new Object[]{ Boolean.FALSE });</span>
+<span class="nc" id="L1060">            clone.fromProperties(toProperties(true));</span>
+<span class="nc bnc" id="L1061" title="All 2 branches missed.">            clone._props = (_props == null) ? null : new HashMap(_props);</span>
+<span class="nc" id="L1062">            clone._globals = _globals;</span>
+<span class="nc" id="L1063">            return clone;</span>
+<span class="nc" id="L1064">        } catch (RuntimeException re) {</span>
+<span class="nc" id="L1065">            throw re;</span>
+<span class="nc" id="L1066">        } catch (Exception e) {</span>
+<span class="nc" id="L1067">            throw new ParseException(e);</span>
+        }
+    }
+
+    @Override
+    public boolean removeValue(Value val) {
+<span class="nc bnc" id="L1073" title="All 2 branches missed.">        if (!_vals.remove(val))</span>
+<span class="nc" id="L1074">            return false;</span>
+<span class="nc" id="L1075">        val.removeListener(this);</span>
+<span class="nc" id="L1076">        return true;</span>
+    }
+
+    @Override
+    public &lt;T extends Value&gt; T addValue(T val) {
+<span class="nc" id="L1081">        _vals.add(val);</span>
+<span class="nc" id="L1082">        val.addListener(this);</span>
+<span class="nc" id="L1083">        return val;</span>
+    }
+
+    /**
+     * Add the given value to the set of configuration properties.
+     */
+    public StringValue addString(String property) {
+<span class="nc" id="L1090">        StringValue val = new StringValue(property);</span>
+<span class="nc" id="L1091">        addValue(val);</span>
+<span class="nc" id="L1092">        return val;</span>
+    }
+
+    /**
+     * Add the given value to the set of configuration properties.
+     */
+    public FileValue addFile(String property) {
+<span class="nc" id="L1099">        FileValue val = new FileValue(property);</span>
+<span class="nc" id="L1100">        addValue(val);</span>
+<span class="nc" id="L1101">        return val;</span>
+    }
+
+    /**
+     * Add the given value to the set of configuration properties.
+     */
+    public IntValue addInt(String property) {
+<span class="nc" id="L1108">        IntValue val = new IntValue(property);</span>
+<span class="nc" id="L1109">        addValue(val);</span>
+<span class="nc" id="L1110">        return val;</span>
+    }
+
+    /**
+     * Add the given value to the set of configuration properties.
+     */
+    public DoubleValue addDouble(String property) {
+<span class="nc" id="L1117">        DoubleValue val = new DoubleValue(property);</span>
+<span class="nc" id="L1118">        addValue(val);</span>
+<span class="nc" id="L1119">        return val;</span>
+    }
+
+    /**
+     * Add the given value to the set of configuration properties.
+     */
+    public BooleanValue addBoolean(String property) {
+<span class="nc" id="L1126">        BooleanValue val = new BooleanValue(property);</span>
+<span class="nc" id="L1127">        addValue(val);</span>
+<span class="nc" id="L1128">        val.setDefault(&quot;false&quot;);</span>
+<span class="nc" id="L1129">        return val;</span>
+    }
+
+    /**
+     * Add the given value to the set of configuration properties.
+     */
+    public StringListValue addStringList(String property) {
+<span class="nc" id="L1136">        StringListValue val = new StringListValue(property);</span>
+<span class="nc" id="L1137">        addValue(val);</span>
+<span class="nc" id="L1138">        return val;</span>
+    }
+
+    /**
+     * Add the given value to the set of configuration properties.
+     */
+    public ObjectValue addObject(String property) {
+<span class="nc" id="L1145">        ObjectValue val = new ObjectValue(property);</span>
+<span class="nc" id="L1146">        addValue(val);</span>
+<span class="nc" id="L1147">        return val;</span>
+    }
+
+    /**
+     * Add the given value to the set of configuration properties.
+     */
+    public PluginValue addPlugin(String property, boolean singleton) {
+<span class="nc" id="L1154">        PluginValue val = new PluginValue(property, singleton);</span>
+<span class="nc" id="L1155">        addValue(val);</span>
+<span class="nc" id="L1156">        return val;</span>
+    }
+
+    /**
+     * Add the given value to the set of configuration properties.
+     */
+    public PluginListValue addPluginList(String property) {
+<span class="nc" id="L1163">        PluginListValue val = new PluginListValue(property);</span>
+<span class="nc" id="L1164">        addValue(val);</span>
+<span class="nc" id="L1165">        return val;</span>
+    }
+
+    @Override
+    public ClassLoader getUserClassLoader() {
+<span class="nc" id="L1170">    	return _userCL;</span>
+    }
+
+    @Override
+    public void setUserClassLoader(ClassLoader cl) {
+<span class="nc" id="L1175">    	_userCL = cl;</span>
+<span class="nc" id="L1176">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

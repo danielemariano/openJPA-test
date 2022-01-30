@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Schema.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">Schema.java</span></div><h1>Schema.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.io.Serializable;
+import java.util.Map;
+import java.util.TreeMap;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+
+/**
+ * Represents a database schema.
+ *
+ * @author Abe White
+ */
+public class Schema
+    implements Comparable&lt;Schema&gt;, Serializable {
+
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L37">    private DBIdentifier _name = DBIdentifier.NULL;</span>
+<span class="nc" id="L38">    private SchemaGroup _group = null;</span>
+<span class="nc" id="L39">    private Map&lt;DBIdentifier, Table&gt; _tableMap = null;</span>
+<span class="nc" id="L40">    private Map&lt;DBIdentifier, Sequence&gt; _seqMap = null;</span>
+
+    // cache
+<span class="nc" id="L43">    private Table[] _tables = null;</span>
+<span class="nc" id="L44">    private Sequence[] _seqs = null;</span>
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L49">    public Schema() {</span>
+<span class="nc" id="L50">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param name the schema name, if any
+     * @param group the schema's owning group
+     * @deprecated
+     */
+    @Deprecated
+    public Schema(String name, SchemaGroup group) {
+<span class="nc" id="L61">        this(DBIdentifier.newSchema(name), group);</span>
+<span class="nc" id="L62">    }</span>
+
+<span class="nc" id="L64">    public Schema(DBIdentifier name, SchemaGroup group) {</span>
+<span class="nc" id="L65">        setIdentifier(name);</span>
+<span class="nc" id="L66">        _group = group;</span>
+<span class="nc" id="L67">    }</span>
+
+    /**
+     * Called when the schema is removed from its group. Invalidates the
+     * schema and removes all its member tables.
+     */
+    void remove() {
+<span class="nc" id="L74">        Table[] tabs = getTables();</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        for (int i = 0; i &lt; tabs.length; i++)</span>
+<span class="nc" id="L76">            removeTable(tabs[i]);</span>
+<span class="nc" id="L77">        Sequence[] seqs = getSequences();</span>
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        for (int i = 0; i &lt; seqs.length; i++)</span>
+<span class="nc" id="L79">            removeSequence(seqs[i]);</span>
+<span class="nc" id="L80">        _group = null;</span>
+<span class="nc" id="L81">    }</span>
+
+    /**
+     * Return the schema's group.
+     */
+    public SchemaGroup getSchemaGroup() {
+<span class="nc" id="L87">        return _group;</span>
+    }
+
+    /**
+     * Return the name of the schema, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public String getName() {
+<span class="nc" id="L96">        return getIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getIdentifier() {
+<span class="nc" id="L100">        return _name;</span>
+    }
+
+    /**
+     * Set the name of the schema. This method can only be used for schemas
+     * not attached to a group.
+     * @deprecated
+     */
+    @Deprecated
+    public void setName(String name) {
+<span class="nc" id="L110">        setIdentifier(DBIdentifier.trimToNull(DBIdentifier.newSchema(name)));</span>
+<span class="nc" id="L111">    }</span>
+
+    public void setIdentifier(DBIdentifier name) {
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (getSchemaGroup() != null)</span>
+<span class="nc" id="L115">            throw new IllegalStateException();</span>
+<span class="nc" id="L116">        _name = DBIdentifier.trimToNull(name);</span>
+<span class="nc" id="L117">    }</span>
+
+    /**
+     * Return the schema's tables.
+     */
+    public Table[] getTables() {
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (_tables == null)</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">            _tables = (_tableMap == null) ? new Table[0] : (Table[])</span>
+<span class="nc" id="L125">                _tableMap.values().toArray(new Table[_tableMap.size()]);</span>
+<span class="nc" id="L126">        return _tables;</span>
+    }
+
+    /**
+     * Return the table with the given name, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public Table getTable(String name) {
+<span class="nc bnc" id="L135" title="All 4 branches missed.">        if (name == null || _tableMap == null)</span>
+<span class="nc" id="L136">            return null;</span>
+<span class="nc" id="L137">        return getTable(DBIdentifier.newIdentifier(name, DBIdentifierType.TABLE, true));</span>
+    }
+
+    public Table getTable(DBIdentifier name) {
+<span class="nc bnc" id="L141" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) || _tableMap == null)</span>
+<span class="nc" id="L142">            return null;</span>
+<span class="nc" id="L143">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L144">        return _tableMap.get(sName);</span>
+    }
+
+    /**
+     * Add a table to the schema.
+     * @deprecated
+     */
+    @Deprecated
+    public Table addTable(String name) {
+<span class="nc" id="L153">        return addTable(DBIdentifier.newTable(name));</span>
+    }
+
+    public Table addTable(DBIdentifier name) {
+<span class="nc" id="L157">        SchemaGroup group = getSchemaGroup();</span>
+        Table tab;
+<span class="nc" id="L159">        name = name.getUnqualifiedName();</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (group != null) {</span>
+<span class="nc" id="L161">            group.addName(name, true);</span>
+<span class="nc" id="L162">            tab = group.newTable(name, this);</span>
+        } else
+<span class="nc" id="L164">            tab = new Table(name, this);</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        if (_tableMap == null)</span>
+<span class="nc" id="L166">            _tableMap = new TreeMap&lt;&gt;();</span>
+<span class="nc" id="L167">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L168">        _tableMap.put(sName, tab);</span>
+<span class="nc" id="L169">        _tables = null;</span>
+<span class="nc" id="L170">        return tab;</span>
+    }
+
+
+    /**
+     * Add a table with a shortened (i.e., validated) name to the schema
+     * @deprecated
+     */
+    @Deprecated
+    public Table addTable(String name, String validName) {
+<span class="nc" id="L180">        return addTable(DBIdentifier.newTable(name), DBIdentifier.newTable(validName));</span>
+    }
+
+    public Table addTable(DBIdentifier name, DBIdentifier validName) {
+<span class="nc" id="L184">        SchemaGroup group = getSchemaGroup();</span>
+        Table tab;
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (group != null) {</span>
+<span class="nc" id="L187">            group.addName(validName, true);</span>
+<span class="nc" id="L188">            tab = group.newTable(validName, this);</span>
+        } else
+<span class="nc" id="L190">            tab = new Table(validName, this);</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">        if (_tableMap == null)</span>
+<span class="nc" id="L192">            _tableMap = new TreeMap&lt;&gt;();</span>
+<span class="nc" id="L193">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L194">        _tableMap.put(sName, tab);</span>
+<span class="nc" id="L195">        _tables = null;</span>
+<span class="nc" id="L196">        return tab;</span>
+    }
+
+    /**
+     * Remove the given table from the schema.
+     *
+     * @return true if the table was removed, false if not in the schema
+     */
+    public boolean removeTable(Table tab) {
+<span class="nc bnc" id="L205" title="All 4 branches missed.">        if (tab == null || _tableMap == null)</span>
+<span class="nc" id="L206">            return false;</span>
+
+<span class="nc" id="L208">        DBIdentifier sName = DBIdentifier.toUpper(tab.getIdentifier());</span>
+<span class="nc" id="L209">        Table cur = _tableMap.get(sName);</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (!cur.equals(tab))</span>
+<span class="nc" id="L211">            return false;</span>
+
+<span class="nc" id="L213">        _tableMap.remove(sName);</span>
+<span class="nc" id="L214">        _tables = null;</span>
+<span class="nc" id="L215">        SchemaGroup group = getSchemaGroup();</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">        if (group != null)</span>
+<span class="nc" id="L217">            group.removeName(tab.getIdentifier());</span>
+<span class="nc" id="L218">        tab.remove();</span>
+<span class="nc" id="L219">        return true;</span>
+    }
+
+    /**
+     * Import a table from another schema.	 Note that this method does
+     * &lt;strong&gt;not&lt;/strong&gt; import foreign keys, indexes, or unique constraints.
+     */
+    public Table importTable(Table table) {
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (table == null)</span>
+<span class="nc" id="L228">            return null;</span>
+
+<span class="nc" id="L230">        Table copy = addTable(table.getIdentifier());</span>
+<span class="nc" id="L231">        Column[] cols = table.getColumns();</span>
+<span class="nc bnc" id="L232" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L233">            copy.importColumn(cols[i]);</span>
+
+<span class="nc" id="L235">        copy.importPrimaryKey(table.getPrimaryKey());</span>
+<span class="nc" id="L236">        return copy;</span>
+    }
+
+    /**
+     * Return the schema's sequences.
+     */
+    public Sequence[] getSequences() {
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        if (_seqs == null)</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">            _seqs = (_seqMap == null) ? new Sequence[0] : (Sequence[])</span>
+<span class="nc" id="L245">                _seqMap.values().toArray(new Sequence[_seqMap.size()]);</span>
+<span class="nc" id="L246">        return _seqs;</span>
+    }
+
+    /**
+     * Return the sequence with the given name, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public Sequence getSequence(String name) {
+<span class="nc bnc" id="L255" title="All 4 branches missed.">        if (name == null || _seqMap == null)</span>
+<span class="nc" id="L256">            return null;</span>
+<span class="nc" id="L257">        return getSequence(DBIdentifier.newIdentifier(name, DBIdentifierType.SEQUENCE, true));</span>
+    }
+
+    public Sequence getSequence(DBIdentifier name) {
+<span class="nc bnc" id="L261" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) || _seqMap == null)</span>
+<span class="nc" id="L262">            return null;</span>
+
+<span class="nc" id="L264">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L265">        Sequence seq = _seqMap.get(sName);</span>
+<span class="nc" id="L266">        return seq;</span>
+    }
+
+    /**
+     * Add a sequence to the schema.
+     * @deprecated
+     */
+    @Deprecated
+    public Sequence addSequence(String name) {
+<span class="nc" id="L275">        return addSequence(DBIdentifier.newIdentifier(name, DBIdentifierType.SEQUENCE, true));</span>
+    }
+
+    public Sequence addSequence(DBIdentifier name) {
+<span class="nc" id="L279">        SchemaGroup group = getSchemaGroup();</span>
+        Sequence seq;
+<span class="nc bnc" id="L281" title="All 2 branches missed.">        if (group != null) {</span>
+<span class="nc" id="L282">            group.addName(name, true);</span>
+<span class="nc" id="L283">            seq = group.newSequence(name, this);</span>
+        } else
+<span class="nc" id="L285">            seq = new Sequence(name, this);</span>
+<span class="nc bnc" id="L286" title="All 2 branches missed.">        if (_seqMap == null)</span>
+<span class="nc" id="L287">            _seqMap = new TreeMap&lt;&gt;();</span>
+
+<span class="nc" id="L289">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L290">        _seqMap.put(sName, seq);</span>
+<span class="nc" id="L291">        _seqs = null;</span>
+<span class="nc" id="L292">        return seq;</span>
+    }
+
+    /**
+     * Remove the given sequence from the schema.
+     *
+     * @return true if the sequence was removed, false if not in the schema
+     */
+    public boolean removeSequence(Sequence seq) {
+<span class="nc bnc" id="L301" title="All 4 branches missed.">        if (seq == null || _seqMap == null)</span>
+<span class="nc" id="L302">            return false;</span>
+
+<span class="nc" id="L304">        DBIdentifier sName = DBIdentifier.toUpper(seq.getIdentifier());</span>
+<span class="nc" id="L305">        Sequence cur = _seqMap.get(sName);</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">        if (!cur.equals(seq))</span>
+<span class="nc" id="L307">            return false;</span>
+
+<span class="nc" id="L309">        _seqMap.remove(sName);</span>
+<span class="nc" id="L310">        _seqs = null;</span>
+<span class="nc" id="L311">        SchemaGroup group = getSchemaGroup();</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">        if (group != null)</span>
+<span class="nc" id="L313">            group.removeName(seq.getIdentifier());</span>
+<span class="nc" id="L314">        seq.remove();</span>
+<span class="nc" id="L315">        return true;</span>
+    }
+
+    /**
+     * Import a sequence from another schema.
+     */
+    public Sequence importSequence(Sequence seq) {
+<span class="nc bnc" id="L322" title="All 2 branches missed.">        if (seq == null)</span>
+<span class="nc" id="L323">            return null;</span>
+
+<span class="nc" id="L325">        Sequence copy = addSequence(seq.getIdentifier());</span>
+<span class="nc" id="L326">        copy.setInitialValue(seq.getInitialValue());</span>
+<span class="nc" id="L327">        copy.setIncrement(seq.getIncrement());</span>
+<span class="nc" id="L328">        copy.setAllocate(seq.getAllocate());</span>
+<span class="nc" id="L329">        return copy;</span>
+    }
+
+    @Override
+    public int compareTo(Schema other) {
+<span class="nc" id="L334">        DBIdentifier name = getIdentifier();</span>
+<span class="nc" id="L335">        DBIdentifier otherName = other.getIdentifier();</span>
+<span class="nc bnc" id="L336" title="All 4 branches missed.">        if (DBIdentifier.isNull(name) &amp;&amp; DBIdentifier.isNull(otherName)) {</span>
+<span class="nc" id="L337">            return 0;</span>
+        }
+<span class="nc bnc" id="L339" title="All 2 branches missed.">        if (DBIdentifier.isNull(name))</span>
+<span class="nc" id="L340">            return 1;</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        if (DBIdentifier.isNull(otherName))</span>
+<span class="nc" id="L342">            return -1;</span>
+<span class="nc" id="L343">        return name.compareTo(otherName);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L348">        return getIdentifier().getName();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

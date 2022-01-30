@@ -1,0 +1,470 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FieldMappingInfo.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">FieldMappingInfo.java</span></div><h1>FieldMappingInfo.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.xml.Commentable;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.MetaDataContext;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Information about the mapping from a field to the schema, in raw form.
+ * The columns and tables used in mapping info will not be part of the
+ * {@link SchemaGroup} used at runtime. Rather, they will be structs
+ * with the relevant pieces of information filled in.
+ *
+ * @author Abe White
+ * @author Pinaki Poddar
+ */
+<span class="nc" id="L49">public class FieldMappingInfo</span>
+    extends MappingInfo
+    implements Commentable {
+
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L55">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L56">        (FieldMappingInfo.class);</span>
+
+<span class="nc" id="L58">    private DBIdentifier _tableName = DBIdentifier.NULL;</span>
+<span class="nc" id="L59">    private boolean _outer = false;</span>
+<span class="nc" id="L60">    private Column _orderCol = null;</span>
+<span class="nc" id="L61">    private boolean _canOrderCol = true;</span>
+<span class="nc" id="L62">    private String[] _comments = null;</span>
+    private List&lt;Unique&gt; _joinTableUniques; // Unique constraints on JoinTable
+
+    /**
+     * The user-supplied name of the table for this field.
+     * @deprecated
+     */
+    @Deprecated
+    public String getTableName() {
+<span class="nc" id="L71">        return getTableIdentifier().getName();</span>
+    }
+
+    public DBIdentifier getTableIdentifier() {
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        return _tableName == null ? DBIdentifier.NULL : _tableName;</span>
+    }
+
+    /**
+     * The user-supplied name of the table for this field.
+     * @deprecated
+     */
+    @Deprecated
+    public void setTableName(String tableName) {
+<span class="nc" id="L84">        setTableIdentifier(DBIdentifier.newTable(tableName));</span>
+<span class="nc" id="L85">    }</span>
+
+    public void setTableIdentifier(DBIdentifier tableName) {
+<span class="nc" id="L88">        _tableName = tableName;</span>
+<span class="nc" id="L89">    }</span>
+
+    /**
+     * Whether the field's table is joined to the class table through an
+     * outer join.
+     */
+    public boolean isJoinOuter() {
+<span class="nc" id="L96">        return _outer;</span>
+    }
+
+    /**
+     * Whether the field's table is joined to the class table through an
+     * outer join.
+     */
+    public void setJoinOuter(boolean outer) {
+<span class="nc" id="L104">        _outer = outer;</span>
+<span class="nc" id="L105">    }</span>
+
+    /**
+     * Raw synthetic ordering column.
+     */
+    public Column getOrderColumn() {
+<span class="nc" id="L111">        return _orderCol;</span>
+    }
+
+    /**
+     * Raw synthetic ordering column.
+     */
+    public void setOrderColumn(Column order) {
+<span class="nc" id="L118">        _orderCol = order;</span>
+<span class="nc" id="L119">    }</span>
+
+    /**
+     * Whether we can have an ordering column.
+     */
+    public boolean canOrderColumn() {
+<span class="nc" id="L125">        return _canOrderCol;</span>
+    }
+
+    /**
+     * Whether we can have an ordering column.
+     */
+    public void setCanOrderColumn(boolean canOrder) {
+<span class="nc" id="L132">        _canOrderCol = canOrder;</span>
+<span class="nc" id="L133">    }</span>
+
+    /**
+     * Return the table for the given field, or null if no table given.
+     */
+    public Table getTable(final FieldMapping field, boolean create,
+        boolean adapt) {
+<span class="nc bnc" id="L140" title="All 4 branches missed.">        if (DBIdentifier.isNull(_tableName) &amp;&amp; !create)</span>
+<span class="nc" id="L141">            return null;</span>
+
+<span class="nc" id="L143">        Table table = field.getDefiningMapping().getTable();</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        DBIdentifier schemaName = (table == null) ? DBIdentifier.NULL</span>
+<span class="nc" id="L145">            : table.getSchema().getIdentifier();</span>
+
+        // if we have no join columns defined, there may be class-level join
+        // information with a more fully-qualified name for our table
+<span class="nc" id="L149">        DBIdentifier tableName = _tableName;</span>
+<span class="nc bnc" id="L150" title="All 4 branches missed.">        if (!DBIdentifier.isNull(tableName) &amp;&amp; getColumns().isEmpty())</span>
+<span class="nc" id="L151">            tableName = field.getDefiningMapping().getMappingInfo().</span>
+<span class="nc" id="L152">                getSecondaryTableIdentifier(tableName);</span>
+
+<span class="nc" id="L154">        return createTable(field, new TableDefaults() {</span>
+            @Override
+            public String get(Schema schema) {
+                // delay this so that we don't do schema reflection for unique
+                // table name unless necessary
+<span class="nc" id="L159">                return field.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L160">                    getTableName(field, schema);</span>
+            }
+            @Override
+            public DBIdentifier getIdentifier(Schema schema) {
+<span class="nc" id="L164">                return field.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L165">                    getTableIdentifier(field, schema);</span>
+            }
+        }, schemaName, tableName, adapt);
+    }
+
+    public ForeignKey getJoinForeignKey (final FieldMapping field, Table table,
+        boolean adapt) {
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (field.isUni1ToMFK()) {</span>
+<span class="nc" id="L173">            List&lt;Column&gt; cols = field.getElementMapping().getValueInfo().getColumns();</span>
+<span class="nc" id="L174">            return getJoin(field, table, adapt, cols);</span>
+        }
+<span class="nc" id="L176">        return null;</span>
+    }
+
+    /**
+     * Return the join from the field table to the owning class table.
+     */
+    public ForeignKey getJoin(final FieldMapping field, Table table,
+        boolean adapt) {
+        // if we have no join columns defined, check class-level join
+    	// if the given field is embedded then consider primary table of owner
+<span class="nc" id="L186">        return getJoin(field, table, adapt, getColumns());</span>
+    }
+
+    public ForeignKey getJoin(final FieldMapping field, Table table,
+            boolean adapt, List&lt;Column&gt; cols) {
+<span class="nc bnc" id="L191" title="All 2 branches missed.">        if (cols.isEmpty()) {</span>
+        	ClassMapping mapping;
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        	if (field.isEmbedded() &amp;&amp;</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">                    field.getDeclaringMapping().getEmbeddingMapping() != null) {</span>
+<span class="nc" id="L195">                mapping = field.getDeclaringMapping().getEmbeddingMapping()</span>
+<span class="nc" id="L196">        			.getFieldMapping().getDeclaringMapping();</span>
+        	} else {
+<span class="nc" id="L198">        		mapping = field.getDefiningMapping();</span>
+        	}
+<span class="nc" id="L200">            cols = mapping.getMappingInfo().</span>
+<span class="nc" id="L201">                getSecondaryTableJoinColumns(_tableName);</span>
+        }
+<span class="nc" id="L203">        ForeignKeyDefaults def = new ForeignKeyDefaults() {</span>
+            @Override
+            public ForeignKey get(Table local, Table foreign, boolean inverse) {
+<span class="nc" id="L206">                return field.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L207">                    getJoinForeignKey(field, local, foreign);</span>
+            }
+
+            @Override
+            public void populate(Table local, Table foreign, Column col,
+                Object target, boolean inverse, int pos, int cols) {
+<span class="nc" id="L213">                field.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L214">                    populateJoinColumn(field, local, foreign, col, target,</span>
+                        pos, cols);
+<span class="nc" id="L216">            }</span>
+        };
+<span class="nc" id="L218">        ClassMapping cls = getDefiningMapping(field);</span>
+<span class="nc" id="L219">        return createForeignKey(field, &quot;join&quot;, cols, def, table, cls, cls,</span>
+            false, adapt);
+    }
+
+    private ClassMapping getDefiningMapping(FieldMapping field) {
+<span class="nc" id="L224">        ClassMapping clm = field.getDefiningMapping();</span>
+<span class="nc" id="L225">        ValueMappingImpl value = (ValueMappingImpl)clm.getEmbeddingMetaData();</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">        if (value == null)</span>
+<span class="nc" id="L227">            return clm;</span>
+<span class="nc" id="L228">        FieldMapping field1 = value.getFieldMapping();</span>
+<span class="nc" id="L229">        return getDefiningMapping(field1);</span>
+    }
+
+    /**
+     * Unique constraint on the field join.
+     */
+    public Unique getJoinUnique(FieldMapping field, boolean def,
+        boolean adapt) {
+<span class="nc" id="L237">        ForeignKey fk = field.getJoinForeignKey();</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if (fk == null)</span>
+<span class="nc" id="L239">            return null;</span>
+
+<span class="nc" id="L241">        Unique unq = null;</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        if (fk.getColumns().length &gt; 0)</span>
+<span class="nc" id="L243">            unq = field.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L244">                getJoinUnique(field, fk.getTable(), fk.getColumns());</span>
+<span class="nc" id="L245">        return createUnique(field, &quot;join&quot;, unq, fk.getColumns(), adapt);</span>
+    }
+
+    /**
+     * Add Unique Constraint to the Join Table.
+     */
+    public void addJoinTableUnique(Unique u) {
+<span class="nc bnc" id="L252" title="All 2 branches missed.">    	if (_joinTableUniques == null)</span>
+<span class="nc" id="L253">    		_joinTableUniques = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L254">    	_joinTableUniques.add(u);</span>
+<span class="nc" id="L255">    }</span>
+
+    /**
+     * Get the unique constraints associated with the Sequence table.
+     */
+    public Unique[] getJoinTableUniques(FieldMapping field, boolean def,
+    		boolean adapt) {
+<span class="nc" id="L262">        return getUniques(field, _joinTableUniques, def, adapt);</span>
+    }
+
+    private Unique[] getUniques(FieldMapping field, List&lt;Unique&gt; uniques,
+    		boolean def, boolean adapt) {
+<span class="nc bnc" id="L267" title="All 4 branches missed.">        if (uniques == null || uniques.isEmpty())</span>
+<span class="nc" id="L268">            return new Unique[0];</span>
+<span class="nc" id="L269">        Collection&lt;Unique&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        for (Unique template : uniques) {</span>
+<span class="nc" id="L271">            Column[] templateColumns = template.getColumns();</span>
+<span class="nc" id="L272">            Column[] uniqueColumns = new Column[templateColumns.length];</span>
+<span class="nc" id="L273">            Table table = getTable(field, true, adapt);</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">            for (int i=0; i&lt;uniqueColumns.length; i++) {</span>
+<span class="nc" id="L275">                DBIdentifier columnName = templateColumns[i].getIdentifier();</span>
+<span class="nc" id="L276">                Column uniqueColumn = table.getColumn(columnName);</span>
+<span class="nc" id="L277">                uniqueColumns[i] = uniqueColumn;</span>
+            }
+<span class="nc" id="L279">            Unique unique = createUnique(field, &quot;unique&quot;, template,</span>
+                uniqueColumns, adapt);
+<span class="nc bnc" id="L281" title="All 2 branches missed.">            if (unique != null)</span>
+<span class="nc" id="L282">                result.add(unique);</span>
+<span class="nc" id="L283">        }</span>
+<span class="nc" id="L284">        return result.toArray(new Unique[result.size()]);</span>
+    }
+
+   /**
+     * Index on the field join.
+     */
+    public Index getJoinIndex(FieldMapping field, boolean adapt) {
+<span class="nc" id="L291">        ForeignKey fk = field.getJoinForeignKey();</span>
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        if (fk == null)</span>
+<span class="nc" id="L293">            return null;</span>
+
+<span class="nc" id="L295">        Index idx = null;</span>
+<span class="nc bnc" id="L296" title="All 2 branches missed.">        if (fk.getColumns().length &gt; 0)</span>
+<span class="nc" id="L297">            idx = field.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L298">                getJoinIndex(field, fk.getTable(), fk.getColumns());</span>
+<span class="nc" id="L299">        return createIndex(field, &quot;join&quot;, idx, fk.getColumns(), adapt);</span>
+    }
+
+    /**
+     * Return the ordering column for this field, or null if none.
+     */
+    public Column getOrderColumn(FieldMapping field, Table table,
+        boolean adapt) {
+<span class="nc bnc" id="L307" title="All 4 branches missed.">        if (_orderCol != null &amp;&amp; field.getOrderDeclaration() != null)</span>
+<span class="nc" id="L308">            throw new MetaDataException(_loc.get(&quot;order-conflict&quot;, field));</span>
+
+        // reset IO
+<span class="nc" id="L311">        setColumnIO(null);</span>
+
+        // has user has explicitly turned ordering off?
+<span class="nc bnc" id="L314" title="All 4 branches missed.">        if (!_canOrderCol || field.getOrderDeclaration() != null)</span>
+<span class="nc" id="L315">            return null;</span>
+
+        // if no defaults return null
+<span class="nc" id="L318">        MappingDefaults def = field.getMappingRepository().</span>
+<span class="nc" id="L319">            getMappingDefaults();</span>
+<span class="nc bnc" id="L320" title="All 6 branches missed.">        if (_orderCol == null &amp;&amp; (!adapt &amp;&amp; !def.defaultMissingInfo()))</span>
+<span class="nc" id="L321">            return null;</span>
+
+<span class="nc" id="L323">        Column tmplate = new Column();</span>
+        // Compatibility option determines what should be used for
+        // the default order column name
+<span class="nc" id="L326">        boolean delimit = field.getMappingRepository().getDBDictionary().delimitAll();</span>
+<span class="nc" id="L327">        if (field.getMappingRepository().getConfiguration()</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">            .getCompatibilityInstance().getUseJPA2DefaultOrderColumnName()) {</span>
+            // Use the same strategy as column to build the field name
+<span class="nc" id="L330">            DBIdentifier sName = DBIdentifier.newColumn(field.getName(), delimit);</span>
+<span class="nc" id="L331">            sName = DBIdentifier.append(sName,&quot;_ORDER&quot;);</span>
+<span class="nc" id="L332">            tmplate.setIdentifier(sName);</span>
+<span class="nc" id="L333">        } else {</span>
+<span class="nc" id="L334">            tmplate.setIdentifier(DBIdentifier.newColumn(&quot;ordr&quot;, delimit));</span>
+        }
+
+<span class="nc" id="L337">        tmplate.setJavaType(JavaTypes.INT);</span>
+<span class="nc bnc" id="L338" title="All 4 branches missed.">        if (!def.populateOrderColumns(field, table, new Column[]{ tmplate })</span>
+            &amp;&amp; _orderCol == null)
+<span class="nc" id="L340">            return null;</span>
+
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        if (_orderCol != null) {</span>
+<span class="nc" id="L343">            ColumnIO io = new ColumnIO();</span>
+<span class="nc bnc" id="L344" title="All 2 branches missed.">            io.setNullInsertable(0, !_orderCol.isNotNull());</span>
+<span class="nc bnc" id="L345" title="All 2 branches missed.">            io.setNullUpdatable(0, !_orderCol.isNotNull());</span>
+<span class="nc bnc" id="L346" title="All 2 branches missed.">            io.setInsertable(0, !_orderCol.getFlag(Column.FLAG_UNINSERTABLE));</span>
+<span class="nc bnc" id="L347" title="All 2 branches missed.">            io.setUpdatable(0, !_orderCol.getFlag(Column.FLAG_UNUPDATABLE));</span>
+<span class="nc" id="L348">            setColumnIO(io);</span>
+        }
+
+<span class="nc" id="L351">        return mergeColumn(field, &quot;order&quot;, tmplate, true, _orderCol, table,</span>
+<span class="nc" id="L352">            adapt, def.defaultMissingInfo());</span>
+    }
+
+    /**
+     * Synchronize internal information with the mapping data for the given
+     * field.
+     */
+    public void syncWith(FieldMapping field) {
+<span class="nc" id="L360">        clear(false);</span>
+
+<span class="nc bnc" id="L362" title="All 2 branches missed.">        if (field.getJoinForeignKey() != null)</span>
+<span class="nc" id="L363">            _tableName = field.getMappingRepository().getDBDictionary().</span>
+<span class="nc" id="L364">                getFullIdentifier(field.getTable(), true);</span>
+
+<span class="nc" id="L366">        ClassMapping def = field.getDefiningMapping();</span>
+<span class="nc" id="L367">        setColumnIO(field.getJoinColumnIO());</span>
+<span class="nc bnc" id="L368" title="All 4 branches missed.">        if (field.getJoinForeignKey() != null &amp;&amp; def.getTable() != null)</span>
+<span class="nc" id="L369">            syncForeignKey(field, field.getJoinForeignKey(),</span>
+<span class="nc" id="L370">                field.getTable(), def.getTable());</span>
+<span class="nc" id="L371">        _outer = field.isJoinOuter();</span>
+
+<span class="nc" id="L373">        syncIndex(field, field.getJoinIndex());</span>
+<span class="nc" id="L374">        syncUnique(field, field.getJoinUnique());</span>
+<span class="nc" id="L375">        syncJoinTableUniques(field, field.getJoinTableUniques());</span>
+<span class="nc" id="L376">        syncOrderColumn(field);</span>
+<span class="nc" id="L377">        syncStrategy(field);</span>
+<span class="nc" id="L378">    }</span>
+
+    /**
+     * Synchronize internal mapping strategy information with the given field.
+     */
+    public void syncStrategy(FieldMapping field) {
+<span class="nc" id="L384">        setStrategy(null);</span>
+<span class="nc bnc" id="L385" title="All 4 branches missed.">        if (field.getHandler() != null || field.getStrategy() == null)</span>
+<span class="nc" id="L386">            return;</span>
+
+        // explicit strategy if the strategy isn't the expected default
+<span class="nc" id="L389">        Strategy strat = field.getMappingRepository().defaultStrategy</span>
+<span class="nc" id="L390">            (field, false);</span>
+<span class="nc bnc" id="L391" title="All 4 branches missed.">        if (strat == null || !strat.getAlias().equals(field.getAlias()))</span>
+<span class="nc" id="L392">            setStrategy(field.getAlias());</span>
+<span class="nc" id="L393">    }</span>
+
+    /**
+     * Synchronize internal order column information with the given field.
+     */
+    public void syncOrderColumn(FieldMapping field) {
+<span class="nc bnc" id="L399" title="All 2 branches missed.">        if (field.getOrderColumn() != null)</span>
+<span class="nc" id="L400">            _orderCol = syncColumn(field, field.getOrderColumn(), 1, false,</span>
+<span class="nc" id="L401">                field.getTable(), null, null, false);</span>
+        else
+<span class="nc" id="L403">            _orderCol = null;</span>
+<span class="nc" id="L404">    }</span>
+
+    /**
+     * Sets internal constraint information to match given mapped constraint.
+     */
+    protected void syncJoinTableUniques(MetaDataContext context, Unique[] unqs)
+    {
+<span class="nc bnc" id="L411" title="All 2 branches missed.">        if (unqs == null) {</span>
+<span class="nc" id="L412">            _joinTableUniques = null;</span>
+<span class="nc" id="L413">            return;</span>
+        }
+<span class="nc" id="L415">        _joinTableUniques = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L416" title="All 2 branches missed.">        for (Unique unique:unqs) {</span>
+<span class="nc" id="L417">        	Unique copy = new Unique();</span>
+<span class="nc" id="L418">        	copy.setIdentifier(unique.getIdentifier());</span>
+<span class="nc" id="L419">        	copy.setDeferred(unique.isDeferred());</span>
+<span class="nc" id="L420">        	_joinTableUniques.add(unique);</span>
+        }
+<span class="nc" id="L422">    }</span>
+
+
+    @Override
+    public boolean hasSchemaComponents() {
+<span class="nc bnc" id="L427" title="All 6 branches missed.">        return super.hasSchemaComponents() || !DBIdentifier.isNull(_tableName)</span>
+            || _orderCol != null;
+    }
+
+    @Override
+    protected void clear(boolean canFlags) {
+<span class="nc" id="L433">        super.clear(canFlags);</span>
+<span class="nc" id="L434">        _tableName = DBIdentifier.NULL;</span>
+<span class="nc" id="L435">        _orderCol = null;</span>
+<span class="nc bnc" id="L436" title="All 2 branches missed.">        if (canFlags)</span>
+<span class="nc" id="L437">            _canOrderCol = true;</span>
+<span class="nc" id="L438">    }</span>
+
+    @Override
+    public void copy(MappingInfo info) {
+<span class="nc" id="L442">        super.copy(info);</span>
+<span class="nc bnc" id="L443" title="All 2 branches missed.">        if (!(info instanceof FieldMappingInfo))</span>
+<span class="nc" id="L444">            return;</span>
+
+<span class="nc" id="L446">        FieldMappingInfo finfo = (FieldMappingInfo) info;</span>
+<span class="nc bnc" id="L447" title="All 2 branches missed.">        if (DBIdentifier.isNull(_tableName))</span>
+<span class="nc" id="L448">            _tableName = finfo.getTableIdentifier();</span>
+<span class="nc bnc" id="L449" title="All 2 branches missed.">        if (!_outer)</span>
+<span class="nc" id="L450">            _outer = finfo.isJoinOuter();</span>
+<span class="nc bnc" id="L451" title="All 4 branches missed.">        if (_canOrderCol &amp;&amp; _orderCol == null)</span>
+<span class="nc" id="L452">            _canOrderCol = finfo.canOrderColumn();</span>
+<span class="nc bnc" id="L453" title="All 4 branches missed.">        if (_canOrderCol &amp;&amp; finfo.getOrderColumn() != null) {</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">            if (_orderCol == null)</span>
+<span class="nc" id="L455">                _orderCol = new Column();</span>
+<span class="nc" id="L456">            _orderCol.copy(finfo.getOrderColumn());</span>
+        }
+<span class="nc" id="L458">    }</span>
+
+    @Override
+    public String[] getComments() {
+<span class="nc bnc" id="L462" title="All 2 branches missed.">        return (_comments == null) ? EMPTY_COMMENTS : _comments;</span>
+    }
+
+    @Override
+    public void setComments(String[] comments) {
+<span class="nc" id="L467">        _comments = comments;</span>
+<span class="nc" id="L468">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

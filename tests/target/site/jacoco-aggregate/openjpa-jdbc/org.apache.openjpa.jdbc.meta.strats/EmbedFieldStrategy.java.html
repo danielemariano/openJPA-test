@@ -1,0 +1,1974 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EmbedFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">EmbedFieldStrategy.java</span></div><h1>EmbedFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.io.InputStream;
+import java.io.ObjectOutput;
+import java.io.Reader;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.util.BitSet;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Locale;
+
+import org.apache.openjpa.enhance.PersistenceCapable;
+import org.apache.openjpa.enhance.StateManager;
+import org.apache.openjpa.jdbc.kernel.EagerFetchModes;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Embeddable;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.meta.Joinable;
+import org.apache.openjpa.jdbc.meta.RelationId;
+import org.apache.openjpa.jdbc.meta.ValueMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.FetchConfiguration;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.PCState;
+import org.apache.openjpa.kernel.StateManagerImpl;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.meta.FetchGroup;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.MetaDataModes;
+import org.apache.openjpa.meta.ValueMetaData;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Mapping for an embedded persistent object.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+<span class="nc" id="L81">public class EmbedFieldStrategy</span>
+    extends AbstractFieldStrategy
+    implements Embeddable {
+
+    
+    private static final long serialVersionUID = 1L;
+    private static final int INSERT = 0;
+    private static final int UPDATE = 1;
+    private static final int DELETE = 2;
+
+<span class="nc" id="L91">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L92">        (EmbedFieldStrategy.class);</span>
+
+<span class="nc" id="L94">    private boolean _synthetic = false;</span>
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if (field.getEmbeddedMetaData() == null)</span>
+<span class="nc" id="L99">            throw new MetaDataException(_loc.get(&quot;not-embed&quot;, field));</span>
+<span class="nc" id="L100">        assertNotMappedBy();</span>
+
+        // map join key (if any)
+<span class="nc" id="L103">        field.mapJoin(adapt, false);</span>
+<span class="nc" id="L104">        field.getKeyMapping().getValueInfo().assertNoSchemaComponents</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">            (field.getKey(), !adapt);</span>
+<span class="nc" id="L106">        field.getElementMapping().getValueInfo().assertNoSchemaComponents</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">            (field.getElement(), !adapt);</span>
+
+<span class="nc" id="L109">        ValueMappingInfo vinfo = field.getValueInfo();</span>
+<span class="nc" id="L110">        vinfo.assertNoJoin(field, true);</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">        vinfo.assertNoForeignKey(field, !adapt);</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        vinfo.assertNoUnique(field, !adapt);</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        vinfo.assertNoIndex(field, !adapt);</span>
+
+        // before we map the null indicator column, we need to make sure our
+        // value is mapped so we can tell whether the column is synthetic
+<span class="nc" id="L117">        field.getValueMapping().resolve(MetaDataModes.MODE_META | MetaDataModes.MODE_MAPPING);</span>
+<span class="nc" id="L118">        Column col = vinfo.getNullIndicatorColumn(field, field.getName(),</span>
+<span class="nc" id="L119">            field.getTable(), adapt);</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        if (col != null) {</span>
+<span class="nc" id="L121">            field.setColumns(new Column[]{ col });</span>
+<span class="nc" id="L122">            field.setColumnIO(vinfo.getColumnIO());</span>
+        }
+
+<span class="nc" id="L125">        field.mapPrimaryKey(adapt);</span>
+<span class="nc" id="L126">    }</span>
+
+    @Override
+    public void initialize() {
+<span class="nc" id="L130">        Column[] cols = field.getColumns();</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if (cols.length != 1)</span>
+<span class="nc" id="L132">            _synthetic = false;</span>
+        else {
+            // do any of the embedded field mappings use this column?
+            // if not, consider it synthetic
+<span class="nc" id="L136">            Column col = cols[0];</span>
+<span class="nc" id="L137">            boolean found = false;</span>
+<span class="nc" id="L138">            FieldMapping[] fields = field.getEmbeddedMapping().</span>
+<span class="nc" id="L139">                getFieldMappings();</span>
+<span class="nc bnc" id="L140" title="All 4 branches missed.">            for (int i = 0; !found &amp;&amp; i &lt; fields.length; i++) {</span>
+<span class="nc" id="L141">                cols = fields[i].getColumns();</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">                for (int j = 0; j &lt; cols.length; j++)</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">                    if (cols[j].equals(col))</span>
+<span class="nc" id="L144">                        found = true;</span>
+            }
+<span class="nc bnc" id="L146" title="All 2 branches missed.">            _synthetic = !found;</span>
+        }
+<span class="nc" id="L148">    }</span>
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L153">        Row row = field.getRow(sm, store, rm, Row.ACTION_INSERT);</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        if (row == null)</span>
+<span class="nc" id="L155">            return;</span>
+
+<span class="nc" id="L157">        OpenJPAStateManager em = store.getContext().getStateManager</span>
+<span class="nc" id="L158">            (sm.fetchObject(field.getIndex()));</span>
+<span class="nc" id="L159">        insert(sm, em, store, rm, row);</span>
+<span class="nc" id="L160">    }</span>
+
+    /**
+     * Insert an embedded object.
+     *
+     * @param owner the owning state manager
+     * @param sm the embedded state manager, or null if the value is null
+     * @param rm the row manager
+     * @param row expected row for this embedded value
+     */
+    public void insert(OpenJPAStateManager owner, OpenJPAStateManager sm,
+        JDBCStore store, RowManager rm, Row row)
+        throws SQLException {
+<span class="nc" id="L173">        OpenJPAStateManager em = sm;</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        if (em == null)</span>
+<span class="nc" id="L175">            em = new NullEmbeddedStateManager(owner, field);</span>
+<span class="nc" id="L176">        rm = new EmbeddedRowManager(rm, row);</span>
+<span class="nc" id="L177">        FieldMapping[] fields = field.getEmbeddedMapping().getFieldMappings();</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++)</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">            if (!Boolean.TRUE.equals(fields[i].isCustomInsert(em, store)))</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">                if (!fields[i].isPrimaryKey())</span>
+<span class="nc" id="L181">                    fields[i].insert(em, store, rm);</span>
+
+<span class="nc bnc" id="L183" title="All 2 branches missed.">        if (field.getColumnIO().isInsertable(0, true))</span>
+<span class="nc" id="L184">            setNullIndicatorColumn(sm, row);</span>
+<span class="nc" id="L185">    }</span>
+
+    @Override
+    public void update(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L190">        OpenJPAStateManager em = store.getContext().getStateManager</span>
+<span class="nc" id="L191">            (sm.fetchObject(field.getIndex()));</span>
+<span class="nc bnc" id="L192" title="All 4 branches missed.">        boolean newVal = em == null || em.getPCState() == PCState.ECOPY;</span>
+
+<span class="nc" id="L194">        Row row = null;</span>
+<span class="nc bnc" id="L195" title="All 4 branches missed.">        if (newVal &amp;&amp; field.getJoinForeignKey() != null</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">            &amp;&amp; field.isJoinOuter()) {</span>
+            // if our record is in an outer-joined related table and we're not
+            // updating an existing value, delete the old one
+<span class="nc" id="L199">            Row del = rm.getRow(field.getTable(), Row.ACTION_DELETE, sm, true);</span>
+<span class="nc" id="L200">            del.whereForeignKey(field.getJoinForeignKey(), sm);</span>
+<span class="nc" id="L201">            delete(sm, null, store, rm, del);</span>
+
+            // insert the new value
+<span class="nc bnc" id="L204" title="All 2 branches missed.">            row = rm.getRow(field.getTable(), Row.ACTION_INSERT, sm,</span>
+                em != null);
+<span class="nc" id="L206">        } else</span>
+<span class="nc" id="L207">            row = rm.getRow(field.getTable(), Row.ACTION_UPDATE, sm, true);</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">        if (row == null)</span>
+<span class="nc" id="L209">            return;</span>
+
+<span class="nc bnc" id="L211" title="All 2 branches missed.">        if (row.getAction() == Row.ACTION_INSERT)</span>
+<span class="nc" id="L212">            insert(sm, em, store, rm, row);</span>
+        else
+<span class="nc" id="L214">            update(sm, em, store, rm, row);</span>
+<span class="nc" id="L215">    }</span>
+
+    /**
+     * Update an embedded object.
+     *
+     * @param owner the owning state manager
+     * @param sm the embedded state manager, or null if the value is null
+     * @param rm the row manager
+     * @param row expected row for this embedded value
+     */
+    public void update(OpenJPAStateManager owner, OpenJPAStateManager sm,
+        JDBCStore store, RowManager rm, Row row)
+        throws SQLException {
+<span class="nc" id="L228">        OpenJPAStateManager em = sm;</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">        if (em == null)</span>
+<span class="nc" id="L230">            em = new NullEmbeddedStateManager(owner, field);</span>
+<span class="nc" id="L231">        rm = new EmbeddedRowManager(rm, row);</span>
+<span class="nc" id="L232">        FieldMapping[] fields = field.getEmbeddedMapping().getFieldMappings();</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++)</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">            if (em.getDirty().get(i)</span>
+<span class="nc bnc" id="L235" title="All 2 branches missed.">                &amp;&amp; !em.getFlushed().get(i)</span>
+<span class="nc bnc" id="L236" title="All 2 branches missed.">                &amp;&amp; !Boolean.TRUE.equals(fields[i].isCustomUpdate(em, store)))</span>
+<span class="nc" id="L237">                fields[i].update(em, store, rm);</span>
+
+<span class="nc bnc" id="L239" title="All 2 branches missed.">        if (field.getColumnIO().isUpdatable(0, true))</span>
+<span class="nc" id="L240">            setNullIndicatorColumn(sm, row);</span>
+<span class="nc" id="L241">    }</span>
+
+    @Override
+    public void delete(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L246">        OpenJPAStateManager em = null;</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">        if (sm.getLoaded().get(field.getIndex()))</span>
+<span class="nc" id="L248">            em = store.getContext().getStateManager(sm.fetchObject</span>
+<span class="nc" id="L249">                (field.getIndex()));</span>
+<span class="nc" id="L250">        Row row = field.getRow(sm, store, rm, Row.ACTION_DELETE);</span>
+<span class="nc" id="L251">        delete(sm, em, store, rm, row);</span>
+<span class="nc" id="L252">    }</span>
+
+    /**
+     * Delete an embedded object record.
+     *
+     * @param owner the owning state manager
+     * @param sm the embedded state manager, or null if not known
+     * @param rm the row manager
+     * @param row expected row for this embedded value
+     */
+    public void delete(OpenJPAStateManager owner, OpenJPAStateManager sm,
+        JDBCStore store, RowManager rm, Row row)
+        throws SQLException {
+<span class="nc" id="L265">        rm = new EmbeddedRowManager(rm, row);</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        if (sm == null)</span>
+<span class="nc" id="L267">            sm = new NullEmbeddedStateManager(owner, field);</span>
+<span class="nc" id="L268">        FieldMapping[] fields = field.getEmbeddedMapping().getFieldMappings();</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++)</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">            if (!Boolean.TRUE.equals(fields[i].isCustomDelete(sm, store)))</span>
+<span class="nc" id="L271">                fields[i].delete(sm, store, rm);</span>
+<span class="nc" id="L272">    }</span>
+
+    /**
+     * Set the proper null indicator value into the given row.
+     */
+    private void setNullIndicatorColumn(OpenJPAStateManager sm, Row row)
+        throws SQLException {
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        if (!_synthetic)</span>
+<span class="nc" id="L280">            return;</span>
+
+<span class="nc" id="L282">        Column col = field.getColumns()[0];</span>
+<span class="nc" id="L283">        Object val = ((EmbeddedClassStrategy) field.getEmbeddedMapping().</span>
+<span class="nc" id="L284">            getStrategy()).getNullIndicatorValue(sm);</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L286">            row.setNull(col, true);</span>
+        else
+<span class="nc" id="L288">            row.setObject(col, val);</span>
+<span class="nc" id="L289">    }</span>
+
+    @Override
+    public Boolean isCustomInsert(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L293">        OpenJPAStateManager em = sm.getContext().getStateManager(sm.fetchObject</span>
+<span class="nc" id="L294">            (field.getIndex()));</span>
+<span class="nc" id="L295">        Boolean custom = isCustom(INSERT, sm, em, store);</span>
+<span class="nc bnc" id="L296" title="All 4 branches missed.">        if (Boolean.TRUE.equals(custom) &amp;&amp; _synthetic)</span>
+<span class="nc" id="L297">            return null;</span>
+<span class="nc" id="L298">        return custom;</span>
+    }
+
+    @Override
+    public Boolean isCustomUpdate(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L303">        OpenJPAStateManager em = sm.getContext().getStateManager(sm.fetchObject</span>
+<span class="nc" id="L304">            (field.getIndex()));</span>
+<span class="nc" id="L305">        Boolean custom = isCustom(UPDATE, sm, em, store);</span>
+<span class="nc bnc" id="L306" title="All 4 branches missed.">        if (Boolean.TRUE.equals(custom) &amp;&amp; _synthetic)</span>
+<span class="nc" id="L307">            return null;</span>
+<span class="nc" id="L308">        return custom;</span>
+    }
+
+    @Override
+    public Boolean isCustomDelete(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L313">        OpenJPAStateManager em = sm.getContext().getStateManager(sm.fetchObject</span>
+<span class="nc" id="L314">            (field.getIndex()));</span>
+<span class="nc" id="L315">        return isCustom(DELETE, sm, em, store);</span>
+    }
+
+    /**
+     * Return whether the given action requires custom handling for any fields.
+     */
+    private Boolean isCustom(int action, OpenJPAStateManager owner,
+        OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc bnc" id="L323" title="All 2 branches missed.">        if (sm == null)</span>
+<span class="nc" id="L324">            sm = new NullEmbeddedStateManager(owner, field);</span>
+<span class="nc" id="L325">        boolean hasCustom = false;</span>
+<span class="nc" id="L326">        boolean hasStd = false;</span>
+
+<span class="nc" id="L328">        FieldMapping[] fields = field.getEmbeddedMapping().getFieldMappings();</span>
+<span class="nc" id="L329">        Boolean custom = null;</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc bnc" id="L331" title="All 4 branches missed.">            switch (action) {</span>
+                case INSERT:
+<span class="nc" id="L333">                    custom = fields[i].isCustomInsert(sm, store);</span>
+<span class="nc" id="L334">                    break;</span>
+                case UPDATE:
+<span class="nc" id="L336">                    custom = fields[i].isCustomUpdate(sm, store);</span>
+<span class="nc" id="L337">                    break;</span>
+                case DELETE:
+<span class="nc" id="L339">                    custom = fields[i].isCustomDelete(sm, store);</span>
+                    break;
+            }
+
+<span class="nc bnc" id="L343" title="All 2 branches missed.">            if (!Boolean.FALSE.equals(custom))</span>
+<span class="nc" id="L344">                hasCustom = true;</span>
+<span class="nc bnc" id="L345" title="All 2 branches missed.">            if (!Boolean.TRUE.equals(custom))</span>
+<span class="nc" id="L346">                hasStd = true;</span>
+        }
+
+<span class="nc bnc" id="L349" title="All 4 branches missed.">        if (hasCustom &amp;&amp; hasStd)</span>
+<span class="nc" id="L350">            return null;</span>
+<span class="nc bnc" id="L351" title="All 2 branches missed.">        return (hasCustom) ? Boolean.TRUE : Boolean.FALSE;</span>
+    }
+
+    @Override
+    public void customInsert(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L357">        OpenJPAStateManager em = store.getContext().getStateManager</span>
+<span class="nc" id="L358">            (sm.fetchObject(field.getIndex()));</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">        if (em == null)</span>
+<span class="nc" id="L360">            em = new NullEmbeddedStateManager(sm, field);</span>
+<span class="nc" id="L361">        FieldMapping[] fields = field.getEmbeddedMapping().getFieldMappings();</span>
+<span class="nc bnc" id="L362" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++)</span>
+<span class="nc bnc" id="L363" title="All 2 branches missed.">            if (!Boolean.FALSE.equals(fields[i].isCustomInsert(em, store)))</span>
+<span class="nc" id="L364">                fields[i].customInsert(em, store);</span>
+<span class="nc" id="L365">    }</span>
+
+    @Override
+    public void customUpdate(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L370">        OpenJPAStateManager em = store.getContext().getStateManager</span>
+<span class="nc" id="L371">            (sm.fetchObject(field.getIndex()));</span>
+<span class="nc bnc" id="L372" title="All 2 branches missed.">        if (em == null)</span>
+<span class="nc" id="L373">            em = new NullEmbeddedStateManager(sm, field);</span>
+<span class="nc" id="L374">        FieldMapping[] fields = field.getEmbeddedMapping().getFieldMappings();</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++)</span>
+<span class="nc bnc" id="L376" title="All 2 branches missed.">            if (em.getDirty().get(i)</span>
+<span class="nc bnc" id="L377" title="All 2 branches missed.">                &amp;&amp; !em.getFlushed().get(i)</span>
+<span class="nc bnc" id="L378" title="All 2 branches missed.">                &amp;&amp; !Boolean.FALSE.equals(fields[i].isCustomUpdate(em, store)))</span>
+<span class="nc" id="L379">                fields[i].customUpdate(em, store);</span>
+<span class="nc" id="L380">    }</span>
+
+    @Override
+    public void customDelete(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L385">        OpenJPAStateManager em = store.getContext().getStateManager</span>
+<span class="nc" id="L386">            (sm.fetchObject(field.getIndex()));</span>
+<span class="nc bnc" id="L387" title="All 2 branches missed.">        if (em == null)</span>
+<span class="nc" id="L388">            em = new NullEmbeddedStateManager(sm, field);</span>
+<span class="nc" id="L389">        FieldMapping[] fields = field.getEmbeddedMapping().getFieldMappings();</span>
+<span class="nc bnc" id="L390" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++)</span>
+<span class="nc bnc" id="L391" title="All 2 branches missed.">            if (!Boolean.FALSE.equals(fields[i].isCustomDelete(em, store)))</span>
+<span class="nc" id="L392">                fields[i].customDelete(em, store);</span>
+<span class="nc" id="L393">    }</span>
+
+    @Override
+    public int supportsSelect(Select sel, int type, OpenJPAStateManager sm,
+        JDBCStore store, JDBCFetchConfiguration fetch) {
+<span class="nc bnc" id="L398" title="All 4 branches missed.">        if (type == Select.TYPE_JOINLESS &amp;&amp; sel.isSelected(field.getTable()))</span>
+<span class="nc" id="L399">            return 1;</span>
+<span class="nc" id="L400">        return 0;</span>
+    }
+
+    @Override
+    public int select(Select sel, OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, int eagerMode) {
+<span class="nc" id="L406">        Joins joins = field.join(sel);</span>
+<span class="nc" id="L407">        sel.select(field.getColumns(), joins); // null indicator</span>
+
+        // limit eager mode to join b/c at this point the select has been
+        // modified and an attempt to clone it for a to-many eager select can
+        // result in a clone that produces invalid SQL
+<span class="nc" id="L412">        eagerMode = Math.min(eagerMode, EagerFetchModes.EAGER_JOIN);</span>
+<span class="nc" id="L413">        sel.select(field.getEmbeddedMapping(), Select.SUBS_EXACT, store,</span>
+            fetch, eagerMode, joins);
+<span class="nc" id="L415">        return 1;</span>
+    }
+
+    @Override
+    public void load(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Result res)
+        throws SQLException {
+<span class="nc" id="L422">        Boolean isNull = indicatesNull(res);</span>
+<span class="nc bnc" id="L423" title="All 2 branches missed.">        if (isNull == null)</span>
+<span class="nc" id="L424">            return;</span>
+
+<span class="nc bnc" id="L426" title="All 2 branches missed.">        if (Boolean.TRUE.equals(isNull)) {</span>
+<span class="nc" id="L427">            sm.storeObject(field.getIndex(), null);</span>
+<span class="nc" id="L428">            return;</span>
+        }
+
+        // handling of lazy embeddables.  if the embedded field is not part of any
+        // fetch group and the result does not contain any embeddable columns,
+        // do not load the embeddable.
+<span class="nc bnc" id="L434" title="All 2 branches missed.">        if (fetch.requiresFetch(field) == FetchConfiguration.FETCH_NONE &amp;&amp;</span>
+<span class="nc bnc" id="L435" title="All 2 branches missed.">            !containsEmbeddedResult(fetch, res)) {</span>
+<span class="nc" id="L436">            return;</span>
+        }
+
+        //### note: without a null indicator column, the above indicatesNull()
+        //### call will always return false, meaning we always have to assume
+        //### we selected the embedded object fields and load the object
+        //### immediately; this will be inefficient when the embedded object
+        //### was not selected after all
+<span class="nc" id="L444">        StoreContext ctx = store.getContext();</span>
+<span class="nc" id="L445">        OpenJPAStateManager em = ctx.embed(null, null, sm, field);</span>
+<span class="nc" id="L446">        sm.storeObject(field.getIndex(), em.getManagedInstance());</span>
+<span class="nc" id="L447">        boolean needsLoad = loadFields(em, store, fetch, res);</span>
+
+        // After loading everything from result, load the rest of the
+        // configured fields if anything is missing.
+<span class="nc bnc" id="L451" title="All 2 branches missed.">        if (needsLoad &amp;&amp;</span>
+<span class="nc bnc" id="L452" title="All 2 branches missed.">            fetch.requiresFetch(field.getFieldMetaData()) ==</span>
+                FetchConfiguration.FETCH_LOAD) {
+<span class="nc" id="L454">          em.load(fetch);</span>
+        }
+<span class="nc" id="L456">    }</span>
+
+    /*
+     * finds an eager fetch field and searches for it in the result.
+     * if the result does not contain it, assume that it contains no embeddable
+     * column data.  this is a fairly safe assumption given that the entire
+     * embeddable was marked lazy.
+     */
+    private boolean containsEmbeddedResult(FetchConfiguration fetch, Result res) {
+<span class="nc" id="L465">        FieldMapping[] fields = field.getEmbeddedMapping().getFieldMappings();</span>
+<span class="nc" id="L466">        boolean containsUnloadedEagerField = false;</span>
+
+<span class="nc bnc" id="L468" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc" id="L469">            boolean inResultSet = checkResult(fields[i],res);</span>
+<span class="nc bnc" id="L470" title="All 2 branches missed.">            if (inResultSet) {</span>
+                // At least one of the embeddable's field is in the ResultSet.
+<span class="nc" id="L472">                return true;</span>
+            }
+
+<span class="nc bnc" id="L475" title="All 2 branches missed.">            if (fetch.requiresFetch(fields[i]) == FetchConfiguration.FETCH_LOAD) {</span>
+<span class="nc" id="L476">                containsUnloadedEagerField = true;</span>
+            }
+        }
+
+        // A field expected to be loaded eagerly was missing from the ResultSet.
+<span class="nc bnc" id="L481" title="All 2 branches missed.">        if (containsUnloadedEagerField == true) {</span>
+<span class="nc" id="L482">            return false;</span>
+        }
+
+        // if all fields are lazy and in the default fetch group, populate the embeddable
+        // so its attributes can be loaded when accessed.
+<span class="nc" id="L487">        return fetch.hasFetchGroup(FetchGroup.NAME_DEFAULT);</span>
+    }
+
+    private boolean checkResult(FieldMapping fm, Result res) {
+<span class="nc bnc" id="L491" title="All 2 branches missed.">        if (fm.getStrategy() instanceof Joinable) {</span>
+<span class="nc" id="L492">            Joinable strat = (Joinable)fm.getStrategy();</span>
+<span class="nc" id="L493">            Column[] cols = strat.getColumns();</span>
+<span class="nc bnc" id="L494" title="All 2 branches missed.">            for (Column col : cols) {</span>
+                try {
+<span class="nc bnc" id="L496" title="All 2 branches missed.">                    if (res.contains(col)) {</span>
+<span class="nc" id="L497">                        return true;</span>
+                    }
+<span class="nc" id="L499">                } catch (Exception e) {</span>
+<span class="nc" id="L500">                    return false;</span>
+<span class="nc" id="L501">                }</span>
+            }
+        }
+        // if the field is a collection, also check for an eager result which could result from
+        // a non-lazy relationship in the embeddable
+<span class="nc" id="L506">        int type = fm.getTypeCode();</span>
+<span class="nc bnc" id="L507" title="All 6 branches missed.">        if ((type == JavaTypes.ARRAY ||</span>
+             type == JavaTypes.COLLECTION ||
+             type == JavaTypes.MAP)
+<span class="nc bnc" id="L510" title="All 2 branches missed.">            &amp;&amp; res.getEager(fm) != null) {</span>
+<span class="nc" id="L511">            return true;</span>
+        }
+<span class="nc" id="L513">        return false;</span>
+    }
+
+    private boolean loadFields(OpenJPAStateManager em, JDBCStore store,
+        JDBCFetchConfiguration fetch, Result res)
+        throws SQLException {
+<span class="nc" id="L519">        FieldMapping[] fields = field.getEmbeddedMapping().getFieldMappings();</span>
+        Object eres, processed;
+<span class="nc" id="L521">        boolean needsLoad = false;</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc" id="L523">            eres = res.getEager(fields[i]);</span>
+<span class="nc" id="L524">            res.startDataRequest(fields[i]);</span>
+            try {
+<span class="nc bnc" id="L526" title="All 2 branches missed.">                if (eres == res)</span>
+<span class="nc" id="L527">                    fields[i].loadEagerJoin(em, store, fetch, res);</span>
+<span class="nc bnc" id="L528" title="All 2 branches missed.">                else if (eres != null) {</span>
+<span class="nc" id="L529">                    processed =</span>
+<span class="nc" id="L530">                        fields[i].loadEagerParallel(em, store, fetch, eres);</span>
+<span class="nc bnc" id="L531" title="All 2 branches missed.">                    if (processed != eres)</span>
+<span class="nc" id="L532">                        res.putEager(fields[i], processed);</span>
+                } else {
+<span class="nc" id="L534">                    fields[i].load(em, store, fetch, res);</span>
+                }
+<span class="nc bnc" id="L536" title="All 4 branches missed.">                needsLoad = needsLoad || (!em.getLoaded().get(i) &amp;&amp;</span>
+<span class="nc bnc" id="L537" title="All 2 branches missed.">                    fetch.requiresFetch(fields[i])</span>
+                        == FetchConfiguration.FETCH_LOAD);
+            } finally {
+<span class="nc" id="L540">                res.endDataRequest();</span>
+            }
+        }
+<span class="nc" id="L543">        return needsLoad;</span>
+    }
+
+    /**
+     * Return whether the given result indicates that the embedded value is
+     * null.
+     *
+     * @return {@link Boolean#TRUE} if the value is null, {@link Boolean#FALSE}
+     * if it is not, or &lt;code&gt;null&lt;/code&gt; if the result does not
+     * contain the embedded value
+     */
+    private Boolean indicatesNull(Result res)
+        throws SQLException {
+<span class="nc" id="L556">        Column[] cols = field.getColumns();</span>
+<span class="nc bnc" id="L557" title="All 2 branches missed.">        if (cols.length != 1)</span>
+<span class="nc" id="L558">            return Boolean.FALSE;</span>
+<span class="nc bnc" id="L559" title="All 2 branches missed.">        if (!res.contains(cols[0]))</span>
+<span class="nc" id="L560">            return null;</span>
+
+<span class="nc" id="L562">        Object obj = res.getObject(cols[0], -1, (Object) null);</span>
+<span class="nc" id="L563">        if (((EmbeddedClassStrategy) field.getEmbeddedMapping().getStrategy()).</span>
+<span class="nc bnc" id="L564" title="All 2 branches missed.">            indicatesNull(obj))</span>
+<span class="nc" id="L565">            return Boolean.TRUE;</span>
+<span class="nc" id="L566">        return Boolean.FALSE;</span>
+    }
+
+    @Override
+    public Object toDataStoreValue(Object val, JDBCStore store) {
+<span class="nc" id="L571">        ClassMapping type = field.getTypeMapping();</span>
+<span class="nc" id="L572">        return type.toDataStoreValue(val, type.getPrimaryKeyColumns(), store);</span>
+    }
+
+    @Override
+    public void appendIsNull(SQLBuffer sql, Select sel, Joins joins) {
+<span class="nc" id="L577">        appendTestNull(sql, sel, joins, true);</span>
+<span class="nc" id="L578">    }</span>
+
+    @Override
+    public void appendIsNotNull(SQLBuffer sql, Select sel, Joins joins) {
+<span class="nc" id="L582">        appendTestNull(sql, sel, joins, false);</span>
+<span class="nc" id="L583">    }</span>
+
+    /**
+     * Append SQL to test whether the embedded object is null.
+     */
+    private void appendTestNull(SQLBuffer sql, Select sel, Joins joins,
+        boolean isNull) {
+<span class="nc" id="L590">        Column[] cols = field.getColumns();</span>
+<span class="nc bnc" id="L591" title="All 2 branches missed.">        if (cols.length != 1) {</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">            if (isNull)</span>
+<span class="nc" id="L593">                sql.append(&quot;1 &lt;&gt; 1&quot;);</span>
+            else
+<span class="nc" id="L595">                sql.append(&quot;1 = 1&quot;);</span>
+<span class="nc" id="L596">            return;</span>
+        }
+
+        Object val;
+<span class="nc bnc" id="L600" title="All 2 branches missed.">        if (cols[0].isNotNull()) {</span>
+<span class="nc bnc" id="L601" title="All 4 branches missed.">            if (_synthetic || cols[0].getDefaultString() == null)</span>
+<span class="nc" id="L602">                val = JavaSQLTypes.getEmptyValue(cols[0].getJavaType());</span>
+            else
+<span class="nc" id="L604">                val = cols[0].getDefault();</span>
+        } else
+<span class="nc" id="L606">            val = null;</span>
+
+<span class="nc" id="L608">        joins = join(joins, false);</span>
+<span class="nc" id="L609">        sql.append(sel.getColumnAlias(cols[0], joins));</span>
+<span class="nc bnc" id="L610" title="All 4 branches missed.">        if (isNull &amp;&amp; val == null)</span>
+<span class="nc" id="L611">            sql.append(&quot; IS &quot;);</span>
+<span class="nc bnc" id="L612" title="All 2 branches missed.">        else if (isNull)</span>
+<span class="nc" id="L613">            sql.append(&quot; = &quot;);</span>
+<span class="nc bnc" id="L614" title="All 2 branches missed.">        else if (val == null)</span>
+<span class="nc" id="L615">            sql.append(&quot; IS NOT &quot;);</span>
+        else
+<span class="nc" id="L617">            sql.append(&quot; &lt;&gt; &quot;);</span>
+<span class="nc" id="L618">        sql.appendValue(val, cols[0]);</span>
+<span class="nc" id="L619">    }</span>
+
+    @Override
+    public Joins join(Joins joins, boolean forceOuter) {
+<span class="nc" id="L623">        return field.join(joins, forceOuter, false);</span>
+    }
+
+    /**
+     * Loading embed object without instantiating owner entity
+     */
+    @Override
+    public Object loadProjection(JDBCStore store, JDBCFetchConfiguration fetch,
+        Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L633">        Boolean isNull = indicatesNull(res);</span>
+<span class="nc bnc" id="L634" title="All 2 branches missed.">        if (isNull == null)</span>
+<span class="nc" id="L635">            return null;</span>
+
+<span class="nc" id="L637">        StoreContext ctx = store.getContext();</span>
+        // load primary key of owner entity
+<span class="nc" id="L639">        Object owner = field.getDefiningMapping().getObjectId(store, res,</span>
+            null, true, joins);
+<span class="nc" id="L641">        OpenJPAStateManager em = ctx.embed(null, null, null, field);</span>
+        // set owner id
+<span class="nc" id="L643">        ((StateManagerImpl) em).setOwner(owner);</span>
+<span class="nc" id="L644">        boolean needsLoad = loadFields(em, store, fetch, res);</span>
+
+        // After loading everything from result, load the rest of the
+        // configured fields if anything is missing.
+<span class="nc bnc" id="L648" title="All 2 branches missed.">        if (needsLoad &amp;&amp;</span>
+<span class="nc bnc" id="L649" title="All 2 branches missed.">            fetch.requiresFetch(field.getFieldMetaData()) ==</span>
+                FetchConfiguration.FETCH_LOAD) {
+<span class="nc" id="L651">          em.load(fetch);</span>
+        }
+
+<span class="nc" id="L654">        return em.getManagedInstance();</span>
+    }
+
+    /////////////////////////////
+    // Embeddable implementation
+    /////////////////////////////
+
+    @Override
+    public Column[] getColumns() {
+<span class="nc" id="L663">        return field.getColumns();</span>
+    }
+
+    @Override
+    public ColumnIO getColumnIO() {
+<span class="nc" id="L668">        return field.getColumnIO();</span>
+    }
+
+    @Override
+    public Object[] getResultArguments() {
+<span class="nc" id="L673">        return null;</span>
+    }
+
+    @Override
+    public Object toEmbeddedDataStoreValue(Object val, JDBCStore store) {
+<span class="nc" id="L678">        return toDataStoreValue(val, store);</span>
+    }
+
+    @Override
+    public Object toEmbeddedObjectValue(Object val) {
+        //return UNSUPPORTED;
+<span class="nc" id="L684">        return null;</span>
+    }
+
+    @Override
+    public void loadEmbedded(OpenJPAStateManager sm, JDBCStore store,
+        JDBCFetchConfiguration fetch, Object val)
+        throws SQLException {
+<span class="nc bnc" id="L691" title="All 2 branches missed.">        if (val != null)</span>
+<span class="nc" id="L692">            sm.storeObject(field.getIndex(), val);</span>
+        else
+<span class="nc" id="L694">            sm.storeObject(field.getIndex(), null);</span>
+<span class="nc" id="L695">    }</span>
+
+
+    /**
+     * State manager that represents a null embedded object.
+     * Used to update embedded fields when the embedded value is null. This
+     * state manager doesn't require access to the old embedded value, because
+     * all updates are flushed before all deletes, so all foreign keys will
+     * be properly nulled before the related object is deleted. However, this
+     * state manager should not be used if possible when the parent object is
+     * being deleted; in that case having the original embedded state manager
+     * is preferable so that it can set foreign key relations to order DELETE
+     * statements to meet constraints.
+     */
+    private static class NullEmbeddedStateManager
+        implements OpenJPAStateManager {
+
+<span class="nc" id="L712">        private static final BitSet EMPTY_BITSET = new BitSet();</span>
+
+        private final OpenJPAStateManager _owner;
+        private final ValueMetaData _vmd;
+<span class="nc" id="L716">        private BitSet _full = null;</span>
+
+        /**
+         * Constructor; supply the owner of the null/deleted embedded value,
+         * and the value metadata.
+         */
+        public NullEmbeddedStateManager(OpenJPAStateManager owner,
+<span class="nc" id="L723">            ValueMetaData vmd) {</span>
+<span class="nc" id="L724">            _owner = owner;</span>
+<span class="nc" id="L725">            _vmd = vmd;</span>
+<span class="nc" id="L726">        }</span>
+
+        @Override
+        public void initialize(Class forType, PCState state) {
+<span class="nc" id="L730">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void load(FetchConfiguration fetch) {
+<span class="nc" id="L735">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean assignObjectId(boolean flush) {
+<span class="nc" id="L740">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Object getManagedInstance() {
+<span class="nc" id="L745">            return null;</span>
+        }
+
+        @Override
+        public PersistenceCapable getPersistenceCapable() {
+<span class="nc" id="L750">            return null;</span>
+        }
+
+        @Override
+        public ClassMetaData getMetaData() {
+<span class="nc" id="L755">            return _vmd.getEmbeddedMetaData();</span>
+        }
+
+        @Override
+        public OpenJPAStateManager getOwner() {
+<span class="nc" id="L760">            return _owner;</span>
+        }
+
+        @Override
+        public int getOwnerIndex() {
+<span class="nc" id="L765">            return _vmd.getFieldMetaData().getIndex();</span>
+        }
+
+        @Override
+        public boolean isEmbedded() {
+<span class="nc" id="L770">            return true;</span>
+        }
+
+        @Override
+        public boolean isTransactional() {
+<span class="nc" id="L775">            return true;</span>
+        }
+
+        @Override
+        public boolean isPersistent() {
+<span class="nc" id="L780">            return true;</span>
+        }
+
+        @Override
+        public boolean isNew() {
+<span class="nc" id="L785">            return _owner.isNew();</span>
+        }
+
+        @Override
+        public boolean isDeleted() {
+<span class="nc" id="L790">            return _owner.isDeleted();</span>
+        }
+
+        @Override
+        public boolean isDetached() {
+<span class="nc" id="L795">            return _owner.isDetached();</span>
+        }
+
+        @Override
+        public boolean isVersionUpdateRequired() {
+<span class="nc" id="L800">            return _owner.isVersionUpdateRequired();</span>
+        }
+
+        @Override
+        public boolean isVersionCheckRequired() {
+<span class="nc" id="L805">            return _owner.isVersionCheckRequired();</span>
+        }
+
+        @Override
+        public boolean isDirty() {
+<span class="nc" id="L810">            return true;</span>
+        }
+
+        @Override
+        public boolean isFlushed() {
+<span class="nc" id="L815">            return _owner.isFlushed();</span>
+        }
+
+        @Override
+        public boolean isFlushedDirty() {
+<span class="nc" id="L820">            return isFlushed();</span>
+        }
+
+        @Override
+        public boolean isProvisional() {
+<span class="nc" id="L825">            return _owner.isProvisional();</span>
+        }
+
+        @Override
+        public BitSet getLoaded() {
+            // consider everything loaded
+<span class="nc bnc" id="L831" title="All 2 branches missed.">            if (_full == null) {</span>
+<span class="nc" id="L832">                FieldMetaData[] fmds = _vmd.getEmbeddedMetaData().getFields();</span>
+<span class="nc" id="L833">                _full = new BitSet(fmds.length);</span>
+<span class="nc bnc" id="L834" title="All 2 branches missed.">                for (int i = 0; i &lt; fmds.length; i++)</span>
+<span class="nc" id="L835">                    _full.set(i);</span>
+            }
+<span class="nc" id="L837">            return _full;</span>
+        }
+
+        @Override
+        public BitSet getDirty() {
+            // consider everything dirty
+<span class="nc bnc" id="L843" title="All 2 branches missed.">            if (_full == null) {</span>
+<span class="nc" id="L844">                FieldMetaData[] fmds = _vmd.getEmbeddedMetaData().getFields();</span>
+<span class="nc" id="L845">                _full = new BitSet(fmds.length);</span>
+<span class="nc bnc" id="L846" title="All 2 branches missed.">                for (int i = 0; i &lt; fmds.length; i++)</span>
+<span class="nc" id="L847">                    _full.set(i);</span>
+            }
+<span class="nc" id="L849">            return _full;</span>
+        }
+
+        @Override
+        public BitSet getFlushed() {
+<span class="nc" id="L854">            return EMPTY_BITSET;</span>
+        }
+
+        @Override
+        public BitSet getUnloaded(FetchConfiguration fetch) {
+<span class="nc" id="L859">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Object newProxy(int field) {
+<span class="nc" id="L864">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Object newFieldProxy(int field) {
+<span class="nc" id="L869">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean isDefaultValue(int field) {
+<span class="nc" id="L874">            return true;</span>
+        }
+
+        @Override
+        public StoreContext getContext() {
+<span class="nc" id="L879">            return _owner.getContext();</span>
+        }
+
+        @Override
+        public Object getId() {
+<span class="nc" id="L884">            return _owner.getId();</span>
+        }
+
+        @Override
+        public Object getObjectId() {
+<span class="nc" id="L889">            return _owner.getObjectId();</span>
+        }
+
+        @Override
+        public void setObjectId(Object oid) {
+<span class="nc" id="L894">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Object getLock() {
+<span class="nc" id="L899">            return null;</span>
+        }
+
+        @Override
+        public void setLock(Object lock) {
+<span class="nc" id="L904">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Object getVersion() {
+<span class="nc" id="L909">            return null;</span>
+        }
+
+        @Override
+        public void setVersion(Object version) {
+<span class="nc" id="L914">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void setNextVersion(Object version) {
+<span class="nc" id="L919">            throw new InternalException();</span>
+        }
+
+        @Override
+        public PCState getPCState() {
+<span class="nc bnc" id="L924" title="All 2 branches missed.">            return (_owner.isDeleted()) ? PCState.EDELETED : PCState.ECOPY;</span>
+        }
+
+        @Override
+        public Object getImplData() {
+<span class="nc" id="L929">            return null;</span>
+        }
+
+        @Override
+        public Object setImplData(Object data, boolean cacheable) {
+<span class="nc" id="L934">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean isImplDataCacheable() {
+<span class="nc" id="L939">            return false;</span>
+        }
+
+        @Override
+        public Object getImplData(int field) {
+<span class="nc" id="L944">            return null;</span>
+        }
+
+        @Override
+        public Object setImplData(int field, Object data) {
+<span class="nc" id="L949">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean isImplDataCacheable(int field) {
+<span class="nc" id="L954">            return false;</span>
+        }
+
+        @Override
+        public Object getIntermediate(int field) {
+<span class="nc" id="L959">            return null;</span>
+        }
+
+        @Override
+        public void setIntermediate(int field, Object value) {
+<span class="nc" id="L964">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean fetchBooleanField(int field) {
+<span class="nc" id="L969">            return false;</span>
+        }
+
+        @Override
+        public byte fetchByteField(int field) {
+<span class="nc" id="L974">            return (byte) 0;</span>
+        }
+
+        @Override
+        public char fetchCharField(int field) {
+<span class="nc" id="L979">            return (char) 0;</span>
+        }
+
+        @Override
+        public double fetchDoubleField(int field) {
+<span class="nc" id="L984">            return 0D;</span>
+        }
+
+        @Override
+        public float fetchFloatField(int field) {
+<span class="nc" id="L989">            return 0F;</span>
+        }
+
+        @Override
+        public int fetchIntField(int field) {
+<span class="nc" id="L994">            return 0;</span>
+        }
+
+        @Override
+        public long fetchLongField(int field) {
+<span class="nc" id="L999">            return 0L;</span>
+        }
+
+        @Override
+        public Object fetchObjectField(int field) {
+<span class="nc" id="L1004">            return null;</span>
+        }
+
+        @Override
+        public short fetchShortField(int field) {
+<span class="nc" id="L1009">            return (short) 0;</span>
+        }
+
+        @Override
+        public String fetchStringField(int field) {
+<span class="nc" id="L1014">            return null;</span>
+        }
+
+        @Override
+        public Object fetchField(int field, boolean transitions) {
+<span class="nc" id="L1019">            return null;</span>
+        }
+
+        @Override
+        public void storeBooleanField(int field, boolean externalVal) {
+<span class="nc" id="L1024">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeByteField(int field, byte externalVal) {
+<span class="nc" id="L1029">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeCharField(int field, char externalVal) {
+<span class="nc" id="L1034">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeDoubleField(int field, double externalVal) {
+<span class="nc" id="L1039">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeFloatField(int field, float externalVal) {
+<span class="nc" id="L1044">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeIntField(int field, int externalVal) {
+<span class="nc" id="L1049">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeLongField(int field, long externalVal) {
+<span class="nc" id="L1054">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeObjectField(int field, Object externalVal) {
+<span class="nc" id="L1059">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeShortField(int field, short externalVal) {
+<span class="nc" id="L1064">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeStringField(int field, String externalVal) {
+<span class="nc" id="L1069">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeField(int field, Object value) {
+<span class="nc" id="L1074">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean fetchBoolean(int field) {
+<span class="nc" id="L1079">            return false;</span>
+        }
+
+        @Override
+        public byte fetchByte(int field) {
+<span class="nc" id="L1084">            return (byte) 0;</span>
+        }
+
+        @Override
+        public char fetchChar(int field) {
+<span class="nc" id="L1089">            return (char) 0;</span>
+        }
+
+        @Override
+        public double fetchDouble(int field) {
+<span class="nc" id="L1094">            return 0D;</span>
+        }
+
+        @Override
+        public float fetchFloat(int field) {
+<span class="nc" id="L1099">            return 0F;</span>
+        }
+
+        @Override
+        public int fetchInt(int field) {
+<span class="nc" id="L1104">            return 0;</span>
+        }
+
+        @Override
+        public long fetchLong(int field) {
+<span class="nc" id="L1109">            return 0L;</span>
+        }
+
+        @Override
+        public Object fetchObject(int field) {
+<span class="nc" id="L1114">            return null;</span>
+        }
+
+        @Override
+        public short fetchShort(int field) {
+<span class="nc" id="L1119">            return (short) 0;</span>
+        }
+
+        @Override
+        public String fetchString(int field) {
+<span class="nc" id="L1124">            return null;</span>
+        }
+
+        @Override
+        public Object fetch(int field) {
+<span class="nc" id="L1129">            return null;</span>
+        }
+
+        @Override
+        public void storeBoolean(int field, boolean externalVal) {
+<span class="nc" id="L1134">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeByte(int field, byte externalVal) {
+<span class="nc" id="L1139">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeChar(int field, char externalVal) {
+<span class="nc" id="L1144">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeDouble(int field, double externalVal) {
+<span class="nc" id="L1149">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeFloat(int field, float externalVal) {
+<span class="nc" id="L1154">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeInt(int field, int externalVal) {
+<span class="nc" id="L1159">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeLong(int field, long externalVal) {
+<span class="nc" id="L1164">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeObject(int field, Object externalVal) {
+<span class="nc" id="L1169">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeShort(int field, short externalVal) {
+<span class="nc" id="L1174">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void storeString(int field, String externalVal) {
+<span class="nc" id="L1179">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void store(int field, Object value) {
+<span class="nc" id="L1184">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Object fetchInitialField(int field) {
+<span class="nc" id="L1189">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void dirty(int field) {
+<span class="nc" id="L1194">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void removed(int field, Object removed, boolean key) {
+<span class="nc" id="L1199">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean beforeRefresh(boolean refreshAll) {
+<span class="nc" id="L1204">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void setRemote(int field, Object value) {
+<span class="nc" id="L1209">            throw new InternalException();</span>
+        }
+
+        ///////////////////////////////
+        // StateManager implementation
+        ///////////////////////////////
+
+        @Override
+        public Object getPCPrimaryKey(Object oid, int field) {
+<span class="nc" id="L1218">            throw new InternalException();</span>
+        }
+
+        @Override
+        public StateManager replaceStateManager(StateManager sm) {
+<span class="nc" id="L1223">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Object getGenericContext() {
+<span class="nc" id="L1228">            return getContext();</span>
+        }
+
+        @Override
+        public void dirty(String field) {
+<span class="nc" id="L1233">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Object fetchObjectId() {
+<span class="nc" id="L1238">            return getObjectId();</span>
+        }
+
+        @Override
+        public void accessingField(int field) {
+<span class="nc" id="L1243">        }</span>
+
+        @Override
+        public boolean serializing() {
+<span class="nc" id="L1247">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean writeDetached(ObjectOutput out) {
+<span class="nc" id="L1252">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void proxyDetachedDeserialized(int idx) {
+<span class="nc" id="L1257">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingBooleanField(PersistenceCapable pc, int field,
+            boolean val1, boolean val2, int set) {
+<span class="nc" id="L1263">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingCharField(PersistenceCapable pc, int field,
+            char val1, char val2, int set) {
+<span class="nc" id="L1269">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingByteField(PersistenceCapable pc, int field,
+            byte val1, byte val2, int set) {
+<span class="nc" id="L1275">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingShortField(PersistenceCapable pc, int field,
+            short val1, short val2, int set) {
+<span class="nc" id="L1281">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingIntField(PersistenceCapable pc, int field,
+            int val1, int val2, int set) {
+<span class="nc" id="L1287">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingLongField(PersistenceCapable pc, int field,
+            long val1, long val2, int set) {
+<span class="nc" id="L1293">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingFloatField(PersistenceCapable pc, int field,
+            float val1, float val2, int set) {
+<span class="nc" id="L1299">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingDoubleField(PersistenceCapable pc, int field,
+            double val1, double val2, int set) {
+<span class="nc" id="L1305">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingStringField(PersistenceCapable pc, int field,
+            String val1, String val2, int set) {
+<span class="nc" id="L1311">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void settingObjectField(PersistenceCapable pc, int field,
+            Object val1, Object val2, int set) {
+<span class="nc" id="L1317">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedBooleanField(PersistenceCapable pc, int field,
+            boolean val) {
+<span class="nc" id="L1323">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedCharField(PersistenceCapable pc, int field,
+            char val) {
+<span class="nc" id="L1329">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedByteField(PersistenceCapable pc, int field,
+            byte val) {
+<span class="nc" id="L1335">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedShortField(PersistenceCapable pc, int field,
+            short val) {
+<span class="nc" id="L1341">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedIntField(PersistenceCapable pc, int field,
+            int val) {
+<span class="nc" id="L1347">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedLongField(PersistenceCapable pc, int field,
+            long val) {
+<span class="nc" id="L1353">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedFloatField(PersistenceCapable pc, int field,
+            float val) {
+<span class="nc" id="L1359">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedDoubleField(PersistenceCapable pc, int field,
+            double val) {
+<span class="nc" id="L1365">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedStringField(PersistenceCapable pc, int field,
+            String val) {
+<span class="nc" id="L1371">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void providedObjectField(PersistenceCapable pc, int field,
+            Object val) {
+<span class="nc" id="L1377">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean replaceBooleanField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1382">            throw new InternalException();</span>
+        }
+
+        @Override
+        public char replaceCharField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1387">            throw new InternalException();</span>
+        }
+
+        @Override
+        public byte replaceByteField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1392">            throw new InternalException();</span>
+        }
+
+        @Override
+        public short replaceShortField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1397">            throw new InternalException();</span>
+        }
+
+        @Override
+        public int replaceIntField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1402">            throw new InternalException();</span>
+        }
+
+        @Override
+        public long replaceLongField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1407">            throw new InternalException();</span>
+        }
+
+        @Override
+        public float replaceFloatField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1412">            throw new InternalException();</span>
+        }
+
+        @Override
+        public double replaceDoubleField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1417">            throw new InternalException();</span>
+        }
+
+        @Override
+        public String replaceStringField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1422">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Object replaceObjectField(PersistenceCapable pc, int field) {
+<span class="nc" id="L1427">            throw new InternalException();</span>
+        }
+
+        @Override
+        public boolean isDelayed(int field) {
+<span class="nc" id="L1432">            return false;</span>
+        }
+
+        @Override
+        public void setDelayed(int field, boolean delay) {
+<span class="nc" id="L1437">            throw new InternalException();</span>
+        }
+
+        @Override
+        public void loadDelayedField(int field) {
+<span class="nc" id="L1442">            throw new UnsupportedOperationException();</span>
+        }
+    }
+
+    /**
+     * Special row manager type that unwraps embedded objects.
+     */
+    private static class EmbeddedRowManager
+        implements RowManager {
+
+        private final RowManager _rm;
+        private final Row _row;
+
+<span class="nc" id="L1455">        public EmbeddedRowManager(RowManager delegate, Row row) {</span>
+<span class="nc" id="L1456">            _rm = delegate;</span>
+<span class="nc bnc" id="L1457" title="All 2 branches missed.">            _row = (row == null) ? null : new EmbeddedRow(row);</span>
+<span class="nc" id="L1458">        }</span>
+
+        public boolean hasAutoAssignConstraints() {
+<span class="nc" id="L1461">            return false;</span>
+        }
+
+        public Collection getInserts() {
+<span class="nc" id="L1465">            throw new InternalException();</span>
+        }
+
+        public Collection getUpdates() {
+<span class="nc" id="L1469">            throw new InternalException();</span>
+        }
+
+        public Collection getDeletes() {
+<span class="nc" id="L1473">            throw new InternalException();</span>
+        }
+
+        public Collection getSecondaryUpdates() {
+<span class="nc" id="L1477">            throw new InternalException();</span>
+        }
+
+        public Collection getSecondaryDeletes() {
+<span class="nc" id="L1481">            throw new InternalException();</span>
+        }
+
+        public Collection getAllRowUpdates() {
+<span class="nc" id="L1485">            throw new InternalException();</span>
+        }
+
+        public Collection getAllRowDeletes() {
+<span class="nc" id="L1489">            throw new InternalException();</span>
+        }
+
+        @Override
+        public Row getRow(Table table, int action, OpenJPAStateManager sm,
+            boolean create) {
+<span class="nc bnc" id="L1495" title="All 4 branches missed.">            while (sm != null &amp;&amp; sm.getOwner() != null)</span>
+<span class="nc" id="L1496">                sm = sm.getOwner();</span>
+<span class="nc bnc" id="L1497" title="All 4 branches missed.">            if (_row != null &amp;&amp; table == _row.getTable()</span>
+<span class="nc bnc" id="L1498" title="All 2 branches missed.">                &amp;&amp; action == _row.getAction())</span>
+<span class="nc" id="L1499">                return _row;</span>
+<span class="nc" id="L1500">            return new EmbeddedRow(_rm.getRow(table, action, sm, create));</span>
+        }
+
+        @Override
+        public Row getSecondaryRow(Table table, int action) {
+<span class="nc" id="L1505">            return new EmbeddedRow(_rm.getSecondaryRow(table, action));</span>
+        }
+
+        @Override
+        public void flushSecondaryRow(Row row)
+            throws SQLException {
+<span class="nc" id="L1511">            _rm.flushSecondaryRow(((EmbeddedRow) row).getDelegate());</span>
+<span class="nc" id="L1512">        }</span>
+
+        @Override
+        public Row getAllRows(Table table, int action) {
+<span class="nc" id="L1516">            return new EmbeddedRow(_rm.getAllRows(table, action));</span>
+        }
+
+        @Override
+        public void flushAllRows(Row row)
+            throws SQLException {
+<span class="nc" id="L1522">            _rm.flushAllRows(((EmbeddedRow) row).getDelegate());</span>
+<span class="nc" id="L1523">        }</span>
+    }
+
+    /**
+     * Special row type that unwraps embedded objects.
+     */
+    private static class EmbeddedRow
+        implements Row {
+
+        private final Row _row;
+
+<span class="nc" id="L1534">        public EmbeddedRow(Row delegate) {</span>
+<span class="nc" id="L1535">            _row = delegate;</span>
+<span class="nc" id="L1536">        }</span>
+
+        public Row getDelegate() {
+<span class="nc" id="L1539">            return _row;</span>
+        }
+
+        @Override
+        public boolean isValid() {
+<span class="nc" id="L1544">            return _row.isValid();</span>
+        }
+
+        @Override
+        public void setValid(boolean valid) {
+<span class="nc" id="L1549">            _row.setValid(valid);</span>
+<span class="nc" id="L1550">        }</span>
+
+        @Override
+        public void setPrimaryKey(OpenJPAStateManager sm)
+            throws SQLException {
+<span class="nc" id="L1555">            _row.setPrimaryKey(getOwner(sm));</span>
+<span class="nc" id="L1556">        }</span>
+
+        @Override
+        public void setPrimaryKey(ColumnIO io, OpenJPAStateManager sm)
+            throws SQLException {
+<span class="nc" id="L1561">            _row.setPrimaryKey(io, getOwner(sm));</span>
+<span class="nc" id="L1562">        }</span>
+
+        @Override
+        public void wherePrimaryKey(OpenJPAStateManager sm)
+            throws SQLException {
+<span class="nc" id="L1567">            _row.wherePrimaryKey(getOwner(sm));</span>
+<span class="nc" id="L1568">        }</span>
+
+        @Override
+        public void setForeignKey(ForeignKey fk, OpenJPAStateManager sm)
+            throws SQLException {
+<span class="nc" id="L1573">            _row.setForeignKey(fk, getOwner(sm));</span>
+<span class="nc" id="L1574">        }</span>
+
+        @Override
+        public void setForeignKey(ForeignKey fk, ColumnIO io,
+            OpenJPAStateManager sm)
+            throws SQLException {
+<span class="nc" id="L1580">            _row.setForeignKey(fk, io, getOwner(sm));</span>
+<span class="nc" id="L1581">        }</span>
+
+        @Override
+        public void whereForeignKey(ForeignKey fk, OpenJPAStateManager sm)
+            throws SQLException {
+<span class="nc" id="L1586">            _row.whereForeignKey(fk, getOwner(sm));</span>
+<span class="nc" id="L1587">        }</span>
+
+        @Override
+        public void setRelationId(Column col, OpenJPAStateManager sm,
+            RelationId rel)
+            throws SQLException {
+<span class="nc" id="L1593">            _row.setRelationId(col, getOwner(sm), rel);</span>
+<span class="nc" id="L1594">        }</span>
+
+        private OpenJPAStateManager getOwner(OpenJPAStateManager sm) {
+<span class="nc bnc" id="L1597" title="All 4 branches missed.">            while (sm != null &amp;&amp; sm.getOwner() != null)</span>
+<span class="nc" id="L1598">                sm = sm.getOwner();</span>
+<span class="nc" id="L1599">            return sm;</span>
+        }
+
+        ////////////////////////
+        // Pass-through methods
+        ////////////////////////
+
+        @Override
+        public Table getTable() {
+<span class="nc" id="L1608">            return _row.getTable();</span>
+        }
+
+        @Override
+        public int getAction() {
+<span class="nc" id="L1613">            return _row.getAction();</span>
+        }
+
+        @Override
+        public Object getFailedObject() {
+<span class="nc" id="L1618">            return _row.getFailedObject();</span>
+        }
+
+        @Override
+        public void setFailedObject(Object failed) {
+<span class="nc" id="L1623">            _row.setFailedObject(failed);</span>
+<span class="nc" id="L1624">        }</span>
+
+        @Override
+        public OpenJPAStateManager getPrimaryKey() {
+<span class="nc" id="L1628">            return _row.getPrimaryKey();</span>
+        }
+
+        @Override
+        public void setArray(Column col, Array val)
+            throws SQLException {
+<span class="nc" id="L1634">            _row.setArray(col, val);</span>
+<span class="nc" id="L1635">        }</span>
+
+        @Override
+        public void setAsciiStream(Column col, InputStream val, int length)
+            throws SQLException {
+<span class="nc" id="L1640">            _row.setAsciiStream(col, val, length);</span>
+<span class="nc" id="L1641">        }</span>
+
+        @Override
+        public void setBigDecimal(Column col, BigDecimal val)
+            throws SQLException {
+<span class="nc" id="L1646">            _row.setBigDecimal(col, val);</span>
+<span class="nc" id="L1647">        }</span>
+
+        @Override
+        public void setBigInteger(Column col, BigInteger val)
+            throws SQLException {
+<span class="nc" id="L1652">            _row.setBigInteger(col, val);</span>
+<span class="nc" id="L1653">        }</span>
+
+        @Override
+        public void setBinaryStream(Column col, InputStream val, int length)
+            throws SQLException {
+<span class="nc" id="L1658">            _row.setBinaryStream(col, val, length);</span>
+<span class="nc" id="L1659">        }</span>
+
+        @Override
+        public void setBlob(Column col, Blob val)
+            throws SQLException {
+<span class="nc" id="L1664">            _row.setBlob(col, val);</span>
+<span class="nc" id="L1665">        }</span>
+
+        @Override
+        public void setBoolean(Column col, boolean val)
+            throws SQLException {
+<span class="nc" id="L1670">            _row.setBoolean(col, val);</span>
+<span class="nc" id="L1671">        }</span>
+
+        @Override
+        public void setByte(Column col, byte val)
+            throws SQLException {
+<span class="nc" id="L1676">            _row.setByte(col, val);</span>
+<span class="nc" id="L1677">        }</span>
+
+        @Override
+        public void setBytes(Column col, byte[] val)
+            throws SQLException {
+<span class="nc" id="L1682">            _row.setBytes(col, val);</span>
+<span class="nc" id="L1683">        }</span>
+
+        @Override
+        public void setCalendar(Column col, Calendar val)
+            throws SQLException {
+<span class="nc" id="L1688">            _row.setCalendar(col, val);</span>
+<span class="nc" id="L1689">        }</span>
+
+        @Override
+        public void setChar(Column col, char val)
+            throws SQLException {
+<span class="nc" id="L1694">            _row.setChar(col, val);</span>
+<span class="nc" id="L1695">        }</span>
+
+        @Override
+        public void setCharacterStream(Column col, Reader val, int length)
+            throws SQLException {
+<span class="nc" id="L1700">            _row.setCharacterStream(col, val, length);</span>
+<span class="nc" id="L1701">        }</span>
+
+        @Override
+        public void setClob(Column col, Clob val)
+            throws SQLException {
+<span class="nc" id="L1706">            _row.setClob(col, val);</span>
+<span class="nc" id="L1707">        }</span>
+
+        @Override
+        public void setDate(Column col, Date val)
+            throws SQLException {
+<span class="nc" id="L1712">            _row.setDate(col, val);</span>
+<span class="nc" id="L1713">        }</span>
+
+        @Override
+        public void setDate(Column col, java.sql.Date val, Calendar cal)
+            throws SQLException {
+<span class="nc" id="L1718">            _row.setDate(col, val, cal);</span>
+<span class="nc" id="L1719">        }</span>
+
+        @Override
+        public void setDouble(Column col, double val)
+            throws SQLException {
+<span class="nc" id="L1724">            _row.setDouble(col, val);</span>
+<span class="nc" id="L1725">        }</span>
+
+        @Override
+        public void setFloat(Column col, float val)
+            throws SQLException {
+<span class="nc" id="L1730">            _row.setFloat(col, val);</span>
+<span class="nc" id="L1731">        }</span>
+
+        @Override
+        public void setInt(Column col, int val)
+            throws SQLException {
+<span class="nc" id="L1736">            _row.setInt(col, val);</span>
+<span class="nc" id="L1737">        }</span>
+
+        @Override
+        public void setLong(Column col, long val)
+            throws SQLException {
+<span class="nc" id="L1742">            _row.setLong(col, val);</span>
+<span class="nc" id="L1743">        }</span>
+
+        @Override
+        public void setLocale(Column col, Locale val)
+            throws SQLException {
+<span class="nc" id="L1748">            _row.setLocale(col, val);</span>
+<span class="nc" id="L1749">        }</span>
+
+        @Override
+        public void setNull(Column col)
+            throws SQLException {
+<span class="nc" id="L1754">            _row.setNull(col);</span>
+<span class="nc" id="L1755">        }</span>
+
+        @Override
+        public void setNull(Column col, boolean overrideDefault)
+            throws SQLException {
+<span class="nc" id="L1760">            _row.setNull(col, overrideDefault);</span>
+<span class="nc" id="L1761">        }</span>
+
+        @Override
+        public void setNumber(Column col, Number val)
+            throws SQLException {
+<span class="nc" id="L1766">            _row.setNumber(col, val);</span>
+<span class="nc" id="L1767">        }</span>
+
+        @Override
+        public void setObject(Column col, Object val)
+            throws SQLException {
+<span class="nc" id="L1772">            _row.setObject(col, val);</span>
+<span class="nc" id="L1773">        }</span>
+
+        @Override
+        public void setRaw(Column col, String val)
+            throws SQLException {
+<span class="nc" id="L1778">            _row.setRaw(col, val);</span>
+<span class="nc" id="L1779">        }</span>
+
+        @Override
+        public void setShort(Column col, short val)
+            throws SQLException {
+<span class="nc" id="L1784">            _row.setShort(col, val);</span>
+<span class="nc" id="L1785">        }</span>
+
+        @Override
+        public void setString(Column col, String val)
+            throws SQLException {
+<span class="nc" id="L1790">            _row.setString(col, val);</span>
+<span class="nc" id="L1791">        }</span>
+
+        @Override
+        public void setTime(Column col, Time val, Calendar cal)
+            throws SQLException {
+<span class="nc" id="L1796">            _row.setTime(col, val, cal);</span>
+<span class="nc" id="L1797">        }</span>
+
+        @Override
+        public void setTimestamp(Column col, Timestamp val, Calendar cal)
+            throws SQLException {
+<span class="nc" id="L1802">            _row.setTimestamp(col, val, cal);</span>
+<span class="nc" id="L1803">        }</span>
+
+        @Override
+        public void whereArray(Column col, Array val)
+            throws SQLException {
+<span class="nc" id="L1808">            _row.whereArray(col, val);</span>
+<span class="nc" id="L1809">        }</span>
+
+        @Override
+        public void whereAsciiStream(Column col, InputStream val, int length)
+            throws SQLException {
+<span class="nc" id="L1814">            _row.whereAsciiStream(col, val, length);</span>
+<span class="nc" id="L1815">        }</span>
+
+        @Override
+        public void whereBigDecimal(Column col, BigDecimal val)
+            throws SQLException {
+<span class="nc" id="L1820">            _row.whereBigDecimal(col, val);</span>
+<span class="nc" id="L1821">        }</span>
+
+        @Override
+        public void whereBigInteger(Column col, BigInteger val)
+            throws SQLException {
+<span class="nc" id="L1826">            _row.whereBigInteger(col, val);</span>
+<span class="nc" id="L1827">        }</span>
+
+        @Override
+        public void whereBinaryStream(Column col, InputStream val, int length)
+            throws SQLException {
+<span class="nc" id="L1832">            _row.whereBinaryStream(col, val, length);</span>
+<span class="nc" id="L1833">        }</span>
+
+        @Override
+        public void whereBlob(Column col, Blob val)
+            throws SQLException {
+<span class="nc" id="L1838">            _row.whereBlob(col, val);</span>
+<span class="nc" id="L1839">        }</span>
+
+        @Override
+        public void whereBoolean(Column col, boolean val)
+            throws SQLException {
+<span class="nc" id="L1844">            _row.whereBoolean(col, val);</span>
+<span class="nc" id="L1845">        }</span>
+
+        @Override
+        public void whereByte(Column col, byte val)
+            throws SQLException {
+<span class="nc" id="L1850">            _row.whereByte(col, val);</span>
+<span class="nc" id="L1851">        }</span>
+
+        @Override
+        public void whereBytes(Column col, byte[] val)
+            throws SQLException {
+<span class="nc" id="L1856">            _row.whereBytes(col, val);</span>
+<span class="nc" id="L1857">        }</span>
+
+        @Override
+        public void whereCalendar(Column col, Calendar val)
+            throws SQLException {
+<span class="nc" id="L1862">            _row.whereCalendar(col, val);</span>
+<span class="nc" id="L1863">        }</span>
+
+        @Override
+        public void whereChar(Column col, char val)
+            throws SQLException {
+<span class="nc" id="L1868">            _row.whereChar(col, val);</span>
+<span class="nc" id="L1869">        }</span>
+
+        @Override
+        public void whereCharacterStream(Column col, Reader val, int length)
+            throws SQLException {
+<span class="nc" id="L1874">            _row.whereCharacterStream(col, val, length);</span>
+<span class="nc" id="L1875">        }</span>
+
+        @Override
+        public void whereClob(Column col, Clob val)
+            throws SQLException {
+<span class="nc" id="L1880">            _row.whereClob(col, val);</span>
+<span class="nc" id="L1881">        }</span>
+
+        @Override
+        public void whereDate(Column col, Date val)
+            throws SQLException {
+<span class="nc" id="L1886">            _row.whereDate(col, val);</span>
+<span class="nc" id="L1887">        }</span>
+
+        @Override
+        public void whereDate(Column col, java.sql.Date val, Calendar cal)
+            throws SQLException {
+<span class="nc" id="L1892">            _row.whereDate(col, val, cal);</span>
+<span class="nc" id="L1893">        }</span>
+
+        @Override
+        public void whereDouble(Column col, double val)
+            throws SQLException {
+<span class="nc" id="L1898">            _row.whereDouble(col, val);</span>
+<span class="nc" id="L1899">        }</span>
+
+        @Override
+        public void whereFloat(Column col, float val)
+            throws SQLException {
+<span class="nc" id="L1904">            _row.whereFloat(col, val);</span>
+<span class="nc" id="L1905">        }</span>
+
+        @Override
+        public void whereInt(Column col, int val)
+            throws SQLException {
+<span class="nc" id="L1910">            _row.whereInt(col, val);</span>
+<span class="nc" id="L1911">        }</span>
+
+        @Override
+        public void whereLong(Column col, long val)
+            throws SQLException {
+<span class="nc" id="L1916">            _row.whereLong(col, val);</span>
+<span class="nc" id="L1917">        }</span>
+
+        @Override
+        public void whereLocale(Column col, Locale val)
+            throws SQLException {
+<span class="nc" id="L1922">            _row.whereLocale(col, val);</span>
+<span class="nc" id="L1923">        }</span>
+
+        @Override
+        public void whereNull(Column col)
+            throws SQLException {
+<span class="nc" id="L1928">            _row.whereNull(col);</span>
+<span class="nc" id="L1929">        }</span>
+
+        @Override
+        public void whereNumber(Column col, Number val)
+            throws SQLException {
+<span class="nc" id="L1934">            _row.whereNumber(col, val);</span>
+<span class="nc" id="L1935">        }</span>
+
+        @Override
+        public void whereObject(Column col, Object val)
+            throws SQLException {
+<span class="nc" id="L1940">            _row.whereObject(col, val);</span>
+<span class="nc" id="L1941">        }</span>
+
+        @Override
+        public void whereRaw(Column col, String val)
+            throws SQLException {
+<span class="nc" id="L1946">            _row.whereRaw(col, val);</span>
+<span class="nc" id="L1947">        }</span>
+
+        @Override
+        public void whereShort(Column col, short val)
+            throws SQLException {
+<span class="nc" id="L1952">            _row.whereShort(col, val);</span>
+<span class="nc" id="L1953">        }</span>
+
+        @Override
+        public void whereString(Column col, String val)
+            throws SQLException {
+<span class="nc" id="L1958">            _row.whereString(col, val);</span>
+<span class="nc" id="L1959">        }</span>
+
+        @Override
+        public void whereTime(Column col, Time val, Calendar cal)
+            throws SQLException {
+<span class="nc" id="L1964">            _row.whereTime(col, val, cal);</span>
+<span class="nc" id="L1965">        }</span>
+
+        @Override
+        public void whereTimestamp(Column col, Timestamp val, Calendar cal)
+            throws SQLException {
+<span class="nc" id="L1970">            _row.whereTimestamp(col, val, cal);</span>
+<span class="nc" id="L1971">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

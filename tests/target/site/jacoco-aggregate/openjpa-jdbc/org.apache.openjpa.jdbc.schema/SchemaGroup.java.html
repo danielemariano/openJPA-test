@@ -1,0 +1,600 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SchemaGroup.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">SchemaGroup.java</span></div><h1>SchemaGroup.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+
+/**
+ * Represents a grouping of schemas used in a database.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L34">public class SchemaGroup</span>
+    extends NameSet
+    implements Cloneable {
+
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L40">    private Map&lt;DBIdentifier, Schema&gt; _schemaMap = null;</span>
+
+    // cache
+<span class="nc" id="L43">    private Schema[] _schemas = null;</span>
+
+    /**
+     * Return all schemas.
+     */
+    public Schema[] getSchemas() {
+<span class="nc bnc" id="L49" title="All 2 branches missed.">        if (_schemas == null)</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">            _schemas = (_schemaMap == null) ? new Schema[0] : (Schema[])</span>
+<span class="nc" id="L51">                _schemaMap.values().toArray(new Schema[_schemaMap.size()]);</span>
+<span class="nc" id="L52">        return _schemas;</span>
+    }
+
+    /**
+     * Return the schema with the given name, or null if none.
+     * @deprecated
+     */
+    @Deprecated
+    public Schema getSchema(String name) {
+<span class="nc bnc" id="L61" title="All 2 branches missed.">        if (_schemaMap == null)</span>
+<span class="nc" id="L62">            return null;</span>
+<span class="nc" id="L63">        return getSchema(DBIdentifier.toUpper(DBIdentifier.newSchema(name)));</span>
+    }
+
+    public Schema getSchema(DBIdentifier name) {
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        if (_schemaMap == null)</span>
+<span class="nc" id="L68">            return null;</span>
+<span class="nc" id="L69">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc" id="L70">        Schema schema = _schemaMap.get(sName);</span>
+<span class="nc" id="L71">        return schema;</span>
+    }
+
+    /**
+     * Add a schema to the group.
+     */
+    public Schema addSchema() {
+<span class="nc" id="L78">        return addSchema(DBIdentifier.NULL);</span>
+    }
+
+    /**
+     * Add a schema to the group.
+     */
+    public Schema addSchema(DBIdentifier name) {
+<span class="nc" id="L85">        addName(name, false);</span>
+<span class="nc" id="L86">        Schema schema = newSchema(name);</span>
+<span class="nc" id="L87">        DBIdentifier sName = DBIdentifier.toUpper(name);</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">        if (_schemaMap == null)</span>
+<span class="nc" id="L89">            _schemaMap = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L90">        _schemaMap.put(sName, schema);</span>
+<span class="nc" id="L91">        _schemas = null;</span>
+<span class="nc" id="L92">        return schema;</span>
+    }
+
+    /**
+     * @deprecated
+     * @param name
+     */
+    @Deprecated
+    public Schema addSchema(String name) {
+<span class="nc" id="L101">        return addSchema(DBIdentifier.newSchema(name));</span>
+    }
+
+    /**
+     * Remove the given schema from the group.
+     *
+     * @return true if the schema was removed, false if not in the group
+     */
+    public boolean removeSchema(Schema schema) {
+<span class="nc bnc" id="L110" title="All 2 branches missed.">        if (schema == null)</span>
+<span class="nc" id="L111">            return false;</span>
+
+<span class="nc" id="L113">        DBIdentifier name = DBIdentifier.toUpper(schema.getIdentifier());</span>
+<span class="nc" id="L114">        Schema rem = _schemaMap.get(name);</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        if (schema.equals(rem)) {</span>
+<span class="nc" id="L116">            _schemaMap.remove(name);</span>
+<span class="nc" id="L117">            removeName(schema.getIdentifier());</span>
+<span class="nc" id="L118">            _schemas = null;</span>
+<span class="nc" id="L119">            schema.remove();</span>
+<span class="nc" id="L120">            return true;</span>
+        }
+<span class="nc" id="L122">        return false;</span>
+    }
+
+    /**
+     * Import a schema from another group. Foreign keys are not imported.
+     */
+    public Schema importSchema(Schema schema) {
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (schema == null)</span>
+<span class="nc" id="L130">            return null;</span>
+
+<span class="nc" id="L132">        Schema copy = addSchema(schema.getIdentifier());</span>
+<span class="nc" id="L133">        Sequence[] seqs = schema.getSequences();</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        for (int i = 0; i &lt; seqs.length; i++)</span>
+<span class="nc" id="L135">            copy.importSequence(seqs[i]);</span>
+
+<span class="nc" id="L137">        Table[] tables = schema.getTables();</span>
+        Index[] idxs;
+        Unique[] unqs;
+        Table tab;
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        for (int i = 0; i &lt; tables.length; i++) {</span>
+<span class="nc" id="L142">            tab = copy.importTable(tables[i]);</span>
+<span class="nc" id="L143">            idxs = tables[i].getIndexes();</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">            for (int j = 0; j &lt; idxs.length; j++)</span>
+<span class="nc" id="L145">                tab.importIndex(idxs[j]);</span>
+<span class="nc" id="L146">            unqs = tables[i].getUniques();</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">            for (int j = 0; j &lt; unqs.length; j++)</span>
+<span class="nc" id="L148">                tab.importUnique(unqs[j]);</span>
+        }
+<span class="nc" id="L150">        return copy;</span>
+    }
+
+    /**
+     * Return true if the given table is known to exist. While
+     * {@link #findTable} may exhibit dynamic behavior in some schema group
+     * implementations, this method only returns true if the table has been
+     * added to this group or is known to exist in the database.
+     */
+    public boolean isKnownTable(Table table) {
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        return findTable(table) != null;</span>
+    }
+
+    /**
+     * Return true if the given table is known to exist. While
+     * {@link #findTable} may exhibit dynamic behavior in some schema group
+     * implementations, this method only returns true if the table has been
+     * added to this group or is known to exist in the database.
+     * @deprecated
+     */
+    @Deprecated
+    public boolean isKnownTable(String name) {
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        return findTable(name) != null;</span>
+    }
+
+      public boolean isKnownTable(QualifiedDBIdentifier path) {
+<span class="nc bnc" id="L176" title="All 2 branches missed.">          return findTable(path) != null;</span>
+      }
+
+    /**
+     * Find the equivalent of the given table in this schema group. The
+     * given table that may have come from another schema group.
+     */
+    public Table findTable(Table table) {
+<span class="nc" id="L184">        return findTable(table.getQualifiedPath());</span>
+    }
+
+    /**
+     * Find the table with the given name in the group, using '.' as the
+     * catalog separator. Returns null if no table found.
+     * @deprecated
+     */
+    @Deprecated
+    public Table findTable(String name) {
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L195">            return null;</span>
+
+<span class="nc" id="L197">        return findTable(QualifiedDBIdentifier.getPath(DBIdentifier.newTable(name)));</span>
+    }
+
+    public Table findTable(QualifiedDBIdentifier path) {
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (DBIdentifier.isNull(path)) {</span>
+<span class="nc" id="L202">            return null;</span>
+        }
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if (!DBIdentifier.isNull(path.getSchemaName())) {</span>
+<span class="nc" id="L205">            Schema schema = getSchema(path.getSchemaName());</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            if (schema != null)</span>
+<span class="nc" id="L207">                return schema.getTable(path.getUnqualifiedName());</span>
+
+<span class="nc" id="L209">        } else {</span>
+<span class="nc" id="L210">            Schema[] schemas = getSchemas();</span>
+            Table tab;
+<span class="nc bnc" id="L212" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L213">                tab = schemas[i].getTable(path.getIdentifier());</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">                if (tab != null)</span>
+<span class="nc" id="L215">                    return tab;</span>
+            }
+        }
+<span class="nc" id="L218">        return null;</span>
+    }
+
+    /**
+     * Find the table with the given name in the group, using '.' as the catalog
+     * separator. Returns null if no table found.
+     * @deprecated
+     */
+    @Deprecated
+    public Table findTable(Schema inSchema, String name) {
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L229">            return null;</span>
+<span class="nc" id="L230">        return findTable(inSchema, DBIdentifier.newTable(name), DBIdentifier.NULL);</span>
+    }
+
+    public Table findTable(Schema inSchema, DBIdentifier name) {
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        if (DBIdentifier.isNull(name))</span>
+<span class="nc" id="L235">            return null;</span>
+<span class="nc" id="L236">        return findTable(inSchema, QualifiedDBIdentifier.getPath(name), DBIdentifier.NULL);</span>
+    }
+
+    public Table findTable(Schema inSchema, DBIdentifier name, DBIdentifier defaultSchemaName) {
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (DBIdentifier.isNull(name))</span>
+<span class="nc" id="L241">            return null;</span>
+<span class="nc" id="L242">        return findTable(inSchema, QualifiedDBIdentifier.getPath(name), defaultSchemaName);</span>
+    }
+
+    public Table findTable(Schema inSchema, QualifiedDBIdentifier path, DBIdentifier defaultSchemaName) {
+<span class="nc bnc" id="L246" title="All 2 branches missed.">        if (path == null)</span>
+<span class="nc" id="L247">            return null;</span>
+
+<span class="nc bnc" id="L249" title="All 2 branches missed.">        if (!DBIdentifier.isNull(path.getSchemaName())) {</span>
+<span class="nc" id="L250">            Schema schema = getSchema(path.getSchemaName());</span>
+<span class="nc bnc" id="L251" title="All 2 branches missed.">            if (schema != null)</span>
+<span class="nc" id="L252">                return schema.getTable(path.getIdentifier());</span>
+<span class="nc" id="L253">        } else {</span>
+<span class="nc" id="L254">            Schema[] schemas = getSchemas();</span>
+<span class="nc bnc" id="L255" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L256">                Table tab = schemas[i].getTable(path.getIdentifier());</span>
+                // if a table is found and it has the same schema
+                // as the input schema , it means that the table
+                // exists. However, if the input schema is null,
+                // then we assume that there is only one table for the
+                // db default schema, in this case, table exists..
+                // We can't handle the case that one entity has schema name
+                // and other entity does not have schema name but both entities
+                // map to the same table.
+<span class="nc bnc" id="L265" title="All 2 branches missed.">                boolean isDefaultSchema = DBIdentifier.isNull(inSchema.getIdentifier()) &amp;&amp;</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">                    !DBIdentifier.isNull(defaultSchemaName) &amp;&amp;</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">                    DBIdentifier.equalsIgnoreCase(defaultSchemaName, schemas[i].getIdentifier());</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">                boolean hasNoDefaultSchema = DBIdentifier.isNull(inSchema.getIdentifier()) &amp;&amp;</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">                    DBIdentifier.isNull(defaultSchemaName);</span>
+
+<span class="nc bnc" id="L271" title="All 8 branches missed.">                if (tab != null &amp;&amp;</span>
+                    (schemas[i] == inSchema || isDefaultSchema || hasNoDefaultSchema))
+<span class="nc" id="L273">                    return tab;</span>
+
+            }
+        }
+<span class="nc" id="L277">        return null;</span>
+    }
+
+    /**
+     * Return true if the given sequence is known to exist. While
+     * {@link #findSequence} may exhibit dynamic behavior in some schema group
+     * implementations, this method only returns true if the sequence has been
+     * added to this group or is known to exist in the database.
+     */
+    public boolean isKnownSequence(Sequence seq) {
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        return findSequence(seq) != null;</span>
+    }
+
+    /**
+     * Return true if the given sequence is known to exist. While
+     * {@link #findSequence} may exhibit dynamic behavior in some schema group
+     * implementations, this method only returns true if the sequence has been
+     * added to this group or is known to exist in the database.
+     * @deprecated
+     */
+    @Deprecated
+    public boolean isKnownSequence(String name) {
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        return findSequence(name) != null;</span>
+    }
+
+    public boolean isKnownSequence(DBIdentifier name) {
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        return findSequence(QualifiedDBIdentifier.getPath(name)) != null;</span>
+    }
+
+    public boolean isKnownSequence(QualifiedDBIdentifier path) {
+<span class="nc bnc" id="L307" title="All 2 branches missed.">        return findSequence(path) != null;</span>
+    }
+
+    /**
+     * Find the equivalent of the given sequence in this schema group. The
+     * given sequence that may have come from another schema group.
+     */
+    public Sequence findSequence(Sequence seq) {
+<span class="nc" id="L315">        return findSequence(seq.getQualifiedPath());</span>
+    }
+
+    /**
+     * Find the sequence with the given name in the group, using '.' as the
+     * catalog separator. Returns null if no sequence found.
+     * @deprecated
+     */
+    @Deprecated
+    public Sequence findSequence(String name) {
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L326">            return null;</span>
+<span class="nc" id="L327">        return findSequence(DBIdentifier.newSequence(name));</span>
+    }
+
+    public Sequence findSequence(DBIdentifier name) {
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        if (DBIdentifier.isNull(name))</span>
+<span class="nc" id="L332">            return null;</span>
+<span class="nc" id="L333">        return findSequence(QualifiedDBIdentifier.getPath(name));</span>
+    }
+
+    public Sequence findSequence(QualifiedDBIdentifier path) {
+<span class="nc bnc" id="L337" title="All 2 branches missed.">        if (path == null)</span>
+<span class="nc" id="L338">            return null;</span>
+
+<span class="nc bnc" id="L340" title="All 2 branches missed.">        if (!DBIdentifier.isNull(path.getSchemaName())) {</span>
+<span class="nc" id="L341">            Schema schema = getSchema(path.getSchemaName());</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">            if (schema != null)</span>
+<span class="nc" id="L343">                return schema.getSequence(path.getIdentifier());</span>
+<span class="nc" id="L344">        } else {</span>
+<span class="nc" id="L345">            Schema[] schemas = getSchemas();</span>
+            Sequence seq;
+<span class="nc bnc" id="L347" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L348">                seq = schemas[i].getSequence(path.getIdentifier());</span>
+<span class="nc bnc" id="L349" title="All 2 branches missed.">                if (seq != null)</span>
+<span class="nc" id="L350">                    return seq;</span>
+            }
+        }
+<span class="nc" id="L353">        return null;</span>
+    }
+
+    /**
+     * Find the sequence with the given name in the group, using '.' as the
+     * catalog separator. Returns null if no sequence found.
+     * @deprecated
+     */
+    @Deprecated
+    public Sequence findSequence(Schema inSchema, String name) {
+<span class="nc bnc" id="L363" title="All 2 branches missed.">        if (name == null)</span>
+<span class="nc" id="L364">            return null;</span>
+<span class="nc" id="L365">        return findSequence(inSchema, QualifiedDBIdentifier.getPath(DBIdentifier.newSequence(name)));</span>
+    }
+
+
+    public Sequence findSequence(Schema inSchema, QualifiedDBIdentifier path) {
+<span class="nc bnc" id="L370" title="All 2 branches missed.">        if (path == null)</span>
+<span class="nc" id="L371">            return null;</span>
+
+<span class="nc bnc" id="L373" title="All 2 branches missed.">        if (!DBIdentifier.isNull(path.getSchemaName())) {</span>
+<span class="nc" id="L374">            Schema schema = getSchema(path.getSchemaName());</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">            if (schema != null)</span>
+<span class="nc" id="L376">                return schema.getSequence(path.getIdentifier());</span>
+<span class="nc" id="L377">        } else {</span>
+<span class="nc" id="L378">            Schema[] schemas = getSchemas();</span>
+            Sequence seq;
+<span class="nc bnc" id="L380" title="All 2 branches missed.">            for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L381">                seq = schemas[i].getSequence(path.getIdentifier());</span>
+<span class="nc bnc" id="L382" title="All 4 branches missed.">                if ((seq != null) &amp;&amp;</span>
+<span class="nc bnc" id="L383" title="All 2 branches missed.">                        (schemas[i] == inSchema || DBIdentifier.isNull(inSchema.getIdentifier())))</span>
+<span class="nc" id="L384">                    return seq;</span>
+            }
+        }
+<span class="nc" id="L387">        return null;</span>
+    }
+
+    /**
+     * Find all foreign keys exported by a given primary key (all foreign keys
+     * that link to the primary key).
+     */
+    public ForeignKey[] findExportedForeignKeys(PrimaryKey pk) {
+<span class="nc bnc" id="L395" title="All 2 branches missed.">        if (pk == null)</span>
+<span class="nc" id="L396">            return new ForeignKey[0];</span>
+
+<span class="nc" id="L398">        Schema[] schemas = getSchemas();</span>
+        Table[] tabs;
+        ForeignKey[] fks;
+<span class="nc" id="L401">        Collection&lt;ForeignKey&gt; exports = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L403">            tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L404" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc" id="L405">                fks = tabs[j].getForeignKeys();</span>
+<span class="nc bnc" id="L406" title="All 2 branches missed.">                for (int k = 0; k &lt; fks.length; k++) {</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">                    if (fks[k].getPrimaryKeyTable() != null</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">                        &amp;&amp; pk.equals(fks[k].getPrimaryKeyTable().</span>
+<span class="nc" id="L409">                        getPrimaryKey()))</span>
+<span class="nc" id="L410">                        exports.add(fks[k]);</span>
+                }
+            }
+        }
+<span class="nc" id="L414">        return exports.toArray(new ForeignKey[exports.size()]);</span>
+    }
+
+    /**
+     * Remove unreferenced or emtpy components from the schema.
+     */
+    public void removeUnusedComponents() {
+<span class="nc" id="L421">        Schema[] schemas = getSchemas();</span>
+        Table[] tabs;
+        Column[] cols;
+        Sequence[] seqs;
+        PrimaryKey pk;
+        ForeignKey[] fks;
+<span class="nc bnc" id="L427" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L428">            seqs = schemas[i].getSequences();</span>
+<span class="nc bnc" id="L429" title="All 2 branches missed.">            for (int j = 0; j &lt; seqs.length; j++)</span>
+<span class="nc bnc" id="L430" title="All 2 branches missed.">                if (seqs[j].getRefCount() == 0)</span>
+<span class="nc" id="L431">                    schemas[i].removeSequence(seqs[j]);</span>
+
+<span class="nc" id="L433">            tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L434" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc" id="L435">                pk = tabs[j].getPrimaryKey();</span>
+<span class="nc" id="L436">                fks = tabs[j].getForeignKeys();</span>
+<span class="nc" id="L437">                cols = tabs[j].getColumns();</span>
+
+<span class="nc bnc" id="L439" title="All 4 branches missed.">                if (pk != null &amp;&amp; pk.getRefCount() == 0)</span>
+<span class="nc" id="L440">                    tabs[j].removePrimaryKey();</span>
+
+<span class="nc bnc" id="L442" title="All 2 branches missed.">                for (int k = 0; k &lt; fks.length; k++)</span>
+<span class="nc bnc" id="L443" title="All 2 branches missed.">                    if (fks[k].getRefCount() == 0)</span>
+<span class="nc" id="L444">                        tabs[j].removeForeignKey(fks[k]);</span>
+
+<span class="nc bnc" id="L446" title="All 2 branches missed.">                for (int k = 0; k &lt; cols.length; k++)</span>
+<span class="nc bnc" id="L447" title="All 2 branches missed.">                    if (cols[k].getRefCount() == 0)</span>
+<span class="nc" id="L448">                        tabs[j].removeColumn(cols[k]);</span>
+
+<span class="nc bnc" id="L450" title="All 2 branches missed.">                if (tabs[j].getColumns().length == 0)</span>
+<span class="nc" id="L451">                    schemas[i].removeTable(tabs[j]);</span>
+            }
+
+<span class="nc bnc" id="L454" title="All 2 branches missed.">            if (schemas[i].getTables().length == 0)</span>
+<span class="nc" id="L455">                removeSchema(schemas[i]);</span>
+        }
+<span class="nc" id="L457">    }</span>
+
+    @Override
+    public Object clone() {
+<span class="nc" id="L461">        SchemaGroup clone = newInstance();</span>
+<span class="nc" id="L462">        clone.copy(this);</span>
+<span class="nc" id="L463">        return clone;</span>
+    }
+
+    /**
+     * Create a new instance of this class.
+     */
+    protected SchemaGroup newInstance() {
+<span class="nc" id="L470">        return new SchemaGroup();</span>
+    }
+
+    /**
+     * Copy cloneable state from the given instance.
+     */
+    protected void copy(SchemaGroup group) {
+<span class="nc" id="L477">        Schema[] schemas = group.getSchemas();</span>
+<span class="nc bnc" id="L478" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++)</span>
+<span class="nc" id="L479">            importSchema(schemas[i]);</span>
+
+        // have to do fks after all schemas are imported
+        Table[] tabs;
+        ForeignKey[] fks;
+<span class="nc bnc" id="L484" title="All 2 branches missed.">        for (int i = 0; i &lt; schemas.length; i++) {</span>
+<span class="nc" id="L485">            tabs = schemas[i].getTables();</span>
+<span class="nc bnc" id="L486" title="All 2 branches missed.">            for (int j = 0; j &lt; tabs.length; j++) {</span>
+<span class="nc" id="L487">                fks = tabs[j].getForeignKeys();</span>
+<span class="nc bnc" id="L488" title="All 2 branches missed.">                for (int k = 0; k &lt; fks.length; k++)</span>
+<span class="nc" id="L489">                    getSchema(schemas[i].getIdentifier()).getTable</span>
+<span class="nc" id="L490">                        (tabs[j].getIdentifier()).importForeignKey(fks[k]);</span>
+            }
+        }
+<span class="nc" id="L493">    }</span>
+
+    /**
+     * Return a new schema with the given name.
+     * @deprecated
+     */
+    @Deprecated
+    protected Schema newSchema(String name) {
+<span class="nc" id="L501">        return new Schema(name, this);</span>
+    }
+
+    protected Schema newSchema(DBIdentifier name) {
+<span class="nc" id="L505">        return new Schema(name, this);</span>
+    }
+
+    /**
+     * Return a new sequence with the given name and owner schema.
+     * @deprecated
+     */
+    @Deprecated
+    protected Sequence newSequence(String name, Schema schema) {
+<span class="nc" id="L514">        return new Sequence(name, schema);</span>
+    }
+
+    protected Sequence newSequence(DBIdentifier name, Schema schema) {
+<span class="nc" id="L518">        return new Sequence(name, schema);</span>
+    }
+
+    /**
+     * Return a new table with the given name and owner schema.
+     * @deprecated
+     */
+    @Deprecated
+    protected Table newTable(String name, Schema schema) {
+<span class="nc" id="L527">        return new Table(name, schema);</span>
+    }
+
+    protected Table newTable(DBIdentifier name, Schema schema) {
+<span class="nc" id="L531">        return new Table(name, schema);</span>
+    }
+
+    /**
+     * Return a new column with the given name and owner table.
+     * @deprecated
+     */
+    @Deprecated
+    protected Column newColumn(String name, Table table) {
+<span class="nc" id="L540">        return new Column(name, table);</span>
+    }
+
+    protected Column newColumn(DBIdentifier name, Table table) {
+<span class="nc" id="L544">        return new Column(name, table);</span>
+    }
+
+    /**
+     * Return a new primary key with the given name and owner table.
+     * @deprecated
+     */
+    @Deprecated
+    protected PrimaryKey newPrimaryKey(String name, Table table) {
+<span class="nc" id="L553">        return new PrimaryKey(name, table);</span>
+    }
+
+    protected PrimaryKey newPrimaryKey(DBIdentifier name, Table table) {
+<span class="nc" id="L557">        return new PrimaryKey(name, table);</span>
+    }
+
+    /**
+     * Return a new index with the given name and owner table.
+     * @deprecated
+     */
+    @Deprecated
+    protected Index newIndex(String name, Table table) {
+<span class="nc" id="L566">        return new Index(name, table);</span>
+    }
+
+    protected Index newIndex(DBIdentifier name, Table table) {
+<span class="nc" id="L570">        return new Index(name, table);</span>
+    }
+
+    /**
+     * Return a new unique constraint with the given name and owner table.
+     * @deprecated
+     */
+    @Deprecated
+    protected Unique newUnique(String name, Table table) {
+<span class="nc" id="L579">        return new Unique(name, table);</span>
+    }
+
+    protected Unique newUnique(DBIdentifier name, Table table) {
+<span class="nc" id="L583">        return new Unique(name, table);</span>
+    }
+
+    /**
+     * Return a new foreign key with the given name and owner table.
+     * @deprecated
+     */
+    @Deprecated
+    protected ForeignKey newForeignKey(String name, Table table) {
+<span class="nc" id="L592">        return new ForeignKey(name, table);</span>
+    }
+
+    protected ForeignKey newForeignKey(DBIdentifier name, Table table) {
+<span class="nc" id="L596">        return new ForeignKey(name, table);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

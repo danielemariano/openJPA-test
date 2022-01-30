@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>GenericResultObjectProvider.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">GenericResultObjectProvider.java</span></div><h1>GenericResultObjectProvider.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.util.StoreException;
+import org.apache.openjpa.util.UnsupportedException;
+
+/**
+ * Object provider implementation wrapped around a generic {@link Result}.
+ *
+ * @author Abe White
+ */
+public class GenericResultObjectProvider
+    implements ResultObjectProvider {
+
+    private final ClassMapping _mapping;
+    private final JDBCStore _store;
+    private final JDBCFetchConfiguration _fetch;
+    private final Result _res;
+
+    /**
+     * Constructor.
+     *
+     * @param pcClass the base class of the result objects
+     * @param store the store manager to delegate loading to
+     * @param fetch the fetch configuration, or null for default
+     * @param res the result containing the data
+     */
+    public GenericResultObjectProvider(Class&lt;?&gt; pcClass,
+        JDBCStore store, JDBCFetchConfiguration fetch, Result res) {
+<span class="nc" id="L54">        this(store.getConfiguration().getMappingRepositoryInstance().getMapping</span>
+<span class="nc" id="L55">            (pcClass, store.getContext().getClassLoader(), true),</span>
+            store, fetch, res);
+<span class="nc" id="L57">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param mapping the mapping for the base class of the result objects
+     * @param store the store manager to delegate loading to
+     * @param fetch the fetch configuration, or null for default
+     * @param res the result containing the data
+     */
+    public GenericResultObjectProvider(ClassMapping mapping,
+<span class="nc" id="L68">        JDBCStore store, JDBCFetchConfiguration fetch, Result res) {</span>
+<span class="nc" id="L69">        _mapping = mapping;</span>
+<span class="nc" id="L70">        _store = store;</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        if (fetch == null)</span>
+<span class="nc" id="L72">            _fetch = store.getFetchConfiguration();</span>
+        else
+<span class="nc" id="L74">            _fetch = fetch;</span>
+<span class="nc" id="L75">        _res = res;</span>
+<span class="nc" id="L76">    }</span>
+
+    @Override
+    public boolean supportsRandomAccess() {
+        try {
+<span class="nc" id="L81">            return _res.supportsRandomAccess();</span>
+<span class="nc" id="L82">        } catch (Throwable t) {</span>
+<span class="nc" id="L83">            return false;</span>
+        }
+    }
+
+    @Override
+    public void open() {
+<span class="nc" id="L89">    }</span>
+
+    @Override
+    public Object getResultObject()
+        throws SQLException {
+        // rather than use the standard result.load(), we go direct to
+        // the store manager so we can tell it not to load anything additional
+<span class="nc" id="L96">        return ((JDBCStoreManager) _store).load(_mapping, _fetch,</span>
+            StoreContext.EXCLUDE_ALL, _res);
+    }
+
+    @Override
+    public boolean next()
+        throws SQLException {
+<span class="nc" id="L103">        return _res.next();</span>
+    }
+
+    @Override
+    public boolean absolute(int pos)
+        throws SQLException {
+<span class="nc" id="L109">        return _res.absolute(pos);</span>
+    }
+
+    @Override
+    public int size()
+        throws SQLException {
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        if (_fetch.getLRSSize() == LRSSizes.SIZE_UNKNOWN</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">            || !supportsRandomAccess())</span>
+<span class="nc" id="L117">            return Integer.MAX_VALUE;</span>
+<span class="nc" id="L118">        return _res.size();</span>
+    }
+
+    @Override
+    public void reset() {
+<span class="nc" id="L123">        throw new UnsupportedException();</span>
+    }
+
+    @Override
+    public void close() {
+<span class="nc" id="L128">        _res.close();</span>
+<span class="nc" id="L129">    }</span>
+
+    @Override
+    public void handleCheckedException(Exception e) {
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if (e instanceof SQLException)</span>
+<span class="nc" id="L134">            throw SQLExceptions.getStore((SQLException) e, _store.getDBDictionary(), _fetch.getReadLockLevel());</span>
+<span class="nc" id="L135">        throw new StoreException(e);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

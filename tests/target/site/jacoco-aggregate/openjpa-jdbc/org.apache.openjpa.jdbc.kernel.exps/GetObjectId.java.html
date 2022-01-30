@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>GetObjectId.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">GetObjectId.java</span></div><h1>GetObjectId.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Joinable;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.ClassMetaData;
+import org.apache.openjpa.util.ApplicationIds;
+import org.apache.openjpa.util.Id;
+import org.apache.openjpa.util.OpenJPAId;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Select the oid value of an object; typically used in projections.
+ *
+ * @author Abe White
+ */
+class GetObjectId
+    extends AbstractVal {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L49">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L50">        (GetObjectId.class);</span>
+
+    private final PCPath _path;
+<span class="nc" id="L53">    private ClassMetaData _meta = null;</span>
+
+    /**
+     * Constructor. Provide the value whose oid to extract.
+     */
+<span class="nc" id="L58">    public GetObjectId(PCPath path) {</span>
+<span class="nc" id="L59">        _path = path;</span>
+<span class="nc" id="L60">    }</span>
+
+    /**
+     * Return the oid columns.
+     */
+    public Column[] getColumns(ExpState state) {
+<span class="nc" id="L66">        return _path.getClassMapping(state).getPrimaryKeyColumns();</span>
+    }
+
+    @Override
+    public ClassMetaData getMetaData() {
+<span class="nc" id="L71">        return _meta;</span>
+    }
+
+    @Override
+    public void setMetaData(ClassMetaData meta) {
+<span class="nc" id="L76">        _meta = meta;</span>
+<span class="nc" id="L77">    }</span>
+
+    @Override
+    public Class getType() {
+<span class="nc" id="L81">        return Object.class;</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L86">    }</span>
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L90">        ExpState state = _path.initialize(sel, ctx, JOIN_REL);</span>
+
+        // it's difficult to get calls on non-pc fields to always return null
+        // without screwing up the SQL, to just don't let users call it on
+        // non-pc fields at all
+<span class="nc" id="L95">        ClassMapping cls = _path.getClassMapping(state);</span>
+<span class="nc bnc" id="L96" title="All 4 branches missed.">        if (cls == null || cls.getEmbeddingMapping() != null)</span>
+<span class="nc" id="L97">            throw new UserException(_loc.get(&quot;bad-getobjectid&quot;,</span>
+<span class="nc" id="L98">                _path.getFieldMapping(state)));</span>
+<span class="nc" id="L99">        return state;</span>
+    }
+
+    @Override
+    public Object toDataStoreValue(Select sel, ExpContext ctx, ExpState state,
+        Object val) {
+        // if datastore identity, try to convert to a long value
+<span class="nc" id="L106">        ClassMapping mapping = _path.getClassMapping(state);</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (mapping.getIdentityType() == ClassMetaData.ID_DATASTORE) {</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">            if (val instanceof Id)</span>
+<span class="nc" id="L109">                return ((Id) val).getId();</span>
+<span class="nc" id="L110">            return Filters.convert(val, long.class);</span>
+        }
+
+        // if unknown identity, can't do much
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (mapping.getIdentityType() == ClassMetaData.ID_UNKNOWN)</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">            return (val instanceof OpenJPAId) ?</span>
+<span class="nc" id="L116">                ((OpenJPAId) val).getIdObject() : val;</span>
+
+        // application identity; convert to pk values in the same order as
+        // the mapping's primary key columns will be returned
+<span class="nc" id="L120">        Object[] pks = ApplicationIds.toPKValues(val, mapping);</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (pks.length == 1)</span>
+<span class="nc" id="L122">            return pks[0];</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (val == null)</span>
+<span class="nc" id="L124">            return pks;</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        while (!mapping.isPrimaryKeyObjectId(false))</span>
+<span class="nc" id="L126">            mapping = mapping.getJoinablePCSuperclassMapping();</span>
+
+<span class="nc" id="L128">        Column[] cols = mapping.getPrimaryKeyColumns();</span>
+<span class="nc" id="L129">        Object[] vals = new Object[cols.length];</span>
+        Joinable join;
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L132">            join = mapping.assertJoinable(cols[i]);</span>
+<span class="nc" id="L133">            vals[i] = pks[mapping.getField(join.getFieldIndex()).</span>
+<span class="nc" id="L134">                getPrimaryKeyIndex()];</span>
+<span class="nc" id="L135">            vals[i] = join.getJoinValue(vals[i], cols[i], ctx.store);</span>
+        }
+<span class="nc" id="L137">        return vals;</span>
+    }
+
+    @Override
+    public void select(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L143">        selectColumns(sel, ctx, state, true);</span>
+<span class="nc" id="L144">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L149">        _path.selectColumns(sel, ctx, state, true);</span>
+<span class="nc" id="L150">    }</span>
+
+    @Override
+    public void groupBy(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L154">        _path.groupBy(sel, ctx, state);</span>
+<span class="nc" id="L155">    }</span>
+
+    @Override
+    public void orderBy(Select sel, ExpContext ctx, ExpState state,
+        boolean asc) {
+<span class="nc" id="L160">        _path.orderBy(sel, ctx, state, asc);</span>
+<span class="nc" id="L161">    }</span>
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res)
+        throws SQLException {
+<span class="nc" id="L166">        return _path.load(ctx, state, res, true);</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L172">        _path.calculateValue(sel, ctx, state, null, null);</span>
+<span class="nc" id="L173">    }</span>
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L177">        return _path.length(sel, ctx, state);</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L183">        _path.appendTo(sel, ctx, state, sql, index);</span>
+<span class="nc" id="L184">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L188">        visitor.enter(this);</span>
+<span class="nc" id="L189">        _path.acceptVisit(visitor);</span>
+<span class="nc" id="L190">        visitor.exit(this);</span>
+<span class="nc" id="L191">    }</span>
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

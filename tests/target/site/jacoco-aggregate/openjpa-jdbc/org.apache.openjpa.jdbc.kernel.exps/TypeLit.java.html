@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TypeLit.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">TypeLit.java</span></div><h1>TypeLit.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Discriminator;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.Literal;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * A type literal value.
+ *
+ * @author Catalina Wei
+ */
+public class TypeLit
+    extends Const
+    implements Literal {
+
+    
+    private static final long serialVersionUID = 1L;
+    private Object _val;
+    private int _ptype;
+
+    /**
+     * Constructor. Supply literal value.
+     */
+<span class="nc" id="L46">    public TypeLit(Object val, int ptype) {</span>
+<span class="nc" id="L47">        _val = val;</span>
+<span class="nc" id="L48">        _ptype = ptype;</span>
+<span class="nc" id="L49">    }</span>
+
+    @Override
+    public Class getType() {
+<span class="nc bnc" id="L53" title="All 2 branches missed.">        return (_val == null) ? Object.class : _val.getClass();</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L58">        _val = Filters.convert(_val, type);</span>
+<span class="nc" id="L59">    }</span>
+
+    @Override
+    public int getParseType() {
+<span class="nc" id="L63">        return _ptype;</span>
+    }
+
+    @Override
+    public Object getValue() {
+<span class="nc" id="L68">        return _val;</span>
+    }
+
+    @Override
+    public void setValue(Object val) {
+<span class="nc" id="L73">        _val = val;</span>
+<span class="nc" id="L74">    }</span>
+
+    @Override
+    public Object getValue(Object[] params) {
+<span class="nc" id="L78">        return getValue();</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L83">        return new LitExpState();</span>
+    }
+
+    /**
+     * Expression state.
+     */
+<span class="nc" id="L89">    private static class LitExpState</span>
+        extends ConstExpState {
+
+        public Object sqlValue;
+        public int otherLength;
+<span class="nc" id="L94">        public ClassMapping mapping = null;</span>
+<span class="nc" id="L95">        public Discriminator disc = null;</span>
+<span class="nc" id="L96">        public Object discValue = null;</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L102">        super.calculateValue(sel, ctx, state, other, otherState);</span>
+<span class="nc" id="L103">        LitExpState lstate = (LitExpState) state;</span>
+<span class="nc" id="L104">        lstate.mapping = (ClassMapping) getMetaData();</span>
+<span class="nc" id="L105">        lstate.disc = lstate.mapping.getDiscriminator();</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        lstate.discValue = lstate.disc != null ? lstate.disc.getValue() :</span>
+<span class="nc" id="L107">            null;</span>
+<span class="nc" id="L108">        sel.select(((ClassMapping) getMetaData()).getPrimaryKeyColumns(),</span>
+            lstate.joins);
+<span class="nc" id="L110">    }</span>
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L115">        LitExpState lstate = (LitExpState) state;</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (lstate.otherLength &gt; 1)</span>
+<span class="nc" id="L117">            sql.appendValue(((Object[]) lstate.sqlValue)[index],</span>
+<span class="nc" id="L118">                lstate.getColumn(index));</span>
+        else {
+<span class="nc bnc" id="L120" title="All 2 branches missed.">            if (lstate.discValue != null)</span>
+<span class="nc" id="L121">                sql.append(getDiscriminator(lstate));</span>
+            else
+<span class="nc" id="L123">                sql.append(&quot;1&quot;);</span>
+        }
+<span class="nc" id="L125">    }</span>
+
+    private String getDiscriminator(LitExpState lstate) {
+<span class="nc" id="L128">        StringBuilder disc = new StringBuilder(lstate.discValue.toString());</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        switch(lstate.disc.getJavaType()) {</span>
+        case JavaTypes.INT:
+<span class="nc" id="L131">            return disc.toString();</span>
+        case JavaTypes.CHAR:
+        case JavaTypes.STRING:
+        default:
+<span class="nc" id="L135">            return disc.insert(0, &quot;'&quot;).append(&quot;'&quot;).toString();</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

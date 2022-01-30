@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Trim.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">Trim.java</span></div><h1>Trim.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.lang.Math;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * Returns the number of characters in a string.
+ *
+ * @author Marc Prud'hommeaux
+ */
+public class Trim
+    extends AbstractVal {
+
+    private static final long serialVersionUID = 1L;
+    private final Val _val;
+    private final Val _trimChar;
+    private final Boolean _where;
+<span class="nc" id="L46">    private ClassMetaData _meta = null;</span>
+
+    /**
+     * Constructor. Provide the string to operate on.
+     */
+<span class="nc" id="L51">    public Trim(Val val, Val trimChar, Boolean where) {</span>
+<span class="nc" id="L52">        _val = val;</span>
+<span class="nc" id="L53">        _trimChar = trimChar;</span>
+<span class="nc" id="L54">        _where = where;</span>
+<span class="nc" id="L55">    }</span>
+
+    public Val getVal() {
+<span class="nc" id="L58">        return _val;</span>
+    }
+
+    public Val getTrimChar() {
+<span class="nc" id="L62">        return _trimChar;</span>
+    }
+
+    public Boolean getWhere(){
+<span class="nc" id="L66">        return _where;</span>
+    }
+
+    @Override
+    public ClassMetaData getMetaData() {
+<span class="nc" id="L71">        return _meta;</span>
+    }
+
+    @Override
+    public void setMetaData(ClassMetaData meta) {
+<span class="nc" id="L76">        _meta = meta;</span>
+<span class="nc" id="L77">    }</span>
+
+    @Override
+    public Class getType() {
+<span class="nc" id="L81">        return String.class;</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L86">    }</span>
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L90">        ExpState valueState =  _val.initialize(sel, ctx, 0);</span>
+<span class="nc" id="L91">        ExpState charState = _trimChar.initialize(sel, ctx, 0);</span>
+<span class="nc" id="L92">        return new TrimExpState(sel.and(valueState.joins, charState.joins),</span>
+            valueState, charState);
+    }
+
+    /**
+     * Expression state.
+     */
+    private static class TrimExpState
+        extends ExpState {
+
+        public final ExpState valueState;
+        public final ExpState charState;
+
+        public TrimExpState(Joins joins, ExpState valueState,
+            ExpState charState) {
+<span class="nc" id="L107">            super(joins);</span>
+<span class="nc" id="L108">            this.valueState = valueState;</span>
+<span class="nc" id="L109">            this.charState = charState;</span>
+<span class="nc" id="L110">        }</span>
+    }
+
+    @Override
+    public void select(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L116">        sel.select(newSQLBuffer(sel, ctx, state), this);</span>
+<span class="nc" id="L117">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L122">        TrimExpState tstate = (TrimExpState) state;</span>
+<span class="nc" id="L123">        _val.selectColumns(sel, ctx, tstate.valueState, true);</span>
+<span class="nc" id="L124">        _trimChar.selectColumns(sel, ctx, tstate.charState, true);</span>
+<span class="nc" id="L125">    }</span>
+
+    @Override
+    public void groupBy(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L129">        sel.groupBy(newSQLBuffer(sel, ctx, state));</span>
+<span class="nc" id="L130">    }</span>
+
+    @Override
+    public void orderBy(Select sel, ExpContext ctx, ExpState state,
+        boolean asc) {
+<span class="nc" id="L135">        sel.orderBy(newSQLBuffer(sel, ctx, state), asc, false, getSelectAs());</span>
+<span class="nc" id="L136">    }</span>
+
+    private SQLBuffer newSQLBuffer(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L139">        calculateValue(sel, ctx, state, null, null);</span>
+<span class="nc" id="L140">        SQLBuffer buf = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L141">        appendTo(sel, ctx, state, buf, 0);</span>
+<span class="nc" id="L142">        return buf;</span>
+    }
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res)
+        throws SQLException {
+<span class="nc" id="L148">        return Filters.convert(res.getObject(this,</span>
+<span class="nc" id="L149">            JavaSQLTypes.JDBC_DEFAULT, null), getType());</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L155">        TrimExpState tstate = (TrimExpState) state;</span>
+<span class="nc" id="L156">        _val.calculateValue(sel, ctx, tstate.valueState, null, null);</span>
+<span class="nc" id="L157">        _trimChar.calculateValue(sel, ctx, tstate.charState, null, null);</span>
+<span class="nc" id="L158">    }</span>
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L162">        return 1;</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L168">        DBDictionary dict = ctx.store.getDBDictionary();</span>
+        String func;
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        if (_where == null) {</span>
+<span class="nc" id="L171">            func = dict.trimBothFunction;</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">            dict.assertSupport(func != null, &quot;TrimBothFunction&quot;);</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        } else if (_where.booleanValue()) {</span>
+<span class="nc" id="L174">            func = dict.trimLeadingFunction;</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">            dict.assertSupport(func != null, &quot;TrimLeadingFunction&quot;);</span>
+        } else {
+<span class="nc" id="L177">            func = dict.trimTrailingFunction;</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            dict.assertSupport(func != null, &quot;TrimTrailingFunction&quot;);</span>
+        }
+<span class="nc" id="L180">        func = dict.getCastFunction(_val, func);</span>
+
+<span class="nc" id="L182">        int fromPart = func.indexOf(&quot;{0}&quot;);</span>
+<span class="nc" id="L183">        int charPart = func.indexOf(&quot;{1}&quot;);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (charPart == -1)</span>
+<span class="nc" id="L185">            charPart = func.length();</span>
+<span class="nc" id="L186">        String part1 = func.substring(0, Math.min(fromPart, charPart));</span>
+<span class="nc" id="L187">        String part2 = func.substring(Math.min(fromPart, charPart) + 3,</span>
+<span class="nc" id="L188">            Math.max(fromPart, charPart));</span>
+<span class="nc" id="L189">        String part3 = null;</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">        if (charPart != func.length())</span>
+<span class="nc" id="L191">            part3 = func.substring(Math.max(fromPart, charPart) + 3);</span>
+
+<span class="nc" id="L193">        TrimExpState tstate = (TrimExpState) state;</span>
+<span class="nc" id="L194">        sql.append(part1);</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        if (fromPart &lt; charPart)</span>
+<span class="nc" id="L196">            _val.appendTo(sel, ctx, tstate.valueState, sql, 0);</span>
+        else
+<span class="nc" id="L198">            _trimChar.appendTo(sel, ctx, tstate.charState, sql, 0);</span>
+<span class="nc" id="L199">        sql.append(part2);</span>
+
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (charPart != func.length()) {</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            if (fromPart &gt; charPart)</span>
+<span class="nc" id="L203">                _val.appendTo(sel, ctx, tstate.valueState, sql, 0);</span>
+            else
+<span class="nc" id="L205">                _trimChar.appendTo(sel, ctx, tstate.charState, sql, 0);</span>
+<span class="nc" id="L206">            sql.append(part3);</span>
+        } else {
+            // since the trim statement did not specify the token for
+            // where to specify the trim char (denoted by &quot;{1}&quot;),
+            // we do not have the ability to trim off non-whitespace
+            // characters; throw an exception when we attempt to do so
+<span class="nc bnc" id="L212" title="All 2 branches missed.">            if (!(_trimChar instanceof Const) || String.valueOf(((Const)</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">                _trimChar).getValue(ctx,tstate.charState)).trim().length() != 0)</span>
+<span class="nc" id="L214">                dict.assertSupport(false, &quot;TrimNonWhitespaceCharacters&quot;);</span>
+        }
+<span class="nc" id="L216">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L220">        visitor.enter(this);</span>
+<span class="nc" id="L221">        _val.acceptVisit(visitor);</span>
+<span class="nc" id="L222">        _trimChar.acceptVisit(visitor);</span>
+<span class="nc" id="L223">        visitor.exit(this);</span>
+<span class="nc" id="L224">    }</span>
+
+    @Override
+    public int getId() {
+<span class="nc" id="L228">        return Val.TRIM_VAL;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

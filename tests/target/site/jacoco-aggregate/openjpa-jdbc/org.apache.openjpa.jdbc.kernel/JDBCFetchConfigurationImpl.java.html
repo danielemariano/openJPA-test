@@ -1,0 +1,487 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JDBCFetchConfigurationImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">JDBCFetchConfigurationImpl.java</span></div><h1>JDBCFetchConfigurationImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.io.Serializable;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Set;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.sql.JoinSyntaxes;
+import org.apache.openjpa.kernel.FetchConfiguration;
+import org.apache.openjpa.kernel.FetchConfigurationImpl;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.rop.EagerResultList;
+import org.apache.openjpa.lib.rop.ListResultObjectProvider;
+import org.apache.openjpa.lib.rop.ResultList;
+import org.apache.openjpa.lib.rop.ResultObjectProvider;
+import org.apache.openjpa.lib.rop.SimpleResultList;
+import org.apache.openjpa.lib.rop.SoftRandomAccessResultList;
+import org.apache.openjpa.lib.rop.WindowResultList;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * JDBC extensions to OpenJPA's {@link FetchConfiguration}.
+ *
+ * @author Abe White
+ */
+public class JDBCFetchConfigurationImpl
+    extends FetchConfigurationImpl
+    implements JDBCFetchConfiguration {
+
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L59">    private static final Localizer _loc = Localizer.forPackage(JDBCFetchConfigurationImpl.class);</span>
+
+    /**
+     * Hint keys that correspond to a mutable bean-style setter in this receiver.
+     * These keys are registered with both &lt;code&gt;openjpa.FetchPlan&lt;/code&gt; and &lt;code&gt;openjpa.jdbc&lt;/code&gt; as prefix.
+     * &lt;br&gt;
+     * A hint without a setter method is also recognized by this receiver.
+     */
+    static {
+<span class="nc" id="L68">        String[] prefixes = {&quot;openjpa.FetchPlan&quot;, &quot;openjpa.jdbc&quot;};</span>
+<span class="nc" id="L69">        Class&lt;?&gt; target = JDBCFetchConfiguration.class;</span>
+<span class="nc" id="L70">        populateHintSetter(target, &quot;EagerFetchMode&quot;, int.class, prefixes);</span>
+<span class="nc" id="L71">        populateHintSetter(target, &quot;FetchDirection&quot;, int.class, prefixes);</span>
+<span class="nc" id="L72">        populateHintSetter(target, &quot;Isolation&quot;, int.class, prefixes);</span>
+<span class="nc" id="L73">        populateHintSetter(target, &quot;setIsolation&quot;, &quot;TransactionIsolation&quot;, int.class, &quot;openjpa.jdbc&quot;);</span>
+<span class="nc" id="L74">        populateHintSetter(target, &quot;JoinSyntax&quot;, int.class, prefixes);</span>
+<span class="nc" id="L75">        populateHintSetter(target, &quot;SubclassFetchMode&quot;, int.class, prefixes);</span>
+<span class="nc" id="L76">        populateHintSetter(target, &quot;LRSSize&quot;, int.class, prefixes);</span>
+<span class="nc" id="L77">        populateHintSetter(target, &quot;setLRSSize&quot;, &quot;LRSSizeAlgorithm&quot;, int.class, prefixes);</span>
+<span class="nc" id="L78">        populateHintSetter(target, &quot;ResultSetType&quot;, int.class, prefixes);</span>
+<span class="nc" id="L79">    }</span>
+
+    /**
+     * Configurable JDBC state shared throughout a traversal chain.
+     */
+<span class="nc" id="L84">    protected static class JDBCConfigurationState implements Serializable {</span>
+        
+        private static final long serialVersionUID = 1L;
+<span class="nc" id="L87">        public int eagerMode = 0;</span>
+<span class="nc" id="L88">        public int subclassMode = 0;</span>
+<span class="nc" id="L89">        public int type = 0;</span>
+<span class="nc" id="L90">        public int direction = 0;</span>
+<span class="nc" id="L91">        public int size = 0;</span>
+<span class="nc" id="L92">        public int syntax = 0;</span>
+<span class="nc" id="L93">        public Set&lt;String&gt; joins = null;</span>
+<span class="nc" id="L94">        public Set&lt;String&gt; fetchInnerJoins = null;</span>
+<span class="nc" id="L95">        public int isolationLevel = -1;</span>
+<span class="nc" id="L96">        public boolean ignoreDfgForFkSelect = false;</span>
+    }
+
+    protected final JDBCConfigurationState _state;
+
+    public JDBCFetchConfigurationImpl() {
+<span class="nc" id="L102">        this(null, null);</span>
+<span class="nc" id="L103">    }</span>
+
+    protected JDBCFetchConfigurationImpl(ConfigurationState state,
+        JDBCConfigurationState jstate) {
+<span class="nc" id="L107">        super(state);</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        _state = (jstate == null) ? new JDBCConfigurationState() : jstate;</span>
+<span class="nc" id="L109">    }</span>
+
+    @Override
+    protected FetchConfigurationImpl newInstance(ConfigurationState state) {
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        JDBCConfigurationState jstate = (state == null) ? null : _state;</span>
+<span class="nc" id="L114">        return new JDBCFetchConfigurationImpl(state, jstate);</span>
+    }
+
+    @Override
+    public void setContext(StoreContext ctx) {
+<span class="nc" id="L119">        super.setContext(ctx);</span>
+<span class="nc" id="L120">        JDBCConfiguration conf = getJDBCConfiguration();</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (conf == null)</span>
+<span class="nc" id="L122">            return;</span>
+
+<span class="nc" id="L124">        setEagerFetchMode(conf.getEagerFetchModeConstant());</span>
+<span class="nc" id="L125">        setSubclassFetchMode(conf.getSubclassFetchModeConstant());</span>
+<span class="nc" id="L126">        setResultSetType(conf.getResultSetTypeConstant());</span>
+<span class="nc" id="L127">        setFetchDirection(conf.getFetchDirectionConstant());</span>
+<span class="nc" id="L128">        setLRSSize(conf.getLRSSizeConstant());</span>
+<span class="nc" id="L129">        setJoinSyntax(conf.getDBDictionaryInstance().joinSyntax);</span>
+<span class="nc" id="L130">    }</span>
+
+    @Override
+    public void copy(FetchConfiguration fetch) {
+<span class="nc" id="L134">        super.copy(fetch);</span>
+<span class="nc" id="L135">        JDBCFetchConfiguration jf = (JDBCFetchConfiguration) fetch;</span>
+<span class="nc" id="L136">        setEagerFetchMode(jf.getEagerFetchMode());</span>
+<span class="nc" id="L137">        setSubclassFetchMode(jf.getSubclassFetchMode());</span>
+<span class="nc" id="L138">        setResultSetType(jf.getResultSetType());</span>
+<span class="nc" id="L139">        setFetchDirection(jf.getFetchDirection());</span>
+<span class="nc" id="L140">        setLRSSize(jf.getLRSSize());</span>
+<span class="nc" id="L141">        setJoinSyntax(jf.getJoinSyntax());</span>
+<span class="nc" id="L142">        addJoins(jf.getJoins());</span>
+<span class="nc" id="L143">        setIgnoreDfgForFkSelect(jf.getIgnoreDfgForFkSelect());</span>
+<span class="nc" id="L144">    }</span>
+
+    @Override
+    public boolean getIgnoreDfgForFkSelect() {
+<span class="nc" id="L148">        return _state.ignoreDfgForFkSelect;</span>
+    }
+
+    @Override
+    public void setIgnoreDfgForFkSelect(boolean b) {
+<span class="nc" id="L153">        _state.ignoreDfgForFkSelect = b;</span>
+<span class="nc" id="L154">    }</span>
+
+    @Override
+    public int getEagerFetchMode() {
+<span class="nc" id="L158">        return _state.eagerMode;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration setEagerFetchMode(int mode) {
+<span class="nc bnc" id="L163" title="All 8 branches missed.">        if (mode != DEFAULT</span>
+            &amp;&amp; mode != EagerFetchModes.EAGER_NONE
+            &amp;&amp; mode != EagerFetchModes.EAGER_JOIN
+            &amp;&amp; mode != EagerFetchModes.EAGER_PARALLEL)
+<span class="nc" id="L167">            throw new IllegalArgumentException(_loc.get(&quot;bad-fetch-mode&quot;, Integer.valueOf(mode)).getMessage());</span>
+
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (mode == DEFAULT) {</span>
+<span class="nc" id="L170">            JDBCConfiguration conf = getJDBCConfiguration();</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">            if (conf != null)</span>
+<span class="nc" id="L172">                mode = conf.getEagerFetchModeConstant();</span>
+        }
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        if (mode != DEFAULT)</span>
+<span class="nc" id="L175">            _state.eagerMode = mode;</span>
+<span class="nc" id="L176">        return this;</span>
+    }
+
+    @Override
+    public int getSubclassFetchMode() {
+<span class="nc" id="L181">        return _state.subclassMode;</span>
+    }
+
+    @Override
+    public int getSubclassFetchMode(ClassMapping cls) {
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (cls == null)</span>
+<span class="nc" id="L187">            return _state.subclassMode;</span>
+<span class="nc" id="L188">        int mode = cls.getSubclassFetchMode();</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        if (mode == DEFAULT)</span>
+<span class="nc" id="L190">            return _state.subclassMode;</span>
+<span class="nc" id="L191">        return Math.min(mode, _state.subclassMode);</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration setSubclassFetchMode(int mode) {
+<span class="nc bnc" id="L196" title="All 8 branches missed.">        if (mode != DEFAULT</span>
+            &amp;&amp; mode != EagerFetchModes.EAGER_NONE
+            &amp;&amp; mode != EagerFetchModes.EAGER_JOIN
+            &amp;&amp; mode != EagerFetchModes.EAGER_PARALLEL)
+<span class="nc" id="L200">            throw new IllegalArgumentException(_loc.get(&quot;bad-fetch-mode&quot;, Integer.valueOf(mode)).getMessage());</span>
+
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        if (mode == DEFAULT) {</span>
+<span class="nc" id="L203">            JDBCConfiguration conf = getJDBCConfiguration();</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">            if (conf != null)</span>
+<span class="nc" id="L205">                mode = conf.getSubclassFetchModeConstant();</span>
+        }
+<span class="nc bnc" id="L207" title="All 2 branches missed.">        if (mode != DEFAULT)</span>
+<span class="nc" id="L208">            _state.subclassMode = mode;</span>
+<span class="nc" id="L209">        return this;</span>
+    }
+
+    @Override
+    public int getResultSetType() {
+<span class="nc" id="L214">        return _state.type;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration setResultSetType(int type) {
+<span class="nc bnc" id="L219" title="All 8 branches missed.">        if (type != DEFAULT</span>
+            &amp;&amp; type != ResultSet.TYPE_FORWARD_ONLY
+            &amp;&amp; type != ResultSet.TYPE_SCROLL_INSENSITIVE
+            &amp;&amp; type != ResultSet.TYPE_SCROLL_SENSITIVE)
+<span class="nc" id="L223">            throw new IllegalArgumentException(_loc.get(&quot;bad-resultset-type&quot;, Integer.valueOf(type)).getMessage());</span>
+
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (type == DEFAULT) {</span>
+<span class="nc" id="L226">            JDBCConfiguration conf = getJDBCConfiguration();</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">            if (conf != null)</span>
+<span class="nc" id="L228">                _state.type = conf.getResultSetTypeConstant();</span>
+<span class="nc" id="L229">        } else</span>
+<span class="nc" id="L230">            _state.type = type;</span>
+<span class="nc" id="L231">        return this;</span>
+    }
+
+    @Override
+    public int getFetchDirection() {
+<span class="nc" id="L236">        return _state.direction;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration setFetchDirection(int direction) {
+<span class="nc bnc" id="L241" title="All 8 branches missed.">        if (direction != DEFAULT</span>
+            &amp;&amp; direction != ResultSet.FETCH_FORWARD
+            &amp;&amp; direction != ResultSet.FETCH_REVERSE
+            &amp;&amp; direction != ResultSet.FETCH_UNKNOWN)
+<span class="nc" id="L245">            throw new IllegalArgumentException(_loc.get(&quot;bad-fetch-direction&quot;, Integer.valueOf(direction))</span>
+<span class="nc" id="L246">                .getMessage());</span>
+
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (direction == DEFAULT) {</span>
+<span class="nc" id="L249">            JDBCConfiguration conf = getJDBCConfiguration();</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">            if (conf != null)</span>
+<span class="nc" id="L251">                _state.direction = conf.getFetchDirectionConstant();</span>
+<span class="nc" id="L252">        } else</span>
+<span class="nc" id="L253">            _state.direction = direction;</span>
+<span class="nc" id="L254">        return this;</span>
+    }
+
+    @Override
+    public int getLRSSize() {
+<span class="nc" id="L259">        return _state.size;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration setLRSSize(int size) {
+<span class="nc bnc" id="L264" title="All 8 branches missed.">        if (size != DEFAULT</span>
+            &amp;&amp; size != LRSSizes.SIZE_QUERY
+            &amp;&amp; size != LRSSizes.SIZE_LAST
+            &amp;&amp; size != LRSSizes.SIZE_UNKNOWN)
+<span class="nc" id="L268">            throw new IllegalArgumentException(_loc.get(&quot;bad-lrs-size&quot;, Integer.valueOf(size)).getMessage());</span>
+
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        if (size == DEFAULT) {</span>
+<span class="nc" id="L271">            JDBCConfiguration conf = getJDBCConfiguration();</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">            if (conf != null)</span>
+<span class="nc" id="L273">                _state.size = conf.getLRSSizeConstant();</span>
+<span class="nc" id="L274">        } else</span>
+<span class="nc" id="L275">            _state.size = size;</span>
+<span class="nc" id="L276">        return this;</span>
+    }
+
+    @Override
+    public int getJoinSyntax() {
+<span class="nc" id="L281">        return _state.syntax;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration setJoinSyntax(int syntax) {
+<span class="nc bnc" id="L286" title="All 8 branches missed.">        if (syntax != DEFAULT</span>
+            &amp;&amp; syntax != JoinSyntaxes.SYNTAX_SQL92
+            &amp;&amp; syntax != JoinSyntaxes.SYNTAX_TRADITIONAL
+            &amp;&amp; syntax != JoinSyntaxes.SYNTAX_DATABASE)
+<span class="nc" id="L290">            throw new IllegalArgumentException(_loc.get(&quot;bad-join-syntax&quot;, Integer.valueOf(syntax)).getMessage());</span>
+
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        if (syntax == DEFAULT) {</span>
+<span class="nc" id="L293">            JDBCConfiguration conf = getJDBCConfiguration();</span>
+<span class="nc bnc" id="L294" title="All 2 branches missed.">            if (conf != null)</span>
+<span class="nc" id="L295">                _state.syntax = conf.getDBDictionaryInstance().joinSyntax;</span>
+<span class="nc" id="L296">        } else</span>
+<span class="nc" id="L297">            _state.syntax = syntax;</span>
+<span class="nc" id="L298">        return this;</span>
+    }
+
+    @Override
+    public ResultList&lt;?&gt; newResultList(ResultObjectProvider rop) {
+        // if built around a list, just use a simple wrapper
+<span class="nc bnc" id="L304" title="All 2 branches missed.">        if (rop instanceof ListResultObjectProvider)</span>
+<span class="nc" id="L305">            return new SimpleResultList(rop);</span>
+
+        // if built around a paging list, use a window provider with the
+        // same window size
+<span class="nc bnc" id="L309" title="All 2 branches missed.">        if (rop instanceof PagingResultObjectProvider)</span>
+<span class="nc" id="L310">            return new WindowResultList(rop, ((PagingResultObjectProvider)</span>
+<span class="nc" id="L311">                rop).getPageSize());</span>
+
+        // if fetch size &lt; 0 just read in all results immediately
+<span class="nc bnc" id="L314" title="All 2 branches missed.">        if (getFetchBatchSize() &lt; 0)</span>
+<span class="nc" id="L315">            return new EagerResultList(rop);</span>
+
+        // if foward only or forward direction use a forward window
+<span class="nc bnc" id="L318" title="All 4 branches missed.">        if (_state.type == ResultSet.TYPE_FORWARD_ONLY</span>
+            || _state.direction == ResultSet.FETCH_FORWARD
+<span class="nc bnc" id="L320" title="All 2 branches missed.">            || !rop.supportsRandomAccess()) {</span>
+<span class="nc bnc" id="L321" title="All 4 branches missed.">            if (getFetchBatchSize() &gt; 0 &amp;&amp; getFetchBatchSize() &lt;= 50)</span>
+<span class="nc" id="L322">                return new WindowResultList(rop, getFetchBatchSize());</span>
+<span class="nc" id="L323">            return new WindowResultList(rop, 50);</span>
+        }
+
+        // if skipping around use a caching random access list
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        if (_state.direction == ResultSet.FETCH_UNKNOWN)</span>
+<span class="nc" id="L328">            return new SoftRandomAccessResultList(rop);</span>
+
+        // scrolling reverse... just use non-caching simple result list
+<span class="nc" id="L331">        return new SimpleResultList(rop);</span>
+    }
+
+    @Override
+    public Set&lt;String&gt; getJoins() {
+<span class="nc bnc" id="L336" title="All 2 branches missed.">        if (_state.joins == null)</span>
+<span class="nc" id="L337">            return Collections.emptySet();</span>
+<span class="nc" id="L338">        return _state.joins;</span>
+    }
+
+    @Override
+    public boolean hasJoin(String field) {
+<span class="nc bnc" id="L343" title="All 4 branches missed.">        return _state.joins != null &amp;&amp; _state.joins.contains(field);</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration addJoin(String join) {
+<span class="nc bnc" id="L348" title="All 2 branches missed.">        if (StringUtil.isEmpty(join))</span>
+<span class="nc" id="L349">            throw new UserException(_loc.get(&quot;null-join&quot;));</span>
+
+<span class="nc" id="L351">        lock();</span>
+        try {
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            if (_state.joins == null)</span>
+<span class="nc" id="L354">                _state.joins = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L355">            _state.joins.add(join);</span>
+        } finally {
+<span class="nc" id="L357">            unlock();</span>
+        }
+<span class="nc" id="L359">        return this;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration addJoins(Collection&lt;String&gt; joins) {
+<span class="nc bnc" id="L364" title="All 4 branches missed.">        if (joins == null || joins.isEmpty())</span>
+<span class="nc" id="L365">            return this;</span>
+<span class="nc bnc" id="L366" title="All 2 branches missed.">        for (Iterator&lt;String&gt; itr = joins.iterator(); itr.hasNext();)</span>
+<span class="nc" id="L367">            addJoin(itr.next());</span>
+<span class="nc" id="L368">        return this;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration removeJoin(String field) {
+<span class="nc" id="L373">        lock();</span>
+        try {
+<span class="nc bnc" id="L375" title="All 2 branches missed.">            if (_state.joins != null)</span>
+<span class="nc" id="L376">                _state.joins.remove(field);</span>
+        } finally {
+<span class="nc" id="L378">            unlock();</span>
+        }
+<span class="nc" id="L380">        return this;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration removeJoins(Collection&lt;String&gt; joins) {
+<span class="nc" id="L385">        lock();</span>
+        try {
+<span class="nc bnc" id="L387" title="All 2 branches missed.">            if (_state.joins != null)</span>
+<span class="nc" id="L388">                _state.joins.removeAll(joins);</span>
+        } finally {
+<span class="nc" id="L390">            unlock();</span>
+        }
+<span class="nc" id="L392">        return this;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration clearJoins() {
+<span class="nc" id="L397">        lock();</span>
+        try {
+<span class="nc bnc" id="L399" title="All 2 branches missed.">            if (_state.joins != null)</span>
+<span class="nc" id="L400">                _state.joins.clear();</span>
+        } finally {
+<span class="nc" id="L402">            unlock();</span>
+        }
+<span class="nc" id="L404">        return this;</span>
+    }
+
+    @Override
+    public int getIsolation() {
+<span class="nc" id="L409">        return _state.isolationLevel;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration setIsolation(int level) {
+<span class="nc bnc" id="L414" title="All 14 branches missed.">        if (level != -1 &amp;&amp; level != DEFAULT</span>
+            &amp;&amp; level != Connection.TRANSACTION_NONE
+            &amp;&amp; level != Connection.TRANSACTION_READ_UNCOMMITTED
+            &amp;&amp; level != Connection.TRANSACTION_READ_COMMITTED
+            &amp;&amp; level != Connection.TRANSACTION_REPEATABLE_READ
+            &amp;&amp; level != Connection.TRANSACTION_SERIALIZABLE)
+<span class="nc" id="L420">            throw new IllegalArgumentException(_loc.get(&quot;bad-level&quot;, Integer.valueOf(level)).getMessage());</span>
+
+<span class="nc bnc" id="L422" title="All 2 branches missed.">        if (level == DEFAULT)</span>
+<span class="nc" id="L423">            _state.isolationLevel = -1;</span>
+        else
+<span class="nc" id="L425">            _state.isolationLevel = level;</span>
+<span class="nc" id="L426">        return this;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration traverseJDBC(FieldMetaData fm) {
+<span class="nc" id="L431">        return (JDBCFetchConfiguration) traverse(fm);</span>
+    }
+
+    /**
+     * Access JDBC configuration information. May return null if not a
+     * JDBC back-end (possible to get a JDBCFetchConfiguration on non-JDBC
+     * back end in remote client).
+     */
+    private JDBCConfiguration getJDBCConfiguration() {
+<span class="nc" id="L440">        StoreContext ctx = getContext();</span>
+<span class="nc bnc" id="L441" title="All 2 branches missed.">        if (ctx == null)</span>
+<span class="nc" id="L442">            return null;</span>
+<span class="nc" id="L443">        OpenJPAConfiguration conf = ctx.getConfiguration();</span>
+<span class="nc bnc" id="L444" title="All 2 branches missed.">        if (!(conf instanceof JDBCConfiguration))</span>
+<span class="nc" id="L445">            return null;</span>
+<span class="nc" id="L446">        return (JDBCConfiguration) conf;</span>
+    }
+
+    @Override
+    public Set&lt;String&gt; getFetchInnerJoins() {
+<span class="nc bnc" id="L451" title="All 2 branches missed.">        if (_state.fetchInnerJoins == null)</span>
+<span class="nc" id="L452">            return Collections.emptySet();</span>
+<span class="nc" id="L453">        return _state.fetchInnerJoins;</span>
+    }
+
+    @Override
+    public boolean hasFetchInnerJoin(String field) {
+<span class="nc bnc" id="L458" title="All 2 branches missed.">        return _state.fetchInnerJoins != null &amp;&amp;</span>
+<span class="nc bnc" id="L459" title="All 2 branches missed.">            _state.fetchInnerJoins.contains(field);</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration addFetchInnerJoin(String join) {
+<span class="nc bnc" id="L464" title="All 2 branches missed.">        if (StringUtil.isEmpty(join))</span>
+<span class="nc" id="L465">            throw new UserException(_loc.get(&quot;null-join&quot;));</span>
+
+<span class="nc" id="L467">        lock();</span>
+        try {
+<span class="nc bnc" id="L469" title="All 2 branches missed.">            if (_state.fetchInnerJoins == null)</span>
+<span class="nc" id="L470">                _state.fetchInnerJoins = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L471">            _state.fetchInnerJoins.add(join);</span>
+        } finally {
+<span class="nc" id="L473">            unlock();</span>
+        }
+<span class="nc" id="L475">        return this;</span>
+    }
+
+    @Override
+    public JDBCFetchConfiguration addFetchInnerJoins(Collection&lt;String&gt; joins) {
+<span class="nc bnc" id="L480" title="All 4 branches missed.">        if (joins == null || joins.isEmpty())</span>
+<span class="nc" id="L481">            return this;</span>
+<span class="nc bnc" id="L482" title="All 2 branches missed.">        for (Iterator&lt;String&gt; itr = joins.iterator(); itr.hasNext();)</span>
+<span class="nc" id="L483">            addFetchInnerJoin(itr.next());</span>
+<span class="nc" id="L484">        return this;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

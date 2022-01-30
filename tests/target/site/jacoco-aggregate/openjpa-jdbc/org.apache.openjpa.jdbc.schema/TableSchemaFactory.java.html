@@ -1,0 +1,517 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TableSchemaFactory.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.schema</a> &gt; <span class="el_source">TableSchemaFactory.java</span></div><h1>TableSchemaFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.schema;
+
+import java.io.IOException;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.io.Writer;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configuration;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.meta.MetaDataSerializer;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.Options;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.GeneralException;
+
+/**
+ * Factory that uses an XML schema definition stored in a database table
+ * to record the system schema.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L54">public class TableSchemaFactory</span>
+    implements SchemaFactory, Configurable {
+
+    public static final String ACTION_ADD = &quot;add&quot;;
+    public static final String ACTION_DROP = &quot;drop&quot;;
+
+<span class="nc" id="L60">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L61">        (TableSchemaFactory.class);</span>
+<span class="nc" id="L62">    private static boolean _refreshedTable = false;</span>
+
+<span class="nc" id="L64">    private JDBCConfiguration _conf = null;</span>
+<span class="nc" id="L65">    private Log _log = null;</span>
+<span class="nc" id="L66">    private DBIdentifier _table = DBIdentifier.newTable(&quot;OPENJPA_SCHEMA&quot;);</span>
+<span class="nc" id="L67">    private DBIdentifier _pkColumnName = DBIdentifier.newColumn(&quot;ID&quot;);</span>
+<span class="nc" id="L68">    private DBIdentifier _schemaColumnName = DBIdentifier.newColumn(&quot;SCHEMA_DEF&quot;);</span>
+<span class="nc" id="L69">    private Column _pkColumn = null;</span>
+<span class="nc" id="L70">    private Column _schemaColumn = null;</span>
+
+    /**
+     * The name of the schema definition table. Defaults to
+     * &lt;code&gt;OPENJPA_SCHEMA&lt;/code&gt;.
+     */
+    public String getTable() {
+<span class="nc" id="L77">        return _table.getName();</span>
+    }
+
+    /**
+     * The name of the schema definition table. Defaults to
+     * &lt;code&gt;OPENJPA_SCHEMA&lt;/code&gt;.
+     */
+    public void setTable(String name) {
+<span class="nc" id="L85">        _table = DBIdentifier.newTable(name);</span>
+<span class="nc" id="L86">    }</span>
+
+    /**
+     * @deprecated Use {@link #setTable}. Retained for
+     * backwards-compatible auto-configuration.
+     */
+    @Deprecated
+    public void setTableName(String name) {
+<span class="nc" id="L94">        setTable(name);</span>
+<span class="nc" id="L95">    }</span>
+
+    /**
+     * The name of the primary key column on the schema definition table.
+     * Defaults to &lt;code&gt;ID&lt;/code&gt;.
+     */
+    public void setPrimaryKeyColumn(String name) {
+<span class="nc" id="L102">        _pkColumnName = DBIdentifier.newColumn(name);</span>
+<span class="nc" id="L103">    }</span>
+
+    /**
+     * The name of the primary key column on the schema definition table.
+     * Defaults to &lt;code&gt;ID&lt;/code&gt;.
+     */
+    public String getPrimaryKeyColumn() {
+<span class="nc" id="L110">        return _pkColumnName.getName();</span>
+    }
+
+    /**
+     * The name of the schema column on the schema definition table.
+     * Defaults to &lt;code&gt;SCHEMA_DEF&lt;/code&gt;.
+     */
+    public void setSchemaColumn(String name) {
+<span class="nc" id="L118">        _schemaColumnName = DBIdentifier.newColumn(name);</span>
+<span class="nc" id="L119">    }</span>
+
+    /**
+     * The name of the schema column on the schema definition table.
+     * Defaults to &lt;code&gt;SCHEMA_DEF&lt;/code&gt;.
+     */
+    public String getSchemaColumn() {
+<span class="nc" id="L126">        return _schemaColumnName.getName();</span>
+    }
+
+    public JDBCConfiguration getConfiguration() {
+<span class="nc" id="L130">        return _conf;</span>
+    }
+
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc" id="L135">        _conf = (JDBCConfiguration) conf;</span>
+<span class="nc" id="L136">        _log = _conf.getLog(JDBCConfiguration.LOG_SCHEMA);</span>
+<span class="nc" id="L137">    }</span>
+
+    @Override
+    public void startConfiguration() {
+<span class="nc" id="L141">    }</span>
+
+    @Override
+    public void endConfiguration() {
+<span class="nc" id="L145">        buildTable();</span>
+<span class="nc" id="L146">    }</span>
+
+    @Override
+    public synchronized SchemaGroup readSchema() {
+<span class="nc" id="L150">        String schema = null;</span>
+        try {
+<span class="nc" id="L152">            schema = readSchemaColumn();</span>
+<span class="nc" id="L153">        } catch (SQLException se) {</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">            if (_log.isWarnEnabled())</span>
+<span class="nc" id="L155">                _log.warn(_loc.get(&quot;bad-sch-read&quot;, se));</span>
+<span class="nc" id="L156">        }</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if (schema == null)</span>
+<span class="nc" id="L158">            return new SchemaGroup();</span>
+
+<span class="nc" id="L160">        XMLSchemaParser parser = new XMLSchemaParser(_conf);</span>
+        try {
+<span class="nc" id="L162">            parser.parse(new StringReader(schema),</span>
+<span class="nc" id="L163">                _schemaColumn.getQualifiedPath().toString());</span>
+<span class="nc" id="L164">        } catch (IOException ioe) {</span>
+<span class="nc" id="L165">            throw new GeneralException(ioe);</span>
+<span class="nc" id="L166">        }</span>
+<span class="nc" id="L167">        return parser.getSchemaGroup();</span>
+    }
+
+    @Override
+    public void storeSchema(SchemaGroup schema) {
+<span class="nc" id="L172">        XMLSchemaSerializer ser = new XMLSchemaSerializer(_conf);</span>
+<span class="nc" id="L173">        ser.addAll(schema);</span>
+<span class="nc" id="L174">        Writer writer = new StringWriter();</span>
+        try {
+<span class="nc" id="L176">            ser.serialize(writer, MetaDataSerializer.COMPACT);</span>
+<span class="nc" id="L177">        } catch (IOException ioe) {</span>
+<span class="nc" id="L178">            throw new GeneralException(ioe);</span>
+<span class="nc" id="L179">        }</span>
+
+<span class="nc" id="L181">        String schemaStr = writer.toString();</span>
+        try {
+<span class="nc" id="L183">            writeSchemaColumn(schemaStr);</span>
+<span class="nc" id="L184">        } catch (SQLException se) {</span>
+<span class="nc bnc" id="L185" title="All 2 branches missed.">            if (_log.isWarnEnabled())</span>
+<span class="nc" id="L186">                _log.warn(_loc.get(&quot;bad-sch-write-1&quot;, se));</span>
+
+            // maybe the update failed b/c the sequence table doesn't
+            // exist yet; create it now; note that though we synchronize
+            // here, other JVMs can still be trying to create the table at
+            // the same time (unlikely, since this is a dev-tool op)
+<span class="nc" id="L192">            synchronized (TableSchemaFactory.class) {</span>
+<span class="nc bnc" id="L193" title="All 2 branches missed.">                if (!_refreshedTable) {</span>
+<span class="nc" id="L194">                    _refreshedTable = true;</span>
+                    try {
+<span class="nc" id="L196">                        refreshTable();</span>
+<span class="nc" id="L197">                    } catch (Exception e) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">                        if (_log.isWarnEnabled())</span>
+<span class="nc" id="L199">                            _log.warn(_loc.get(&quot;bad-sch-ref&quot;, e));</span>
+<span class="nc" id="L200">                    }</span>
+                }
+
+                try {
+<span class="nc" id="L204">                    writeSchemaColumn(schemaStr);</span>
+<span class="nc" id="L205">                } catch (Exception e) {</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">                    if (_log.isWarnEnabled())</span>
+<span class="nc" id="L207">                        _log.warn(_loc.get(&quot;bad-sch-write-2&quot;));</span>
+
+                    // throw original exception
+<span class="nc" id="L210">                    throw SQLExceptions.getStore(se,</span>
+<span class="nc" id="L211">                        _conf.getDBDictionaryInstance());</span>
+<span class="nc" id="L212">                }</span>
+<span class="nc" id="L213">            }</span>
+<span class="nc" id="L214">        }</span>
+<span class="nc" id="L215">    }</span>
+
+    /**
+     * Creates the schema table in the DB.
+     */
+    public void refreshTable()
+        throws SQLException {
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        if (_log.isInfoEnabled())</span>
+<span class="nc" id="L223">            _log.info(_loc.get(&quot;make-sch-table&quot;));</span>
+
+        // create the table
+<span class="nc" id="L226">        SchemaTool tool = new SchemaTool(_conf);</span>
+<span class="nc" id="L227">        tool.setIgnoreErrors(true);</span>
+<span class="nc" id="L228">        tool.createTable(_pkColumn.getTable());</span>
+
+        // insert an empty schema
+<span class="nc" id="L231">        Connection conn = getConnection();</span>
+<span class="nc" id="L232">        PreparedStatement stmnt = null;</span>
+<span class="nc" id="L233">        boolean wasAuto = true;</span>
+        try {
+<span class="nc" id="L235">            wasAuto = conn.getAutoCommit();</span>
+<span class="nc bnc" id="L236" title="All 2 branches missed.">            if (!wasAuto)</span>
+<span class="nc" id="L237">                conn.setAutoCommit(true);</span>
+
+<span class="nc" id="L239">            DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L240">            stmnt = conn.prepareStatement(&quot;INSERT INTO &quot;</span>
+<span class="nc" id="L241">                + dict.getFullName(_pkColumn.getTable(), false)</span>
+<span class="nc" id="L242">                + &quot; (&quot; + dict.getColumnDBName(_pkColumn) + &quot;, &quot; +</span>
+<span class="nc" id="L243">                dict.getColumnDBName(_schemaColumn) + &quot;) VALUES (?, ?)&quot;);</span>
+<span class="nc" id="L244">            dict.setInt(stmnt, 1, 1, _pkColumn);</span>
+<span class="nc" id="L245">            dict.setNull(stmnt, 2, _schemaColumn.getType(), _schemaColumn);</span>
+<span class="nc" id="L246">            dict.setTimeouts(stmnt, _conf, true);</span>
+<span class="nc" id="L247">            stmnt.executeUpdate();</span>
+        } finally {
+<span class="nc bnc" id="L249" title="All 2 branches missed.">            if (stmnt != null)</span>
+                try {
+<span class="nc" id="L251">                    stmnt.close();</span>
+<span class="nc" id="L252">                } catch (SQLException se) {</span>
+<span class="nc" id="L253">                }</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">            if (!wasAuto)</span>
+<span class="nc" id="L255">                conn.setAutoCommit(false);</span>
+            try {
+<span class="nc" id="L257">                conn.close();</span>
+<span class="nc" id="L258">            } catch (SQLException se) {</span>
+<span class="nc" id="L259">            }</span>
+        }
+<span class="nc" id="L261">    }</span>
+
+    /**
+     * Drops the sequence table in the DB.
+     */
+    public void dropTable()
+        throws SQLException {
+<span class="nc bnc" id="L268" title="All 2 branches missed.">        if (_log.isInfoEnabled())</span>
+<span class="nc" id="L269">            _log.info(_loc.get(&quot;drop-sch-table&quot;));</span>
+
+        // drop the table
+<span class="nc" id="L272">        SchemaTool tool = new SchemaTool(_conf);</span>
+<span class="nc" id="L273">        tool.setIgnoreErrors(true);</span>
+<span class="nc" id="L274">        tool.dropTable(_pkColumn.getTable());</span>
+<span class="nc" id="L275">    }</span>
+
+    /**
+     * Returns the schema as an XML string.
+     */
+    public String readSchemaColumn()
+        throws SQLException {
+<span class="nc" id="L282">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L283">        SQLBuffer sel = new SQLBuffer(dict).append(_schemaColumn);</span>
+<span class="nc" id="L284">        SQLBuffer where = new SQLBuffer(dict).append(_pkColumn).append(&quot; = &quot;).</span>
+<span class="nc" id="L285">            appendValue(1, _pkColumn);</span>
+<span class="nc" id="L286">        SQLBuffer tables = new SQLBuffer(dict).append(_pkColumn.getTable());</span>
+
+<span class="nc" id="L288">        SQLBuffer select = dict.toSelect(sel, null, tables, where, null,</span>
+            null, null, false, false, 0, Long.MAX_VALUE);
+
+<span class="nc" id="L291">        Connection conn = getConnection();</span>
+<span class="nc" id="L292">        PreparedStatement stmnt = null;</span>
+<span class="nc" id="L293">        ResultSet rs = null;</span>
+<span class="nc" id="L294">        boolean wasAuto = true;</span>
+        try {
+<span class="nc" id="L296">            wasAuto = conn.getAutoCommit();</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">            if (!wasAuto)</span>
+<span class="nc" id="L298">                conn.setAutoCommit(true);</span>
+
+<span class="nc" id="L300">            stmnt = select.prepareStatement(conn);</span>
+<span class="nc" id="L301">            dict.setQueryTimeout(stmnt, _conf.getQueryTimeout());</span>
+<span class="nc" id="L302">            rs = stmnt.executeQuery();</span>
+<span class="nc" id="L303">            rs.next();</span>
+<span class="nc bnc" id="L304" title="All 2 branches missed.">            String schema = (_schemaColumn.getType() == Types.CLOB) ?</span>
+<span class="nc" id="L305">                dict.getClobString(rs, 1) : dict.getString(rs, 1);</span>
+<span class="nc" id="L306">            return schema;</span>
+        } finally {
+<span class="nc bnc" id="L308" title="All 2 branches missed.">            if (rs != null)</span>
+                try {
+<span class="nc" id="L310">                    rs.close();</span>
+<span class="nc" id="L311">                } catch (SQLException se) {</span>
+<span class="nc" id="L312">                }</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">            if (stmnt != null)</span>
+                try {
+<span class="nc" id="L315">                    stmnt.close();</span>
+<span class="nc" id="L316">                } catch (SQLException se) {</span>
+<span class="nc" id="L317">                }</span>
+<span class="nc bnc" id="L318" title="All 2 branches missed.">            if (!wasAuto)</span>
+<span class="nc" id="L319">                conn.setAutoCommit(false);</span>
+            try {
+<span class="nc" id="L321">                conn.close();</span>
+<span class="nc" id="L322">            } catch (SQLException se) {</span>
+<span class="nc" id="L323">            }</span>
+        }
+    }
+
+    /**
+     * Writes the schema as a string to the database.
+     */
+    public void writeSchemaColumn(String schema)
+        throws SQLException {
+        // always use special clob handling when dict has max embedded size;
+        // for some reason optimizing for string length causes errors
+<span class="nc" id="L334">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc bnc" id="L335" title="All 2 branches missed.">        boolean embedded = dict.maxEmbeddedClobSize == -1;</span>
+        String update;
+<span class="nc bnc" id="L337" title="All 2 branches missed.">        if (embedded)</span>
+<span class="nc" id="L338">            update = &quot;UPDATE &quot; + dict.getFullName(_pkColumn.getTable(), false)</span>
+<span class="nc" id="L339">                + &quot; SET &quot; + dict.getColumnDBName(_schemaColumn) + &quot; = ?  WHERE &quot; +</span>
+<span class="nc" id="L340">                dict.getColumnIdentifier(_pkColumn) + &quot; = ?&quot;;</span>
+        else
+<span class="nc" id="L342">            update = &quot;SELECT &quot; + dict.getColumnDBName(_schemaColumn) + &quot; FROM &quot;</span>
+<span class="nc" id="L343">                + dict.getFullName(_pkColumn.getTable(), false)</span>
+<span class="nc" id="L344">                + &quot; WHERE &quot; + dict.getColumnDBName(_pkColumn) + &quot; = ?&quot;;</span>
+
+<span class="nc" id="L346">        Connection conn = getConnection();</span>
+<span class="nc" id="L347">        PreparedStatement stmnt = null;</span>
+<span class="nc" id="L348">        ResultSet rs = null;</span>
+<span class="nc" id="L349">        boolean wasAuto = true;</span>
+        try {
+            // if embedded we want autocommit true, else false
+<span class="nc" id="L352">            wasAuto = conn.getAutoCommit();</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            if (wasAuto != embedded)</span>
+<span class="nc" id="L354">                conn.setAutoCommit(embedded);</span>
+
+<span class="nc bnc" id="L356" title="All 2 branches missed.">            if (embedded) {</span>
+<span class="nc" id="L357">                stmnt = conn.prepareStatement(update);</span>
+<span class="nc bnc" id="L358" title="All 2 branches missed.">                if (schema == null)</span>
+<span class="nc" id="L359">                    dict.setNull(stmnt, 1, _schemaColumn.getType(),</span>
+                        _schemaColumn);
+<span class="nc bnc" id="L361" title="All 2 branches missed.">                else if (_schemaColumn.getType() == Types.CLOB)</span>
+<span class="nc" id="L362">                    dict.setClobString(stmnt, 1, schema, _schemaColumn);</span>
+                else
+<span class="nc" id="L364">                    dict.setString(stmnt, 1, schema, _schemaColumn);</span>
+<span class="nc" id="L365">                dict.setInt(stmnt, 2, 1, _pkColumn);</span>
+<span class="nc" id="L366">                dict.setTimeouts(stmnt, _conf, true);</span>
+<span class="nc" id="L367">                stmnt.executeUpdate();</span>
+            } else {
+<span class="nc" id="L369">                stmnt = conn.prepareStatement(update,</span>
+                    ResultSet.TYPE_SCROLL_INSENSITIVE,
+                    ResultSet.CONCUR_UPDATABLE);
+<span class="nc" id="L372">                dict.setInt(stmnt, 1, 1, _pkColumn);</span>
+<span class="nc" id="L373">                dict.setTimeouts(stmnt, _conf, true);</span>
+<span class="nc" id="L374">                rs = stmnt.executeQuery();</span>
+<span class="nc" id="L375">                rs.next();</span>
+<span class="nc" id="L376">                dict.putString(rs.getClob(1), schema);</span>
+<span class="nc" id="L377">                conn.commit();</span>
+            }
+        }
+        finally {
+<span class="nc bnc" id="L381" title="All 2 branches missed.">            if (rs != null)</span>
+                try {
+<span class="nc" id="L383">                    rs.close();</span>
+<span class="nc" id="L384">                } catch (SQLException se) {</span>
+<span class="nc" id="L385">                }</span>
+<span class="nc bnc" id="L386" title="All 2 branches missed.">            if (stmnt != null)</span>
+                try {
+<span class="nc" id="L388">                    stmnt.close();</span>
+<span class="nc" id="L389">                } catch (SQLException se) {</span>
+<span class="nc" id="L390">                }</span>
+<span class="nc bnc" id="L391" title="All 2 branches missed.">            if (wasAuto != embedded)</span>
+<span class="nc" id="L392">                conn.setAutoCommit(wasAuto);</span>
+            try {
+<span class="nc" id="L394">                conn.close();</span>
+<span class="nc" id="L395">            } catch (SQLException se) {</span>
+<span class="nc" id="L396">            }</span>
+        }
+<span class="nc" id="L398">    }</span>
+
+    /**
+     * Creates the object-level representation of the sequence table.
+     */
+    private void buildTable() {
+<span class="nc" id="L404">        QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(_table);</span>
+<span class="nc" id="L405">        DBIdentifier tableName = path.getIdentifier();</span>
+<span class="nc" id="L406">        DBIdentifier schemaName = path.getSchemaName();</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        if (DBIdentifier.isEmpty(schemaName))</span>
+<span class="nc" id="L408">            schemaName = Schemas.getNewTableSchemaIdentifier(_conf);</span>
+
+        // build the table in one of the designated schemas
+<span class="nc" id="L411">        SchemaGroup group = new SchemaGroup();</span>
+<span class="nc" id="L412">        Schema schema = group.addSchema(schemaName);</span>
+
+<span class="nc" id="L414">        Table table = schema.addTable(tableName);</span>
+<span class="nc" id="L415">        PrimaryKey pk = table.addPrimaryKey();</span>
+
+<span class="nc" id="L417">        DBDictionary dict = _conf.getDBDictionaryInstance();</span>
+<span class="nc" id="L418">        _pkColumn = table.addColumn(dict.getValidColumnName</span>
+<span class="nc" id="L419">            (_pkColumnName, table));</span>
+<span class="nc" id="L420">        _pkColumn.setType(dict.getPreferredType(Types.TINYINT));</span>
+<span class="nc" id="L421">        _pkColumn.setJavaType(JavaTypes.INT);</span>
+<span class="nc" id="L422">        pk.addColumn(_pkColumn);</span>
+
+<span class="nc" id="L424">        _schemaColumn = table.addColumn(dict.getValidColumnName</span>
+<span class="nc" id="L425">            (_schemaColumnName, table));</span>
+<span class="nc" id="L426">        _schemaColumn.setType(dict.getPreferredType(Types.CLOB));</span>
+<span class="nc" id="L427">        _schemaColumn.setJavaType(JavaTypes.STRING);</span>
+<span class="nc" id="L428">    }</span>
+
+    /**
+     * Return a connection to use.
+     */
+    private Connection getConnection()
+        throws SQLException {
+<span class="nc" id="L435">        return _conf.getDataSource2(null).getConnection();</span>
+    }
+
+    /////////
+    // Main
+    /////////
+
+    /**
+     * Usage: java org.apache.openjpa.jdbc.schema.TableSchemaFactory
+     * [option]* -action/-a &amp;lt;add | drop&amp;gt;
+     *  Where the following options are recognized.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;-properties/-p &amp;lt;properties file or resource&amp;gt;&lt;/i&gt;: The
+     * path or resource name of a OpenJPA properties file containing
+     * information such as the license key	and connection data as
+     * outlined in {@link JDBCConfiguration}. Optional.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;-&amp;lt;property name&amp;gt; &amp;lt;property value&amp;gt;&lt;/i&gt;: All bean
+     * properties of the OpenJPA {@link JDBCConfiguration} can be set by
+     * using their	names and supplying a value. For example:
+     * &lt;code&gt;-licenseKey adslfja83r3lkadf&lt;/code&gt;&lt;/li&gt;
+     * &lt;/ul&gt;
+     *  The various actions are as follows.
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;i&gt;add&lt;/i&gt;: Create the schema table.&lt;/li&gt;
+     * &lt;li&gt;&lt;i&gt;drop&lt;/i&gt;: Drop the schema table.&lt;/li&gt;
+     * &lt;/ul&gt;
+     */
+    public static void main(String[] args)
+        throws IOException, SQLException {
+<span class="nc" id="L464">        Options opts = new Options();</span>
+<span class="nc" id="L465">        final String[] arguments = opts.setFromCmdLine(args);</span>
+<span class="nc" id="L466">        boolean ret = Configurations.runAgainstAllAnchors(opts,</span>
+<span class="nc" id="L467">            new Configurations.Runnable() {</span>
+            @Override
+            public boolean run(Options opts) throws Exception {
+<span class="nc" id="L470">                JDBCConfiguration conf = new JDBCConfigurationImpl();</span>
+                try {
+<span class="nc" id="L472">                    return TableSchemaFactory.run(conf, arguments, opts);</span>
+                } finally {
+<span class="nc" id="L474">                    conf.close();</span>
+                }
+            }
+        });
+<span class="nc bnc" id="L478" title="All 2 branches missed.">        if (!ret) {</span>
+            // START - ALLOW PRINT STATEMENTS
+<span class="nc" id="L480">            System.out.println(_loc.get(&quot;sch-usage&quot;));</span>
+            // STOP - ALLOW PRINT STATEMENTS
+        }
+<span class="nc" id="L483">    }</span>
+
+    /**
+     * Run the tool. Returns false if invalid options were given.
+     *
+     * @see #main
+     */
+    public static boolean run(JDBCConfiguration conf, String[] args,
+        Options opts)
+        throws IOException, SQLException {
+<span class="nc" id="L493">        String action = opts.removeProperty(&quot;action&quot;, &quot;a&quot;, null);</span>
+<span class="nc" id="L494">        Configurations.populateConfiguration(conf, opts);</span>
+<span class="nc" id="L495">        return run(conf, action);</span>
+    }
+
+    /**
+     * Run the tool.
+     */
+    public static boolean run(JDBCConfiguration conf, String action)
+        throws IOException, SQLException {
+        // run the action
+<span class="nc" id="L504">        TableSchemaFactory factory = new TableSchemaFactory();</span>
+<span class="nc" id="L505">        String props = Configurations.getProperties(conf.getSchemaFactory());</span>
+<span class="nc" id="L506">        Configurations.configureInstance(factory, conf, props);</span>
+
+<span class="nc bnc" id="L508" title="All 2 branches missed.">        if (ACTION_DROP.equals(action))</span>
+<span class="nc" id="L509">            factory.dropTable();</span>
+<span class="nc bnc" id="L510" title="All 2 branches missed.">        else if (ACTION_ADD.equals(action))</span>
+<span class="nc" id="L511">            factory.refreshTable();</span>
+        else
+<span class="nc" id="L513">            return false;</span>
+<span class="nc" id="L514">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

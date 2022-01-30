@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SecondaryRow.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">SecondaryRow.java</span></div><h1>SecondaryRow.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.RelationId;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+
+/**
+ * Secondary table row that tracks foreign keys to auto-inc columns.
+ *
+ * @author Abe White
+ */
+public class SecondaryRow
+    extends RowImpl {
+
+<span class="nc" id="L39">    private OpenJPAStateManager[] _fks = null;</span>
+<span class="nc" id="L40">    private ColumnIO[] _fkIO = null;</span>
+<span class="nc" id="L41">    private OpenJPAStateManager[] _rels = null;</span>
+<span class="nc" id="L42">    private RelationId[] _callbacks = null;</span>
+
+    /**
+     * Constructor; supply table and action.
+     */
+    public SecondaryRow(Table table, int action) {
+<span class="nc" id="L48">        this(table.getColumns(), action);</span>
+<span class="nc" id="L49">    }</span>
+
+    protected SecondaryRow(Column[] cols, int action) {
+<span class="nc" id="L52">        super(cols, action);</span>
+<span class="nc" id="L53">    }</span>
+
+    @Override
+    public void setForeignKey(ForeignKey fk, OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc" id="L58">        setForeignKey(fk, null, sm);</span>
+<span class="nc" id="L59">    }</span>
+
+    @Override
+    public void setForeignKey(ForeignKey fk, ColumnIO io,
+        OpenJPAStateManager sm)
+        throws SQLException {
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (!delayForeignKey(fk, sm)) {</span>
+<span class="nc" id="L66">            super.setForeignKey(fk, io, sm);</span>
+<span class="nc" id="L67">            return;</span>
+        }
+
+        // force valid
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        if (canSetAny(io, fk.getColumns().length</span>
+<span class="nc" id="L72">            + fk.getConstantColumns().length, false))</span>
+<span class="nc" id="L73">            setValid(true);</span>
+
+        // record foreig key for delayed flush
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        if (_fks == null)</span>
+<span class="nc" id="L77">            _fks = new OpenJPAStateManager[getTable().getForeignKeys().length];</span>
+<span class="nc" id="L78">        _fks[fk.getIndex()] = sm;</span>
+
+<span class="nc bnc" id="L80" title="All 2 branches missed.">        if (_fkIO != null)</span>
+<span class="nc" id="L81">            _fkIO[fk.getIndex()] = io;</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        else if (io != null</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">            &amp;&amp; ((getAction() == ACTION_INSERT</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">            &amp;&amp; !io.isAllInsertable(fk, false))</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">            || (getAction() != ACTION_INSERT</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            &amp;&amp; !io.isAllUpdatable(fk, false)))) {</span>
+<span class="nc" id="L87">            _fkIO = new ColumnIO[_fks.length];</span>
+<span class="nc" id="L88">            _fkIO[fk.getIndex()] = io;</span>
+        }
+<span class="nc" id="L90">    }</span>
+
+    /**
+     * Record foreign keys to new auto-inc instances; flush them only when
+     * we have to generate our SQL to give the instance a chance to finalize
+     * its values.
+     */
+    private boolean delayForeignKey(ForeignKey fk, OpenJPAStateManager sm) {
+<span class="nc bnc" id="L98" title="All 6 branches missed.">        return fk.isPrimaryKeyAutoAssigned() &amp;&amp; getAction() != ACTION_DELETE</span>
+<span class="nc bnc" id="L99" title="All 4 branches missed.">            &amp;&amp; sm != null &amp;&amp; sm.isNew() &amp;&amp; !sm.isFlushed();</span>
+    }
+
+    @Override
+    public void setRelationId(Column col, OpenJPAStateManager sm,
+        RelationId rel)
+        throws SQLException {
+<span class="nc bnc" id="L106" title="All 6 branches missed.">        if (sm == null || sm.getObjectId() != null || !sm.isNew()</span>
+<span class="nc bnc" id="L107" title="All 4 branches missed.">            || sm.isFlushed() || !isPrimaryKeyAutoAssigned(sm))</span>
+<span class="nc" id="L108">            super.setRelationId(col, sm, rel);</span>
+        else {
+<span class="nc bnc" id="L110" title="All 2 branches missed.">            if (_rels == null) {</span>
+<span class="nc" id="L111">                Column[] cols = getTable().getRelationIdColumns();</span>
+<span class="nc" id="L112">                _rels = new OpenJPAStateManager[cols.length];</span>
+<span class="nc" id="L113">                _callbacks = new RelationId[cols.length];</span>
+            }
+<span class="nc" id="L115">            int idx = getRelationIdIndex(col);</span>
+<span class="nc" id="L116">            _rels[idx] = sm;</span>
+<span class="nc" id="L117">            _callbacks[idx] = rel;</span>
+        }
+<span class="nc" id="L119">    }</span>
+
+    /**
+     * Return the index into our relation id array of the value for the
+     * given column.
+     */
+    private int getRelationIdIndex(Column col) {
+<span class="nc" id="L126">        Column[] cols = getTable().getRelationIdColumns();</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">            if (cols[i] == col)</span>
+<span class="nc" id="L129">                return i;</span>
+<span class="nc" id="L130">        return -1;</span>
+    }
+
+    /**
+     * Return true if any primary key columns of the given instance are
+     * auto-assigned.
+     */
+    private static boolean isPrimaryKeyAutoAssigned(OpenJPAStateManager sm) {
+<span class="nc" id="L138">        ClassMapping cls = (ClassMapping) sm.getMetaData();</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">        while (cls.getJoinablePCSuperclassMapping() != null)</span>
+<span class="nc" id="L140">            cls = cls.getJoinablePCSuperclassMapping();</span>
+<span class="nc" id="L141">        Column[] cols = cls.getPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">            if (cols[i].isAutoAssigned())</span>
+<span class="nc" id="L144">                return true;</span>
+<span class="nc" id="L145">        return false;</span>
+    }
+
+    @Override
+    protected String generateSQL(DBDictionary dict) {
+        try {
+<span class="nc bnc" id="L151" title="All 2 branches missed.">            if (_fks != null) {</span>
+<span class="nc" id="L152">                ForeignKey[] fks = getTable().getForeignKeys();</span>
+                ColumnIO io;
+<span class="nc bnc" id="L154" title="All 2 branches missed.">                for (int i = 0; i &lt; _fks.length; i++) {</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">                    if (_fks[i] != null) {</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">                        io = (_fkIO == null) ? null : _fkIO[i];</span>
+<span class="nc" id="L157">                        super.setForeignKey(fks[i], io, _fks[i]);</span>
+                    }
+                }
+            }
+<span class="nc bnc" id="L161" title="All 2 branches missed.">            if (_rels != null) {</span>
+<span class="nc" id="L162">                Column[] cols = getTable().getRelationIdColumns();</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">                for (int i = 0; i &lt; _rels.length; i++)</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">                    if (_rels[i] != null)</span>
+<span class="nc" id="L165">                        super.setRelationId(cols[i], _rels[i], _callbacks[i]);</span>
+            }
+        }
+<span class="nc" id="L168">        catch (SQLException se) {</span>
+<span class="nc" id="L169">            throw SQLExceptions.getStore(se, dict);</span>
+<span class="nc" id="L170">        }</span>
+<span class="nc" id="L171">        return super.generateSQL(dict);</span>
+    }
+
+    @Override
+    protected RowImpl newInstance(Column[] cols, int action) {
+<span class="nc" id="L176">        return new SecondaryRow(cols, action);</span>
+    }
+
+    @Override
+    public void copyInto(RowImpl row, boolean whereOnly) {
+<span class="nc" id="L181">        super.copyInto(row, whereOnly);</span>
+<span class="nc bnc" id="L182" title="All 8 branches missed.">        if (_fks == null || whereOnly || row.getAction() == ACTION_DELETE</span>
+            || !(row instanceof SecondaryRow))
+<span class="nc" id="L184">            return;</span>
+
+<span class="nc" id="L186">        SecondaryRow srow = (SecondaryRow) row;</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        if (srow._fks == null)</span>
+<span class="nc" id="L188">            srow._fks = new OpenJPAStateManager[_fks.length];</span>
+<span class="nc" id="L189">        System.arraycopy(_fks, 0, srow._fks, 0, _fks.length);</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">        if (_fkIO != null) {</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">            if (srow._fkIO == null)</span>
+<span class="nc" id="L192">                srow._fkIO = new ColumnIO[_fkIO.length];</span>
+<span class="nc" id="L193">            System.arraycopy(_fkIO, 0, srow._fkIO, 0, _fkIO.length);</span>
+        }
+<span class="nc" id="L195">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

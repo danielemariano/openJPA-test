@@ -1,0 +1,435 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SQLServerDictionary.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">SQLServerDictionary.java</span></div><h1>SQLServerDictionary.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. The ASF
+ * licenses this file to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.io.InputStream;
+import java.io.Reader;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.util.Locale;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.kernel.exps.FilterValue;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.StoreException;
+
+
+/**
+ * Dictionary for Microsoft SQL Server.
+ */
+public class SQLServerDictionary extends AbstractSQLServerDictionary {
+
+    public static final String VENDOR_MICROSOFT = &quot;microsoft&quot;;
+    public static final String VENDOR_NETDIRECT = &quot;netdirect&quot;;
+    public static final String VENDOR_JTDS = &quot;jtds&quot;;
+
+<span class="nc" id="L54">    private static final Localizer _loc =</span>
+<span class="nc" id="L55">        Localizer.forPackage(SQLServerDictionary.class);</span>
+
+<span class="nc" id="L57">    private String schemaCase = SCHEMA_CASE_PRESERVE;</span>
+    /**
+     * Flag whether to treat UNIQUEIDENTIFIER as VARBINARY or VARCHAR
+     */
+<span class="nc" id="L61">    public boolean uniqueIdentifierAsVarbinary = true;</span>
+
+    /**
+     * Whether to send Time values as DateTime or as Time.
+     * This affects how the Database actually looks like.
+     * sendTimeAsDatetime is supported as of SQLServer2008 and
+     * is only to be used with TIME columns.
+     * Previous to that a DATETIME column had to be used with a fixed 1970-01-01 date.
+     */
+<span class="nc" id="L70">    public Boolean sendTimeAsDatetime = null;</span>
+
+<span class="nc" id="L72">    public SQLServerDictionary() {</span>
+<span class="nc" id="L73">        platform = &quot;Microsoft SQL Server&quot;;</span>
+        // SQLServer locks on a table-by-table basis
+<span class="nc" id="L75">        forUpdateClause = null;</span>
+<span class="nc" id="L76">        tableForUpdateClause = &quot;WITH (UPDLOCK)&quot;;</span>
+<span class="nc" id="L77">        supportsNullTableForGetColumns = false;</span>
+<span class="nc" id="L78">        requiresAliasForSubselect = true;</span>
+<span class="nc" id="L79">        stringLengthFunction = &quot;LEN({0})&quot;;</span>
+
+<span class="nc" id="L81">        timeWithZoneTypeName = &quot;TIME&quot;;</span>
+<span class="nc" id="L82">        timestampWithZoneTypeName = &quot;DATETIMEOFFSET&quot;;</span>
+<span class="nc" id="L83">    }</span>
+
+    @Override
+    public void connectedConfiguration(Connection conn) throws SQLException {
+<span class="nc" id="L87">        super.connectedConfiguration(conn);</span>
+<span class="nc" id="L88">        boolean requiresWarnings = true;</span>
+<span class="nc" id="L89">        DatabaseMetaData meta = conn.getMetaData();</span>
+<span class="nc" id="L90">        String driverName = meta.getDriverName();</span>
+<span class="nc" id="L91">        String url = meta.getURL();</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if (driverVendor == null) {</span>
+            // serverMajorVersion of 8==2000, 9==2005, 10==2008,  11==2012
+<span class="nc bnc" id="L94" title="All 2 branches missed.">            if (meta.getDatabaseMajorVersion() &gt;= 9) {</span>
+<span class="nc" id="L95">                setSupportsXMLColumn(true);</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">                if (sendTimeAsDatetime == null) {</span>
+<span class="nc" id="L97">                    sendTimeAsDatetime = Boolean.TRUE;</span>
+                }
+            }
+<span class="nc bnc" id="L100" title="All 2 branches missed.">            if (meta.getDatabaseMajorVersion() &gt;= 10) {</span>
+                // MSSQL 2008 supports new date, time and datetime2 types
+                // Use DATETIME2 which has 100ns vs. 3.333msec precision
+<span class="nc" id="L103">                dateTypeName = &quot;DATE&quot;;</span>
+<span class="nc" id="L104">                timeTypeName = &quot;TIME&quot;;</span>
+<span class="nc" id="L105">                timestampTypeName = &quot;DATETIME2&quot;;</span>
+<span class="nc" id="L106">                datePrecision = MICRO / 10;</span>
+            }
+<span class="nc bnc" id="L108" title="All 2 branches missed.">            if (meta.getDatabaseMajorVersion() &gt;= 11) {</span>
+                //SQLServer 2012 supports range select
+<span class="nc" id="L110">                rangePosition = RANGE_POST_SELECT;</span>
+<span class="nc" id="L111">                supportsSelectStartIndex = true;</span>
+<span class="nc" id="L112">                supportsSelectEndIndex = true;</span>
+            }
+<span class="nc bnc" id="L114" title="All 2 branches missed.">            if (driverName != null) {</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">                if (driverName.startsWith(&quot;Microsoft SQL Server&quot;)) {</span>
+                    // v1.1, 1.2, 2.0 or 3.0 driver
+<span class="nc" id="L117">                    driverVendor = VENDOR_MICROSOFT;</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">                    if (meta.getDriverMajorVersion() &gt;= 2) {</span>
+                        // see http://blogs.msdn.com/jdbcteam/archive/2007/05/\
+                        // 02/what-is-adaptive-response-buffering-and-why-\
+                        // should-i-use-it.aspx
+                        // 2.0 driver connectURL automatically includes
+                        // responseBuffering=adaptive
+                        // and disableStatementPooling=true
+<span class="nc" id="L125">                        requiresWarnings = false;</span>
+                    }
+                } else {
+<span class="nc bnc" id="L128" title="All 2 branches missed.">                    if (&quot;NetDirect JSQLConnect&quot;.equals(driverName))</span>
+<span class="nc" id="L129">                        driverVendor = VENDOR_NETDIRECT;</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">                    else if (driverName.startsWith(&quot;jTDS&quot;))</span>
+<span class="nc" id="L131">                        driverVendor = VENDOR_JTDS;</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">                    else if (&quot;SQLServer&quot;.equals(driverName)) {</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">                        if (url != null &amp;&amp;</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">                            url.startsWith(&quot;jdbc:microsoft:sqlserver:&quot;))</span>
+<span class="nc" id="L135">                            driverVendor = VENDOR_MICROSOFT;</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">                        else if (url != null &amp;&amp;</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                            url.startsWith(&quot;jdbc:datadirect:sqlserver:&quot;))</span>
+<span class="nc" id="L138">                            driverVendor = VENDOR_DATADIRECT;</span>
+                        else
+<span class="nc" id="L140">                            driverVendor = VENDOR_OTHER;</span>
+                    }
+                    // old way of determining xml support
+<span class="nc bnc" id="L143" title="All 2 branches missed.">                    if (driverName.indexOf(platform) != -1) {</span>
+<span class="nc" id="L144">                        String versionString =</span>
+<span class="nc" id="L145">                            driverName.substring(platform.length() + 1);</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">                        if (versionString.indexOf(&quot; &quot;) != -1)</span>
+<span class="nc" id="L147">                            versionString = versionString.substring(0,</span>
+<span class="nc" id="L148">                                versionString.indexOf(&quot; &quot;));</span>
+<span class="nc" id="L149">                        int version = Integer.parseInt(versionString);</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">                        if (version &gt;= 2005)</span>
+<span class="nc" id="L151">                            setSupportsXMLColumn(true);</span>
+<span class="nc" id="L152">                    }</span>
+                }
+            } else {
+<span class="nc" id="L155">                driverVendor = VENDOR_OTHER;</span>
+            }
+        }
+
+        // warn about not using cursors for pre-2.0 MS driver
+        // as connectURL includes selectMethod=direct
+<span class="nc bnc" id="L161" title="All 4 branches missed.">        if (((VENDOR_MICROSOFT.equalsIgnoreCase(driverVendor) &amp;&amp;</span>
+            requiresWarnings) ||
+<span class="nc bnc" id="L163" title="All 2 branches missed.">            VENDOR_DATADIRECT.equalsIgnoreCase(driverVendor)) &amp;&amp;</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">            (url.toLowerCase(Locale.ENGLISH).indexOf(&quot;selectmethod=cursor&quot;) == -1))</span>
+<span class="nc" id="L165">            log.warn(_loc.get(&quot;sqlserver-cursor&quot;, url));</span>
+
+        // warn about prepared statement caching if using pre-2.0 MS drivers
+        // as connectURL includes responseBuffering=full
+<span class="nc" id="L169">        String props = conf.getConnectionFactoryProperties();</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        if ((props != null) &amp;&amp;</span>
+<span class="nc bnc" id="L171" title="All 4 branches missed.">            VENDOR_MICROSOFT.equalsIgnoreCase(driverVendor) &amp;&amp;</span>
+            requiresWarnings &amp;&amp;
+<span class="nc bnc" id="L173" title="All 2 branches missed.">            (props.toLowerCase(Locale.ENGLISH).indexOf(&quot;maxcachedstatements=0&quot;) == -1))</span>
+<span class="nc" id="L174">            log.warn(_loc.get(&quot;sqlserver-cachedstmnts&quot;));</span>
+<span class="nc" id="L175">    }</span>
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, String catalog,
+        String schemaName, String tableName, String columnName, Connection conn)
+        throws SQLException {
+<span class="nc" id="L181">        return getColumns(meta, DBIdentifier.newCatalog(catalog),</span>
+<span class="nc" id="L182">            DBIdentifier.newSchema(schemaName),</span>
+<span class="nc" id="L183">            DBIdentifier.newTable(tableName),</span>
+<span class="nc" id="L184">            DBIdentifier.newColumn(columnName),</span>
+            conn);
+    }
+
+    @Override
+    public Column[] getColumns(DatabaseMetaData meta, DBIdentifier catalog,
+        DBIdentifier schemaName, DBIdentifier tableName, DBIdentifier columnName, Connection conn)
+        throws SQLException {
+
+<span class="nc" id="L193">        Column[] cols = super.getColumns(meta, catalog, schemaName, tableName,</span>
+            columnName, conn);
+
+        // for opta driver, which reports nvarchar as unknown type
+<span class="nc bnc" id="L197" title="All 4 branches missed.">        for (int i = 0; cols != null &amp;&amp; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L198">            String typeName = cols[i].getTypeIdentifier().getName();</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">            if (typeName == null)</span>
+<span class="nc" id="L200">                continue;</span>
+
+<span class="nc" id="L202">            typeName = typeName.toUpperCase(Locale.ENGLISH);</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">            if (&quot;NVARCHAR&quot;.equals(typeName))</span>
+<span class="nc" id="L204">                cols[i].setType(Types.VARCHAR);</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">            else if (&quot;UNIQUEIDENTIFIER&quot;.equals(typeName)) {</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">                if (uniqueIdentifierAsVarbinary)</span>
+<span class="nc" id="L207">                    cols[i].setType(Types.VARBINARY);</span>
+                else
+<span class="nc" id="L209">                    cols[i].setType(Types.VARCHAR);</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">            } else if (&quot;NCHAR&quot;.equals(typeName))</span>
+<span class="nc" id="L211">                cols[i].setType(Types.CHAR);</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">            else if (&quot;NTEXT&quot;.equals(typeName))</span>
+<span class="nc" id="L213">                cols[i].setType(Types.CLOB);</span>
+        }
+<span class="nc" id="L215">        return cols;</span>
+    }
+
+    @Override
+    protected void appendLength(SQLBuffer buf, int type) {
+<span class="nc bnc" id="L220" title="All 2 branches missed.">        if (type == Types.VARCHAR)</span>
+<span class="nc" id="L221">            buf.append(&quot;(&quot;).append(Integer.toString(characterColumnSize))</span>
+<span class="nc" id="L222">                .append(&quot;)&quot;);</span>
+<span class="nc" id="L223">    }</span>
+
+    /**
+     * If this dictionary supports XML type, use this method to append xml
+     * predicate.
+     *
+     * @param buf the SQL buffer to write the comparison
+     * @param op the comparison operation to perform
+     * @param lhs the left hand side of the comparison
+     * @param rhs the right hand side of the comparison
+     * @param lhsxml indicates whether the left operand maps to xml
+     * @param rhsxml indicates whether the right operand maps to xml
+     */
+    @Override
+    public void appendXmlComparison(SQLBuffer buf, String op, FilterValue lhs,
+        FilterValue rhs, boolean lhsxml, boolean rhsxml) {
+<span class="nc" id="L239">        super.appendXmlComparison(buf, op, lhs, rhs, lhsxml, rhsxml);</span>
+<span class="nc bnc" id="L240" title="All 4 branches missed.">        if (lhsxml &amp;&amp; rhsxml)</span>
+<span class="nc" id="L241">            appendXmlComparison2(buf, op, lhs, rhs);</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        else if (lhsxml)</span>
+<span class="nc" id="L243">            appendXmlComparison1(buf, op, lhs, rhs);</span>
+        else
+<span class="nc" id="L245">            appendXmlComparison1(buf, op, rhs, lhs);</span>
+<span class="nc" id="L246">    }</span>
+
+    /**
+     * Append an xml comparison predicate
+     *
+     * @param buf the SQL buffer to write the comparison
+     * @param op the comparison operation to perform
+     * @param lhs the left hand side of the comparison (maps to xml column)
+     * @param rhs the right hand side of the comparison
+     */
+    private void appendXmlComparison1(SQLBuffer buf, String op,
+        FilterValue lhs, FilterValue rhs) {
+<span class="nc" id="L258">        boolean castrhs = rhs.isConstant();</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (castrhs)</span>
+<span class="nc" id="L260">            appendXmlValue(buf, lhs);</span>
+        else
+<span class="nc" id="L262">            appendXmlExist(buf, lhs);</span>
+<span class="nc" id="L263">        buf.append(&quot; &quot;).append(op).append(&quot; &quot;);</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">        if (castrhs)</span>
+<span class="nc" id="L265">            rhs.appendTo(buf);</span>
+        else {
+<span class="nc" id="L267">            buf.append(&quot;sql:column(\&quot;&quot;);</span>
+<span class="nc" id="L268">            rhs.appendTo(buf);</span>
+<span class="nc" id="L269">            buf.append(&quot;\&quot;)&quot;).append(&quot;]') = 1&quot;);</span>
+        }
+<span class="nc" id="L271">    }</span>
+
+    private void appendXmlExist(SQLBuffer buf, FilterValue lhs) {
+<span class="nc" id="L274">        buf.append(lhs.getColumnAlias(lhs.getFieldMapping().getColumns()[0]))</span>
+<span class="nc" id="L275">            .append(&quot;.exist('&quot;).append(&quot;/*[&quot;);</span>
+<span class="nc" id="L276">        lhs.appendTo(buf);</span>
+<span class="nc" id="L277">    }</span>
+
+    /**
+     * Append an xml comparison predicate (both operands map to xml column)
+     *
+     * @param buf the SQL buffer to write the comparison
+     * @param op the comparison operation to perform
+     * @param lhs the left hand side of the comparison (maps to xml column)
+     * @param rhs the right hand side of the comparison (maps to xml column)
+     */
+    private void appendXmlComparison2(SQLBuffer buf, String op,
+        FilterValue lhs, FilterValue rhs) {
+<span class="nc" id="L289">        appendXmlValue(buf, lhs);</span>
+<span class="nc" id="L290">        buf.append(&quot; &quot;).append(op).append(&quot; &quot;);</span>
+<span class="nc" id="L291">        appendXmlValue(buf, rhs);</span>
+<span class="nc" id="L292">    }</span>
+
+    private void appendXmlValue(SQLBuffer buf, FilterValue val) {
+<span class="nc" id="L295">        Class&lt;?&gt; rc = Filters.wrap(val.getType());</span>
+<span class="nc" id="L296">        int type = getJDBCType(JavaTypes.getTypeCode(rc), false);</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">        boolean isXmlAttribute = (val.getXmlMapping() == null)</span>
+<span class="nc" id="L298">            ? false : val.getXmlMapping().isXmlAttribute();</span>
+<span class="nc" id="L299">        buf.append(val.getColumnAlias(val.getFieldMapping().getColumns()[0]))</span>
+<span class="nc" id="L300">            .append(&quot;.value(&quot;).append(&quot;'(/*/&quot;);</span>
+<span class="nc" id="L301">        val.appendTo(buf);</span>
+<span class="nc bnc" id="L302" title="All 2 branches missed.">        if (!isXmlAttribute)</span>
+<span class="nc" id="L303">            buf.append(&quot;/text()&quot;);</span>
+<span class="nc" id="L304">        buf.append(&quot;)[1]','&quot;).append(getTypeName(type));</span>
+<span class="nc" id="L305">        appendLength(buf, type);</span>
+<span class="nc" id="L306">        buf.append(&quot;')&quot;);</span>
+<span class="nc" id="L307">    }</span>
+
+    /**
+     * Return DB specific schemaCase
+     */
+    @Override
+    public String getSchemaCase() {
+<span class="nc" id="L314">        return schemaCase;</span>
+    }
+
+    @Override
+    public void setSupportsXMLColumn(boolean b) {
+<span class="nc" id="L319">        super.setSupportsXMLColumn(b);</span>
+        // MS SQL Server requires XML data in UTF-16 or UCS-2 instead of JAXB default of UTF-8
+<span class="nc" id="L321">        super.setXMLTypeEncoding(&quot;UTF-16&quot;);</span>
+<span class="nc" id="L322">    }</span>
+
+    @Override
+    public boolean isFatalException(int subtype,  SQLException ex) {
+<span class="nc" id="L326">        String errorState = ex.getSQLState();</span>
+<span class="nc bnc" id="L327" title="All 4 branches missed.">        if ((subtype == StoreException.LOCK  || subtype == StoreException.QUERY)</span>
+<span class="nc bnc" id="L328" title="All 6 branches missed.">          &amp;&amp;(&quot;1222&quot;.equals(errorState) || &quot;HY008&quot;.equals(errorState) || &quot;HYT00&quot;.equals(errorState)))</span>
+<span class="nc" id="L329">         return false;</span>
+<span class="nc" id="L330">        return super.isFatalException(subtype, ex);</span>
+    }
+
+    /**
+     * Obtain an {@link InputStream} by using {@link ResultSet#getBlob(int)} and
+     * {@link Blob#getBinaryStream()}.
+     * Unfortunately this will load entire BLOB into memory.
+     * The alternative {@link ResultSet#getBinaryStream(int)} provides true streaming but
+     * the stream can be consumed only as long as {@link ResultSet} is open.
+     */
+    @Override
+    public InputStream getLOBStream(JDBCStore store, ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L342">        Blob blob = rs.getBlob(column);</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">        if (blob == null) {</span>
+<span class="nc" id="L344">            return null;</span>
+        }
+<span class="nc" id="L346">        return blob.getBinaryStream();</span>
+    }
+
+    /**
+     * Obtain a {@link Reader} by using {@link ResultSet#getClob(int)} and
+     * {@link Clob#getCharacterStream()}.
+     * Unfortunately this will load entire CLOB into memory.
+     * The alternative {@link ResultSet#getCharacterStream(int)} provides true streaming but
+     * the stream can be consumed only as long as {@link ResultSet} is open.
+     */
+    @Override
+    public Reader getCharacterStream(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L358">        Clob clob = rs.getClob(column);</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">        if (clob == null) {</span>
+<span class="nc" id="L360">            return null;</span>
+        }
+<span class="nc" id="L362">        return clob.getCharacterStream();</span>
+    }
+
+
+    @Override
+    public LocalDate getLocalDate(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L368">        return rs.getObject(column, LocalDate.class);</span>
+    }
+
+    @Override
+    public void setLocalTime(PreparedStatement stmnt, int idx, LocalTime val, Column col) throws SQLException {
+<span class="nc" id="L373">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L374">    }</span>
+
+    @Override
+    public LocalTime getLocalTime(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L378">        return rs.getObject(column, LocalTime.class);</span>
+    }
+
+    @Override
+    public void setLocalDateTime(PreparedStatement stmnt, int idx, LocalDateTime val, Column col) throws SQLException {
+<span class="nc" id="L383">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L384">    }</span>
+
+    @Override
+    public LocalDateTime getLocalDateTime(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L388">        return rs.getObject(column, LocalDateTime.class);</span>
+    }
+
+    @Override
+    public void setOffsetDateTime(PreparedStatement stmnt, int idx, OffsetDateTime val, Column col) throws SQLException {
+<span class="nc" id="L393">        stmnt.setObject(idx, val);</span>
+<span class="nc" id="L394">    }</span>
+
+    /**
+     * h2 does intentionally not support {@code getTimestamp()} for 'TIME WITH TIME ZONE' columns.
+     * See h2 ticket #413.
+     */
+    @Override
+    public OffsetDateTime getOffsetDateTime(ResultSet rs, int column) throws SQLException {
+<span class="nc" id="L402">        return rs.getObject(column, OffsetDateTime.class);</span>
+    }
+
+
+    @Override
+    public void indexOf(SQLBuffer buf, FilterValue str, FilterValue find,
+        FilterValue start) {
+<span class="nc" id="L409">        buf.append(&quot;CHARINDEX(&quot;);</span>
+<span class="nc" id="L410">        find.appendTo(buf);</span>
+<span class="nc" id="L411">        buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L412">        str.appendTo(buf);</span>
+<span class="nc bnc" id="L413" title="All 2 branches missed.">        if (start != null) {</span>
+<span class="nc" id="L414">            buf.append(&quot;, &quot;);</span>
+<span class="nc" id="L415">            start.appendTo(buf);</span>
+        }
+<span class="nc" id="L417">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L418">    }</span>
+
+    @Override
+    protected void appendSelectRange(SQLBuffer buf, long start, long end, boolean subselect) {
+        //SQL Server 2012 supports range select
+<span class="nc bnc" id="L423" title="All 2 branches missed.">        if (this.getMajorVersion() &gt;= 11) {</span>
+            //we need an order by clause....
+<span class="nc bnc" id="L425" title="All 2 branches missed.">            if (!buf.getSQL().contains(&quot; ORDER BY &quot;)) {</span>
+<span class="nc" id="L426">                buf.append(&quot; ORDER BY 1 &quot;);</span>
+            }
+<span class="nc" id="L428">            buf.append(&quot; OFFSET &quot;).append(Long.toString(start)).append(&quot; ROWS &quot;).</span>
+<span class="nc" id="L429">                    append(&quot; FETCH NEXT &quot;).append(Long.toString(end - start)).append(&quot; ROWS ONLY &quot;);</span>
+        } else {
+<span class="nc" id="L431">            super.appendSelectRange(buf, start, end, subselect);</span>
+        }
+<span class="nc" id="L433">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

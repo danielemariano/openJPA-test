@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JDBCColumnOrder.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">JDBCColumnOrder.java</span></div><h1>JDBCColumnOrder.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.util.Comparator;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Select;
+
+/**
+ * Order by a synthetic order column.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L34">class JDBCColumnOrder implements JDBCOrder {</span>
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L36">    private Column _col = null;</span>
+<span class="nc" id="L37">    private ColumnIO _io = null;</span>
+
+    /**
+     * The synthetic column.
+     */
+    public Column getColumn() {
+<span class="nc" id="L43">        return _col;</span>
+    }
+
+    /**
+     * The synthetic column.
+     */
+    public void setColumn(Column col) {
+<span class="nc" id="L50">        _col = col;</span>
+<span class="nc" id="L51">    }</span>
+
+    /**
+     * I/O restrictions for the synthetic column.
+     */
+    public ColumnIO getColumnIO() {
+<span class="nc bnc" id="L57" title="All 2 branches missed.">        return (_io == null) ? ColumnIO.UNRESTRICTED : _io;</span>
+    }
+
+    /**
+     * I/O restrictions for the synthetic column.
+     */
+    public void setColumnIO(ColumnIO io) {
+<span class="nc" id="L64">        _io = io;</span>
+<span class="nc" id="L65">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public String getName() {
+<span class="nc bnc" id="L73" title="All 2 branches missed.">        return (_col == null) ? &quot;&quot; : _col.getName();</span>
+    }
+
+    @Override
+    public DBIdentifier getIdentifier() {
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        return (_col == null) ? DBIdentifier.newColumn(&quot;&quot;) : _col.getIdentifier();</span>
+    }
+
+    @Override
+    public boolean isAscending() {
+<span class="nc" id="L83">        return true;</span>
+    }
+
+    @Override
+    public Comparator&lt;?&gt; getComparator() {
+<span class="nc" id="L88">        return null;</span>
+    }
+
+    @Override
+    public boolean isInRelation() {
+<span class="nc" id="L93">        return false;</span>
+    }
+
+    @Override
+    public void order(Select sel, ClassMapping elem, Joins joins) {
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if (_col != null)</span>
+<span class="nc" id="L99">            sel.orderBy(_col, true, joins, true);</span>
+<span class="nc" id="L100">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

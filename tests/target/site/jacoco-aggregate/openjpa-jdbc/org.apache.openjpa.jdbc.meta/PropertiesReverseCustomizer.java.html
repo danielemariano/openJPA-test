@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PropertiesReverseCustomizer.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">PropertiesReverseCustomizer.java</span></div><h1>PropertiesReverseCustomizer.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
+
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.lib.util.ClassUtil;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * Simple {@link ReverseCustomizer} that uses a properties file to
+ * to allow customization of basic class and field properties. The
+ * customizer uses the following keys:
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;i&gt;&amp;lt;table name&amp;gt;.table-type&lt;/i&gt;: Override the default type of the
+ * given table. Legal values are: &lt;code&gt;base, secondary,
+ * secondary-outer, association, subclass, none&lt;/code&gt;. See
+ * the TABLE_XXX constants in {@link ReverseMappingTool} for descriptions.&lt;/li&gt;
+ * &lt;li&gt;&lt;i&gt;&amp;lt;class name&amp;gt;.rename&lt;/i&gt;: Override the tool-generated class name
+ * with the given value. Use full class names, including package. Use a
+ * value of &lt;code&gt;none&lt;/code&gt; to reject the class and leave the
+ * corresponding table unmapped.&lt;/li&gt;
+ * &lt;li&gt;&lt;i&gt;&amp;lt;table name&amp;gt;.class-name&lt;/i&gt;: Assign the given fully-qualified
+ * class name to the type created from the given table. Use a value of
+ * &lt;code&gt;none&lt;/code&gt; to prevent mapping this table. This property can be
+ * used in place of the &lt;code&gt;rename&lt;/code&gt; property.
+ * &lt;li&gt;&lt;i&gt;&amp;lt;class name&amp;gt;.identity&lt;/i&gt;: Set this property to
+ * &lt;code&gt;datastore&lt;/code&gt;, &lt;code&gt;builtin&lt;/code&gt;, or the desired
+ * fully-qualified application identity class name to override the
+ * reverse mapping tool's default identity settings. If the class has been
+ * renamed, use the new name.&lt;/li&gt;
+ * &lt;li&gt;&lt;i&gt;&amp;lt;class name&amp;gt;.&amp;lt;field name&amp;gt;.rename&lt;/i&gt;: Override the
+ * tool-generated field name with the given value. Use the field owner's
+ * full class name in the property key. The property value should be the
+ * new field name, without the preceding class name. Use a value of
+ * &lt;code&gt;none&lt;/code&gt; to reject the generated mapping.&lt;/li&gt;
+ * &lt;li&gt;&lt;i&gt;&amp;lt;table name&amp;gt;.&amp;lt;column name&amp;gt;.field-name&lt;/i&gt;: Assign the
+ * field name to use for the mapping of a particular column. If this is
+ * a multi-column mapping, any one of the columns can be used. Use a value
+ * of &lt;code&gt;none&lt;/code&gt; to prevent the column (and associated columns)
+ * from being mapped. This property can be used in place of the
+ * &lt;code&gt;rename&lt;/code&gt; property.
+ * &lt;li&gt;&lt;i&gt;&amp;lt;class name&amp;gt;.&amp;lt;field name&amp;gt;.type&lt;/i&gt;: The class name of
+ * the type to give the named field. Use full class names. If the field
+ * has been renamed, use the new name.&lt;/li&gt;
+ * &lt;li&gt;&lt;i&gt;&amp;lt;class name&amp;gt;.&amp;lt;field name&amp;gt;.value&lt;/i&gt;: The initial value
+ * for the named field. The given string will be placed as-is in the
+ * generated Java code, so be sure to add quotes to strings, etc. If the
+ * field has been renamed, use the new name.&lt;/li&gt;
+ * &lt;/ul&gt; All keys are optional; if not specified, the customizer keeps the
+ * default value generated by the reverse mapping tool.
+ */
+<span class="nc" id="L76">public class PropertiesReverseCustomizer</span>
+    implements ReverseCustomizer {
+
+<span class="nc" id="L79">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L80">        (PropertiesReverseCustomizer.class);</span>
+
+<span class="nc" id="L82">    protected ReverseMappingTool tool = null;</span>
+<span class="nc" id="L83">    private Properties _props = null;</span>
+<span class="nc" id="L84">    private Set _unaccessed = null;</span>
+
+    @Override
+    public void setConfiguration(Properties props) {
+<span class="nc" id="L88">        _props = props;</span>
+<span class="nc" id="L89">        _unaccessed = new TreeSet(props.keySet());</span>
+<span class="nc" id="L90">    }</span>
+
+    @Override
+    public void setTool(ReverseMappingTool tool) {
+<span class="nc" id="L94">        this.tool = tool;</span>
+<span class="nc" id="L95">    }</span>
+
+    @Override
+    public int getTableType(Table table, int defaultType) {
+<span class="nc" id="L99">        String type = getProperty(table.getName() + &quot;.table-type&quot;);</span>
+<span class="nc bnc" id="L100" title="All 4 branches missed.">        if (type == null &amp;&amp; table.getSchemaName() != null)</span>
+<span class="nc" id="L101">            type = getProperty(table.getFullName() + &quot;.table-type&quot;);</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if (type == null)</span>
+<span class="nc" id="L103">            return defaultType;</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        if (&quot;none&quot;.equals(type))</span>
+<span class="nc" id="L105">            return ReverseMappingTool.TABLE_NONE;</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        if (&quot;base&quot;.equals(type))</span>
+<span class="nc" id="L107">            return ReverseMappingTool.TABLE_BASE;</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        if (&quot;secondary&quot;.equals(type))</span>
+<span class="nc" id="L109">            return ReverseMappingTool.TABLE_SECONDARY;</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">        if (&quot;secondary-outer&quot;.equals(type))</span>
+<span class="nc" id="L111">            return ReverseMappingTool.TABLE_SECONDARY_OUTER;</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (&quot;association&quot;.equals(type))</span>
+<span class="nc" id="L113">            return ReverseMappingTool.TABLE_ASSOCIATION;</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (&quot;subclass&quot;.equals(type))</span>
+<span class="nc" id="L115">            return ReverseMappingTool.TABLE_SUBCLASS;</span>
+<span class="nc" id="L116">        throw new IllegalArgumentException(table.getName() + &quot;.table-type: &quot;</span>
+            + type);
+    }
+
+    @Override
+    public String getClassName(Table table, String defaultName) {
+        // check for a rename property or a table-naming property
+<span class="nc" id="L123">        String name = getProperty(defaultName + &quot;.rename&quot;);</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        if (name == null) {</span>
+<span class="nc" id="L125">            name = getProperty(table.getName() + &quot;.class-name&quot;);</span>
+<span class="nc bnc" id="L126" title="All 4 branches missed.">            if (name == null &amp;&amp; table.getSchemaName() != null)</span>
+<span class="nc" id="L127">                name = getProperty(table.getFullName() + &quot;.class-name&quot;);</span>
+        }
+
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        if (name == null) {</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">            if (tool.getLog().isTraceEnabled())</span>
+<span class="nc" id="L132">                tool.getLog().trace(_loc.get(&quot;custom-no-class&quot;,</span>
+                    defaultName, table));
+<span class="nc" id="L134">            return defaultName;</span>
+        }
+
+<span class="nc bnc" id="L137" title="All 2 branches missed.">        if (&quot;none&quot;.equals(name)) {</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            if (tool.getLog().isInfoEnabled())</span>
+<span class="nc" id="L139">                tool.getLog().info(_loc.get(&quot;custom-rm-class&quot;,</span>
+                    defaultName, table));
+<span class="nc" id="L141">            return null;</span>
+        }
+
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        if (tool.getLog().isInfoEnabled())</span>
+<span class="nc" id="L145">            tool.getLog().info(_loc.get(&quot;custom-class&quot;, defaultName, name));</span>
+<span class="nc" id="L146">        return name;</span>
+    }
+
+    @Override
+    public void customize(ClassMapping cls) {
+        // customize identity type
+<span class="nc" id="L152">        String id = getProperty(cls.getDescribedType().getName()</span>
+            + &quot;.identity&quot;);
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        if (&quot;datastore&quot;.equals(id)) {</span>
+<span class="nc" id="L155">            cls.setObjectIdType(null, false);</span>
+<span class="nc" id="L156">            cls.setIdentityType(ClassMetaData.ID_DATASTORE);</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        } else if (&quot;builtin&quot;.equals(id)) {</span>
+<span class="nc" id="L158">            cls.setObjectIdType(null, false);</span>
+<span class="nc" id="L159">            cls.setIdentityType(ClassMetaData.ID_APPLICATION);</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        } else if (id != null)</span>
+<span class="nc" id="L161">            cls.setObjectIdType(tool.generateClass(id, null), false);</span>
+<span class="nc" id="L162">    }</span>
+
+    @Override
+    public String getClassCode(ClassMapping mapping) {
+<span class="nc" id="L166">        return null;</span>
+    }
+
+    @Override
+    public void customize(FieldMapping field) {
+<span class="nc" id="L171">        String type = getProperty(field.getFullName(false) + &quot;.type&quot;);</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (type != null)</span>
+<span class="nc" id="L173">            field.setDeclaredType(ClassUtil.toClass(type, null));</span>
+<span class="nc" id="L174">    }</span>
+
+    @Override
+    public String getFieldName(ClassMapping dec, Column[] cols, ForeignKey fk,
+        String defaultName) {
+        // check for a rename property or a column-naming property
+<span class="nc" id="L180">        String name = getProperty(dec.getDescribedType().getName() + &quot;.&quot;</span>
+            + defaultName + &quot;.rename&quot;);
+<span class="nc bnc" id="L182" title="All 4 branches missed.">        for (int i = 0; name == null &amp;&amp; i &lt; cols.length; i++) {</span>
+<span class="nc" id="L183">            name = getProperty(cols[i].getTableName() + &quot;.&quot;</span>
+<span class="nc" id="L184">                + cols[i].getName() + &quot;.&quot; + &quot;field-name&quot;);</span>
+<span class="nc bnc" id="L185" title="All 4 branches missed.">            if (name == null &amp;&amp; cols[i].getTable().getSchemaName() != null)</span>
+<span class="nc" id="L186">                name = getProperty(cols[i].getTable().getFullName()</span>
+<span class="nc" id="L187">                    + &quot;.&quot; + cols[i].getName() + &quot;.&quot; + &quot;field-name&quot;);</span>
+        }
+
+<span class="nc bnc" id="L190" title="All 2 branches missed.">        if (name == null) {</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">            if (tool.getLog().isTraceEnabled())</span>
+<span class="nc" id="L192">                tool.getLog().trace(_loc.get(&quot;custom-no-field&quot;, defaultName,</span>
+                    dec));
+<span class="nc" id="L194">            return defaultName;</span>
+        }
+
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        if (&quot;none&quot;.equals(name)) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">            if (tool.getLog().isInfoEnabled())</span>
+<span class="nc" id="L199">                tool.getLog().info(_loc.get(&quot;custom-rm-field&quot;, defaultName,</span>
+                    dec));
+<span class="nc" id="L201">            return null;</span>
+        }
+
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if (tool.getLog().isInfoEnabled())</span>
+<span class="nc" id="L205">            tool.getLog().info(_loc.get(&quot;custom-field&quot;, defaultName, dec,</span>
+                name));
+<span class="nc" id="L207">        return name;</span>
+    }
+
+    @Override
+    public String getInitialValue(FieldMapping field) {
+<span class="nc" id="L212">        return getProperty(field.getFullName(false) + &quot;.value&quot;);</span>
+    }
+
+    @Override
+    public String getDeclaration(FieldMapping field) {
+<span class="nc" id="L217">        return null;</span>
+    }
+
+    @Override
+    public String getFieldCode(FieldMapping field) {
+<span class="nc" id="L222">        return null;</span>
+    }
+
+    @Override
+    public boolean unmappedTable(Table table) {
+<span class="nc" id="L227">        return false;</span>
+    }
+
+    @Override
+    public void close() {
+<span class="nc bnc" id="L232" title="All 4 branches missed.">        if (!_unaccessed.isEmpty() &amp;&amp; tool.getLog().isTraceEnabled())</span>
+<span class="nc" id="L233">            tool.getLog().trace(_loc.get(&quot;custom-unused-props&quot;, _unaccessed));</span>
+<span class="nc" id="L234">    }</span>
+
+    /**
+     * Return the property value for the given key, or null if none.
+     */
+    protected String getProperty(String key) {
+<span class="nc" id="L240">        String val = StringUtil.trimToNull(_props.getProperty(key));</span>
+<span class="nc" id="L241">        _unaccessed.remove(key);</span>
+<span class="nc" id="L242">        return val;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

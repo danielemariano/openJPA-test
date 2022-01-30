@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CoalesceExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">CoalesceExpression.java</span></div><h1>CoalesceExpression.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Raw;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.ExpressionVisitor;
+import org.apache.openjpa.kernel.exps.Value;
+import org.apache.openjpa.meta.ClassMetaData;
+
+/**
+ * Coalesce expression.
+ *
+ * @author Catalina Wei
+ */
+public class CoalesceExpression
+    extends AbstractVal {
+
+    
+    private static final long serialVersionUID = 1L;
+    private final Val[] _vals;
+<span class="nc" id="L45">    private ClassMetaData _meta = null;</span>
+<span class="nc" id="L46">    private Class _cast = null;</span>
+<span class="nc" id="L47">    private Value other = null;</span>
+<span class="nc" id="L48">    private ExpState otherState = null;</span>
+
+    /**
+     * Constructor.
+     */
+<span class="nc" id="L53">    public CoalesceExpression(Val[] vals) {</span>
+<span class="nc" id="L54">        _vals = vals;</span>
+<span class="nc" id="L55">    }</span>
+
+    public Val[] getVal() {
+<span class="nc" id="L58">        return _vals;</span>
+    }
+
+    @Override
+    public Class getType() {
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if (_cast != null)</span>
+<span class="nc" id="L64">            return _cast;</span>
+<span class="nc" id="L65">        Class type = _vals[0].getType();</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        for (int i = 1; i &lt; _vals.length; i++)</span>
+<span class="nc" id="L67">            type = Filters.promote(type, _vals[i].getType());</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        if (type == Raw.class)</span>
+<span class="nc" id="L69">            return String.class;</span>
+<span class="nc" id="L70">        return type;</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L75">        ExpState[] states = new ExpState[_vals.length];</span>
+<span class="nc" id="L76">        Joins joins = null;</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        for (int i = 0; i &lt; _vals.length; i++) {</span>
+<span class="nc" id="L78">            states[i] = _vals[i].initialize(sel, ctx, flags);</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">            if (joins == null)</span>
+<span class="nc" id="L80">                joins = states[i].joins;</span>
+            else
+<span class="nc" id="L82">                joins = sel.and(joins, states[i].joins);</span>
+        }
+<span class="nc" id="L84">        return new CoalesceExpState(joins, states);</span>
+    }
+
+    private static class CoalesceExpState
+        extends ExpState {
+
+        public ExpState[] states;
+
+        public CoalesceExpState(Joins joins, ExpState[] states) {
+<span class="nc" id="L93">            super(joins);</span>
+<span class="nc" id="L94">            this.states = states;</span>
+<span class="nc" id="L95">        }</span>
+    }
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer buf, int index) {
+<span class="nc" id="L101">        CoalesceExpState cstate = (CoalesceExpState) state;</span>
+
+<span class="nc" id="L103">        buf.append(&quot; COALESCE(&quot;); // MySQL does not like space before bracket</span>
+
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        for (int i = 0; i &lt; _vals.length; i++) {</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">            if (i &gt; 0)</span>
+<span class="nc" id="L107">                buf.append(&quot;,&quot;);</span>
+<span class="nc" id="L108">            _vals[i].appendTo(sel, ctx, cstate.states[i], buf, 0);</span>
+        }
+
+<span class="nc" id="L111">        buf.append(&quot;)&quot;);</span>
+<span class="nc" id="L112">    }</span>
+
+    @Override
+    public void selectColumns(Select sel, ExpContext ctx, ExpState state,
+        boolean pks) {
+<span class="nc" id="L117">        CoalesceExpState cstate = (CoalesceExpState) state;</span>
+
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        for (int i = 0; i &lt; _vals.length; i++)</span>
+<span class="nc" id="L120">            _vals[i].selectColumns(sel, ctx, cstate.states[i], pks);</span>
+<span class="nc" id="L121">    }</span>
+
+    @Override
+    public void acceptVisit(ExpressionVisitor visitor) {
+<span class="nc" id="L125">        visitor.enter(this);</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">        for (int i = 0; i &lt; _vals.length; i++)</span>
+<span class="nc" id="L127">            _vals[i].acceptVisit(visitor);</span>
+<span class="nc" id="L128">        visitor.exit(this);</span>
+<span class="nc" id="L129">    }</span>
+
+    @Override
+    public int getId() {
+<span class="nc" id="L133">        return Val.COALESCE_VAL;</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L139">        CoalesceExpState cstate = (CoalesceExpState) state;</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        for (int i = 0; i &lt; _vals.length; i++)</span>
+<span class="nc" id="L141">            _vals[i].calculateValue(sel, ctx, cstate.states[i], other, otherState);</span>
+<span class="nc" id="L142">    }</span>
+
+    @Override
+    public void groupBy(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L146">        sel.groupBy(newSQLBuffer(sel, ctx, state));</span>
+<span class="nc" id="L147">    }</span>
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L151">        return 1;</span>
+    }
+
+    private SQLBuffer newSQLBuffer(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L155">        calculateValue(sel, ctx, state, (Val)other, otherState);</span>
+<span class="nc" id="L156">        SQLBuffer buf = new SQLBuffer(ctx.store.getDBDictionary());</span>
+<span class="nc" id="L157">        appendTo(sel, ctx, state, buf, 0);</span>
+<span class="nc" id="L158">        return buf;</span>
+    }
+
+    @Override
+    public Object load(ExpContext ctx, ExpState state, Result res)
+        throws SQLException {
+<span class="nc" id="L164">        return Filters.convert(res.getObject(this,</span>
+<span class="nc" id="L165">            JavaSQLTypes.JDBC_DEFAULT, null), getType());</span>
+    }
+
+    @Override
+    public void orderBy(Select sel, ExpContext ctx, ExpState state,
+        boolean asc) {
+<span class="nc" id="L171">        sel.orderBy(newSQLBuffer(sel, ctx, state), asc, false, getSelectAs());</span>
+<span class="nc" id="L172">    }</span>
+
+    @Override
+    public void select(Select sel, ExpContext ctx, ExpState state, boolean pks){
+<span class="nc" id="L176">        sel.select(newSQLBuffer(sel, ctx, state), this);</span>
+<span class="nc" id="L177">    }</span>
+
+    @Override
+    public ClassMetaData getMetaData() {
+<span class="nc" id="L181">        return _meta;</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L186">        _cast = type;</span>
+<span class="nc" id="L187">    }</span>
+
+    @Override
+    public void setMetaData(ClassMetaData meta) {
+<span class="nc" id="L191">        _meta = meta;</span>
+<span class="nc" id="L192">    }</span>
+
+    public void setOtherPath(Value other) {
+<span class="nc" id="L195">        this.other = other;</span>
+<span class="nc" id="L196">    }</span>
+
+    public Value getOtherPath() {
+<span class="nc" id="L199">        return other;</span>
+    }
+
+    public void setOtherState(ExpState otherState) {
+<span class="nc" id="L203">        this.otherState = otherState;</span>
+<span class="nc" id="L204">    }</span>
+
+    public ExpState getOtherState() {
+<span class="nc" id="L207">        return otherState;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

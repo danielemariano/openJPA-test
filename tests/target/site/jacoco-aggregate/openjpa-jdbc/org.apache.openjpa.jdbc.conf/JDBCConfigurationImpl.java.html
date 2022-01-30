@@ -1,0 +1,1090 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JDBCConfigurationImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.conf</a> &gt; <span class="el_source">JDBCConfigurationImpl.java</span></div><h1>JDBCConfigurationImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.conf;
+
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.util.Locale;
+
+import javax.sql.DataSource;
+
+import org.apache.openjpa.conf.OpenJPAConfigurationImpl;
+import org.apache.openjpa.jdbc.identifier.DBIdentifierUtil;
+import org.apache.openjpa.jdbc.kernel.BatchingConstraintUpdateManager;
+import org.apache.openjpa.jdbc.kernel.BatchingOperationOrderUpdateManager;
+import org.apache.openjpa.jdbc.kernel.EagerFetchModes;
+import org.apache.openjpa.jdbc.kernel.JDBCBrokerFactory;
+import org.apache.openjpa.jdbc.kernel.LRSSizes;
+import org.apache.openjpa.jdbc.kernel.PessimisticLockManager;
+import org.apache.openjpa.jdbc.kernel.UpdateManager;
+import org.apache.openjpa.jdbc.meta.MappingDefaults;
+import org.apache.openjpa.jdbc.meta.MappingRepository;
+import org.apache.openjpa.jdbc.schema.DataSourceFactory;
+import org.apache.openjpa.jdbc.schema.DriverDataSource;
+import org.apache.openjpa.jdbc.schema.SchemaFactory;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.DBDictionaryFactory;
+import org.apache.openjpa.jdbc.sql.MaxDBDictionary;
+import org.apache.openjpa.jdbc.sql.SQLFactory;
+import org.apache.openjpa.kernel.BrokerImpl;
+import org.apache.openjpa.kernel.StoreContext;
+import org.apache.openjpa.lib.conf.IntValue;
+import org.apache.openjpa.lib.conf.ObjectValue;
+import org.apache.openjpa.lib.conf.PluginValue;
+import org.apache.openjpa.lib.conf.ProductDerivations;
+import org.apache.openjpa.lib.conf.StringListValue;
+import org.apache.openjpa.lib.conf.StringValue;
+import org.apache.openjpa.lib.jdbc.ConnectionDecorator;
+import org.apache.openjpa.lib.jdbc.DecoratingDataSource;
+import org.apache.openjpa.lib.jdbc.JDBCListener;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.MetaDataFactory;
+import org.apache.openjpa.util.UserException;
+
+/**
+ * Default implementation of the {@link JDBCConfiguration} interface.
+ *
+ * @author Marc Prud'hommeaux
+ * @author Abe White
+ */
+public class JDBCConfigurationImpl
+    extends OpenJPAConfigurationImpl
+    implements JDBCConfiguration {
+
+    public StringValue schema;
+    public StringListValue schemas;
+    public IntValue transactionIsolation;
+    public IntValue resultSetType;
+    public IntValue fetchDirection;
+    public FetchModeValue eagerFetchMode;
+    public FetchModeValue subclassFetchMode;
+    public IntValue lrsSize;
+    public StringValue synchronizeMappings;
+    public ObjectValue jdbcListenerPlugins;
+    public ObjectValue connectionDecoratorPlugins;
+    public PluginValue dbdictionaryPlugin;
+    public ObjectValue updateManagerPlugin;
+    public ObjectValue schemaFactoryPlugin;
+    public ObjectValue sqlFactoryPlugin;
+    public ObjectValue mappingDefaultsPlugin;
+    public PluginValue driverDataSourcePlugin;
+    public MappingFactoryValue mappingFactoryPlugin;
+    public ObjectValue identifierUtilPlugin;
+
+    // used internally
+<span class="nc" id="L93">    private String firstUser = null;</span>
+<span class="nc" id="L94">    private String firstPass = null;</span>
+<span class="nc" id="L95">    private DecoratingDataSource dataSource = null;</span>
+<span class="nc" id="L96">    private DecoratingDataSource dataSource2 = null;</span>
+
+<span class="nc" id="L98">    private static final Localizer _loc = Localizer.forPackage(JDBCConfigurationImpl.class);</span>
+
+    /**
+     * Default constructor. Attempts to load default properties.
+     */
+    public JDBCConfigurationImpl() {
+<span class="nc" id="L104">        this(true);</span>
+<span class="nc" id="L105">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param loadGlobals whether to attempt to load the global properties
+     */
+    public JDBCConfigurationImpl(boolean loadGlobals) {
+<span class="nc" id="L113">        this(true, loadGlobals);</span>
+<span class="nc" id="L114">    }</span>
+
+    /**
+     * Constructor.
+     *
+     * @param derivations whether to apply product derivations
+     * @param loadGlobals whether to attempt to load the global properties
+     */
+    public JDBCConfigurationImpl(boolean derivations, boolean loadGlobals) {
+<span class="nc" id="L123">        super(false, false);</span>
+        String[] aliases;
+
+<span class="nc" id="L126">        schema = addString(&quot;jdbc.Schema&quot;);</span>
+<span class="nc" id="L127">        schemas = addStringList(&quot;jdbc.Schemas&quot;);</span>
+
+<span class="nc" id="L129">        transactionIsolation = addInt(&quot;jdbc.TransactionIsolation&quot;);</span>
+<span class="nc" id="L130">        aliases = new String[]{</span>
+<span class="nc" id="L131">            &quot;default&quot;, String.valueOf(-1),</span>
+<span class="nc" id="L132">            &quot;none&quot;, String.valueOf(Connection.TRANSACTION_NONE),</span>
+            &quot;read-committed&quot;, String.valueOf
+<span class="nc" id="L134">            (Connection.TRANSACTION_READ_COMMITTED),</span>
+            &quot;read-uncommitted&quot;, String.valueOf
+<span class="nc" id="L136">            (Connection.TRANSACTION_READ_UNCOMMITTED),</span>
+            &quot;repeatable-read&quot;, String.valueOf
+<span class="nc" id="L138">            (Connection.TRANSACTION_REPEATABLE_READ),</span>
+<span class="nc" id="L139">            &quot;serializable&quot;, String.valueOf(Connection.TRANSACTION_SERIALIZABLE)</span>
+        };
+<span class="nc" id="L141">        transactionIsolation.setAliases(aliases);</span>
+<span class="nc" id="L142">        transactionIsolation.setDefault(aliases[0]);</span>
+<span class="nc" id="L143">        transactionIsolation.set(-1);</span>
+<span class="nc" id="L144">        transactionIsolation.setAliasListComprehensive(true);</span>
+
+<span class="nc" id="L146">        resultSetType = addInt(&quot;jdbc.ResultSetType&quot;);</span>
+<span class="nc" id="L147">        aliases = new String[]{</span>
+<span class="nc" id="L148">            &quot;forward-only&quot;, String.valueOf(ResultSet.TYPE_FORWARD_ONLY),</span>
+            &quot;scroll-sensitive&quot;, String.valueOf
+<span class="nc" id="L150">            (ResultSet.TYPE_SCROLL_SENSITIVE),</span>
+            &quot;scroll-insensitive&quot;, String.valueOf
+<span class="nc" id="L152">            (ResultSet.TYPE_SCROLL_INSENSITIVE),</span>
+        };
+<span class="nc" id="L154">        resultSetType.setAliases(aliases);</span>
+<span class="nc" id="L155">        resultSetType.setDefault(aliases[0]);</span>
+<span class="nc" id="L156">        resultSetType.set(ResultSet.TYPE_FORWARD_ONLY);</span>
+<span class="nc" id="L157">        resultSetType.setAliasListComprehensive(true);</span>
+
+<span class="nc" id="L159">        fetchDirection = addInt(&quot;jdbc.FetchDirection&quot;);</span>
+<span class="nc" id="L160">        aliases = new String[]{</span>
+<span class="nc" id="L161">            &quot;forward&quot;, String.valueOf(ResultSet.FETCH_FORWARD),</span>
+<span class="nc" id="L162">            &quot;reverse&quot;, String.valueOf(ResultSet.FETCH_REVERSE),</span>
+<span class="nc" id="L163">            &quot;unknown&quot;, String.valueOf(ResultSet.FETCH_UNKNOWN),</span>
+        };
+<span class="nc" id="L165">        fetchDirection.setAliases(aliases);</span>
+<span class="nc" id="L166">        fetchDirection.setDefault(aliases[0]);</span>
+<span class="nc" id="L167">        fetchDirection.set(ResultSet.FETCH_FORWARD);</span>
+<span class="nc" id="L168">        fetchDirection.setAliasListComprehensive(true);</span>
+
+<span class="nc" id="L170">        eagerFetchMode = new FetchModeValue(&quot;jdbc.EagerFetchMode&quot;);</span>
+<span class="nc" id="L171">        eagerFetchMode.setDefault(FetchModeValue.EAGER_PARALLEL);</span>
+<span class="nc" id="L172">        eagerFetchMode.set(EagerFetchModes.EAGER_PARALLEL);</span>
+<span class="nc" id="L173">        addValue(eagerFetchMode);</span>
+
+<span class="nc" id="L175">        subclassFetchMode = new FetchModeValue(&quot;jdbc.SubclassFetchMode&quot;);</span>
+<span class="nc" id="L176">        subclassFetchMode.setDefault(FetchModeValue.EAGER_JOIN);</span>
+<span class="nc" id="L177">        subclassFetchMode.set(EagerFetchModes.EAGER_JOIN);</span>
+<span class="nc" id="L178">        addValue(subclassFetchMode);</span>
+
+<span class="nc" id="L180">        lrsSize = addInt(&quot;jdbc.LRSSize&quot;);</span>
+<span class="nc" id="L181">        aliases = new String[]{</span>
+<span class="nc" id="L182">            &quot;query&quot;, String.valueOf(LRSSizes.SIZE_QUERY),</span>
+<span class="nc" id="L183">            &quot;unknown&quot;, String.valueOf(LRSSizes.SIZE_UNKNOWN),</span>
+<span class="nc" id="L184">            &quot;last&quot;, String.valueOf(LRSSizes.SIZE_LAST),</span>
+        };
+<span class="nc" id="L186">        lrsSize.setAliases(aliases);</span>
+<span class="nc" id="L187">        lrsSize.setDefault(aliases[0]);</span>
+<span class="nc" id="L188">        lrsSize.set(LRSSizes.SIZE_QUERY);</span>
+<span class="nc" id="L189">        lrsSize.setAliasListComprehensive(true);</span>
+
+<span class="nc" id="L191">        synchronizeMappings = addString(&quot;jdbc.SynchronizeMappings&quot;);</span>
+<span class="nc" id="L192">        aliases = new String[]{ &quot;false&quot;, null };</span>
+<span class="nc" id="L193">        synchronizeMappings.setAliases(aliases);</span>
+<span class="nc" id="L194">        synchronizeMappings.setDefault(aliases[0]);</span>
+
+<span class="nc" id="L196">        jdbcListenerPlugins = addPluginList(&quot;jdbc.JDBCListeners&quot;);</span>
+<span class="nc" id="L197">        jdbcListenerPlugins.setInstantiatingGetter(&quot;getJDBCListenerInstances&quot;);</span>
+
+<span class="nc" id="L199">        connectionDecoratorPlugins = addPluginList</span>
+<span class="nc" id="L200">            (&quot;jdbc.ConnectionDecorators&quot;);</span>
+<span class="nc" id="L201">        connectionDecoratorPlugins.setInstantiatingGetter</span>
+<span class="nc" id="L202">            (&quot;getConnectionDecoratorInstances&quot;);</span>
+
+<span class="nc" id="L204">        dbdictionaryPlugin = addPlugin(&quot;jdbc.DBDictionary&quot;, true);</span>
+<span class="nc" id="L205">        aliases = new String[]{</span>
+<span class="nc" id="L206">            &quot;access&quot;, org.apache.openjpa.jdbc.sql.AccessDictionary.class.getName(),</span>
+<span class="nc" id="L207">            &quot;db2&quot;, org.apache.openjpa.jdbc.sql.DB2Dictionary.class.getName(),</span>
+<span class="nc" id="L208">            &quot;derby&quot;, org.apache.openjpa.jdbc.sql.DerbyDictionary.class.getName(),</span>
+<span class="nc" id="L209">            &quot;empress&quot;, org.apache.openjpa.jdbc.sql.EmpressDictionary.class.getName(),</span>
+<span class="nc" id="L210">            &quot;foxpro&quot;, org.apache.openjpa.jdbc.sql.FoxProDictionary.class.getName(),</span>
+<span class="nc" id="L211">            &quot;h2&quot;, org.apache.openjpa.jdbc.sql.H2Dictionary.class.getName(),</span>
+<span class="nc" id="L212">            &quot;hsql&quot;, org.apache.openjpa.jdbc.sql.HSQLDictionary.class.getName(),</span>
+<span class="nc" id="L213">            &quot;informix&quot;, org.apache.openjpa.jdbc.sql.InformixDictionary.class.getName(),</span>
+<span class="nc" id="L214">            &quot;ingres&quot;, org.apache.openjpa.jdbc.sql.IngresDictionary.class.getName(),</span>
+<span class="nc" id="L215">            &quot;jdatastore&quot;, org.apache.openjpa.jdbc.sql.JDataStoreDictionary.class.getName(),</span>
+<span class="nc" id="L216">            &quot;mariadb&quot;, org.apache.openjpa.jdbc.sql.MariaDBDictionary.class.getName(),</span>
+<span class="nc" id="L217">            &quot;mysql&quot;, org.apache.openjpa.jdbc.sql.MySQLDictionary.class.getName(),</span>
+<span class="nc" id="L218">            &quot;herddb&quot;, org.apache.openjpa.jdbc.sql.HerdDBDictionary.class.getName(),</span>
+<span class="nc" id="L219">            &quot;oracle&quot;, org.apache.openjpa.jdbc.sql.OracleDictionary.class.getName(),</span>
+<span class="nc" id="L220">            &quot;pointbase&quot;, org.apache.openjpa.jdbc.sql.PointbaseDictionary.class.getName(),</span>
+<span class="nc" id="L221">            &quot;postgres&quot;, org.apache.openjpa.jdbc.sql.PostgresDictionary.class.getName(),</span>
+<span class="nc" id="L222">            &quot;soliddb&quot;, org.apache.openjpa.jdbc.sql.SolidDBDictionary.class.getName(),</span>
+<span class="nc" id="L223">            &quot;sqlserver&quot;, org.apache.openjpa.jdbc.sql.SQLServerDictionary.class.getName(),</span>
+<span class="nc" id="L224">            &quot;sybase&quot;, org.apache.openjpa.jdbc.sql.SybaseDictionary.class.getName(),</span>
+<span class="nc" id="L225">            &quot;maxdb&quot;, MaxDBDictionary.class.getName(),</span>
+        };
+<span class="nc" id="L227">        dbdictionaryPlugin.setAliases(aliases);</span>
+<span class="nc" id="L228">        dbdictionaryPlugin.setInstantiatingGetter(&quot;getDBDictionaryInstance&quot;);</span>
+
+<span class="nc" id="L230">        updateManagerPlugin = addPlugin(&quot;jdbc.UpdateManager&quot;, true);</span>
+<span class="nc" id="L231">        aliases = new String[]{</span>
+            &quot;default&quot;,
+<span class="nc" id="L233">            BatchingConstraintUpdateManager.class.getName(),</span>
+            &quot;operation-order&quot;,
+            &quot;org.apache.openjpa.jdbc.kernel.OperationOrderUpdateManager&quot;,
+            &quot;constraint&quot;,
+            &quot;org.apache.openjpa.jdbc.kernel.ConstraintUpdateManager&quot;,
+            &quot;batching-constraint&quot;,
+<span class="nc" id="L239">            BatchingConstraintUpdateManager.class.getName(),</span>
+            &quot;batching-operation-order&quot;,
+<span class="nc" id="L241">            BatchingOperationOrderUpdateManager.class.getName(),</span>
+        };
+<span class="nc" id="L243">        updateManagerPlugin.setAliases(aliases);</span>
+<span class="nc" id="L244">        updateManagerPlugin.setDefault(aliases[0]);</span>
+<span class="nc" id="L245">        updateManagerPlugin.setString(aliases[0]);</span>
+<span class="nc" id="L246">        updateManagerPlugin.setInstantiatingGetter(&quot;getUpdateManagerInstance&quot;);</span>
+
+<span class="nc" id="L248">        driverDataSourcePlugin = addPlugin(&quot;jdbc.DriverDataSource&quot;, false);</span>
+<span class="nc" id="L249">        aliases = new String[]{</span>
+            &quot;auto&quot;, &quot;org.apache.openjpa.jdbc.schema.AutoDriverDataSource&quot;,
+            &quot;simple&quot;, &quot;org.apache.openjpa.jdbc.schema.SimpleDriverDataSource&quot;,
+            &quot;dbcp&quot;, &quot;org.apache.openjpa.jdbc.schema.DBCPDriverDataSource&quot;
+        };
+<span class="nc" id="L254">        driverDataSourcePlugin.setAliases(aliases);</span>
+<span class="nc" id="L255">        driverDataSourcePlugin.setDefault(aliases[0]);</span>
+<span class="nc" id="L256">        driverDataSourcePlugin.setString(aliases[0]);</span>
+
+<span class="nc" id="L258">        schemaFactoryPlugin = addPlugin(&quot;jdbc.SchemaFactory&quot;, true);</span>
+<span class="nc" id="L259">        aliases = new String[]{</span>
+            &quot;dynamic&quot;, &quot;org.apache.openjpa.jdbc.schema.DynamicSchemaFactory&quot;,
+            &quot;native&quot;, &quot;org.apache.openjpa.jdbc.schema.LazySchemaFactory&quot;,
+            &quot;file&quot;, &quot;org.apache.openjpa.jdbc.schema.FileSchemaFactory&quot;,
+            &quot;table&quot;, &quot;org.apache.openjpa.jdbc.schema.TableSchemaFactory&quot;,
+            // deprecated alias
+            &quot;db&quot;, &quot;org.apache.openjpa.jdbc.schema.TableSchemaFactory&quot;,
+        };
+<span class="nc" id="L267">        schemaFactoryPlugin.setAliases(aliases);</span>
+<span class="nc" id="L268">        schemaFactoryPlugin.setDefault(aliases[0]);</span>
+<span class="nc" id="L269">        schemaFactoryPlugin.setString(aliases[0]);</span>
+<span class="nc" id="L270">        schemaFactoryPlugin.setInstantiatingGetter(&quot;getSchemaFactoryInstance&quot;);</span>
+
+<span class="nc" id="L272">        sqlFactoryPlugin = addPlugin(&quot;jdbc.SQLFactory&quot;, true);</span>
+<span class="nc" id="L273">        aliases = new String[]{</span>
+            &quot;default&quot;, &quot;org.apache.openjpa.jdbc.sql.SQLFactoryImpl&quot;,
+        };
+<span class="nc" id="L276">        sqlFactoryPlugin.setAliases(aliases);</span>
+<span class="nc" id="L277">        sqlFactoryPlugin.setDefault(aliases[0]);</span>
+<span class="nc" id="L278">        sqlFactoryPlugin.setString(aliases[0]);</span>
+<span class="nc" id="L279">        sqlFactoryPlugin.setInstantiatingGetter(&quot;getSQLFactoryInstance&quot;);</span>
+
+<span class="nc" id="L281">        mappingFactoryPlugin = new MappingFactoryValue(&quot;jdbc.MappingFactory&quot;);</span>
+<span class="nc" id="L282">        addValue(mappingFactoryPlugin);</span>
+
+<span class="nc" id="L284">        mappingDefaultsPlugin = addPlugin(&quot;jdbc.MappingDefaults&quot;, true);</span>
+<span class="nc" id="L285">        aliases = new String[]{</span>
+            &quot;default&quot;, &quot;org.apache.openjpa.jdbc.meta.MappingDefaultsImpl&quot;,
+        };
+<span class="nc" id="L288">        mappingDefaultsPlugin.setAliases(aliases);</span>
+<span class="nc" id="L289">        mappingDefaultsPlugin.setDefault(aliases[0]);</span>
+<span class="nc" id="L290">        mappingDefaultsPlugin.setString(aliases[0]);</span>
+<span class="nc" id="L291">        mappingDefaultsPlugin.setInstantiatingGetter</span>
+<span class="nc" id="L292">            (&quot;getMappingDefaultsInstance&quot;);</span>
+
+        // set up broker factory defaults
+<span class="nc" id="L295">        brokerFactoryPlugin.setAlias(&quot;jdbc&quot;, JDBCBrokerFactory.class.getName());</span>
+<span class="nc" id="L296">        brokerFactoryPlugin.setDefault(&quot;jdbc&quot;);</span>
+<span class="nc" id="L297">        brokerFactoryPlugin.setString(&quot;jdbc&quot;);</span>
+
+        // set new default for mapping repos
+<span class="nc" id="L300">        metaRepositoryPlugin.setAlias(&quot;default&quot;,</span>
+            &quot;org.apache.openjpa.jdbc.meta.MappingRepository&quot;);
+<span class="nc" id="L302">        metaRepositoryPlugin.setDefault(&quot;default&quot;);</span>
+<span class="nc" id="L303">        metaRepositoryPlugin.setString(&quot;default&quot;);</span>
+
+        // set new default for lock manager
+<span class="nc" id="L306">        lockManagerPlugin.setAlias(&quot;pessimistic&quot;,</span>
+<span class="nc" id="L307">            PessimisticLockManager.class.getName());</span>
+<span class="nc" id="L308">        lockManagerPlugin.setDefault(&quot;pessimistic&quot;);</span>
+<span class="nc" id="L309">        lockManagerPlugin.setString(&quot;pessimistic&quot;);</span>
+
+        // native savepoint manager options
+<span class="nc" id="L312">        savepointManagerPlugin.setAlias(&quot;jdbc&quot;,</span>
+            &quot;org.apache.openjpa.jdbc.kernel.JDBC3SavepointManager&quot;);
+
+        // set new aliases and defaults for sequence
+<span class="nc" id="L316">        seqPlugin.setAliases(JDBCSeqValue.ALIASES);</span>
+<span class="nc" id="L317">        seqPlugin.setDefault(JDBCSeqValue.ALIASES[0]);</span>
+<span class="nc" id="L318">        seqPlugin.setString(JDBCSeqValue.ALIASES[0]);</span>
+
+        // This plug-in is declared in superclass but defined here
+        // because PreparedQueryCache is currently available for JDBC
+        // backend only
+<span class="nc" id="L323">        preparedQueryCachePlugin = addPlugin(&quot;jdbc.QuerySQLCache&quot;, true);</span>
+<span class="nc" id="L324">        aliases = new String[] {</span>
+            &quot;true&quot;, &quot;org.apache.openjpa.jdbc.kernel.PreparedQueryCacheImpl&quot;,
+            &quot;false&quot;, null
+        };
+<span class="nc" id="L328">        preparedQueryCachePlugin.setAliases(aliases);</span>
+<span class="nc" id="L329">        preparedQueryCachePlugin.setAliasListComprehensive(true);</span>
+<span class="nc" id="L330">        preparedQueryCachePlugin.setDefault(aliases[0]);</span>
+<span class="nc" id="L331">        preparedQueryCachePlugin.setClassName(aliases[1]);</span>
+<span class="nc" id="L332">        preparedQueryCachePlugin.setDynamic(true);</span>
+<span class="nc" id="L333">        preparedQueryCachePlugin.setInstantiatingGetter(</span>
+                &quot;getQuerySQLCacheInstance&quot;);
+
+<span class="nc" id="L336">        finderCachePlugin = addPlugin(&quot;jdbc.FinderCache&quot;, true);</span>
+<span class="nc" id="L337">        aliases = new String[] {</span>
+            &quot;true&quot;, &quot;org.apache.openjpa.jdbc.kernel.FinderCacheImpl&quot;,
+            &quot;false&quot;, null
+        };
+<span class="nc" id="L341">        finderCachePlugin.setAliases(aliases);</span>
+<span class="nc" id="L342">        finderCachePlugin.setAliasListComprehensive(true);</span>
+<span class="nc" id="L343">        finderCachePlugin.setDefault(aliases[0]);</span>
+<span class="nc" id="L344">        finderCachePlugin.setClassName(aliases[1]);</span>
+<span class="nc" id="L345">        finderCachePlugin.setDynamic(true);</span>
+<span class="nc" id="L346">        finderCachePlugin.setInstantiatingGetter(&quot;getFinderCacheInstance&quot;);</span>
+
+<span class="nc" id="L348">        identifierUtilPlugin = addPlugin(&quot;jdbc.IdentifierUtil&quot;, true);</span>
+<span class="nc" id="L349">        aliases = new String[] {</span>
+            &quot;default&quot;, &quot;org.apache.openjpa.jdbc.identifier.DBIdentifierUtilImpl&quot; };
+<span class="nc" id="L351">        identifierUtilPlugin.setAliases(aliases);</span>
+<span class="nc" id="L352">        identifierUtilPlugin.setDefault(aliases[0]);</span>
+<span class="nc" id="L353">        identifierUtilPlugin.setString(aliases[0]);</span>
+<span class="nc" id="L354">        identifierUtilPlugin.setInstantiatingGetter(&quot;getIdentifierUtilInstance&quot;);</span>
+
+
+        // this static initializer is to get past a weird
+        // ClassCircularityError that happens only under IBM's
+        // JDK 1.3.1 on Linux from within the JRun ClassLoader;
+        // while exact causes are unknown, it is almost certainly
+        // a bug in JRun, and we can get around it by forcing
+        // Instruction.class to be loaded and initialized
+        // before TypedInstruction.class
+<span class="nc" id="L364">        try { serp.bytecode.lowlevel.Entry.class.getName(); }</span>
+<span class="nc" id="L365">        catch (Throwable t) {}</span>
+<span class="nc" id="L366">        try { serp.bytecode.Instruction.class.getName(); }</span>
+<span class="nc" id="L367">        catch (Throwable t) {}</span>
+
+<span class="nc" id="L369">        supportedOptions().add(OPTION_QUERY_SQL);</span>
+<span class="nc" id="L370">        supportedOptions().add(OPTION_JDBC_CONNECTION);</span>
+<span class="nc" id="L371">        supportedOptions().remove(OPTION_VALUE_INCREMENT);</span>
+<span class="nc" id="L372">        supportedOptions().remove(OPTION_NULL_CONTAINER);</span>
+
+<span class="nc bnc" id="L374" title="All 2 branches missed.">        if (derivations)</span>
+<span class="nc" id="L375">            ProductDerivations.beforeConfigurationLoad(this);</span>
+<span class="nc bnc" id="L376" title="All 2 branches missed.">        if (loadGlobals)</span>
+<span class="nc" id="L377">            loadGlobals();</span>
+<span class="nc" id="L378">    }</span>
+
+    /**
+     * Copy constructor
+     */
+    public JDBCConfigurationImpl(JDBCConfiguration conf) {
+<span class="nc" id="L384">        this(true, false);</span>
+<span class="nc bnc" id="L385" title="All 2 branches missed.">        if (conf != null)</span>
+<span class="nc" id="L386">            fromProperties(conf.toProperties(false));</span>
+<span class="nc" id="L387">    }</span>
+
+    @Override
+    public void setSchema(String schema) {
+<span class="nc" id="L391">        this.schema.setString(schema);</span>
+<span class="nc" id="L392">    }</span>
+
+    @Override
+    public String getSchema() {
+<span class="nc" id="L396">        return schema.getString();</span>
+    }
+
+    @Override
+    public void setSchemas(String schemas) {
+<span class="nc" id="L401">        this.schemas.setString(schemas);</span>
+<span class="nc" id="L402">    }</span>
+
+    @Override
+    public String getSchemas() {
+<span class="nc" id="L406">        return schemas.getString();</span>
+    }
+
+    @Override
+    public void setSchemas(String[] schemas) {
+<span class="nc" id="L411">        this.schemas.set(schemas);</span>
+<span class="nc" id="L412">    }</span>
+
+    @Override
+    public String[] getSchemasList() {
+<span class="nc" id="L416">        return schemas.get();</span>
+    }
+
+    @Override
+    public void setTransactionIsolation(String transactionIsolation) {
+<span class="nc" id="L421">        this.transactionIsolation.setString(transactionIsolation);</span>
+<span class="nc" id="L422">    }</span>
+
+    @Override
+    public String getTransactionIsolation() {
+<span class="nc" id="L426">        return transactionIsolation.getString();</span>
+    }
+
+    @Override
+    public void setTransactionIsolation(int transactionIsolation) {
+<span class="nc" id="L431">        this.transactionIsolation.set(transactionIsolation);</span>
+<span class="nc" id="L432">    }</span>
+
+    @Override
+    public int getTransactionIsolationConstant() {
+<span class="nc" id="L436">        return transactionIsolation.get();</span>
+    }
+
+    @Override
+    public void setResultSetType(String resultSetType) {
+<span class="nc" id="L441">        this.resultSetType.setString(resultSetType);</span>
+<span class="nc" id="L442">    }</span>
+
+    @Override
+    public String getResultSetType() {
+<span class="nc" id="L446">        return resultSetType.getString();</span>
+    }
+
+    @Override
+    public void setResultSetType(int resultSetType) {
+<span class="nc" id="L451">        this.resultSetType.set(resultSetType);</span>
+<span class="nc" id="L452">    }</span>
+
+    @Override
+    public int getResultSetTypeConstant() {
+<span class="nc" id="L456">        return resultSetType.get();</span>
+    }
+
+    @Override
+    public void setFetchDirection(String fetchDirection) {
+<span class="nc" id="L461">        this.fetchDirection.setString(fetchDirection);</span>
+<span class="nc" id="L462">    }</span>
+
+    @Override
+    public String getFetchDirection() {
+<span class="nc" id="L466">        return fetchDirection.getString();</span>
+    }
+
+    @Override
+    public void setFetchDirection(int fetchDirection) {
+<span class="nc" id="L471">        this.fetchDirection.set(fetchDirection);</span>
+<span class="nc" id="L472">    }</span>
+
+    @Override
+    public int getFetchDirectionConstant() {
+<span class="nc" id="L476">        return fetchDirection.get();</span>
+    }
+
+    @Override
+    public void setEagerFetchMode(String eagerFetchMode) {
+<span class="nc" id="L481">        this.eagerFetchMode.setString(eagerFetchMode);</span>
+<span class="nc" id="L482">    }</span>
+
+    @Override
+    public String getEagerFetchMode() {
+<span class="nc" id="L486">        return eagerFetchMode.getString();</span>
+    }
+
+    @Override
+    public void setEagerFetchMode(int eagerFetchMode) {
+<span class="nc" id="L491">        this.eagerFetchMode.set(eagerFetchMode);</span>
+<span class="nc" id="L492">    }</span>
+
+    @Override
+    public int getEagerFetchModeConstant() {
+<span class="nc" id="L496">        return eagerFetchMode.get();</span>
+    }
+
+    @Override
+    public void setSubclassFetchMode(String subclassFetchMode) {
+<span class="nc" id="L501">        this.subclassFetchMode.setString(subclassFetchMode);</span>
+<span class="nc" id="L502">    }</span>
+
+    @Override
+    public String getSubclassFetchMode() {
+<span class="nc" id="L506">        return subclassFetchMode.getString();</span>
+    }
+
+    @Override
+    public void setSubclassFetchMode(int subclassFetchMode) {
+<span class="nc" id="L511">        this.subclassFetchMode.set(subclassFetchMode);</span>
+<span class="nc" id="L512">    }</span>
+
+    @Override
+    public int getSubclassFetchModeConstant() {
+<span class="nc" id="L516">        return subclassFetchMode.get();</span>
+    }
+
+    @Override
+    public void setLRSSize(String lrsSize) {
+<span class="nc" id="L521">        this.lrsSize.setString(lrsSize);</span>
+<span class="nc" id="L522">    }</span>
+
+    @Override
+    public String getLRSSize() {
+<span class="nc" id="L526">        return lrsSize.getString();</span>
+    }
+
+    @Override
+    public void setLRSSize(int lrsSize) {
+<span class="nc" id="L531">        this.lrsSize.set(lrsSize);</span>
+<span class="nc" id="L532">    }</span>
+
+    @Override
+    public int getLRSSizeConstant() {
+<span class="nc" id="L536">        return lrsSize.get();</span>
+    }
+
+    @Override
+    public void setSynchronizeMappings(String synchronizeMappings) {
+<span class="nc" id="L541">        this.synchronizeMappings.set(synchronizeMappings);</span>
+<span class="nc" id="L542">    }</span>
+
+    @Override
+    public String getSynchronizeMappings() {
+<span class="nc" id="L546">        return synchronizeMappings.get();</span>
+    }
+
+    @Override
+    public void setJDBCListeners(String jdbcListeners) {
+<span class="nc" id="L551">        jdbcListenerPlugins.setString(jdbcListeners);</span>
+<span class="nc" id="L552">    }</span>
+
+    @Override
+    public String getJDBCListeners() {
+<span class="nc" id="L556">        return jdbcListenerPlugins.getString();</span>
+    }
+
+    @Override
+    public void setJDBCListeners(JDBCListener[] listeners) {
+<span class="nc" id="L561">        jdbcListenerPlugins.set(listeners);</span>
+<span class="nc" id="L562">    }</span>
+
+    @Override
+    public JDBCListener[] getJDBCListenerInstances() {
+<span class="nc bnc" id="L566" title="All 2 branches missed.">        if (jdbcListenerPlugins.get() == null)</span>
+<span class="nc" id="L567">            jdbcListenerPlugins.instantiate(JDBCListener.class, this);</span>
+<span class="nc" id="L568">        return (JDBCListener[]) jdbcListenerPlugins.get();</span>
+    }
+
+    @Override
+    public void setConnectionDecorators(String connectionDecorators) {
+<span class="nc" id="L573">        connectionDecoratorPlugins.setString(connectionDecorators);</span>
+<span class="nc" id="L574">    }</span>
+
+    @Override
+    public String getConnectionDecorators() {
+<span class="nc" id="L578">        return connectionDecoratorPlugins.getString();</span>
+    }
+
+    @Override
+    public void setConnectionDecorators(ConnectionDecorator[] decorators) {
+<span class="nc" id="L583">        connectionDecoratorPlugins.set(decorators);</span>
+<span class="nc" id="L584">    }</span>
+
+    @Override
+    public ConnectionDecorator[] getConnectionDecoratorInstances() {
+<span class="nc bnc" id="L588" title="All 2 branches missed.">        if (connectionDecoratorPlugins.get() == null) {</span>
+<span class="nc" id="L589">            connectionDecoratorPlugins.instantiate</span>
+<span class="nc" id="L590">                (ConnectionDecorator.class, this);</span>
+        }
+<span class="nc" id="L592">        return (ConnectionDecorator[]) connectionDecoratorPlugins.get();</span>
+    }
+
+    @Override
+    public void setDBDictionary(String dbdictionary) {
+<span class="nc" id="L597">        dbdictionaryPlugin.setString(dbdictionary);</span>
+<span class="nc" id="L598">    }</span>
+
+    @Override
+    public String getDBDictionary() {
+<span class="nc" id="L602">        return dbdictionaryPlugin.getString();</span>
+    }
+
+    @Override
+    public void setDBDictionary(DBDictionary dbdictionary) {
+        // we can't allow the dictionary to be set after the connection
+        // factory, due to initialization issues
+<span class="nc bnc" id="L609" title="All 2 branches missed.">        if (connectionFactory.get() != null</span>
+<span class="nc bnc" id="L610" title="All 2 branches missed.">            || connectionFactory2.get() != null)</span>
+<span class="nc" id="L611">            throw new IllegalStateException();</span>
+
+<span class="nc" id="L613">        dbdictionaryPlugin.set(dbdictionary);</span>
+<span class="nc" id="L614">    }</span>
+
+    @Override
+    public DBDictionary getDBDictionaryInstance() {
+        // lock on connection factory name, since getting the connection
+        // factory and getting the dictionary have to use the same locks to
+        // prevent deadlock since they call each other
+<span class="nc" id="L621">        DBDictionary dbdictionary = (DBDictionary) dbdictionaryPlugin.get();</span>
+<span class="nc bnc" id="L622" title="All 2 branches missed.">        if (dbdictionary == null) {</span>
+<span class="nc" id="L623">            String clsName = dbdictionaryPlugin.getClassName();</span>
+<span class="nc" id="L624">            String props = dbdictionaryPlugin.getProperties();</span>
+<span class="nc bnc" id="L625" title="All 2 branches missed.">            if (!StringUtil.isEmpty(clsName)) {</span>
+<span class="nc" id="L626">                dbdictionary = DBDictionaryFactory.newDBDictionary</span>
+<span class="nc" id="L627">                    (this, clsName, props);</span>
+            } else {
+                // if the dictionary class isn't set, try to guess from
+                // connection URL and driver name
+<span class="nc" id="L631">                dbdictionary = DBDictionaryFactory.calculateDBDictionary</span>
+<span class="nc" id="L632">                    (this, getConnectionURL(), getConnectionDriverName(),</span>
+                        props);
+
+                // if the url and driver name aren't enough, connect to
+                // the DB and use the connection metadata
+<span class="nc bnc" id="L637" title="All 2 branches missed.">                if (dbdictionary == null) {</span>
+<span class="nc" id="L638">                    Log log = getLog(LOG_JDBC);</span>
+<span class="nc bnc" id="L639" title="All 2 branches missed.">                    if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L640">                        Localizer loc = Localizer.forPackage</span>
+<span class="nc" id="L641">                            (JDBCConfigurationImpl.class);</span>
+<span class="nc" id="L642">                        log.trace(loc.get(&quot;connecting-for-dictionary&quot;));</span>
+                    }
+
+                    // use the base connection factory rather than the
+                    // configured data source b/c the data source relies
+                    // on passing the connection through the dictionary,
+                    // resulting in infinite loops
+<span class="nc" id="L649">                    DataSource ds = createConnectionFactory();</span>
+<span class="nc" id="L650">                    dbdictionary = DBDictionaryFactory.newDBDictionary</span>
+<span class="nc" id="L651">                        (this, getDataSource(null, ds), props);</span>
+                }
+            }
+<span class="nc" id="L654">            dbdictionaryPlugin.set(dbdictionary, true);</span>
+        }
+<span class="nc" id="L656">        return dbdictionary;</span>
+    }
+
+    @Override
+    public void setUpdateManager(String updateManager) {
+<span class="nc" id="L661">        updateManagerPlugin.setString(updateManager);</span>
+<span class="nc" id="L662">    }</span>
+
+    @Override
+    public String getUpdateManager() {
+<span class="nc" id="L666">        return updateManagerPlugin.getString();</span>
+    }
+
+    @Override
+    public void setUpdateManager(UpdateManager updateManager) {
+<span class="nc" id="L671">        updateManagerPlugin.set(updateManager);</span>
+<span class="nc" id="L672">    }</span>
+
+    @Override
+    public UpdateManager getUpdateManagerInstance() {
+<span class="nc bnc" id="L676" title="All 2 branches missed.">        if (updateManagerPlugin.get() == null)</span>
+<span class="nc" id="L677">            updateManagerPlugin.instantiate(UpdateManager.class, this);</span>
+<span class="nc" id="L678">        return (UpdateManager) updateManagerPlugin.get();</span>
+    }
+
+    @Override
+    public void setDriverDataSource(String driverDataSource) {
+<span class="nc" id="L683">        driverDataSourcePlugin.setString(driverDataSource);</span>
+<span class="nc" id="L684">    }</span>
+
+    @Override
+    public String getDriverDataSource() {
+<span class="nc" id="L688">        return driverDataSourcePlugin.getString();</span>
+    }
+
+    @Override
+    public DriverDataSource newDriverDataSourceInstance() {
+<span class="nc" id="L693">        return (DriverDataSource) driverDataSourcePlugin.</span>
+<span class="nc" id="L694">            instantiate(DriverDataSource.class, this);</span>
+    }
+
+    @Override
+    public void setSchemaFactory(String schemaFactory) {
+<span class="nc" id="L699">        schemaFactoryPlugin.setString(schemaFactory);</span>
+<span class="nc" id="L700">    }</span>
+
+    @Override
+    public String getSchemaFactory() {
+<span class="nc" id="L704">        return schemaFactoryPlugin.getString();</span>
+    }
+
+    @Override
+    public void setSchemaFactory(SchemaFactory schemaFactory) {
+<span class="nc" id="L709">        schemaFactoryPlugin.set(schemaFactory);</span>
+<span class="nc" id="L710">    }</span>
+
+    @Override
+    public SchemaFactory getSchemaFactoryInstance() {
+<span class="nc bnc" id="L714" title="All 2 branches missed.">        if (schemaFactoryPlugin.get() == null)</span>
+<span class="nc" id="L715">            schemaFactoryPlugin.instantiate(SchemaFactory.class, this);</span>
+<span class="nc" id="L716">        return (SchemaFactory) schemaFactoryPlugin.get();</span>
+    }
+
+    @Override
+    public void setSQLFactory(String sqlFactory) {
+<span class="nc" id="L721">        sqlFactoryPlugin.setString(sqlFactory);</span>
+<span class="nc" id="L722">    }</span>
+
+    @Override
+    public String getSQLFactory() {
+<span class="nc" id="L726">        return sqlFactoryPlugin.getString();</span>
+    }
+
+    @Override
+    public void setSQLFactory(SQLFactory sqlFactory) {
+<span class="nc" id="L731">        sqlFactoryPlugin.set(sqlFactory);</span>
+<span class="nc" id="L732">    }</span>
+
+    @Override
+    public SQLFactory getSQLFactoryInstance() {
+<span class="nc bnc" id="L736" title="All 2 branches missed.">        if (sqlFactoryPlugin.get() == null)</span>
+<span class="nc" id="L737">            sqlFactoryPlugin.instantiate(SQLFactory.class, this);</span>
+<span class="nc" id="L738">        return (SQLFactory) sqlFactoryPlugin.get();</span>
+    }
+
+    @Override
+    public String getMappingFactory() {
+<span class="nc" id="L743">        return mappingFactoryPlugin.getString();</span>
+    }
+
+    @Override
+    public void setMappingFactory(String mapping) {
+<span class="nc" id="L748">        mappingFactoryPlugin.setString(mapping);</span>
+<span class="nc" id="L749">    }</span>
+
+    @Override
+    public MetaDataFactory newMetaDataFactoryInstance() {
+<span class="nc" id="L753">        return mappingFactoryPlugin.instantiateMetaDataFactory(this,</span>
+<span class="nc" id="L754">            metaFactoryPlugin, getMapping());</span>
+    }
+
+    @Override
+    public void setMappingDefaults(String mapping) {
+<span class="nc" id="L759">        this.mappingDefaultsPlugin.setString(mapping);</span>
+<span class="nc" id="L760">    }</span>
+
+    @Override
+    public String getMappingDefaults() {
+<span class="nc" id="L764">        return mappingDefaultsPlugin.getString();</span>
+    }
+
+    @Override
+    public void setMappingDefaults(MappingDefaults mapping) {
+<span class="nc" id="L769">        mappingDefaultsPlugin.set(mapping);</span>
+<span class="nc" id="L770">    }</span>
+
+    @Override
+    public MappingDefaults getMappingDefaultsInstance() {
+<span class="nc bnc" id="L774" title="All 2 branches missed.">        if (mappingDefaultsPlugin.get() == null)</span>
+<span class="nc" id="L775">            mappingDefaultsPlugin.instantiate(MappingDefaults.class, this);</span>
+<span class="nc" id="L776">        return (MappingDefaults) mappingDefaultsPlugin.get();</span>
+    }
+
+    @Override
+    public MappingRepository getMappingRepositoryInstance() {
+<span class="nc" id="L781">        return (MappingRepository) getMetaDataRepositoryInstance();</span>
+    }
+
+    @Override
+    public MappingRepository newMappingRepositoryInstance() {
+<span class="nc" id="L786">        return (MappingRepository) newMetaDataRepositoryInstance();</span>
+    }
+
+    @Override
+    public BrokerImpl newBrokerInstance(String user, String pass) {
+<span class="nc" id="L791">        BrokerImpl broker = super.newBrokerInstance(user, pass);</span>
+
+        // record first non-null broker user and pass in case no global settings
+<span class="nc bnc" id="L794" title="All 6 branches missed.">        if (broker != null &amp;&amp; user != null &amp;&amp; firstUser == null) {</span>
+<span class="nc" id="L795">            firstUser = user;</span>
+<span class="nc" id="L796">            firstPass = pass;</span>
+        }
+<span class="nc" id="L798">        return broker;</span>
+    }
+
+    @Override
+    public Object getConnectionFactory() {
+        // override to configure data source
+<span class="nc bnc" id="L804" title="All 2 branches missed.">        if (dataSource == null) {</span>
+<span class="nc" id="L805">            DecoratingDataSource ds = createConnectionFactory();</span>
+<span class="nc" id="L806">            dataSource = DataSourceFactory.installDBDictionary</span>
+<span class="nc" id="L807">                (getDBDictionaryInstance(), ds, this, false);</span>
+        }
+<span class="nc" id="L809">        return dataSource;</span>
+    }
+
+    @Override
+    public void setConnectionFactory(Object factory) {
+        // there's a lot of one-time initialization involved for
+        // connection factories, so ignore resets
+<span class="nc bnc" id="L816" title="All 2 branches missed.">        if (factory == connectionFactory.get())</span>
+<span class="nc" id="L817">            return;</span>
+
+        // override to configure data source
+<span class="nc bnc" id="L820" title="All 2 branches missed.">        if (factory != null) {</span>
+            // need to ensure it is decorated before we set the dict
+<span class="nc" id="L822">            DecoratingDataSource ds =</span>
+<span class="nc" id="L823">                setupConnectionFactory((DataSource) factory, false);</span>
+<span class="nc" id="L824">            dataSource = DataSourceFactory.installDBDictionary</span>
+<span class="nc" id="L825">                (getDBDictionaryInstance(), ds, this, false);</span>
+<span class="nc" id="L826">        } else</span>
+<span class="nc" id="L827">            connectionFactory.set(null);</span>
+<span class="nc" id="L828">    }</span>
+
+    /**
+     * Ensure that the specified DataSource is decorated and set in the cache.
+     */
+    private DecoratingDataSource setupConnectionFactory(DataSource ds,
+        boolean factory2) {
+<span class="nc bnc" id="L835" title="All 2 branches missed.">        if (ds == null)</span>
+<span class="nc" id="L836">            return null;</span>
+
+        DecoratingDataSource dds;
+<span class="nc bnc" id="L839" title="All 2 branches missed.">        if (ds instanceof DecoratingDataSource)</span>
+<span class="nc" id="L840">            dds = (DecoratingDataSource) ds;</span>
+        else
+<span class="nc" id="L842">            dds = DataSourceFactory.decorateDataSource(ds, this, factory2);</span>
+
+<span class="nc bnc" id="L844" title="All 4 branches missed.">        if (!factory2 &amp;&amp; connectionFactory.get() != ds)</span>
+<span class="nc" id="L845">            connectionFactory.set(dds, true);</span>
+<span class="nc bnc" id="L846" title="All 4 branches missed.">        else if (factory2 &amp;&amp; connectionFactory2.get() != ds)</span>
+<span class="nc" id="L847">            connectionFactory2.set(dds, true);</span>
+
+<span class="nc" id="L849">        return dds;</span>
+    }
+
+    @Override
+    public Object getConnectionFactory2() {
+        // override to configure data source
+<span class="nc bnc" id="L855" title="All 2 branches missed.">        if (dataSource2 == null) {</span>
+            // superclass will lookup from JNDI.
+<span class="nc" id="L857">            Object obj = super.getConnectionFactory2();</span>
+<span class="nc" id="L858">            DataSource ds = null;</span>
+<span class="nc bnc" id="L859" title="All 2 branches missed.">            if (obj != null) {</span>
+<span class="nc bnc" id="L860" title="All 2 branches missed.">                if (obj instanceof DataSource)</span>
+<span class="nc" id="L861">                    ds = (DataSource) obj;</span>
+                else {
+<span class="nc" id="L863">                    Log log = getLog(LOG_JDBC);</span>
+<span class="nc bnc" id="L864" title="All 2 branches missed.">                    if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L865">                        Localizer loc = Localizer.forPackage(JDBCConfigurationImpl.class);</span>
+<span class="nc" id="L866">                        log.trace(loc.get(&quot;unknown-datasource&quot;, getConnectionFactory2Name(),</span>
+<span class="nc" id="L867">                            obj.getClass().getName()));</span>
+                    }
+                }
+            }
+
+<span class="nc bnc" id="L872" title="All 2 branches missed.">            if (ds == null) {</span>
+                // the driver name is always required, so if not specified,
+                // then no connection factory 2
+<span class="nc" id="L875">                String driver = getConnection2DriverName();</span>
+<span class="nc bnc" id="L876" title="All 2 branches missed.">                if (!StringUtil.isEmpty(driver))</span>
+<span class="nc" id="L877">                    ds = DataSourceFactory.newDataSource(this, true);</span>
+            }
+<span class="nc bnc" id="L879" title="All 2 branches missed.">            if (ds != null) {</span>
+<span class="nc" id="L880">                DecoratingDataSource dds =</span>
+<span class="nc" id="L881">                    setupConnectionFactory(ds, true); // before dict</span>
+<span class="nc" id="L882">                dataSource2 = DataSourceFactory.installDBDictionary</span>
+<span class="nc" id="L883">                    (getDBDictionaryInstance(), dds, this, true);</span>
+            }
+        }
+<span class="nc" id="L886">        return dataSource2;</span>
+    }
+
+    @Override
+    public void setConnectionFactory2(Object factory) {
+<span class="nc bnc" id="L891" title="All 2 branches missed.">        if (factory == connectionFactory2.get())</span>
+<span class="nc" id="L892">            return;</span>
+
+        // override to configure data source
+<span class="nc bnc" id="L895" title="All 2 branches missed.">        if (factory != null) {</span>
+            // need to ensure it is decorated before we set the dict
+<span class="nc" id="L897">            DecoratingDataSource ds = setupConnectionFactory((DataSource)</span>
+                factory, true);
+<span class="nc" id="L899">            dataSource2 = DataSourceFactory.installDBDictionary</span>
+<span class="nc" id="L900">                (getDBDictionaryInstance(), ds, this, true);</span>
+<span class="nc" id="L901">        } else</span>
+<span class="nc" id="L902">            connectionFactory2.set(null);</span>
+<span class="nc" id="L903">    }</span>
+
+    /**
+     * Create the connection factory if necessary.
+     */
+    public DecoratingDataSource createConnectionFactory() {
+<span class="nc" id="L909">        DataSource ds = (DataSource) connectionFactory.get();</span>
+<span class="nc" id="L910">        Log log = getLog(LOG_JDBC);</span>
+<span class="nc bnc" id="L911" title="All 2 branches missed.">        if (ds != null) {</span>
+<span class="nc bnc" id="L912" title="All 2 branches missed.">            if (log.isTraceEnabled())</span>
+<span class="nc" id="L913">                log.trace(&quot;createConnectionFactory: DataSource:&quot; + ds);</span>
+
+<span class="nc" id="L915">            return setupConnectionFactory(ds, false);</span>
+        }
+
+<span class="nc bnc" id="L918" title="All 2 branches missed.">        if (log.isTraceEnabled())</span>
+<span class="nc" id="L919">            log.trace(&quot;createConnectionFactory: connectionFactory not created yet, attempt JNDI lookup...&quot;);</span>
+
+<span class="nc" id="L921">        ds = (DataSource) super.getConnectionFactory(); // JNDI lookup</span>
+<span class="nc bnc" id="L922" title="All 2 branches missed.">        if (ds == null) {</span>
+<span class="nc bnc" id="L923" title="All 2 branches missed.">            if (log.isTraceEnabled())</span>
+<span class="nc" id="L924">                log.trace(&quot;createConnectionFactory: JNDI lookup failed, attempt DataSource properties...&quot;);</span>
+<span class="nc" id="L925">            ds = DataSourceFactory.newDataSource(this, false);</span>
+        }
+
+<span class="nc bnc" id="L928" title="All 2 branches missed.">        if (log.isTraceEnabled())</span>
+<span class="nc" id="L929">            log.trace(&quot;createConnectionFactory: DataSource=&quot;+ds);</span>
+
+<span class="nc" id="L931">        return setupConnectionFactory(ds, false);</span>
+    }
+
+    @Override
+    public DataSource getDataSource(StoreContext ctx) {
+<span class="nc" id="L936">        Log log = getLog(LOG_RUNTIME);</span>
+<span class="nc" id="L937">        DataSource ds = null;</span>
+
+<span class="nc bnc" id="L939" title="All 4 branches missed.">        if(ctx != null &amp;&amp; StringUtil.isNotEmpty(ctx.getConnectionFactoryName())) {</span>
+<span class="nc" id="L940">            ds =  getDataSource(ctx, (DataSource) ctx.getConnectionFactory());</span>
+            // fail fast if a cfName has been provided, but was not available in JNDI
+<span class="nc bnc" id="L942" title="All 2 branches missed.">            if (ds == null) {</span>
+<span class="nc" id="L943">                throw new UserException(_loc.get(&quot;invalid-datasource&quot;, ctx.getConnectionFactoryName())).setFatal(true);</span>
+            }
+<span class="nc bnc" id="L945" title="All 2 branches missed.">            if(! (ds instanceof DecoratingDataSource)) {</span>
+<span class="nc" id="L946">                ds = DataSourceFactory.decorateDataSource(ds, this, false);</span>
+            }
+<span class="nc bnc" id="L948" title="All 2 branches missed.">            if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L949">                log.trace(&quot;Found datasource1: &quot; + ds + &quot; from StoreContext using jndiName: &quot;</span>
+<span class="nc" id="L950">                    + ctx.getConnectionFactory2Name());</span>
+            }
+<span class="nc" id="L952">            return ds;</span>
+        }
+        else {
+<span class="nc" id="L955">            ds = getDataSource(ctx, (DataSource) getConnectionFactory());</span>
+<span class="nc bnc" id="L956" title="All 2 branches missed.">            if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L957">                log.trace(&quot;Found datasource1: &quot; + ds + &quot; from configuration. StoreContext: &quot; + ctx );</span>
+            }
+<span class="nc" id="L959">            return ds;</span>
+        }
+    }
+
+    @Override
+    public DataSource getDataSource2(StoreContext ctx) {
+<span class="nc" id="L965">        Log log = getLog(LOG_RUNTIME);</span>
+<span class="nc" id="L966">        DataSource ds = null;</span>
+
+        // Try to obtain from the StoreContext first.
+<span class="nc bnc" id="L969" title="All 4 branches missed.">        if (ctx != null &amp;&amp; StringUtil.isNotEmpty(ctx.getConnectionFactory2Name())) {</span>
+<span class="nc" id="L970">            ds = (DataSource) ctx.getConnectionFactory2();</span>
+<span class="nc bnc" id="L971" title="All 2 branches missed.">            if (ds == null) {</span>
+                // fail fast. If the non-jta-data-source is configured on the context we want an immediate error.
+<span class="nc" id="L973">                throw new UserException(_loc.get(&quot;invalid-datasource&quot;, ctx.getConnectionFactory2Name())).setFatal(true);</span>
+            }
+<span class="nc bnc" id="L975" title="All 2 branches missed.">            if(! (ds instanceof DecoratingDataSource)) {</span>
+<span class="nc" id="L976">                ds = DataSourceFactory.decorateDataSource(ds, this, false);</span>
+            }
+<span class="nc bnc" id="L978" title="All 2 branches missed.">            if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L979">                log.trace(&quot;Found datasource2: &quot; + ds + &quot; from StoreContext using jndiName: &quot;</span>
+<span class="nc" id="L980">                    + ctx.getConnectionFactory2Name());</span>
+            }
+<span class="nc" id="L982">            return ds;</span>
+        }
+
+        // If not set on context or value from context is not available try cf2 from config
+        else{
+<span class="nc" id="L987">            ds = (DataSource) getConnectionFactory2();</span>
+<span class="nc bnc" id="L988" title="All 2 branches missed.">            if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L989">                log.trace(&quot;Found datasource 2: &quot;+ ds + &quot; from config. StoreContext: &quot; + ctx);</span>
+            }
+        }
+
+        // fallback to cf1 / datasource1
+<span class="nc bnc" id="L994" title="All 2 branches missed.">        if (ds == null) {</span>
+<span class="nc bnc" id="L995" title="All 2 branches missed.">            if(log.isTraceEnabled()) {</span>
+<span class="nc" id="L996">                log.trace(&quot;Trying datasource1&quot;);</span>
+            }
+<span class="nc" id="L998">            return getDataSource(ctx);</span>
+        }
+
+        // prefer the global connection 2 auth info if given
+<span class="nc" id="L1002">        String user = getConnection2UserName();</span>
+<span class="nc" id="L1003">        String pass = getConnection2Password();</span>
+<span class="nc bnc" id="L1004" title="All 4 branches missed.">        if (user == null &amp;&amp; pass == null) {</span>
+            // no global auth info; use the context if given, or the first
+            // context if not
+<span class="nc bnc" id="L1007" title="All 2 branches missed.">            if (ctx == null) {</span>
+<span class="nc" id="L1008">                user = firstUser;</span>
+<span class="nc" id="L1009">                pass = firstPass;</span>
+            } else {
+<span class="nc" id="L1011">                user = ctx.getConnectionUserName();</span>
+<span class="nc" id="L1012">                pass = ctx.getConnectionPassword();</span>
+            }
+        }
+<span class="nc" id="L1015">        return DataSourceFactory.defaultsDataSource(ds, user, pass);</span>
+    }
+
+    /**
+     * This version allows us to pass in which data source to wrap internally;
+     * useful during initialization before the connection factory is
+     * completely configured.
+     */
+    private DataSource getDataSource(StoreContext ctx, DataSource ds) {
+        String user, pass;
+<span class="nc bnc" id="L1025" title="All 2 branches missed.">        if (ctx == null) {</span>
+            // if no context, default to the global auth info, or the auth info
+            // of the first context if none
+<span class="nc" id="L1028">            user = getConnectionUserName();</span>
+<span class="nc bnc" id="L1029" title="All 2 branches missed.">            if (user == null)</span>
+<span class="nc" id="L1030">                user = firstUser;</span>
+<span class="nc" id="L1031">            pass = getConnectionPassword();</span>
+<span class="nc bnc" id="L1032" title="All 2 branches missed.">            if (pass == null)</span>
+<span class="nc" id="L1033">                pass = firstPass;</span>
+        } else {
+            // use the context's auth info
+<span class="nc" id="L1036">            user = ctx.getConnectionUserName();</span>
+<span class="nc" id="L1037">            pass = ctx.getConnectionPassword();</span>
+        }
+<span class="nc" id="L1039">        return DataSourceFactory.defaultsDataSource(ds, user, pass);</span>
+    }
+
+    /**
+     * Free the data sources.
+     */
+    @Override
+    protected void preClose() {
+<span class="nc bnc" id="L1047" title="All 2 branches missed.">        if (dataSource != null) {</span>
+<span class="nc" id="L1048">            getDBDictionaryInstance().closeDataSource(dataSource);</span>
+<span class="nc" id="L1049">            connectionFactory.set(null, true); // so super doesn't close it</span>
+        }
+<span class="nc bnc" id="L1051" title="All 2 branches missed.">        if (dataSource2 != null) {</span>
+<span class="nc" id="L1052">            getDBDictionaryInstance().closeDataSource(dataSource);</span>
+<span class="nc" id="L1053">            connectionFactory2.set(null, true); // so super doesn't close it</span>
+        }
+<span class="nc" id="L1055">        super.preClose();</span>
+<span class="nc" id="L1056">    }</span>
+
+    @Override
+    protected boolean isInvalidProperty(String propName) {
+<span class="nc bnc" id="L1060" title="All 2 branches missed.">        if (super.isInvalidProperty(propName))</span>
+<span class="nc" id="L1061">            return true;</span>
+
+        // handle openjpa.jdbc.SomeMisspelledProperty, but not
+        // openjpa.someotherimplementation.SomeProperty
+<span class="nc" id="L1065">        String[] prefixes = ProductDerivations.getConfigurationPrefixes();</span>
+<span class="nc bnc" id="L1066" title="All 2 branches missed.">        for (int i = 0; i &lt; prefixes.length; i++)</span>
+<span class="nc bnc" id="L1067" title="All 2 branches missed.">            if (propName.toLowerCase(Locale.ENGLISH).startsWith(prefixes[i] + &quot;.jdbc&quot;))</span>
+<span class="nc" id="L1068">                return true;</span>
+<span class="nc" id="L1069">        return false;</span>
+    }
+
+    @Override
+    public String getIdentifierUtil() {
+<span class="nc" id="L1074">        return identifierUtilPlugin.getString();</span>
+    }
+
+    @Override
+    public DBIdentifierUtil getIdentifierUtilInstance() {
+<span class="nc bnc" id="L1079" title="All 2 branches missed.">        if (identifierUtilPlugin.get() == null)</span>
+<span class="nc" id="L1080">            identifierUtilPlugin.instantiate(DBIdentifierUtil.class, this);</span>
+<span class="nc" id="L1081">        return (DBIdentifierUtil) identifierUtilPlugin.get();</span>
+    }
+
+    @Override
+    public void setIdentifierUtil(DBIdentifierUtil util) {
+<span class="nc" id="L1086">        identifierUtilPlugin.set(util);</span>
+<span class="nc" id="L1087">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

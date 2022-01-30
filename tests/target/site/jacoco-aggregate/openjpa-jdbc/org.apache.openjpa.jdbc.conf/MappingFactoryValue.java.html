@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MappingFactoryValue.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.conf</a> &gt; <span class="el_source">MappingFactoryValue.java</span></div><h1>MappingFactoryValue.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.conf;
+
+import org.apache.openjpa.conf.OpenJPAConfiguration;
+import org.apache.openjpa.jdbc.meta.MetaDataPlusMappingFactory;
+import org.apache.openjpa.lib.conf.Configuration;
+import org.apache.openjpa.lib.conf.Configurations;
+import org.apache.openjpa.lib.conf.PluginValue;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.MetaDataFactory;
+
+/**
+ * Handles the complex logic of creating a {@link MetaDataFactory} for
+ * combined metadata and mapping.
+ *
+ * @author Abe White
+ */
+public class MappingFactoryValue
+    extends PluginValue {
+
+<span class="nc" id="L40">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L41">        (MappingFactoryValue.class);</span>
+
+<span class="nc" id="L43">    private String[] _metaFactoryDefaults = null;</span>
+<span class="nc" id="L44">    private String[] _mappedMetaFactoryDefaults = null;</span>
+
+    public MappingFactoryValue(String prop) {
+<span class="nc" id="L47">        super(prop, false);</span>
+<span class="nc" id="L48">    }</span>
+
+    /**
+     * Default setting for a given &lt;code&gt;MetaDataFactory&lt;/code&gt; alias setting.
+     * If a &lt;code&gt;MappingFactory&lt;/code&gt; value is not supplied, we check these
+     * defaults against the &lt;code&gt;MetaDataFactory&lt;/code&gt; setting. If the
+     * &lt;code&gt;MetaDataFactory&lt;/code&gt; does not have a default, we assume it
+     * handles both metadata and mapping factory.
+     */
+    public void setMetaDataFactoryDefault(String metaAlias,
+        String mappingAlias) {
+<span class="nc" id="L59">        _metaFactoryDefaults = setAlias(metaAlias, mappingAlias,</span>
+            _metaFactoryDefaults);
+<span class="nc" id="L61">    }</span>
+
+    /**
+     * If the &lt;code&gt;Mapping&lt;/code&gt; property is set, we check these defaults
+     * before checking metadata factory defaults.
+     */
+    public void setMappedMetaDataFactoryDefault(String metaAlias,
+        String mappingAlias) {
+<span class="nc" id="L69">        _mappedMetaFactoryDefaults = setAlias(metaAlias, mappingAlias,</span>
+            _mappedMetaFactoryDefaults);
+<span class="nc" id="L71">    }</span>
+
+    /**
+     * Intantiate a {@link MetaDataFactory} responsible for both metadata and
+     * mapping.
+     */
+    public MetaDataFactory instantiateMetaDataFactory(Configuration conf,
+        PluginValue metaPlugin, String mapping) {
+<span class="nc" id="L79">        return instantiateMetaDataFactory(conf, metaPlugin, mapping, true);</span>
+    }
+
+    /**
+     * Intantiate a {@link MetaDataFactory} responsible for both metadata and
+     * mapping.
+     */
+    public MetaDataFactory instantiateMetaDataFactory(Configuration conf,
+        PluginValue metaPlugin, String mapping, boolean fatal) {
+<span class="nc" id="L88">        String clsName = getClassName();</span>
+<span class="nc" id="L89">        String props = getProperties();</span>
+<span class="nc" id="L90">        String metaClsName = metaPlugin.getClassName();</span>
+<span class="nc" id="L91">        String metaProps = metaPlugin.getProperties();</span>
+
+        // if no mapping factory set, check for default for this factory
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if (StringUtil.isEmpty(clsName)) {</span>
+            String def;
+<span class="nc bnc" id="L96" title="All 2 branches missed.">            if (!StringUtil.isEmpty(mapping)) {</span>
+<span class="nc" id="L97">                def = unalias(metaPlugin.alias(metaClsName),</span>
+                    _mappedMetaFactoryDefaults, true);
+<span class="nc bnc" id="L99" title="All 2 branches missed.">                if (def != null)</span>
+<span class="nc" id="L100">                    clsName = unalias(def);</span>
+            }
+<span class="nc bnc" id="L102" title="All 2 branches missed.">            if (StringUtil.isEmpty(clsName)) {</span>
+<span class="nc" id="L103">                def = unalias(metaPlugin.alias(metaClsName),</span>
+                    _metaFactoryDefaults, true);
+<span class="nc bnc" id="L105" title="All 2 branches missed.">                if (def != null)</span>
+<span class="nc" id="L106">                    clsName = unalias(def);</span>
+            }
+        }
+
+        // if mapping factory and metadata factory the same, combine
+        // into metadata factory
+<span class="nc bnc" id="L112" title="All 4 branches missed.">        if (clsName != null &amp;&amp; clsName.equals(metaClsName)) {</span>
+<span class="nc bnc" id="L113" title="All 4 branches missed.">            if (props != null &amp;&amp; metaProps == null)</span>
+<span class="nc" id="L114">                metaProps = props;</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">            else if (props != null)</span>
+<span class="nc" id="L116">                metaProps += &quot;,&quot; + props;</span>
+<span class="nc" id="L117">            clsName = null;</span>
+<span class="nc" id="L118">            props = null;</span>
+        }
+
+        // instantiate factories
+<span class="nc" id="L122">        MetaDataFactory map = (MetaDataFactory) newInstance(clsName,</span>
+            MetaDataFactory.class, conf, fatal);
+        MetaDataFactory meta;
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if (map != null</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">            &amp;&amp; map.getClass().getName().indexOf(&quot;Deprecated&quot;) != -1) {</span>
+            // deprecated mapping factories take over metadata too, so we have
+            // to special-case them to treat them like metadata factory only
+<span class="nc" id="L129">            meta = map;</span>
+<span class="nc" id="L130">            map = null;</span>
+        } else {
+<span class="nc" id="L132">            meta = (MetaDataFactory) metaPlugin.newInstance</span>
+<span class="nc" id="L133">                (metaClsName, MetaDataFactory.class, conf, fatal);</span>
+        }
+
+        // configure factories.  if only meta factory, allow user to specify
+        // its mapping properties in the mapping factory setting
+<span class="nc bnc" id="L138" title="All 4 branches missed.">        if (map == null &amp;&amp; props != null) {</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">            if (metaProps == null)</span>
+<span class="nc" id="L140">                metaProps = props;</span>
+            else
+<span class="nc" id="L142">                metaProps += &quot;, &quot; + props;</span>
+        }
+<span class="nc" id="L144">        Configurations.configureInstance(map, conf, props,</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">            (fatal) ? getProperty() : null);</span>
+<span class="nc" id="L146">        Configurations.configureInstance(meta, conf, metaProps,</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">            (fatal) ? metaPlugin.getProperty() : null);</span>
+
+<span class="nc" id="L149">        Log log = conf.getLog(OpenJPAConfiguration.LOG_METADATA);</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L151">            log.trace(_loc.get(&quot;meta-factory&quot;, meta));</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">            if (map != null)</span>
+<span class="nc" id="L153">                log.trace(_loc.get(&quot;map-factory&quot;, map));</span>
+        }
+
+        // if no mapping setting, return meta factory alone, assuming it handles
+        // both metadata and mapping
+<span class="nc" id="L158">        MetaDataFactory ret = null;</span>
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        if(map == null ) {</span>
+<span class="nc" id="L160">            ret = meta;</span>
+        }
+        else {
+<span class="nc bnc" id="L163" title="All 2 branches missed.">            if( conf instanceof OpenJPAConfiguration) {</span>
+<span class="nc" id="L164">                ret = new MetaDataPlusMappingFactory(meta, map, (OpenJPAConfiguration) conf);</span>
+            }
+            else {
+<span class="nc" id="L167">                ret = new MetaDataPlusMappingFactory(meta, map);</span>
+            }
+        }
+
+<span class="nc" id="L171">        return ret;</span>
+
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

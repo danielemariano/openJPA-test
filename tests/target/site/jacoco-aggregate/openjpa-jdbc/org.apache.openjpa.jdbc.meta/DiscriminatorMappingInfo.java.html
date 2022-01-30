@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DiscriminatorMappingInfo.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">DiscriminatorMappingInfo.java</span></div><h1>DiscriminatorMappingInfo.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.lang.reflect.Modifier;
+
+import org.apache.openjpa.jdbc.meta.strats.NoneDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.SuperclassDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.meta.strats.ValueMapDiscriminatorStrategy;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.meta.JavaTypes;
+
+/**
+ * Information about the mapping from a discriminator to the schema, in
+ * raw form. The columns and tables used in mapping info will not be part of
+ * the {@link SchemaGroup} used at runtime. Rather, they will be structs
+ * with the relevant pieces of information filled in.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L41">public class DiscriminatorMappingInfo extends MappingInfo {</span>
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L43">    private String _value = null;</span>
+
+    /**
+     * Raw discriminator value string.
+     */
+    public String getValue() {
+<span class="nc" id="L49">        return _value;</span>
+    }
+
+    /**
+     * Raw discriminator value string.
+     */
+    public void setValue(String value) {
+<span class="nc" id="L56">        _value = value;</span>
+<span class="nc" id="L57">    }</span>
+
+    /**
+     * Return the discriminator value as an object of the right type.
+     */
+    public Object getValue(Discriminator discrim, boolean adapt) {
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if (discrim.getValue() != null)</span>
+<span class="nc" id="L64">            return discrim.getValue();</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (StringUtil.isEmpty(_value)) {</span>
+<span class="nc" id="L66">            return discrim.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L67">                getDiscriminatorValue(discrim, adapt);</span>
+        }
+
+<span class="nc bnc" id="L70" title="All 3 branches missed.">        switch(discrim.getJavaType()) {</span>
+            case JavaTypes.INT:
+<span class="nc" id="L72">                return Integer.valueOf(_value);</span>
+            case JavaTypes.CHAR:
+<span class="nc" id="L74">               return Character.valueOf(_value.charAt(_value.indexOf('\'')+1));</span>
+            case JavaTypes.STRING:
+            default:
+<span class="nc" id="L77">                return _value;</span>
+        }
+    }
+
+    /**
+     * Return the columns set for this discriminator, based on the given
+     * templates.
+     */
+    public Column[] getColumns(Discriminator discrim, Column[] tmplates,
+        boolean adapt) {
+<span class="nc" id="L87">        Table table = discrim.getClassMapping().getTable();</span>
+<span class="nc" id="L88">        discrim.getMappingRepository().getMappingDefaults().populateColumns</span>
+<span class="nc" id="L89">            (discrim, table, tmplates);</span>
+<span class="nc" id="L90">        return createColumns(discrim, null, tmplates, table, adapt);</span>
+    }
+
+    /**
+     * Return the index to set on the discriminator columns, or null if none.
+     */
+    public Index getIndex(Discriminator discrim, Column[] cols, boolean adapt) {
+<span class="nc" id="L97">        Index idx = null;</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if (cols.length &gt; 0)</span>
+<span class="nc" id="L99">            idx = discrim.getMappingRepository().getMappingDefaults().</span>
+<span class="nc" id="L100">                getIndex(discrim, cols[0].getTable(), cols);</span>
+<span class="nc" id="L101">        return createIndex(discrim, null, idx, cols, adapt);</span>
+    }
+
+    /**
+     * Synchronize internal information with the mapping data for the given
+     * discriminator.
+     */
+    public void syncWith(Discriminator disc) {
+<span class="nc" id="L109">        clear(false);</span>
+
+        // set io before syncing cols
+<span class="nc" id="L112">        setColumnIO(disc.getColumnIO());</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        syncColumns(disc, disc.getColumns(), disc.getValue() != null</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">            &amp;&amp; !(disc.getValue() instanceof String));</span>
+<span class="nc" id="L115">        syncIndex(disc, disc.getIndex());</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (disc.getValue() == Discriminator.NULL)</span>
+<span class="nc" id="L117">            _value = &quot;null&quot;;</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        else if (disc.getValue() != null)</span>
+<span class="nc" id="L119">            _value = disc.getValue().toString();</span>
+
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (disc.getStrategy() == null</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">            || disc.getStrategy() instanceof SuperclassDiscriminatorStrategy)</span>
+<span class="nc" id="L123">            return;</span>
+
+        // explicit discriminator strategy if:
+        // - unmapped class and discriminator is mapped
+        // - final base class and discriminator is mapped
+        // - table-per-class subclass and discriminator is mapped
+        // - mapped subclass and doesn't rely on superclass discriminator
+        // - mapped base class and doesn't use value-map strategy with value
+        //   and isn't a final class that uses the final strategy
+<span class="nc" id="L132">        ClassMapping cls = disc.getClassMapping();</span>
+<span class="nc" id="L133">        String strat = disc.getStrategy().getAlias();</span>
+<span class="nc" id="L134">        boolean sync = false;</span>
+
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        if (!cls.isMapped()</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">            || (cls.getJoinablePCSuperclassMapping() != null</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            &amp;&amp; Modifier.isFinal(cls.getDescribedType().getModifiers()))</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">            || (cls.getJoinablePCSuperclassMapping() == null</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">            &amp;&amp; cls.getMappedPCSuperclassMapping() != null))</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">            sync = !NoneDiscriminatorStrategy.ALIAS.equals(strat);</span>
+        else
+<span class="nc bnc" id="L143" title="All 4 branches missed.">            sync = cls.getJoinablePCSuperclassMapping() != null</span>
+                || _value == null
+<span class="nc bnc" id="L145" title="All 2 branches missed.">                || !ValueMapDiscriminatorStrategy.ALIAS.equals(strat);</span>
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (sync)</span>
+<span class="nc" id="L148">            setStrategy(strat);</span>
+<span class="nc" id="L149">    }</span>
+
+    @Override
+    protected void clear(boolean canFlags) {
+<span class="nc" id="L153">        super.clear(canFlags);</span>
+<span class="nc" id="L154">        _value = null;</span>
+<span class="nc" id="L155">    }</span>
+
+    @Override
+    public void copy(MappingInfo info) {
+<span class="nc" id="L159">        super.copy(info);</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (!(info instanceof DiscriminatorMappingInfo))</span>
+<span class="nc" id="L161">            return;</span>
+
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        if (_value == null)</span>
+<span class="nc" id="L164">            _value = ((DiscriminatorMappingInfo) info).getValue();</span>
+<span class="nc" id="L165">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

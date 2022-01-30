@@ -1,0 +1,621 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ValueMappingImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">ValueMappingImpl.java</span></div><h1>ValueMappingImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.ForeignKey;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.Schemas;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.schema.Unique;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.ValueMetaData;
+import org.apache.openjpa.meta.ValueMetaDataImpl;
+import org.apache.openjpa.util.InternalException;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Standalone {@link ValueMapping} implementation.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+public class ValueMappingImpl
+    extends ValueMetaDataImpl
+    implements ValueMapping {
+
+    private static final long serialVersionUID = 6440545965133775709L;
+
+<span class="nc" id="L55">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L56">        (ValueMappingImpl.class);</span>
+
+    private ValueMappingInfo _info;
+<span class="nc" id="L59">    private ValueHandler _handler = null;</span>
+<span class="nc" id="L60">    private ClassMapping[] _typeArr = null;</span>
+
+<span class="nc" id="L62">    private Column[] _cols = Schemas.EMPTY_COLUMNS;</span>
+<span class="nc" id="L63">    private ColumnIO _io = null;</span>
+<span class="nc" id="L64">    private ForeignKey _fk = null;</span>
+<span class="nc" id="L65">    private Map&lt;ClassMapping,ForeignKey&gt; _targetFKs = null;</span>
+<span class="nc" id="L66">    private Index _idx = null;</span>
+<span class="nc" id="L67">    private Unique _unq = null;</span>
+<span class="nc" id="L68">    private int _join = JOIN_FORWARD;</span>
+<span class="nc" id="L69">    private boolean _criteria = false;</span>
+<span class="nc" id="L70">    private int _poly = POLY_TRUE;</span>
+
+    /**
+     * Constructor. Supply owning mapping.
+     */
+    public ValueMappingImpl(FieldMapping owner) {
+<span class="nc" id="L76">        super(owner);</span>
+<span class="nc" id="L77">        _info = owner.getMappingRepository().newMappingInfo(this);</span>
+<span class="nc" id="L78">        _info.setUseClassCriteria(owner.getMappingRepository().</span>
+<span class="nc" id="L79">            getMappingDefaults().useClassCriteria());</span>
+<span class="nc" id="L80">    }</span>
+
+    /**
+     * Constructor for deserialization.
+     */
+    protected ValueMappingImpl() {
+<span class="nc" id="L86">        super();</span>
+<span class="nc" id="L87">    }</span>
+
+    @Override
+    public ValueMappingInfo getValueInfo() {
+<span class="nc" id="L91">        return _info;</span>
+    }
+
+    @Override
+    public ValueHandler getHandler() {
+<span class="nc" id="L96">        return _handler;</span>
+    }
+
+    @Override
+    public void setHandler(ValueHandler handler) {
+<span class="nc" id="L101">        _handler = handler;</span>
+<span class="nc" id="L102">    }</span>
+
+    @Override
+    public MappingRepository getMappingRepository() {
+<span class="nc" id="L106">        return (MappingRepository) getRepository();</span>
+    }
+
+    @Override
+    public FieldMapping getFieldMapping() {
+<span class="nc" id="L111">        return (FieldMapping) getFieldMetaData();</span>
+    }
+
+    @Override
+    public ClassMapping getTypeMapping() {
+<span class="nc" id="L116">        return (ClassMapping) getTypeMetaData();</span>
+    }
+
+    @Override
+    public ClassMapping getDeclaredTypeMapping() {
+<span class="nc" id="L121">        return (ClassMapping) getDeclaredTypeMetaData();</span>
+    }
+
+    @Override
+    public ClassMapping getEmbeddedMapping() {
+<span class="nc" id="L126">        return (ClassMapping) getEmbeddedMetaData();</span>
+    }
+
+    @Override
+    public FieldMapping getValueMappedByMapping() {
+<span class="nc" id="L131">        return (FieldMapping) getValueMappedByMetaData();</span>
+    }
+
+    @Override
+    public Column[] getColumns() {
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        if (_cols.length != 0)</span>
+<span class="nc" id="L137">            return _cols;</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (_fk != null)</span>
+<span class="nc" id="L139">            return _fk.getColumns();</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        if (getValueMappedBy() != null)</span>
+<span class="nc" id="L141">            return getValueMappedByMapping().getColumns();</span>
+<span class="nc" id="L142">        return _cols;</span>
+    }
+
+    @Override
+    public void setColumns(Column[] cols) {
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (cols == null)</span>
+<span class="nc" id="L148">            cols = Schemas.EMPTY_COLUMNS;</span>
+<span class="nc" id="L149">        _cols = cols;</span>
+<span class="nc" id="L150">    }</span>
+
+    @Override
+    public ColumnIO getColumnIO() {
+<span class="nc bnc" id="L154" title="All 6 branches missed.">        if (_cols.length == 0 &amp;&amp; _fk == null &amp;&amp; getValueMappedBy() != null)</span>
+<span class="nc" id="L155">            return getValueMappedByMapping().getColumnIO();</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">        return (_io == null) ? ColumnIO.UNRESTRICTED : _io;</span>
+    }
+
+    @Override
+    public void setColumnIO(ColumnIO io) {
+<span class="nc" id="L161">        _io = io;</span>
+<span class="nc" id="L162">    }</span>
+
+    @Override
+    public ForeignKey getForeignKey() {
+<span class="nc bnc" id="L166" title="All 4 branches missed.">        if (_fk == null &amp;&amp; getValueMappedBy() != null)</span>
+<span class="nc" id="L167">            return getValueMappedByMapping().getForeignKey();</span>
+<span class="nc" id="L168">        return _fk;</span>
+    }
+
+    @Override
+    public void setForeignKey(ForeignKey fk) {
+<span class="nc" id="L173">        _fk = fk;</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        if (fk == null)</span>
+<span class="nc" id="L175">            _join = JOIN_FORWARD;</span>
+<span class="nc" id="L176">    }</span>
+
+    public ForeignKey getForeignKey(ClassMapping target, int targetNumber) {
+<span class="nc bnc" id="L179" title="All 4 branches missed.">        if (_fk == null &amp;&amp; getValueMappedBy() != null)</span>
+<span class="nc" id="L180">            return getValueMappedByMapping().getForeignKey(target);</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (target == null)</span>
+<span class="nc" id="L182">            return _fk;</span>
+<span class="nc" id="L183">        ClassMapping embeddedMeta = (ClassMapping)getEmbeddedMetaData();</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (embeddedMeta != null) {</span>
+<span class="nc" id="L185">            FieldMapping[] fields = embeddedMeta.getFieldMappings();</span>
+<span class="nc" id="L186">            int j = 0;</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">            for (int i = 0; i &lt; fields.length; i++) {</span>
+<span class="nc" id="L188">                ValueMapping val = fields[i].getValueMapping();</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">                if (val.getDeclaredTypeMapping() == target)</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">                    if (targetNumber == j)</span>
+<span class="nc" id="L191">                    return val.getForeignKey();</span>
+                    else
+<span class="nc" id="L193">                        j++;</span>
+            }
+        }
+<span class="nc bnc" id="L196" title="All 4 branches missed.">        if (_fk == null &amp;&amp; _cols.length == 0)</span>
+<span class="nc" id="L197">            return null;</span>
+
+        // always use least-derived joinable type
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        for (ClassMapping sup = target; sup != null;</span>
+<span class="nc" id="L201">            sup = sup.getJoinablePCSuperclassMapping()) {</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            if (sup == getTypeMetaData())</span>
+<span class="nc" id="L203">                return _fk;</span>
+<span class="nc" id="L204">            target = sup;</span>
+        }
+
+<span class="nc" id="L207">        synchronized (this) {</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">            if (_targetFKs != null) {</span>
+<span class="nc" id="L209">                Object cachedFK = _targetFKs.get(target);</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">                if (cachedFK != null)</span>
+<span class="nc" id="L211">                    return (ForeignKey) cachedFK;</span>
+<span class="nc" id="L212">            } else</span>
+<span class="nc" id="L213">                _targetFKs = new HashMap&lt;&gt;();</span>
+
+<span class="nc bnc" id="L215" title="All 2 branches missed.">            ForeignKey newfk = (_join == JOIN_FORWARD)</span>
+<span class="nc" id="L216">                ? newForwardForeignKey(target) : newInverseForeignKey(target);</span>
+<span class="nc" id="L217">            _targetFKs.put(target, newfk);</span>
+<span class="nc" id="L218">            return newfk;</span>
+        }
+    }
+    @Override
+    public ForeignKey getForeignKey(ClassMapping target) {
+<span class="nc" id="L223">        return getForeignKey(target, 0);</span>
+    }
+    /**
+     * Create a forward foreign key to the given target.
+     */
+    private ForeignKey newForwardForeignKey(ClassMapping target) {
+        Table table;
+        Column[] cols;
+<span class="nc bnc" id="L231" title="All 2 branches missed.">        if (_fk == null) {</span>
+<span class="nc" id="L232">            table = _cols[0].getTable();</span>
+<span class="nc" id="L233">            cols = _cols;</span>
+        } else {
+<span class="nc" id="L235">            table = _fk.getTable();</span>
+<span class="nc" id="L236">            cols = _fk.getColumns();</span>
+        }
+
+        // gather target cols before adding foreign key to table in case
+        // there is an error while looking for a target col
+<span class="nc" id="L241">        Column[] tcols = new Column[cols.length];</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">            if (cols[i].getTargetField() != null)</span>
+<span class="nc" id="L244">                tcols[i] = getEquivalentColumn(cols[i], target,</span>
+<span class="nc" id="L245">                    cols[i].getTargetField());</span>
+<span class="nc bnc" id="L246" title="All 2 branches missed.">            else if (_fk != null)</span>
+<span class="nc" id="L247">                tcols[i] = getEquivalentColumn(_fk.getPrimaryKeyColumn</span>
+<span class="nc" id="L248">                    (cols[i]).getIdentifier(), target, true);</span>
+<span class="nc bnc" id="L249" title="All 2 branches missed.">            else if (!DBIdentifier.isNull(cols[i].getTargetIdentifier()))</span>
+<span class="nc" id="L250">                tcols[i] = getEquivalentColumn(cols[i].getTargetIdentifier(), target,</span>
+                    true);
+            else
+<span class="nc" id="L253">                tcols[i] = getEquivalentColumn(cols[i].getIdentifier(), target,</span>
+                    false);
+        }
+
+<span class="nc" id="L257">        ForeignKey newfk = table.addForeignKey();</span>
+<span class="nc" id="L258">        newfk.setJoins(cols, tcols);</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (_fk != null) {</span>
+<span class="nc" id="L260">            cols = _fk.getConstantColumns();</span>
+<span class="nc bnc" id="L261" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L262">                newfk.joinConstant(cols[i], _fk.getConstant(cols[i]));</span>
+
+<span class="nc" id="L264">            cols = _fk.getConstantPrimaryKeyColumns();</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">            for (int i = 0; i &lt; cols.length; i++)</span>
+<span class="nc" id="L266">                newfk.joinConstant(_fk.getPrimaryKeyConstant(cols[i]),</span>
+<span class="nc" id="L267">                    getEquivalentColumn(cols[i].getIdentifier(), target, true));</span>
+        }
+<span class="nc" id="L269">        return newfk;</span>
+    }
+
+    /**
+     * Return the given mapping's equivalent to the given column, using the
+     * target field.
+     */
+    private Column getEquivalentColumn(Column col, ClassMapping target,
+        String fieldName) {
+<span class="nc" id="L278">        fieldName = fieldName.substring(fieldName.indexOf('.') + 1);</span>
+<span class="nc" id="L279">        FieldMapping field = target.getFieldMapping(fieldName);</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">        if (field == null)</span>
+<span class="nc" id="L281">            throw new MetaDataException(_loc.get(&quot;no-equiv-field&quot;,</span>
+                new Object[]{ this, target, fieldName, col }));
+
+<span class="nc" id="L284">        Column[] cols = field.getColumns();</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if (cols.length != 1)</span>
+<span class="nc" id="L286">            throw new MetaDataException(_loc.get(&quot;bad-equiv-field&quot;,</span>
+                new Object[]{ this, target, fieldName, col }));
+
+<span class="nc" id="L289">        return cols[0];</span>
+    }
+
+    /**
+     * Return the given mapping's equivalent of the given column.
+     */
+    private Column getEquivalentColumn(DBIdentifier colName, ClassMapping target,
+        boolean explicit) {
+        // if there was no explicit target, use single pk column
+<span class="nc bnc" id="L298" title="All 2 branches missed.">        if (!explicit) {</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">            for (ClassMapping cls = target; cls != null;</span>
+<span class="nc" id="L300">                cls = cls.getJoinablePCSuperclassMapping()) {</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">                if (cls.getTable() != null) {</span>
+<span class="nc bnc" id="L302" title="All 2 branches missed.">                    if (cls.getPrimaryKeyColumns().length == 1)</span>
+<span class="nc" id="L303">                        return cls.getPrimaryKeyColumns()[0];</span>
+                    break;
+                }
+            }
+        }
+
+        Column ret;
+<span class="nc bnc" id="L310" title="All 2 branches missed.">        for (ClassMapping cls = target; cls != null;</span>
+<span class="nc" id="L311">            cls = cls.getJoinablePCSuperclassMapping()) {</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">            if (cls.getTable() != null) {</span>
+<span class="nc" id="L313">                ret = cls.getTable().getColumn(colName);</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">                if (ret != null)</span>
+<span class="nc" id="L315">                    return ret;</span>
+            }
+        }
+
+<span class="nc" id="L319">        throw new MetaDataException(_loc.get(&quot;no-equiv-col&quot;, this, target,</span>
+            colName));
+    }
+
+    /**
+     * Return an inverse foreign key from the given related type to our table.
+     */
+    private ForeignKey newInverseForeignKey(ClassMapping target) {
+<span class="nc" id="L327">        FieldMapping field = getFieldMapping();</span>
+<span class="nc" id="L328">        FieldMapping mapped = field.getMappedByMapping();</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if (mapped == null)</span>
+<span class="nc" id="L330">            throw new MetaDataException(_loc.get(&quot;cant-inverse&quot;, this));</span>
+
+<span class="nc" id="L332">        mapped = target.getFieldMapping(mapped.getIndex());</span>
+<span class="nc bnc" id="L333" title="All 4 branches missed.">        if (mapped == null || mapped.getTypeCode() != JavaTypes.PC)</span>
+<span class="nc" id="L334">            throw new MetaDataException(_loc.get(&quot;no-equiv-mapped-by&quot;,</span>
+<span class="nc" id="L335">                this, target, field.getMappedBy()));</span>
+<span class="nc" id="L336">        return mapped.getForeignKey();</span>
+    }
+
+    @Override
+    public int getJoinDirection() {
+<span class="nc bnc" id="L341" title="All 4 branches missed.">        if (_fk == null &amp;&amp; getValueMappedBy() != null)</span>
+<span class="nc" id="L342">            return getValueMappedByMapping().getJoinDirection();</span>
+<span class="nc" id="L343">        return _join;</span>
+    }
+
+    @Override
+    public void setJoinDirection(int direction) {
+<span class="nc" id="L348">        _join = direction;</span>
+<span class="nc" id="L349">    }</span>
+
+    @Override
+    public void setForeignKey(Row row, OpenJPAStateManager rel, int targetNumber)
+        throws SQLException {
+<span class="nc bnc" id="L354" title="All 2 branches missed.">        if (rel != null) {</span>
+<span class="nc" id="L355">            row.setForeignKey(getForeignKey((ClassMapping) rel.getMetaData(), targetNumber),</span>
+                _io, rel);
+        }
+<span class="nc bnc" id="L358" title="All 2 branches missed.">        else if (_fk != null)</span>
+<span class="nc" id="L359">            row.setForeignKey(_fk, _io, null);</span>
+        else {
+<span class="nc bnc" id="L361" title="All 2 branches missed.">            for (int i = 0; i &lt; _cols.length; i++) {</span>
+<span class="nc bnc" id="L362" title="All 4 branches missed.">                if (_io == null || (row.getAction() == Row.ACTION_INSERT</span>
+<span class="nc bnc" id="L363" title="All 2 branches missed.">                    &amp;&amp; _io.isInsertable(i, true))</span>
+<span class="nc bnc" id="L364" title="All 2 branches missed.">                    || (row.getAction() != Row.ACTION_INSERT</span>
+<span class="nc bnc" id="L365" title="All 2 branches missed.">                    &amp;&amp; _io.isUpdatable(i, true)))</span>
+<span class="nc" id="L366">                    row.setNull(_cols[i]);</span>
+            }
+        }
+<span class="nc" id="L369">    }</span>
+    @Override
+    public void setForeignKey(Row row, OpenJPAStateManager rel)
+        throws SQLException {
+<span class="nc" id="L373">        setForeignKey(row, rel, 0);</span>
+<span class="nc" id="L374">    }</span>
+
+    @Override
+    public void whereForeignKey(Row row, OpenJPAStateManager rel)
+        throws SQLException {
+<span class="nc bnc" id="L379" title="All 2 branches missed.">        if (rel != null)</span>
+<span class="nc" id="L380">            row.whereForeignKey(getForeignKey((ClassMapping)</span>
+<span class="nc" id="L381">                rel.getMetaData()), rel);</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">        else if (_fk != null)</span>
+<span class="nc" id="L383">            row.whereForeignKey(_fk, null);</span>
+        else
+<span class="nc bnc" id="L385" title="All 2 branches missed.">            for (int i = 0; i &lt; _cols.length; i++)</span>
+<span class="nc" id="L386">                row.whereNull(_cols[i]);</span>
+<span class="nc" id="L387">    }</span>
+
+    @Override
+    public ClassMapping[] getIndependentTypeMappings() {
+<span class="nc" id="L391">        ClassMapping rel = getTypeMapping();</span>
+<span class="nc bnc" id="L392" title="All 2 branches missed.">        if (rel == null)</span>
+<span class="nc" id="L393">            return ClassMapping.EMPTY_MAPPINGS;</span>
+<span class="nc bnc" id="L394" title="All 2 branches missed.">        if (_poly != POLY_TRUE) {</span>
+<span class="nc bnc" id="L395" title="All 2 branches missed.">            if (!rel.isMapped())</span>
+<span class="nc" id="L396">                return ClassMapping.EMPTY_MAPPINGS;</span>
+<span class="nc bnc" id="L397" title="All 2 branches missed.">            if (_typeArr == null)</span>
+<span class="nc" id="L398">                _typeArr = new ClassMapping[]{ rel };</span>
+<span class="nc" id="L399">            return _typeArr;</span>
+        }
+<span class="nc" id="L401">        return rel.getIndependentAssignableMappings();</span>
+    }
+
+    @Override
+    public int getSelectSubclasses() {
+<span class="nc" id="L406">        ClassMapping rel = getTypeMapping();</span>
+<span class="nc bnc" id="L407" title="All 4 branches missed.">        if (rel == null || !rel.isMapped())</span>
+<span class="nc" id="L408">            return -1;</span>
+
+<span class="nc bnc" id="L410" title="All 4 branches missed.">        switch (_poly) {</span>
+            case POLY_FALSE:
+<span class="nc bnc" id="L412" title="All 2 branches missed.">                return (_criteria) ? Select.SUBS_NONE : Select.SUBS_EXACT;</span>
+            case POLY_TRUE:
+<span class="nc" id="L414">                ClassMapping[] assign = rel.getIndependentAssignableMappings();</span>
+<span class="nc bnc" id="L415" title="All 4 branches missed.">                if (assign.length != 1 || assign[0] != rel)</span>
+<span class="nc" id="L416">                    return -1;</span>
+                // no break
+            case POLY_JOINABLE:
+<span class="nc bnc" id="L419" title="All 2 branches missed.">                return (_criteria) ? Select.SUBS_JOINABLE</span>
+<span class="nc" id="L420">                    : Select.SUBS_ANY_JOINABLE;</span>
+            default:
+<span class="nc" id="L422">                throw new InternalException();</span>
+        }
+    }
+
+    @Override
+    public Unique getValueUnique() {
+<span class="nc" id="L428">        return _unq;</span>
+    }
+
+    @Override
+    public void setValueUnique(Unique unq) {
+<span class="nc" id="L433">        _unq = unq;</span>
+<span class="nc" id="L434">    }</span>
+
+    @Override
+    public Index getValueIndex() {
+<span class="nc" id="L438">        return _idx;</span>
+    }
+
+    @Override
+    public void setValueIndex(Index idx) {
+<span class="nc" id="L443">        _idx = idx;</span>
+<span class="nc" id="L444">    }</span>
+
+    @Override
+    public boolean getUseClassCriteria() {
+<span class="nc bnc" id="L448" title="All 4 branches missed.">        if (_fk == null &amp;&amp; getValueMappedBy() != null)</span>
+<span class="nc" id="L449">            return getValueMappedByMapping().getUseClassCriteria();</span>
+<span class="nc" id="L450">        return _criteria;</span>
+    }
+
+    @Override
+    public void setUseClassCriteria(boolean criteria) {
+<span class="nc" id="L455">        _criteria = criteria;</span>
+<span class="nc" id="L456">    }</span>
+
+    @Override
+    public int getPolymorphic() {
+<span class="nc" id="L460">        return _poly;</span>
+    }
+
+    @Override
+    public void setPolymorphic(int poly) {
+<span class="nc" id="L465">        _poly = poly;</span>
+<span class="nc" id="L466">    }</span>
+
+    @Override
+    public void refSchemaComponents() {
+<span class="nc bnc" id="L470" title="All 2 branches missed.">        for (int i = 0; i &lt; _cols.length; i++)</span>
+<span class="nc" id="L471">            _cols[i].ref();</span>
+<span class="nc bnc" id="L472" title="All 2 branches missed.">        if (_fk != null) {</span>
+<span class="nc" id="L473">            _fk.ref();</span>
+<span class="nc" id="L474">            _fk.refColumns();</span>
+        }
+
+<span class="nc" id="L477">        ClassMapping embed = getEmbeddedMapping();</span>
+<span class="nc bnc" id="L478" title="All 2 branches missed.">        if (embed != null)</span>
+<span class="nc" id="L479">            embed.refSchemaComponents();</span>
+<span class="nc" id="L480">    }</span>
+
+    /**
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public void mapConstraints(String name, boolean adapt) {
+<span class="nc" id="L488">        mapConstraints(DBIdentifier.newConstraint(name), adapt);</span>
+<span class="nc" id="L489">    }</span>
+
+    @Override
+    public void mapConstraints(DBIdentifier name, boolean adapt) {
+<span class="nc" id="L493">        _unq = _info.getUnique(this, name, adapt);</span>
+<span class="nc" id="L494">        _idx = _info.getIndex(this, name, adapt);</span>
+<span class="nc" id="L495">    }</span>
+
+    @Override
+    public void clearMapping() {
+<span class="nc" id="L499">        _handler = null;</span>
+<span class="nc" id="L500">        _cols = Schemas.EMPTY_COLUMNS;</span>
+<span class="nc" id="L501">        _unq = null;</span>
+<span class="nc" id="L502">        _idx = null;</span>
+<span class="nc" id="L503">        _fk = null;</span>
+<span class="nc" id="L504">        _join = JOIN_FORWARD;</span>
+<span class="nc" id="L505">        _info.clear();</span>
+<span class="nc" id="L506">        setResolve(MODE_MAPPING | MODE_MAPPING_INIT, false);</span>
+<span class="nc" id="L507">    }</span>
+
+    @Override
+    public void syncMappingInfo() {
+<span class="nc bnc" id="L511" title="All 2 branches missed.">        if (getValueMappedBy() != null)</span>
+<span class="nc" id="L512">            _info.clear();</span>
+        else {
+<span class="nc" id="L514">            _info.syncWith(this);</span>
+<span class="nc" id="L515">            ClassMapping embed = getEmbeddedMapping();</span>
+<span class="nc bnc" id="L516" title="All 2 branches missed.">            if (embed != null)</span>
+<span class="nc" id="L517">                embed.syncMappingInfo();</span>
+        }
+<span class="nc" id="L519">    }</span>
+
+    @Override
+    public void copy(ValueMetaData vmd) {
+<span class="nc" id="L523">        super.copy(vmd);</span>
+<span class="nc" id="L524">        copyMappingInfo((ValueMapping)vmd);</span>
+<span class="nc" id="L525">    }</span>
+
+    @Override
+    public void copyMappingInfo(ValueMapping vm) {
+<span class="nc" id="L529">        setValueMappedBy(vm.getValueMappedBy());</span>
+<span class="nc" id="L530">        setPolymorphic(vm.getPolymorphic());</span>
+<span class="nc" id="L531">        _info.copy(vm.getValueInfo());</span>
+
+<span class="nc" id="L533">        ClassMapping embed = vm.getEmbeddedMapping();</span>
+<span class="nc bnc" id="L534" title="All 4 branches missed.">        if (embed != null &amp;&amp; getEmbeddedMapping() != null) {</span>
+<span class="nc" id="L535">            FieldMapping[] tmplates = embed.getFieldMappings();</span>
+<span class="nc" id="L536">            FieldMapping[] fms = getEmbeddedMapping().getFieldMappings();</span>
+<span class="nc bnc" id="L537" title="All 2 branches missed.">            if (tmplates.length == fms.length)</span>
+<span class="nc bnc" id="L538" title="All 2 branches missed.">                for (int i = 0; i &lt; fms.length; i++)</span>
+<span class="nc" id="L539">                    fms[i].copyMappingInfo(tmplates[i]);</span>
+        }
+<span class="nc" id="L541">    }</span>
+
+    @Override
+    public boolean resolve(int mode) {
+<span class="nc" id="L545">        int cur = getResolve();</span>
+<span class="nc bnc" id="L546" title="All 2 branches missed.">        if (super.resolve(mode))</span>
+<span class="nc" id="L547">            return true;</span>
+<span class="nc" id="L548">        ClassMapping embed = getEmbeddedMapping();</span>
+<span class="nc bnc" id="L549" title="All 2 branches missed.">        if (embed != null)</span>
+<span class="nc" id="L550">            embed.resolve(mode);</span>
+<span class="nc bnc" id="L551" title="All 4 branches missed.">        if ((mode &amp; MODE_MAPPING) != 0 &amp;&amp; (cur &amp; MODE_MAPPING) == 0)</span>
+<span class="nc" id="L552">            resolveMapping();</span>
+<span class="nc bnc" id="L553" title="All 4 branches missed.">        if ((mode &amp; MODE_MAPPING_INIT) != 0 &amp;&amp; (cur &amp; MODE_MAPPING_INIT) == 0)</span>
+<span class="nc" id="L554">            initializeMapping();</span>
+<span class="nc" id="L555">        return false;</span>
+    }
+
+    /**
+     * Setup mapping. Our handler will already have been set by our owning
+     * field.
+     */
+    private void resolveMapping() {
+        // mark mapped columns
+        Column[] cols;
+        int insertFlag;
+<span class="nc bnc" id="L566" title="All 2 branches missed.">        if (_fk != null) {</span>
+<span class="nc" id="L567">            cols = _fk.getColumns();</span>
+<span class="nc" id="L568">            insertFlag = Column.FLAG_FK_INSERT;</span>
+        } else {
+<span class="nc" id="L570">            cols = getColumns();</span>
+<span class="nc" id="L571">            insertFlag = Column.FLAG_DIRECT_INSERT;</span>
+        }
+<span class="nc" id="L573">        ColumnIO io = getColumnIO();</span>
+<span class="nc bnc" id="L574" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">            if (io.isInsertable(i, false))</span>
+<span class="nc" id="L576">                cols[i].setFlag(insertFlag, true);</span>
+<span class="nc bnc" id="L577" title="All 2 branches missed.">            if (io.isUpdatable(i, false))</span>
+<span class="nc" id="L578">                cols[i].setFlag(insertFlag, true);</span>
+        }
+<span class="nc" id="L580">    }</span>
+
+    /**
+     * Prepare mapping for runtime use.
+     */
+    private void initializeMapping() {
+<span class="nc bnc" id="L586" title="All 2 branches missed.">        if (_fk == null)</span>
+<span class="nc" id="L587">            return;</span>
+
+        // if our fk cols are direct mapped by other values, make them
+        // non-nullable
+<span class="nc" id="L591">        Column[] cols = _fk.getColumns();</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L593" title="All 2 branches missed.">            if (cols[i].getFlag(Column.FLAG_DIRECT_INSERT))</span>
+<span class="nc" id="L594">                newIO().setNullInsertable(i, false);</span>
+<span class="nc bnc" id="L595" title="All 2 branches missed.">            if (cols[i].getFlag(Column.FLAG_DIRECT_UPDATE))</span>
+<span class="nc" id="L596">                newIO().setNullUpdatable(i, false);</span>
+        }
+
+        // if anything maps our constant fk cols, make them read only
+<span class="nc" id="L600">        int len = cols.length;</span>
+<span class="nc" id="L601">        cols = _fk.getConstantColumns();</span>
+<span class="nc bnc" id="L602" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L603" title="All 2 branches missed.">            if (cols[i].getFlag(Column.FLAG_DIRECT_INSERT)</span>
+<span class="nc bnc" id="L604" title="All 2 branches missed.">                || cols[i].getFlag(Column.FLAG_FK_INSERT))</span>
+<span class="nc" id="L605">                newIO().setInsertable(len + i, false);</span>
+<span class="nc bnc" id="L606" title="All 2 branches missed.">            if (cols[i].getFlag(Column.FLAG_DIRECT_UPDATE)</span>
+<span class="nc bnc" id="L607" title="All 2 branches missed.">                || cols[i].getFlag(Column.FLAG_FK_UPDATE))</span>
+<span class="nc" id="L608">                newIO().setUpdatable(len + i, false);</span>
+        }
+<span class="nc" id="L610">    }</span>
+
+    /**
+     * Return the column I/O information, creating it if necessary.
+     */
+    private ColumnIO newIO() {
+<span class="nc bnc" id="L616" title="All 2 branches missed.">        if (_io == null)</span>
+<span class="nc" id="L617">            _io = new ColumnIO();</span>
+<span class="nc" id="L618">        return _io;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

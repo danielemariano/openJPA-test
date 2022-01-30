@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EmbedValueHandler.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">EmbedValueHandler.java</span></div><h1>EmbedValueHandler.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.openjpa.enhance.PersistenceCapable;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Embeddable;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.meta.FieldStrategy;
+import org.apache.openjpa.jdbc.meta.ValueMapping;
+import org.apache.openjpa.jdbc.meta.ValueMappingImpl;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.kernel.ObjectIdStateManager;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.kernel.StateManagerImpl;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.FieldMetaData;
+import org.apache.openjpa.meta.MetaDataModes;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Base class for embedded value handlers.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+<span class="nc" id="L52">public abstract class EmbedValueHandler</span>
+    extends AbstractValueHandler {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L57">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L58">        (EmbedValueHandler.class);</span>
+
+    /**
+     * Maps embedded value and gathers columns and arguments into given lists.
+     * @deprecated
+     */
+    @Deprecated
+    protected void map(ValueMapping vm, String name, ColumnIO io,
+        boolean adapt, List cols, List args) {
+<span class="nc" id="L67">        DBDictionary dict = vm.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        DBIdentifier colName = DBIdentifier.newColumn(name, dict != null ? dict.delimitAll() : false);</span>
+<span class="nc" id="L69">        map(vm, colName, io, adapt, cols, args);</span>
+<span class="nc" id="L70">    }</span>
+
+    /**
+     * Maps embedded value and gathers columns and arguments into given lists.
+     */
+    protected void map(ValueMapping vm, DBIdentifier name, ColumnIO io,
+        boolean adapt, List cols, List args) {
+        // have to resolve embedded value to collect its columns
+<span class="nc" id="L78">        vm.getEmbeddedMapping().resolve(MetaDataModes.MODE_META | MetaDataModes.MODE_MAPPING);</span>
+
+        // gather columns and result arguments
+<span class="nc" id="L81">        FieldMapping[] fms = vm.getEmbeddedMapping().getFieldMappings();</span>
+        Column[] curCols;
+        Object[] curArgs;
+        ColumnIO curIO;
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            if (fms[i].getManagement() != FieldMetaData.MANAGE_PERSISTENT)</span>
+<span class="nc" id="L87">                continue;</span>
+<span class="nc" id="L88">            FieldStrategy strat = fms[i].getStrategy();</span>
+
+<span class="nc bnc" id="L90" title="All 2 branches missed.">            if (!(strat instanceof Embeddable))</span>
+<span class="nc" id="L91">                throw new MetaDataException(_loc.get(&quot;not-embeddable&quot;,</span>
+                    vm, fms[i]));
+
+<span class="nc" id="L94">            ValueMapping val = fms[i].getValueMapping();</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">            if (val.getEmbeddedMapping() != null)</span>
+<span class="nc" id="L96">                map(val, name, io, adapt, cols, args);</span>
+
+<span class="nc" id="L98">            curCols = ((Embeddable) strat).getColumns();</span>
+<span class="nc" id="L99">            curIO = ((Embeddable) strat).getColumnIO();</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">            for (int j = 0; j &lt; curCols.length; j++) {</span>
+<span class="nc" id="L101">                io.setInsertable(cols.size(), curIO.isInsertable(j, false));</span>
+<span class="nc" id="L102">                io.setNullInsertable(cols.size(),</span>
+<span class="nc" id="L103">                    curIO.isInsertable(j, true));</span>
+<span class="nc" id="L104">                io.setUpdatable(cols.size(), curIO.isUpdatable(j, false));</span>
+<span class="nc" id="L105">                io.setNullUpdatable(cols.size(), curIO.isUpdatable(j, true));</span>
+<span class="nc" id="L106">                cols.add(curCols[j]);</span>
+            }
+
+<span class="nc" id="L109">            curArgs = ((Embeddable) fms[i].getStrategy()).getResultArguments();</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">            if (curCols.length == 1)</span>
+<span class="nc" id="L111">                args.add(curArgs);</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">            else if (curCols.length &gt; 1)</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">                for (int j = 0; j &lt; curCols.length; j++)</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">                    args.add((curArgs == null) ? null</span>
+<span class="nc" id="L115">                        : ((Object[]) curArgs)[j]);</span>
+        }
+<span class="nc" id="L117">    }</span>
+
+    /**
+     * Helper to convert an object value to its datastore equivalent.
+     *
+     * @param em state manager for embedded object
+     * @param vm owning value
+     * @param store store manager
+     * @param cols embedded columns
+     * @param rval return array if multiple columns
+     * @param idx index in columns array to start
+     */
+    protected Object toDataStoreValue(OpenJPAStateManager em, ValueMapping vm,
+            JDBCStore store, Column[] cols, Object rval, int idx) {
+
+        // This is a placeholder to hold the value generated in
+        // toDataStoreValue1. When this method is called from
+        // ElementEmbedValueHandler or ObjectIdValueHandler,
+        // if the dimension of cols &gt; 1, rval is an array of the
+        // same dimension. If the dimension of cols is 1, rval is null.
+        // If rval is not null, it is an array of objects and this array
+        // will be populated in toDatastoreValue1. If rval is null,
+        // a new value will be added to rvals in toDataStoreValue1
+        // and return to the caller.
+<span class="nc" id="L141">        List rvals = new ArrayList();</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        if (rval != null)</span>
+<span class="nc" id="L143">            rvals.add(rval);</span>
+
+<span class="nc" id="L145">        toDataStoreValue1(em, vm, store, cols, rvals, idx);</span>
+<span class="nc" id="L146">        return rvals.get(0);</span>
+    }
+
+    protected int toDataStoreValue1(OpenJPAStateManager em, ValueMapping vm,
+        JDBCStore store, Column[] cols, List rvals, int idx) {
+        // set rest of columns from fields
+<span class="nc" id="L152">        FieldMapping[] fms = vm.getEmbeddedMapping().getFieldMappings();</span>
+        Object cval;
+        Column[] ecols;
+        Embeddable embed;
+<span class="nc bnc" id="L156" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">            if (fms[i].getManagement() != FieldMetaData.MANAGE_PERSISTENT)</span>
+<span class="nc" id="L158">                continue;</span>
+
+            // This recursive code is mainly to deal with situations
+            // where an entity contains a collection of embeddableA.
+            // The embeddableA element in the collection contains an
+            // embeddableB. The parameter vm to toDataStoreValue is
+            // embeddableA. If some field in embeddableA is of type
+            // embeddableB, recursive call is required to populate the
+            // value for embeddableB.
+<span class="nc" id="L167">            ValueMapping val = fms[i].getValueMapping();</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">            if (val.getEmbeddedMapping() != null) {</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">                cval = (em == null) ? null : em.fetch(i);</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">                if (cval instanceof PersistenceCapable) {</span>
+<span class="nc" id="L171">                    OpenJPAStateManager embedSm = (OpenJPAStateManager)</span>
+<span class="nc" id="L172">                        ((PersistenceCapable)cval).pcGetStateManager();</span>
+<span class="nc" id="L173">                    idx = toDataStoreValue1(embedSm, val, store, cols, rvals,</span>
+                            idx);
+<span class="nc bnc" id="L175" title="All 2 branches missed.">                } else if (cval instanceof ObjectIdStateManager) {</span>
+<span class="nc" id="L176">                    idx = toDataStoreValue1((ObjectIdStateManager)cval, val,</span>
+                            store, cols, rvals, idx);
+<span class="nc bnc" id="L178" title="All 2 branches missed.">                } else if (cval == null) {</span>
+<span class="nc" id="L179">                    idx = toDataStoreValue1(null, val, store, cols, rvals, idx);</span>
+                }
+            }
+
+<span class="nc" id="L183">            embed = (Embeddable) fms[i].getStrategy();</span>
+<span class="nc" id="L184">            ecols = embed.getColumns();</span>
+<span class="nc bnc" id="L185" title="All 2 branches missed.">            if (ecols.length == 0)</span>
+<span class="nc" id="L186">                continue;</span>
+
+<span class="nc bnc" id="L188" title="All 2 branches missed.">            cval = (em == null) ? null : getValue(embed, em, i);</span>
+<span class="nc" id="L189">            cval = embed.toEmbeddedDataStoreValue(cval, store);</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">            if (cols.length == 1) {</span>
+                // rvals is empty
+<span class="nc" id="L192">                rvals.add(cval); // save the return value</span>
+<span class="nc bnc" id="L193" title="All 2 branches missed.">            } else if (ecols.length == 1) {</span>
+<span class="nc" id="L194">                Object rval = rvals.get(0);</span>
+<span class="nc" id="L195">                ((Object[]) rval)[idx++] = cval;</span>
+<span class="nc" id="L196">            } else {</span>
+<span class="nc" id="L197">                Object rval = rvals.get(0);</span>
+<span class="nc" id="L198">                System.arraycopy(cval, 0, rval, idx, ecols.length);</span>
+<span class="nc" id="L199">                idx += ecols.length;</span>
+            }
+        }
+<span class="nc" id="L202">        return idx;</span>
+    }
+
+    private Object getValue(Embeddable embed, OpenJPAStateManager sm, int idx) {
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        if (embed instanceof MaxEmbeddedLobFieldStrategy) {</span>
+<span class="nc" id="L207">            return ((MaxEmbeddedLobFieldStrategy)embed).getValue(sm);</span>
+        }
+<span class="nc" id="L209">        return sm.fetch(idx);</span>
+    }
+
+    /**
+     * Helper to convert a datastore value to its object equivalent.
+     *
+     * @param em state manager for embedded object
+     * @param vm owning value
+     * @param val datastore value
+     * @param store optional store manager
+     * @param fetch optional fetch configuration
+     * @param cols embedded columns
+     * @param idx index in columns array to start
+     */
+    protected void toObjectValue(OpenJPAStateManager em, ValueMapping vm,
+            Object val, JDBCStore store, JDBCFetchConfiguration fetch,
+            Column[] cols, int idx)
+            throws SQLException {
+<span class="nc" id="L227">        toObjectValue1(em, vm, val, store, fetch, cols, idx);</span>
+<span class="nc" id="L228">    }</span>
+
+    protected int toObjectValue1(OpenJPAStateManager em, ValueMapping vm,
+        Object val, JDBCStore store, JDBCFetchConfiguration fetch,
+        Column[] cols, int idx)
+        throws SQLException {
+<span class="nc" id="L234">        FieldMapping[] fms = vm.getEmbeddedMapping().getFieldMappings();</span>
+        Embeddable embed;
+        Object cval;
+        Column[] ecols;
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        for (int i = 0; i &lt; fms.length; i++) {</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">            if (fms[i].getManagement() != FieldMetaData.MANAGE_PERSISTENT)</span>
+<span class="nc" id="L240">                continue;</span>
+
+<span class="nc" id="L242">            ValueMapping vm1 = fms[i].getValueMapping();</span>
+<span class="nc" id="L243">            OpenJPAStateManager em1 = null;</span>
+
+<span class="nc" id="L245">            embed = (Embeddable) fms[i].getStrategy();</span>
+<span class="nc bnc" id="L246" title="All 2 branches missed.">            if (vm1.getEmbeddedMapping() != null) {</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">                if (em instanceof StateManagerImpl) {</span>
+<span class="nc" id="L248">                em1 = store.getContext().embed(null, null, em, vm1);</span>
+<span class="nc" id="L249">                idx = toObjectValue1(em1, vm1, val, store, fetch, cols, idx);</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">                } else if (em instanceof ObjectIdStateManager) {</span>
+<span class="nc" id="L251">                    em1 = new ObjectIdStateManager(null, null, vm1);</span>
+<span class="nc" id="L252">                    idx = toObjectValue1(em1, vm1, val, store, null,</span>
+<span class="nc" id="L253">                            getColumns(fms[i]), idx);</span>
+                }
+<span class="nc bnc" id="L255" title="All 2 branches missed.">                if (em1 != null) {</span>
+<span class="nc" id="L256">                    cval = em1.getManagedInstance();</span>
+                } else {
+<span class="nc" id="L258">                    cval = null;</span>
+                }
+            } else {
+<span class="nc" id="L261">                ecols = embed.getColumns();</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">                if (ecols.length == 0)</span>
+<span class="nc" id="L263">                    cval = null;</span>
+<span class="nc bnc" id="L264" title="All 4 branches missed.">                else if (idx == 0 &amp;&amp; ecols.length == cols.length)</span>
+<span class="nc" id="L265">                    cval = val;</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">                else if (ecols.length == 1)</span>
+<span class="nc" id="L267">                    cval = ((Object[]) val)[idx++];</span>
+                else {
+<span class="nc" id="L269">                    cval = new Object[ecols.length];</span>
+<span class="nc" id="L270">                    System.arraycopy(val, idx, cval, 0, ecols.length);</span>
+<span class="nc" id="L271">                    idx += ecols.length;</span>
+                }
+            }
+
+<span class="nc bnc" id="L275" title="All 4 branches missed.">            if (store != null &amp;&amp; em instanceof StateManagerImpl)</span>
+<span class="nc" id="L276">                embed.loadEmbedded(em, store, fetch, cval);</span>
+            else {
+<span class="nc bnc" id="L278" title="All 2 branches missed.">                if (!(em instanceof ObjectIdStateManager))</span>
+<span class="nc" id="L279">                    cval = embed.toEmbeddedObjectValue(cval);</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">                if (fms[i].getHandler() != null)</span>
+<span class="nc" id="L281">                    cval = fms[i].getHandler().toObjectValue(fms[i], cval);</span>
+
+<span class="nc" id="L283">                em.store(fms[i].getIndex(), cval);</span>
+            }
+        }
+<span class="nc" id="L286">        return idx;</span>
+    }
+    private Column[] getColumns(FieldMapping fm) {
+<span class="nc" id="L289">        List&lt;Column&gt; colList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L290">        getEmbeddedIdCols(fm, colList);</span>
+<span class="nc" id="L291">        Column[] cols = new Column[colList.size()];</span>
+<span class="nc" id="L292">        int i = 0;</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">        for (Column col : colList) {</span>
+<span class="nc" id="L294">            cols[i++] = col;</span>
+<span class="nc" id="L295">        }</span>
+<span class="nc" id="L296">        return cols;</span>
+    }
+
+    public static void getEmbeddedIdCols(FieldMapping fmd, List cols) {
+<span class="nc" id="L300">        ClassMapping embed = fmd.getEmbeddedMapping();</span>
+<span class="nc" id="L301">        FieldMapping[] fmds = embed.getFieldMappings();</span>
+<span class="nc bnc" id="L302" title="All 2 branches missed.">        for (int i = 0; i &lt; fmds.length; i++) {</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">            if (fmds[i].getValue().getEmbeddedMetaData() == null) {</span>
+<span class="nc" id="L304">                getIdColumns(fmds[i], cols);</span>
+            } else {
+<span class="nc" id="L306">                getEmbeddedIdCols(fmds[i], cols);</span>
+            }
+        }
+<span class="nc" id="L309">    }</span>
+
+    public static void getIdColumns(FieldMapping fmd, List cols) {
+<span class="nc" id="L312">        Column[] pkCols =  ((ValueMappingImpl)fmd.getValue()).getColumns();</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">        for (int j = 0; j &lt; pkCols.length; j++) {</span>
+<span class="nc" id="L314">            Column newCol = new Column();</span>
+<span class="nc" id="L315">            newCol.copy(pkCols[j]);</span>
+<span class="nc" id="L316">            cols.add(newCol);</span>
+        }
+<span class="nc" id="L318">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

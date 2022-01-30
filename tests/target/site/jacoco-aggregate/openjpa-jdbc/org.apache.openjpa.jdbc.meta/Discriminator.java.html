@@ -1,0 +1,458 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Discriminator.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">Discriminator.java</span></div><h1>Discriminator.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.ColumnIO;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.schema.Schemas;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.MetaDataContext;
+import org.apache.openjpa.meta.MetaDataModes;
+import org.apache.openjpa.meta.MetaDataRepository;
+import org.apache.openjpa.util.InternalException;
+
+/**
+ * Handles determining the object class of database records.
+ *
+ * @author Abe White
+ */
+public class Discriminator
+    implements DiscriminatorStrategy, MetaDataContext, MetaDataModes {
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Null discriminator value marker.
+     */
+<span class="nc" id="L54">    public static final Object NULL = new Object();</span>
+
+<span class="nc" id="L56">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L57">        (Discriminator.class);</span>
+
+    private final ClassMapping _mapping;
+    private final DiscriminatorMappingInfo _info;
+<span class="nc" id="L61">    private DiscriminatorStrategy _strategy = null;</span>
+<span class="nc" id="L62">    private int _resMode = MODE_NONE;</span>
+
+<span class="nc" id="L64">    private Column[] _cols = Schemas.EMPTY_COLUMNS;</span>
+<span class="nc" id="L65">    private ColumnIO _io = null;</span>
+<span class="nc" id="L66">    private Index _idx = null;</span>
+<span class="nc" id="L67">    private boolean _subsLoaded = false;</span>
+<span class="nc" id="L68">    private Object _value = null;</span>
+
+<span class="nc" id="L70">    private int _javaType = -1;</span>
+
+    /**
+     * Constructor. Supply owning mapping.
+     */
+<span class="nc" id="L75">    public Discriminator(ClassMapping mapping) {</span>
+<span class="nc" id="L76">        _mapping = mapping;</span>
+<span class="nc" id="L77">        _info = getMappingRepository().newMappingInfo(this);</span>
+<span class="nc" id="L78">    }</span>
+
+    @Override
+    public MetaDataRepository getRepository() {
+<span class="nc" id="L82">        return _mapping.getRepository();</span>
+    }
+
+    public MappingRepository getMappingRepository() {
+<span class="nc" id="L86">        return _mapping.getMappingRepository();</span>
+    }
+
+    /**
+     * Return the owning mapping.
+     */
+    public ClassMapping getClassMapping() {
+<span class="nc" id="L93">        return _mapping;</span>
+    }
+
+    /**
+     * The strategy used for class discrimination.
+     */
+    public DiscriminatorStrategy getStrategy() {
+<span class="nc" id="L100">        return _strategy;</span>
+    }
+
+    /**
+     * The strategy used for class discrimination. The &lt;code&gt;adapt&lt;/code&gt;
+     * parameter determines whether to adapt when mapping the strategy;
+     * use null if the strategy should not be mapped.
+     */
+    public void setStrategy(DiscriminatorStrategy strategy, Boolean adapt) {
+        // set strategy first so we can access it during mapping
+<span class="nc" id="L110">        DiscriminatorStrategy orig = _strategy;</span>
+<span class="nc" id="L111">        _strategy = strategy;</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (strategy != null) {</span>
+            try {
+<span class="nc" id="L114">                strategy.setDiscriminator(this);</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">                if (adapt != null)</span>
+<span class="nc" id="L116">                    strategy.map(adapt.booleanValue());</span>
+<span class="nc" id="L117">            } catch (RuntimeException re) {</span>
+                // reset strategy
+<span class="nc" id="L119">                _strategy = orig;</span>
+<span class="nc" id="L120">                throw re;</span>
+<span class="nc" id="L121">            }</span>
+        }
+<span class="nc" id="L123">    }</span>
+
+    /**
+     * The discriminator value.
+     */
+    public Object getValue() {
+<span class="nc" id="L129">        return _value;</span>
+    }
+
+    /**
+     * The discriminator value.
+     */
+    public void setValue(Object value) {
+<span class="nc" id="L136">        _value = value;</span>
+<span class="nc" id="L137">    }</span>
+
+    /**
+     * Raw mapping data.
+     */
+    public DiscriminatorMappingInfo getMappingInfo() {
+<span class="nc" id="L143">        return _info;</span>
+    }
+
+    /**
+     * Columns used by this Discriminator.
+     */
+    public Column[] getColumns() {
+<span class="nc" id="L150">        return _cols;</span>
+    }
+
+    /**
+     * Columns used by this Discriminator.
+     */
+    public void setColumns(Column[] cols) {
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if (cols == null)</span>
+<span class="nc" id="L158">            cols = Schemas.EMPTY_COLUMNS;</span>
+<span class="nc" id="L159">        _cols = cols;</span>
+<span class="nc" id="L160">    }</span>
+
+    /**
+     * I/O information on the discriminator columns.
+     */
+    public ColumnIO getColumnIO() {
+<span class="nc bnc" id="L166" title="All 2 branches missed.">        return (_io == null) ? ColumnIO.UNRESTRICTED : _io;</span>
+    }
+
+    /**
+     * I/O information on the discriminator columns.
+     */
+    public void setColumnIO(ColumnIO io) {
+<span class="nc" id="L173">        _io = io;</span>
+<span class="nc" id="L174">    }</span>
+
+    /**
+     * Index on the Discriminator columns, or null if none.
+     */
+    public Index getIndex() {
+<span class="nc" id="L180">        return _idx;</span>
+    }
+
+    /**
+     * Index on the Discriminator columns, or null if none.
+     */
+    public void setIndex(Index idx) {
+<span class="nc" id="L187">        _idx = idx;</span>
+<span class="nc" id="L188">    }</span>
+
+    /**
+     * Increment the reference count of used schema components.
+     */
+    public void refSchemaComponents() {
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        for (int i = 0; i &lt; _cols.length; i++)</span>
+<span class="nc" id="L195">            _cols[i].ref();</span>
+<span class="nc" id="L196">    }</span>
+
+    /**
+     * Clear mapping information, including strategy.
+     */
+    public void clearMapping() {
+<span class="nc" id="L202">        _strategy = null;</span>
+<span class="nc" id="L203">        _cols = Schemas.EMPTY_COLUMNS;</span>
+<span class="nc" id="L204">        _idx = null;</span>
+<span class="nc" id="L205">        _value = null;</span>
+<span class="nc" id="L206">        _info.clear();</span>
+<span class="nc" id="L207">        setResolve(MODE_MAPPING | MODE_MAPPING_INIT, false);</span>
+<span class="nc" id="L208">    }</span>
+
+    /**
+     * Update {@link MappingInfo} with our current mapping information.
+     */
+    public void syncMappingInfo() {
+<span class="nc" id="L214">        _info.syncWith(this);</span>
+<span class="nc" id="L215">    }</span>
+
+    /**
+     * Resolve mode.
+     */
+    public int getResolve() {
+<span class="nc" id="L221">        return _resMode;</span>
+    }
+
+    /**
+     * Resolve mode.
+     */
+    public void setResolve(int mode) {
+<span class="nc" id="L228">        _resMode = mode;</span>
+<span class="nc" id="L229">    }</span>
+
+    /**
+     * Resolve mode.
+     */
+    public void setResolve(int mode, boolean on) {
+<span class="nc bnc" id="L235" title="All 2 branches missed.">        if (mode == MODE_NONE)</span>
+<span class="nc" id="L236">            _resMode = mode;</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        else if (on)</span>
+<span class="nc" id="L238">            _resMode |= mode;</span>
+        else
+<span class="nc" id="L240">            _resMode &amp;= ~mode;</span>
+<span class="nc" id="L241">    }</span>
+
+    /**
+     * Resolve mapping information.
+     */
+    public boolean resolve(int mode) {
+<span class="nc bnc" id="L247" title="All 2 branches missed.">        if ((_resMode &amp; mode) == mode)</span>
+<span class="nc" id="L248">            return true;</span>
+<span class="nc" id="L249">        int cur = _resMode;</span>
+<span class="nc" id="L250">        _resMode |= mode;</span>
+<span class="nc bnc" id="L251" title="All 4 branches missed.">        if ((mode &amp; MODE_MAPPING) != 0 &amp;&amp; (cur &amp; MODE_MAPPING) == 0)</span>
+<span class="nc" id="L252">            resolveMapping();</span>
+<span class="nc bnc" id="L253" title="All 4 branches missed.">        if ((mode &amp; MODE_MAPPING_INIT) != 0 &amp;&amp; (cur &amp; MODE_MAPPING_INIT) == 0)</span>
+<span class="nc" id="L254">            _strategy.initialize();</span>
+<span class="nc" id="L255">        return false;</span>
+    }
+
+    /**
+     * Setup mapping.
+     */
+    private void resolveMapping() {
+        // map strategy
+<span class="nc" id="L263">        MappingRepository repos = getMappingRepository();</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">        if (_strategy == null)</span>
+<span class="nc" id="L265">            repos.getStrategyInstaller().installStrategy(this);</span>
+<span class="nc" id="L266">        Log log = repos.getLog();</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        if (log.isTraceEnabled())</span>
+<span class="nc" id="L268">            log.trace(_loc.get(&quot;strategy&quot;, this, _strategy.getAlias()));</span>
+
+        // mark columns as mapped
+<span class="nc" id="L271">        Column[] cols = getColumns();</span>
+<span class="nc" id="L272">        ColumnIO io = getColumnIO();</span>
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        for (int i = 0; i &lt; cols.length; i++) {</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">            if (io.isInsertable(i, false))</span>
+<span class="nc" id="L275">                cols[i].setFlag(Column.FLAG_DIRECT_INSERT, true);</span>
+<span class="nc bnc" id="L276" title="All 2 branches missed.">            if (io.isUpdatable(i, false))</span>
+<span class="nc" id="L277">                cols[i].setFlag(Column.FLAG_DIRECT_UPDATE, true);</span>
+        }
+<span class="nc" id="L279">    }</span>
+
+    /**
+     * Whether this Discriminator has loaded subclasses yet.
+     */
+    public boolean getSubclassesLoaded() {
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if (!_subsLoaded) {</span>
+<span class="nc" id="L286">            ClassMapping sup = _mapping.getPCSuperclassMapping();</span>
+<span class="nc bnc" id="L287" title="All 4 branches missed.">            if (sup != null &amp;&amp; sup.getDiscriminator().getSubclassesLoaded())</span>
+<span class="nc" id="L288">                _subsLoaded = true;</span>
+        }
+<span class="nc" id="L290">        return _subsLoaded;</span>
+    }
+
+    /**
+     * Whether this Discriminator has loaded subclasses yet.
+     */
+    public void setSubclassesLoaded(boolean loaded) {
+<span class="nc" id="L297">        _subsLoaded = loaded;</span>
+<span class="nc" id="L298">    }</span>
+
+    /**
+     * Add WHERE conditions to the given select limiting the returned results
+     * to our mapping type, possibly including subclasses.
+     */
+    public boolean addClassConditions(Select sel, boolean subs, Joins joins) {
+<span class="nc bnc" id="L305" title="All 2 branches missed.">        if (_mapping.getJoinablePCSuperclassMapping() == null</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">            &amp;&amp; _mapping.getJoinablePCSubclassMappings().length == 0)</span>
+<span class="nc" id="L307">            return false;</span>
+<span class="nc bnc" id="L308" title="All 2 branches missed.">        if (!hasClassConditions(_mapping, subs))</span>
+<span class="nc" id="L309">            return false;</span>
+
+        // join down to base class where conditions will be added
+<span class="nc" id="L312">        ClassMapping from = _mapping;</span>
+<span class="nc" id="L313">        ClassMapping sup = _mapping.getJoinablePCSuperclassMapping();</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">        for (; sup != null; from = sup, sup = from</span>
+<span class="nc" id="L315">            .getJoinablePCSuperclassMapping()) {</span>
+<span class="nc bnc" id="L316" title="All 2 branches missed.">            if (from.getTable() != sup.getTable()) {</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">                if (joins == null)</span>
+<span class="nc" id="L318">                    joins = sel.newJoins();</span>
+<span class="nc" id="L319">                joins = from.joinSuperclass(joins, false);</span>
+            }
+        }
+
+<span class="nc" id="L323">        sel.where(getClassConditions(sel, joins, _mapping, subs), joins);</span>
+<span class="nc" id="L324">        return true;</span>
+    }
+
+    ////////////////////////////////////////
+    // DiscriminatorStrategy implementation
+    ////////////////////////////////////////
+
+    @Override
+    public String getAlias() {
+<span class="nc" id="L333">        return assertStrategy().getAlias();</span>
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc" id="L338">        assertStrategy().map(adapt);</span>
+<span class="nc" id="L339">    }</span>
+
+    @Override
+    public void initialize() {
+<span class="nc" id="L343">        assertStrategy().initialize();</span>
+<span class="nc" id="L344">    }</span>
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L349">        assertStrategy().insert(sm, store, rm);</span>
+<span class="nc" id="L350">    }</span>
+
+    @Override
+    public void update(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L355">        assertStrategy().update(sm, store, rm);</span>
+<span class="nc" id="L356">    }</span>
+
+    @Override
+    public void delete(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L361">        assertStrategy().delete(sm, store, rm);</span>
+<span class="nc" id="L362">    }</span>
+
+    @Override
+    public Boolean isCustomInsert(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L366">        return assertStrategy().isCustomInsert(sm, store);</span>
+    }
+
+    @Override
+    public Boolean isCustomUpdate(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L371">        return assertStrategy().isCustomUpdate(sm, store);</span>
+    }
+
+    @Override
+    public Boolean isCustomDelete(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L376">        return assertStrategy().isCustomDelete(sm, store);</span>
+    }
+
+    @Override
+    public void customInsert(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L382">        assertStrategy().customInsert(sm, store);</span>
+<span class="nc" id="L383">    }</span>
+
+    @Override
+    public void customUpdate(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L388">        assertStrategy().customUpdate(sm, store);</span>
+<span class="nc" id="L389">    }</span>
+
+    @Override
+    public void customDelete(OpenJPAStateManager sm, JDBCStore store)
+        throws SQLException {
+<span class="nc" id="L394">        assertStrategy().customDelete(sm, store);</span>
+<span class="nc" id="L395">    }</span>
+
+    @Override
+    public void setDiscriminator(Discriminator owner) {
+<span class="nc" id="L399">        assertStrategy().setDiscriminator(owner);</span>
+<span class="nc" id="L400">    }</span>
+
+    @Override
+    public boolean select(Select sel, ClassMapping mapping) {
+<span class="nc" id="L404">        return assertStrategy().select(sel, mapping);</span>
+    }
+
+    @Override
+    public void loadSubclasses(JDBCStore store)
+        throws SQLException, ClassNotFoundException {
+<span class="nc" id="L410">        assertStrategy().loadSubclasses(store);</span>
+<span class="nc" id="L411">    }</span>
+
+    @Override
+    public Class&lt;?&gt; getClass(JDBCStore store, ClassMapping base, Result result)
+        throws SQLException, ClassNotFoundException {
+<span class="nc" id="L416">        return assertStrategy().getClass(store, base, result);</span>
+    }
+
+    @Override
+    public boolean hasClassConditions(ClassMapping base, boolean subs) {
+<span class="nc" id="L421">        return assertStrategy().hasClassConditions(base, subs);</span>
+    }
+
+    @Override
+    public SQLBuffer getClassConditions(Select sel, Joins joins,
+        ClassMapping base, boolean subs) {
+<span class="nc" id="L427">        return assertStrategy().getClassConditions(sel, joins, base, subs);</span>
+    }
+
+    private DiscriminatorStrategy assertStrategy() {
+<span class="nc bnc" id="L431" title="All 2 branches missed.">        if (_strategy == null)</span>
+<span class="nc" id="L432">            throw new InternalException();</span>
+<span class="nc" id="L433">        return _strategy;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L438">        return _mapping + &quot;&lt;discriminator&gt;&quot;;</span>
+    }
+
+    public void setJavaType(int javaType) {
+<span class="nc" id="L442">        _javaType = javaType;</span>
+<span class="nc" id="L443">    }</span>
+
+    public int getJavaType() {
+<span class="nc bnc" id="L446" title="All 2 branches missed.">        if (_javaType == -1) {</span>
+<span class="nc" id="L447">            ClassMapping superMapping = _mapping.getPCSuperclassMapping();</span>
+
+<span class="nc bnc" id="L449" title="All 2 branches missed.">            if (superMapping != null &amp;&amp;</span>
+<span class="nc bnc" id="L450" title="All 2 branches missed.">                superMapping.getDiscriminator() != null) {</span>
+<span class="nc" id="L451">                _javaType = superMapping.getDiscriminator().getJavaType();</span>
+            }
+        }
+
+<span class="nc" id="L455">        return _javaType;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,504 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DBIdentifierUtilImpl.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.identifier</a> &gt; <span class="el_source">DBIdentifierUtilImpl.java</span></div><h1>DBIdentifierUtilImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.identifier;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.NameSet;
+import org.apache.openjpa.jdbc.schema.Schema;
+import org.apache.openjpa.jdbc.schema.SchemaGroup;
+import org.apache.openjpa.jdbc.schema.Table;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.lib.conf.Configurable;
+import org.apache.openjpa.lib.conf.Configuration;
+import org.apache.openjpa.lib.identifier.IdentifierConfiguration;
+import org.apache.openjpa.lib.identifier.IdentifierRule;
+import org.apache.openjpa.lib.identifier.IdentifierUtil;
+import org.apache.openjpa.lib.identifier.IdentifierUtilImpl;
+import org.apache.openjpa.lib.util.StringUtil;
+
+public class DBIdentifierUtilImpl extends IdentifierUtilImpl implements DBIdentifierUtil,
+    Configurable {
+
+<span class="pc" id="L40">    private JDBCConfiguration _conf = null;</span>
+
+<span class="nc" id="L42">    public DBIdentifierUtilImpl() {</span>
+<span class="nc" id="L43">    }</span>
+
+    public DBIdentifierUtilImpl(IdentifierConfiguration config) {
+<span class="fc" id="L46">        super(config);</span>
+<span class="fc" id="L47">    }</span>
+
+    @Override
+    public DBIdentifier getValidColumnIdentifier(DBIdentifier name, Table table,
+        int maxLen, boolean checkForUniqueness) {
+<span class="nc bnc" id="L52" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L53">            return name;</span>
+        }
+<span class="nc" id="L55">        String rule = name.getType().name();</span>
+<span class="nc" id="L56">        maxLen = getMaxLen(rule, name, maxLen);</span>
+
+<span class="nc" id="L58">        DBIdentifier sName = DBIdentifier.removeLeading(name, IdentifierUtil.UNDERSCORE);</span>
+<span class="nc" id="L59">        return makeIdentifierValid(sName, table, maxLen, checkForUniqueness);</span>
+    }
+
+    @Override
+    public DBIdentifier getValidForeignKeyIdentifier(DBIdentifier name, Table table, Table toTable, int maxLen) {
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L65">            return name;</span>
+        }
+<span class="nc" id="L67">        String rule = name.getType().name();</span>
+<span class="nc" id="L68">        maxLen = getMaxLen(rule, name, maxLen);</span>
+
+<span class="nc" id="L70">        DBIdentifier sName = makeName(rule, name, table, &quot;F&quot;);</span>
+<span class="nc" id="L71">        return makeIdentifierValid(sName, table.getSchema().getSchemaGroup(),</span>
+            maxLen, true);
+    }
+
+
+    @Override
+    public DBIdentifier getValidUniqueIdentifier(DBIdentifier name, Table table, int maxLen) {
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L79">            return name;</span>
+        }
+<span class="nc" id="L81">        String rule = name.getType().name();</span>
+<span class="nc" id="L82">        maxLen = getMaxLen(rule, name, maxLen);</span>
+
+<span class="nc" id="L84">        DBIdentifier sName = makeName(rule, name, table, &quot;U&quot;);</span>
+<span class="nc" id="L85">        return makeIdentifierValid(sName, table.getSchema().getSchemaGroup(),</span>
+            maxLen, true);
+    }
+
+    @Override
+    public DBIdentifier getValidIndexIdentifier(DBIdentifier name, Table table, int maxLen) {
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L92">            return name;</span>
+        }
+<span class="nc" id="L94">        String rule = name.getType().name();</span>
+<span class="nc" id="L95">        maxLen = getMaxLen(rule, name, maxLen);</span>
+
+<span class="nc" id="L97">        DBIdentifier sName = makeName(rule, name, table, &quot;I&quot;);</span>
+<span class="nc" id="L98">        return makeIdentifierValid(sName, table.getSchema().getSchemaGroup(),</span>
+            maxLen, true);
+    }
+
+    @Override
+    public DBIdentifier getValidSequenceIdentifier(DBIdentifier name, Schema schema, int maxLen) {
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L105">            return name;</span>
+        }
+<span class="nc" id="L107">        String rule = name.getType().name();</span>
+<span class="nc" id="L108">        maxLen = getMaxLen(rule, name, maxLen);</span>
+
+<span class="nc" id="L110">        DBIdentifier sName = makeName(rule, name, &quot;S&quot;);</span>
+<span class="nc" id="L111">        return makeIdentifierValid(sName, schema.getSchemaGroup(), maxLen, true);</span>
+    }
+
+    @Override
+    public DBIdentifier getValidTableIdentifier(DBIdentifier name, Schema schema, int maxLen) {
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L117">            return name;</span>
+        }
+<span class="nc" id="L119">        String rule = name.getType().name();</span>
+<span class="nc" id="L120">        maxLen = getMaxLen(rule, name, maxLen);</span>
+
+<span class="nc" id="L122">        DBIdentifier sName = makeName(rule, name, null);</span>
+
+<span class="nc" id="L124">        return makeIdentifierValid(sName, schema.getSchemaGroup(),</span>
+            maxLen, true);
+    }
+
+    @Override
+    public DBIdentifier makeNameValid(String name, NameSet set, int maxLen,
+        int nameType, boolean checkForUniqueness) {
+<span class="nc" id="L131">        DBIdentifierType id = DBIdentifierType.DEFAULT;</span>
+<span class="nc bnc" id="L132" title="All 4 branches missed.">        switch (nameType) {</span>
+            case DBIdentifierUtil.TABLE:
+<span class="nc" id="L134">                id = DBIdentifierType.TABLE;</span>
+<span class="nc" id="L135">                break;</span>
+            case DBIdentifierUtil.SEQUENCE:
+<span class="nc" id="L137">                id = DBIdentifierType.SEQUENCE;</span>
+<span class="nc" id="L138">                break;</span>
+            case DBIdentifierUtil.COLUMN:
+<span class="nc" id="L140">                id = DBIdentifierType.COLUMN;</span>
+                break;
+        }
+<span class="nc" id="L143">        return makeIdentifierValid(DBIdentifier.newIdentifier(name, id), set, maxLen, checkForUniqueness);</span>
+    }
+
+    @Override
+    public DBIdentifier makeIdentifierValid(DBIdentifier sname, NameSet set, int maxLen,
+        boolean checkForUniqueness) {
+<span class="nc" id="L149">        DBIdentifier validName = sname;</span>
+<span class="nc" id="L150">        String rule = sname.getType().name();</span>
+
+<span class="nc" id="L152">        maxLen = getMaxLen(rule, validName, maxLen);</span>
+
+<span class="nc" id="L154">        int nameLen = validName.getName().length();</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (nameLen &gt; maxLen) {</span>
+<span class="nc" id="L156">            validName = DBIdentifier.truncate(validName, nameLen - maxLen);</span>
+<span class="nc" id="L157">            nameLen = validName.getName().length();</span>
+        }
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        if (isReservedWord(rule, validName.getName())) {</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">            if (nameLen == maxLen)</span>
+<span class="nc" id="L161">                validName = DBIdentifier.truncate(validName, 1);</span>
+<span class="nc" id="L162">            validName = DBIdentifier.append(validName, &quot;0&quot;);</span>
+<span class="nc" id="L163">            nameLen = validName.getName().length();</span>
+        }
+
+        // now make sure the name is unique
+<span class="nc bnc" id="L167" title="All 4 branches missed.">        if (set != null &amp;&amp; checkForUniqueness) {</span>
+<span class="nc" id="L168">            for (int version = 1, chars = 1; true; version++) {</span>
+                // for table names, we check for the table itself in case the
+                // name set is lazy about schema reflection
+<span class="nc bnc" id="L171" title="All 2 branches missed.">                if (validName.getType() == DBIdentifierType.TABLE) {</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">                    if (!((SchemaGroup) set).isKnownTable(QualifiedDBIdentifier.getPath(validName)))</span>
+<span class="nc" id="L173">                        break;</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">                } else if (validName.getType() == DBIdentifierType.SEQUENCE) {</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">                    if (!((SchemaGroup) set).isKnownSequence(QualifiedDBIdentifier.getPath(validName)))</span>
+<span class="nc" id="L176">                        break;</span>
+                } else {
+<span class="nc bnc" id="L178" title="All 2 branches missed.">                    if (!set.isNameTaken(validName))</span>
+<span class="nc" id="L179">                        break;</span>
+                }
+
+                // a single char for the version is probably enough, but might
+                // as well be general about it...
+<span class="nc bnc" id="L184" title="All 2 branches missed.">                if (version &gt; 1) {</span>
+<span class="nc" id="L185">                    validName = DBIdentifier.truncate(validName, chars);</span>
+                }
+<span class="nc bnc" id="L187" title="All 2 branches missed.">                if (version &gt;= Math.pow(10, chars))</span>
+<span class="nc" id="L188">                    chars++;</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">                if (nameLen + chars &gt; maxLen) {</span>
+<span class="nc" id="L190">                    validName = DBIdentifier.truncate(validName, nameLen + chars - maxLen);</span>
+                }
+<span class="nc" id="L192">                validName = DBIdentifier.append(validName, Integer.toString(version));</span>
+<span class="nc" id="L193">                nameLen = validName.getName().length();</span>
+            }
+        }
+
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        if (validName.isDelimited()) {</span>
+<span class="nc" id="L198">            String delimCase = getIdentifierConfiguration().getDelimitedCase();</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">            if (delimCase.equals(CASE_LOWER)) {</span>
+<span class="nc" id="L200">                return DBIdentifier.toLower(validName,true);</span>
+            }
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            else if (delimCase.equals(CASE_UPPER)) {</span>
+<span class="nc" id="L203">                return DBIdentifier.toUpper(validName,true);</span>
+            }
+            else {
+<span class="nc" id="L206">                return validName;</span>
+            }
+        }
+<span class="nc" id="L209">        return DBIdentifier.toUpper(validName);</span>
+    }
+
+    /**
+     *  Converts the name to a name which can be used within a SQL statement.  Uses
+     *  the appropriate delimiters and separators.
+     *  @parm name a DBIdentifier
+     */
+    @Override
+    public String toDBName(DBIdentifier name) {
+<span class="nc" id="L219">        return toDBName(name, true);</span>
+    }
+
+    /**
+     *  Converts the name to a name which can be used within a SQL statement.  Uses
+     *  the appropriate delimiters and separators.
+     *  @parm name a DBIdentifier
+     *  @param delimit If true, allows the name to be delimited, if necessary.
+     *  Otherwise, the identifier is not delimited.
+     */
+    @Override
+    public String toDBName(DBIdentifier name, boolean delimit) {
+<span class="nc bnc" id="L231" title="All 2 branches missed.">        if (DBIdentifier.isNull(name)) {</span>
+<span class="nc" id="L232">            return null;</span>
+        }
+<span class="nc bnc" id="L234" title="All 4 branches missed.">        if (getIdentifierConfiguration().getSupportsDelimitedIdentifiers() &amp;&amp; delimit</span>
+<span class="nc bnc" id="L235" title="All 4 branches missed.">            &amp;&amp; getIdentifierConfiguration().delimitAll() &amp;&amp; !name.isDelimited()) {</span>
+<span class="nc" id="L236">            return delimit(name, true);</span>
+        }
+<span class="nc" id="L238">        String rule = name.getType().name();</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">        if (name instanceof QualifiedDBIdentifier) {</span>
+<span class="nc" id="L240">            QualifiedDBIdentifier path = (QualifiedDBIdentifier)name;</span>
+<span class="nc" id="L241">            return convertFull(Normalizer.getNamingConfiguration(), rule, path.getName());</span>
+        }
+<span class="nc" id="L243">        return convert(Normalizer.getNamingConfiguration(), rule, name.getName());</span>
+    }
+
+    /**
+     * Converts the identifier to a format appropriate for the configuration.
+     * Delimits if necessary
+     */
+    @Override
+    public String toDBName(String name) {
+<span class="nc" id="L252">        return toDBName(name, true);</span>
+    }
+
+    /**
+     * Converts the identifier to a format appropriate for the configuration using
+     * the default naming rule.
+     * @param delimit If false, do not delimit.  Otherwise, delimit if necessary.
+     */
+    @Override
+    public String toDBName(String name, boolean delimit) {
+<span class="nc" id="L262">        return toDBName(getIdentifierConfiguration().getDefaultIdentifierRule().getName(), name, delimit);</span>
+    }
+
+    /**
+     * Converts the identifier to a format appropriate for the configuration using
+     * the specified naming rule.
+     * @param delimit If false, do not delimit.  Otherwise, delimit if necessary.
+     */
+    private String toDBName(String rule, String name, boolean delimit) {
+<span class="nc bnc" id="L271" title="All 2 branches missed.">        if (name == null) {</span>
+<span class="nc" id="L272">            return null;</span>
+        }
+<span class="nc bnc" id="L274" title="All 4 branches missed.">        if (getIdentifierConfiguration().getSupportsDelimitedIdentifiers() &amp;&amp; delimit &amp;&amp;</span>
+<span class="nc bnc" id="L275" title="All 4 branches missed.">            getIdentifierConfiguration().delimitAll() &amp;&amp; !Normalizer.isDelimited(name)) {</span>
+<span class="nc" id="L276">            return delimit(rule, name, true);</span>
+        }
+<span class="nc" id="L278">        return convert(Normalizer.getNamingConfiguration(), rule, name);</span>
+    }
+
+    /**
+     * Creates a new identifier of a given type based upon the name returned
+     * from the database.
+     */
+    @Override
+    public DBIdentifier fromDBName(String name, DBIdentifierType id) {
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        if (name == null) {</span>
+<span class="nc" id="L288">            return DBIdentifier.NULL;</span>
+        }
+<span class="nc bnc" id="L290" title="All 2 branches missed.">        if (!getIdentifierConfiguration().getSupportsDelimitedIdentifiers()) {</span>
+<span class="nc" id="L291">            return DBIdentifier.newIdentifier(name, id);</span>
+        }
+<span class="nc" id="L293">        String delimCase = getIdentifierConfiguration().getDelimitedCase();</span>
+<span class="nc" id="L294">        String nonDelimCase = getIdentifierConfiguration().getSchemaCase();</span>
+<span class="nc" id="L295">        String caseName = name;</span>
+
+        // If delimited and non-delimited case are the same, don't change
+        // case or try to determine whether delimiting is required.  Let the
+        // normalizer figure it out using standard rules.
+<span class="nc bnc" id="L300" title="All 2 branches missed.">        if (delimCase.equals(nonDelimCase)) {</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">            return DBIdentifier.newIdentifier(name, id, false, false, !delimCase.equals(CASE_PRESERVE));</span>
+        }
+
+        // Otherwise, try to determine whether to delimit based on an expected vs.
+        // actual name comparison.
+<span class="nc bnc" id="L306" title="All 2 branches missed.">        if (delimCase.equals(CASE_PRESERVE)) {</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">            if (nonDelimCase.equals(CASE_LOWER)) {</span>
+<span class="nc" id="L308">                caseName = name.toLowerCase();</span>
+            } else {
+<span class="nc" id="L310">                caseName = name.toUpperCase();</span>
+            }
+<span class="nc bnc" id="L312" title="All 2 branches missed.">        } else if (delimCase.equals(CASE_LOWER)) {</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">            if (nonDelimCase.equals(CASE_UPPER)) {</span>
+<span class="nc" id="L314">                caseName = name.toUpperCase();</span>
+            }
+<span class="nc bnc" id="L316" title="All 2 branches missed.">        } else if (delimCase.equals(CASE_UPPER)) {</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">            if (nonDelimCase.equals(CASE_LOWER)) {</span>
+<span class="nc" id="L318">                caseName = name.toLowerCase();</span>
+            }
+        }
+
+<span class="nc bnc" id="L322" title="All 4 branches missed.">        boolean delimit = !caseName.equals(name) || getIdentifierConfiguration().delimitAll();</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">        return DBIdentifier.newIdentifier((delimit ? name : caseName), id, false, delimit,</span>
+<span class="nc bnc" id="L324" title="All 2 branches missed.">            !delimCase.equals(CASE_PRESERVE));</span>
+    }
+
+    @Override
+    public DBIdentifier append(DBIdentifierType resultId, DBIdentifier...names) {
+<span class="nc bnc" id="L329" title="All 4 branches missed.">        if (names == null || names.length == 0) {</span>
+<span class="nc" id="L330">            return DBIdentifier.NULL;</span>
+        }
+<span class="nc" id="L332">        DBIdentifier sName = DBIdentifier.newIdentifier(&quot;&quot;, resultId);</span>
+<span class="nc bnc" id="L333" title="All 2 branches missed.">        for (DBIdentifier name : names) {</span>
+<span class="nc" id="L334">            DBIdentifier.append(sName, name.getName());</span>
+        }
+<span class="nc" id="L336">        return sName;</span>
+    }
+
+    @Override
+    public String appendColumns(Column[] columns) {
+<span class="nc bnc" id="L341" title="All 4 branches missed.">        if (columns == null || columns.length == 0) {</span>
+<span class="nc" id="L342">            return &quot;&quot;;</span>
+        }
+<span class="nc bnc" id="L344" title="All 2 branches missed.">        if (columns.length == 1) {</span>
+<span class="nc" id="L345">            return toDBName(columns[0].getIdentifier());</span>
+        }
+<span class="nc" id="L347">        StringBuilder colsb = new StringBuilder(&quot;&quot;);</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">        for (int i = 0; i &lt; columns.length; i++) {</span>
+<span class="nc" id="L349">            colsb.append(toDBName(columns[i].getIdentifier()));</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">            if (i &lt; (columns.length - 1)) {</span>
+<span class="nc" id="L351">                colsb.append(&quot;, &quot;);</span>
+            }
+        }
+<span class="nc" id="L354">        return colsb.toString();</span>
+    }
+
+    public String delimit(DBIdentifier name, boolean force) {
+<span class="nc" id="L358">        String rule = name.getType().name();</span>
+        // If this is a compound path, each item must be delimited
+        // separately
+<span class="nc bnc" id="L361" title="All 2 branches missed.">        if (name instanceof QualifiedDBIdentifier) {</span>
+<span class="nc" id="L362">            QualifiedDBIdentifier path = (QualifiedDBIdentifier)name;</span>
+            // Make sure this is a qualified path before delimiting
+            // separately
+<span class="nc bnc" id="L365" title="All 2 branches missed.">            if (!((path.getType() == DBIdentifierType.COLUMN &amp;&amp;</span>
+<span class="nc bnc" id="L366" title="All 2 branches missed.">                  path.isUnqualifiedColumn()) ||</span>
+<span class="nc bnc" id="L367" title="All 2 branches missed.">                  (path.getType() != DBIdentifierType.COLUMN &amp;&amp;</span>
+<span class="nc bnc" id="L368" title="All 2 branches missed.">                   path.isUnqualifiedObject()))) {</span>
+<span class="nc" id="L369">                DBIdentifier[] names = QualifiedDBIdentifier.splitPath(name);</span>
+<span class="nc bnc" id="L370" title="All 2 branches missed.">                for (int i = 0; i &lt; names.length; i++) {</span>
+<span class="nc" id="L371">                    DBIdentifier sName = names[i].getUnqualifiedName();</span>
+<span class="nc bnc" id="L372" title="All 2 branches missed.">                    if (!sName.isDelimited()) {</span>
+<span class="nc" id="L373">                        String pRule = sName.getType().name();</span>
+<span class="nc" id="L374">                        names[i].setName(delimit(pRule, sName.getName(), force));</span>
+                    }
+                }
+<span class="nc" id="L377">                return QualifiedDBIdentifier.newPath(names).getName();</span>
+            }
+        }
+<span class="nc" id="L380">        return delimit(rule, name.getName(), force);</span>
+    }
+
+    public String shorten(String name, int targetLength) {
+<span class="nc" id="L384">        return DBDictionary.shorten(name, targetLength);</span>
+    }
+
+    @Override
+    public DBIdentifier getGeneratedKeySequenceName(Column col, int maxLen) {
+<span class="nc" id="L389">        DBIdentifier tname = col.getTableIdentifier();</span>
+<span class="nc" id="L390">        DBIdentifier cname = col.getIdentifier();</span>
+<span class="nc" id="L391">        int max = maxLen;</span>
+<span class="nc" id="L392">        int extraChars = -max + tname.getName().length() + 1 // &lt;tname&gt; + '_'</span>
+<span class="nc" id="L393">            + cname.getName().length() + 4; // &lt;cname&gt; + '_SEQ'</span>
+<span class="nc" id="L394">        String tsname = tname.getName();</span>
+<span class="nc bnc" id="L395" title="All 2 branches missed.">        if (extraChars &gt; 0) {</span>
+            // this assumes that tname is longer than extraChars
+<span class="nc" id="L397">            tsname = tsname.substring(0, tsname.length() - extraChars);</span>
+        }
+<span class="nc" id="L399">        return DBIdentifier.combine(DBIdentifierType.SEQUENCE, tsname, cname.getName(), &quot;SEQ&quot;);</span>
+    }
+
+    /**
+     * Convert the specified schema name to a name that the database will
+     * be able to understand in metadata operations.
+     */
+    @Override
+    public DBIdentifier convertSchemaCase(DBIdentifier name) {
+<span class="nc bnc" id="L408" title="All 2 branches missed.">        if (DBIdentifier.isNull(name))</span>
+<span class="nc" id="L409">            return DBIdentifier.NULL;</span>
+
+<span class="nc" id="L411">        DBIdentifier sName = name.clone();</span>
+        // Handle delimited string differently. Return unquoted name.
+<span class="nc" id="L413">        String delimCase = getIdentifierConfiguration().getDelimitedCase();</span>
+<span class="nc bnc" id="L414" title="All 2 branches missed.">        if (/* getNamingConfiguration().delimitAll() || */ name.isDelimited()) {</span>
+<span class="nc bnc" id="L415" title="All 2 branches missed.">            if (CASE_UPPER.equals(delimCase)) {</span>
+<span class="nc" id="L416">                sName = DBIdentifier.toUpper(sName,true);</span>
+            }
+<span class="nc bnc" id="L418" title="All 2 branches missed.">            else if (CASE_LOWER.equals(delimCase)) {</span>
+<span class="nc" id="L419">                sName = DBIdentifier.toLower(sName,true);</span>
+            }
+
+<span class="nc" id="L422">            return DBIdentifier.removeDelimiters(sName);</span>
+        }
+<span class="nc bnc" id="L424" title="All 2 branches missed.">        if (!getIdentifierConfiguration().delimitAll()) {</span>
+            // Not delimited, use the base schema case expected by the DB
+<span class="nc" id="L426">            String schemaCase = getIdentifierConfiguration().getSchemaCase();</span>
+<span class="nc bnc" id="L427" title="All 2 branches missed.">            if (CASE_LOWER.equals(schemaCase))</span>
+<span class="nc" id="L428">                return DBIdentifier.toLower(sName);</span>
+<span class="nc bnc" id="L429" title="All 2 branches missed.">            if (CASE_PRESERVE.equals(schemaCase))</span>
+<span class="nc" id="L430">                return sName;</span>
+<span class="nc" id="L431">            return DBIdentifier.toUpper(sName);</span>
+        }
+<span class="nc" id="L433">        return sName;</span>
+    }
+
+    /**
+     * Converts a column alias to use the appropriate delimiters
+     */
+    @Override
+    public String convertAlias(String alias) {
+<span class="nc bnc" id="L441" title="All 2 branches missed.">        if (!needsConversion(getIdentifierConfiguration())) {</span>
+<span class="nc" id="L442">            return alias;</span>
+        }
+
+<span class="nc" id="L445">        String[] names = Normalizer.splitName(alias);</span>
+<span class="nc bnc" id="L446" title="All 2 branches missed.">        if (names.length &lt;= 1) {</span>
+            // Nothing to split
+<span class="nc" id="L448">            return alias;</span>
+        }
+        // Skip the the first name.  It is the alias (T0, T1, etc.)
+<span class="nc bnc" id="L451" title="All 2 branches missed.">        for (int i = 1; i &lt; names.length; i++) {</span>
+<span class="nc" id="L452">            names[i] = toDBName(getIdentifierConfiguration().getDefaultIdentifierRule().toString(), names[i], true);</span>
+        }
+<span class="nc" id="L454">        return joinNames(getIdentifierConfiguration().getDefaultIdentifierRule(), names);</span>
+    }
+
+    private DBIdentifier makeName(String rule, DBIdentifier name, Table tbl, String prefix) {
+<span class="nc" id="L458">        DBIdentifier sName = DBIdentifier.removeLeading(name, IdentifierUtil.UNDERSCORE);</span>
+<span class="nc" id="L459">        String tableName = tbl.getIdentifier().getName();</span>
+<span class="nc" id="L460">        int len = Math.min(tableName.length(), 7);</span>
+
+        // Combine the names using the normalized configuration.
+<span class="nc" id="L463">        String str = combineNames(Normalizer.getNamingConfiguration(), rule,</span>
+<span class="nc bnc" id="L464" title="All 2 branches missed.">            new String[] { prefix == null ? &quot;&quot; : prefix,</span>
+<span class="nc" id="L465">            shorten(tableName, len), sName.getName() });</span>
+<span class="nc" id="L466">        sName.setName(str);</span>
+<span class="nc" id="L467">        return sName;</span>
+    }
+
+    private DBIdentifier makeName(String rule, DBIdentifier name, String prefix) {
+<span class="nc" id="L471">        DBIdentifier sName = DBIdentifier.removeLeading(name, IdentifierUtil.UNDERSCORE);</span>
+<span class="nc bnc" id="L472" title="All 2 branches missed.">        if (!StringUtil.isEmpty(prefix)) {</span>
+<span class="nc" id="L473">            sName = DBIdentifier.preCombine(sName, prefix);</span>
+        }
+<span class="nc" id="L475">        return sName;</span>
+    }
+
+    private int getMaxLen(String rule, DBIdentifier name, int maxLen) {
+<span class="nc" id="L479">        IdentifierConfiguration config = getIdentifierConfiguration();</span>
+<span class="nc bnc" id="L480" title="All 2 branches missed.">        if (maxLen &lt; 1) {</span>
+<span class="nc" id="L481">            IdentifierRule nrule = config.getIdentifierRule(rule);</span>
+<span class="nc" id="L482">            maxLen = nrule.getMaxLength();</span>
+        }
+        // Subtract delimiter length if name is delimited or will be delimited
+<span class="nc bnc" id="L485" title="All 4 branches missed.">        if (config.delimitAll() || name.isDelimited()) {</span>
+<span class="nc" id="L486">            maxLen = maxLen - (config.getLeadingDelimiter().length() + config.getTrailingDelimiter().length());</span>
+        }
+
+<span class="nc" id="L489">        return maxLen;</span>
+    }
+
+    /**
+     * System configuration.
+     */
+    public JDBCConfiguration getConfiguration() {
+<span class="nc" id="L496">        return _conf;</span>
+    }
+
+    @Override
+    public void setConfiguration(Configuration conf) {
+<span class="nc" id="L501">        _conf = (JDBCConfiguration)conf;</span>
+<span class="nc" id="L502">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

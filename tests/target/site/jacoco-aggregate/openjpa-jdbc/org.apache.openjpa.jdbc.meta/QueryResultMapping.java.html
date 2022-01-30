@@ -1,0 +1,660 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>QueryResultMapping.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta</a> &gt; <span class="el_source">QueryResultMapping.java</span></div><h1>QueryResultMapping.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.lib.meta.SourceTracker;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.lib.xml.Commentable;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.meta.MetaDataContext;
+import org.apache.openjpa.meta.MetaDataModes;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Mapping of a query result set to scalar and/or persistence-capable
+ * object-level values.
+ *
+ * @author Pinaki Poddar
+ * @author Abe White
+ */
+public class QueryResultMapping
+    implements MetaDataModes, SourceTracker, Commentable {
+
+<span class="nc" id="L51">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L52">        (QueryResultMapping.class);</span>
+
+    private final String _name;
+    private final MappingRepository _repos;
+<span class="nc" id="L56">    private File _file = null;</span>
+<span class="nc" id="L57">    private Object _scope = null;</span>
+<span class="nc" id="L58">    private int _srcType = SRC_OTHER;</span>
+<span class="nc" id="L59">    private int _lineNum = 0;</span>
+<span class="nc" id="L60">    private int _colNum = 0;</span>
+<span class="nc" id="L61">    private int _mode = MODE_QUERY;</span>
+<span class="nc" id="L62">    private Class&lt;?&gt; _class = null;</span>
+<span class="nc" id="L63">    private int _idx = 0;</span>
+<span class="nc" id="L64">    private String[] _comments = null;</span>
+<span class="nc" id="L65">    private List&lt;Object&gt; _colList = null;  // list of column ids, typically the column name.</span>
+<span class="nc" id="L66">    private List&lt;PCResult&gt; _pcList = null;</span>
+
+<span class="nc" id="L68">    private PCResult[] _pcs = null;</span>
+<span class="nc" id="L69">    private Object[] _cols = null;</span>
+
+    /**
+     * Construct with the given name.
+     */
+<span class="nc" id="L74">    QueryResultMapping(String name, MappingRepository repos) {</span>
+<span class="nc" id="L75">        _name = name;</span>
+<span class="nc" id="L76">        _repos = repos;</span>
+<span class="nc" id="L77">    }</span>
+
+    /**
+     * Return the name for this query result.
+     */
+    public String getName() {
+<span class="nc" id="L83">        return _name;</span>
+    }
+
+    /**
+     * The class that defines this query result, or null if none.
+     */
+    public Class&lt;?&gt; getDefiningType() {
+<span class="nc" id="L90">        return _class;</span>
+    }
+
+    /**
+     * The class that defines this query result, or null if none.
+     */
+    public void setDefiningType(Class&lt;?&gt; cls) {
+<span class="nc" id="L97">        _class = cls;</span>
+<span class="nc" id="L98">    }</span>
+
+    /**
+     * Ids of mapped scalar columns in the result. These will typically be
+     * column names.
+     *
+     * @see org.apache.openjpa.jdbc.sql.Result
+     */
+    public Object[] getColumnResults() {
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (_cols == null) {</span>
+            Object[] cols;
+<span class="nc bnc" id="L109" title="All 2 branches missed.">            if (_colList == null)</span>
+<span class="nc" id="L110">                cols = new Object[0];</span>
+            else
+<span class="nc" id="L112">                cols = _colList.toArray();</span>
+<span class="nc" id="L113">            _cols = cols;</span>
+        }
+<span class="nc" id="L115">        return _cols;</span>
+    }
+
+    /**
+     * Add the id of a mapped column in the query result. This will typically
+     * be a column name.
+     *
+     * @see org.apache.openjpa.jdbc.sql.Result
+     */
+    public void addColumnResult(Object id) {
+<span class="nc" id="L125">        _cols = null;</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">        if (_colList == null) {</span>
+<span class="nc" id="L127">            _colList = new ArrayList&lt;&gt;();</span>
+        }
+<span class="nc" id="L129">        _colList.add(id);</span>
+<span class="nc" id="L130">    }</span>
+
+    /**
+     * Return the mapped persistence-capable types in the query result.
+     */
+    public PCResult[] getPCResults() {
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        if (_pcs == null) {</span>
+            PCResult[] pcs;
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            if (_pcList == null) {</span>
+<span class="nc" id="L139">                pcs = new PCResult[0];</span>
+            }
+            else {
+<span class="nc" id="L142">                pcs = _pcList.toArray(new PCResult[_pcList.size()]);</span>
+            }
+<span class="nc" id="L144">            _pcs = pcs;</span>
+        }
+<span class="nc" id="L146">        return _pcs;</span>
+    }
+
+    /**
+     * Add a mapped persistence-capable result with the given candidate type.
+     */
+    public PCResult addPCResult(Class&lt;?&gt; candidate) {
+<span class="nc" id="L153">        _pcs = null;</span>
+<span class="nc" id="L154">        PCResult pc = new PCResult(candidate);</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (_pcList == null) {</span>
+<span class="nc" id="L156">            _pcList = new ArrayList&lt;&gt;();</span>
+        }
+<span class="nc" id="L158">        _pcList.add(pc);</span>
+<span class="nc" id="L159">        return pc;</span>
+    }
+
+    /**
+     * The source mode of this query result.
+     */
+    public int getSourceMode() {
+<span class="nc" id="L166">        return _mode;</span>
+    }
+
+    /**
+     * The source mode of this query result.
+     */
+    public void setSourceMode(int mode) {
+<span class="nc" id="L173">        _mode = mode;</span>
+<span class="nc" id="L174">    }</span>
+
+    /**
+     * Relative order of result mapping in metadata.
+     */
+    public int getListingIndex() {
+<span class="nc" id="L180">        return _idx;</span>
+    }
+
+    /**
+     * Relative order of result mapping in metadata.
+     */
+    public void setListingIndex(int idx) {
+<span class="nc" id="L187">        _idx = idx;</span>
+<span class="nc" id="L188">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L192">        return _name;</span>
+    }
+
+    ///////////////
+    // Commentable
+    ///////////////
+
+    @Override
+    public String[] getComments() {
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        return (_comments == null) ? EMPTY_COMMENTS : _comments;</span>
+    }
+
+    @Override
+    public void setComments(String[] comments) {
+<span class="nc" id="L206">        _comments = comments;</span>
+<span class="nc" id="L207">    }</span>
+
+    ////////////////////////////////
+    // SourceTracker implementation
+    ////////////////////////////////
+
+    @Override
+    public File getSourceFile() {
+<span class="nc" id="L215">        return _file;</span>
+    }
+
+    @Override
+    public Object getSourceScope() {
+<span class="nc" id="L220">        return _scope;</span>
+    }
+
+    @Override
+    public int getSourceType() {
+<span class="nc" id="L225">        return _srcType;</span>
+    }
+
+    public void setSource(File file, Object scope, int srcType) {
+<span class="nc" id="L229">        _file = file;</span>
+<span class="nc" id="L230">        _scope = scope;</span>
+<span class="nc" id="L231">        _srcType = srcType;</span>
+<span class="nc" id="L232">    }</span>
+
+    @Override
+    public String getResourceName() {
+<span class="nc bnc" id="L236" title="All 2 branches missed.">        return (_class == null) ? _name : _class.getName() + &quot;:&quot; + _name;</span>
+    }
+
+    @Override
+    public int getLineNumber() {
+<span class="nc" id="L241">        return _lineNum;</span>
+    }
+
+    public void setLineNumber(int lineNum) {
+<span class="nc" id="L245">        _lineNum = lineNum;</span>
+<span class="nc" id="L246">    }</span>
+
+    @Override
+    public int getColNumber() {
+<span class="nc" id="L250">        return _colNum;</span>
+    }
+
+    public void setColNumber(int colNum) {
+<span class="nc" id="L254">        _colNum = colNum;</span>
+<span class="nc" id="L255">    }</span>
+
+    /**
+     * A persistence-capable result.
+     */
+    public class PCResult {
+
+        /**
+         * Path token to represent a discriminator.
+         */
+        public static final String DISCRIMINATOR = &quot;&lt;discriminator&gt;&quot;;
+
+        private final Class&lt;?&gt; _candidate;
+<span class="nc" id="L268">        private ClassMapping _candidateMap = null;</span>
+<span class="nc" id="L269">        private Map&lt;String, Object&gt; _rawMappings = null;</span>
+<span class="nc" id="L270">        private Map&lt;List&lt;MetaDataContext&gt;, ColumnMap&gt; _mappings = null;</span>
+<span class="nc" id="L271">        private Map&lt;List&lt;MetaDataContext&gt;, FetchInfo&gt; _eager = null;</span>
+<span class="nc" id="L272">        private FetchInfo _fetchInfo = null; // for top-level</span>
+<span class="nc" id="L273">        private Collection&lt;String&gt; _constructorParams = null;</span>
+
+        /**
+         * Supply candidate type on construction.
+         */
+<span class="nc" id="L278">        private PCResult(Class&lt;?&gt; candidate) {</span>
+<span class="nc" id="L279">            _candidate = candidate;</span>
+<span class="nc" id="L280">        }</span>
+
+        /**
+         * The result candidate class.
+         */
+        public Class&lt;?&gt; getCandidateType() {
+<span class="nc" id="L286">            return _candidate;</span>
+        }
+
+        /**
+         * Candidate mapping.
+         */
+        public ClassMapping getCandidateTypeMapping() {
+<span class="nc bnc" id="L293" title="All 2 branches missed.">            if (_candidateMap == null)</span>
+<span class="nc" id="L294">                _candidateMap = _repos.getMapping(_candidate, null, true);</span>
+<span class="nc" id="L295">            return _candidateMap;</span>
+        }
+
+        /**
+         * Return the raw mapping paths supplied with {@link #addMapping}, or
+         * empty array if none.
+         */
+        public String[] getMappingPaths() {
+<span class="nc bnc" id="L303" title="All 2 branches missed.">            if (_rawMappings == null) {</span>
+<span class="nc" id="L304">                return new String[0];</span>
+            }
+<span class="nc" id="L306">            Collection&lt;String&gt; keys = _rawMappings.keySet();</span>
+<span class="nc" id="L307">            return keys.toArray(new String[keys.size()]);</span>
+        }
+
+        /**
+         * Return the mapping id for the given path supplied with
+         * {@link #addMapping}, or null if none.
+         */
+        public Object getMapping(String path) {
+<span class="nc bnc" id="L315" title="All 2 branches missed.">            return (_rawMappings == null) ? null : _rawMappings.get(path);</span>
+        }
+
+        /**
+         * Map the given path to the given result id.
+         */
+        public void addMapping(String path, Object id) {
+<span class="nc bnc" id="L322" title="All 2 branches missed.">            if (StringUtil.isEmpty(path))</span>
+<span class="nc" id="L323">                throw new MetaDataException(_loc.get(&quot;null-path&quot;,</span>
+                    QueryResultMapping.this, _candidate));
+
+<span class="nc" id="L326">            _mappings = null;</span>
+<span class="nc" id="L327">            _eager = null;</span>
+<span class="nc" id="L328">            _fetchInfo = null;</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">            if (_rawMappings == null) {</span>
+<span class="nc" id="L330">                _rawMappings = new HashMap&lt;&gt;();</span>
+            }
+<span class="nc" id="L332">            _rawMappings.put(path, id);</span>
+<span class="nc" id="L333">        }</span>
+
+        /**
+         * Map the given request onto a result id.
+         *
+         * @param path stack of data requests (see
+         * {@link org.apache.openjpa.jdbc.sql.Result#startDataRequest})
+         * @param id requested id or column (see
+         * {@link org.apache.openjpa.jdbc.sql.Result} APIs)
+         * @param joins requested joins, or null
+         * @return the id or column to fetch from the result
+         * (typically a column name)
+         */
+        public Object map(List&lt;MetaDataContext&gt; path, Object id, Joins joins) {
+<span class="nc bnc" id="L347" title="All 4 branches missed.">            if (_rawMappings == null || !(id instanceof Column)) {</span>
+<span class="nc" id="L348">                return id;</span>
+            }
+
+<span class="nc" id="L351">            resolve();</span>
+<span class="nc" id="L352">            ColumnMap cm = _mappings.get(path);</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            return (cm == null) ? id : cm.map((Column) id);</span>
+        }
+
+        /**
+         * Return true if the mapped result contains eager data for the given
+         * field at the given path.
+         *
+         * @param path stack of data requests (see
+         * {@link org.apache.openjpa.jdbc.sql.Result#startDataRequest})
+         */
+        public boolean hasEager(List&lt;MetaDataContext&gt; path, FieldMapping field) {
+<span class="nc bnc" id="L364" title="All 2 branches missed.">            if (_rawMappings == null) {</span>
+<span class="nc" id="L365">                return false;</span>
+            }
+
+<span class="nc" id="L368">            resolve();</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">            if (path.isEmpty()) {</span>
+<span class="nc" id="L370">                return _fetchInfo.eager.get(field.getIndex());</span>
+            }
+<span class="nc bnc" id="L372" title="All 2 branches missed.">            if (_eager == null) {</span>
+<span class="nc" id="L373">                return false;</span>
+            }
+<span class="nc" id="L375">            FetchInfo info = _eager.get(path);</span>
+<span class="nc bnc" id="L376" title="All 4 branches missed.">            return info != null &amp;&amp; info.eager.get(field.getIndex());</span>
+        }
+
+        /**
+         * Return the field indexes to exclude when loading data for the
+         * given path.
+         */
+        public BitSet getExcludes(List&lt;MetaDataContext&gt; path) {
+<span class="nc bnc" id="L384" title="All 2 branches missed.">            if (_rawMappings == null) {</span>
+<span class="nc" id="L385">                return null;</span>
+            }
+
+<span class="nc" id="L388">            resolve();</span>
+<span class="nc bnc" id="L389" title="All 2 branches missed.">            if (path.isEmpty()) {</span>
+<span class="nc" id="L390">                return _fetchInfo.excludes;</span>
+            }
+<span class="nc bnc" id="L392" title="All 2 branches missed.">            if (_eager == null) {</span>
+<span class="nc" id="L393">                return null;</span>
+            }
+<span class="nc" id="L395">            FetchInfo info = _eager.get(path);</span>
+<span class="nc bnc" id="L396" title="All 2 branches missed.">            return (info == null) ? null : info.excludes;</span>
+        }
+
+        /**
+         * Resolve internal datastructures from raw mappings.
+         */
+        private synchronized void resolve() {
+<span class="nc bnc" id="L403" title="All 4 branches missed.">            if (_rawMappings == null || _mappings != null) {</span>
+<span class="nc" id="L404">                return;</span>
+            }
+
+<span class="nc" id="L407">            _mappings = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L408">            _fetchInfo = new FetchInfo(getCandidateTypeMapping());</span>
+
+<span class="nc bnc" id="L410" title="All 2 branches missed.">            for(Map.Entry&lt;String, Object&gt;  entry : _rawMappings.entrySet()) {</span>
+<span class="nc" id="L411">                resolveMapping(entry.getKey(), entry.getValue());</span>
+<span class="nc" id="L412">            }</span>
+<span class="nc" id="L413">        }</span>
+
+        /**
+         * Resolve the given mapping path.
+         */
+        private void resolveMapping(String path, Object id) {
+            // build up path to second-to-last token
+<span class="nc" id="L420">            String[] tokens = StringUtil.split(path, &quot;.&quot;, 0);</span>
+<span class="nc" id="L421">            List&lt;MetaDataContext&gt; rpath = new ArrayList&lt;&gt;(tokens.length);</span>
+<span class="nc" id="L422">            ClassMapping candidate = getCandidateTypeMapping();</span>
+<span class="nc" id="L423">            FieldMapping fm = null;</span>
+<span class="nc bnc" id="L424" title="All 2 branches missed.">            for (int i = 0; i &lt; tokens.length - 1; i++) {</span>
+<span class="nc" id="L425">                fm = candidate.getFieldMapping(tokens[i]);</span>
+<span class="nc bnc" id="L426" title="All 2 branches missed.">                if (fm == null)</span>
+<span class="nc" id="L427">                    throw new MetaDataException(_loc.get(&quot;bad-path&quot;,</span>
+                        QueryResultMapping.this, _candidate, path));
+
+<span class="nc bnc" id="L430" title="All 2 branches missed.">                if (fm.getEmbeddedMapping() != null) {</span>
+<span class="nc" id="L431">                    recordIncluded(candidate, rpath, fm);</span>
+<span class="nc" id="L432">                    candidate = fm.getEmbeddedMapping();</span>
+                } else
+<span class="nc" id="L434">                    candidate = fm.getTypeMapping();</span>
+<span class="nc bnc" id="L435" title="All 2 branches missed.">                if (candidate == null)</span>
+<span class="nc" id="L436">                    throw new MetaDataException(_loc.get(&quot;untraversable-path&quot;,</span>
+                        QueryResultMapping.this, _candidate, path));
+<span class="nc" id="L438">                rpath.add(fm);</span>
+            }
+
+<span class="nc" id="L441">            String lastToken = tokens[tokens.length - 1];</span>
+<span class="nc bnc" id="L442" title="All 2 branches missed.">            if (DISCRIMINATOR.equals(lastToken)) {</span>
+<span class="nc" id="L443">                Discriminator discrim = candidate.getDiscriminator();</span>
+<span class="nc" id="L444">                rpath.add(discrim);</span>
+<span class="nc" id="L445">                assertSingleColumn(discrim.getColumns(), path);</span>
+<span class="nc" id="L446">                _mappings.put(rpath, new SingleColumnMap(id));</span>
+<span class="nc" id="L447">            } else {</span>
+<span class="nc" id="L448">                FieldMapping last = candidate.getFieldMapping(lastToken);</span>
+<span class="nc bnc" id="L449" title="All 2 branches missed.">                if (last == null)</span>
+<span class="nc" id="L450">                    throw new MetaDataException(_loc.get(&quot;untraversable-path&quot;,</span>
+                        QueryResultMapping.this, _candidate, path));
+<span class="nc" id="L452">                Column[] cols = last.getColumns();</span>
+<span class="nc" id="L453">                assertSingleColumn(cols, path);</span>
+<span class="nc" id="L454">                Column col = cols[0];</span>
+
+                // special-case oid fields, since path lists supplied for
+                // them at runtime don't include the embedded fields
+<span class="nc bnc" id="L458" title="All 4 branches missed.">                if (fm != null &amp;&amp; fm.getDeclaredTypeCode() == JavaTypes.OID) {</span>
+<span class="nc" id="L459">                    addComplexColumnMapping(fm, rpath, col, id);</span>
+<span class="nc" id="L460">                    return;</span>
+                }
+
+<span class="nc bnc" id="L463" title="All 4 branches missed.">                if (fm != null &amp;&amp; fm.getForeignKey() != null) {</span>
+                    // if the last field is one of the joinables used in the
+                    // relation's foreign key, map to relation field path.
+                    // otherwise, record that we have an eager result
+<span class="nc" id="L467">                    Column fkCol = fm.getForeignKey().getColumn(col);</span>
+<span class="nc bnc" id="L468" title="All 2 branches missed.">                    if (fkCol != null)</span>
+<span class="nc" id="L469">                        addComplexColumnMapping(fm, new ArrayList&lt;&gt;(rpath),</span>
+                            fkCol, id);
+                    else {
+<span class="nc" id="L472">                        recordEager(candidate, rpath, fm);</span>
+<span class="nc" id="L473">                        recordIncluded(candidate, rpath, last);</span>
+                    }
+<span class="nc" id="L475">                } else</span>
+<span class="nc" id="L476">                    recordIncluded(candidate, rpath, last);</span>
+
+                // map to related field path. because the SingleColumnMap
+                // doesn't test the requested column, it will accept
+                // requests for both the fk col or the related field col
+<span class="nc" id="L481">                rpath.add(last);</span>
+<span class="nc" id="L482">                _mappings.put(rpath, new SingleColumnMap(id));</span>
+            }
+<span class="nc" id="L484">        }</span>
+
+        /**
+         * Create an appropriate column mapping for the given field.
+         */
+        private void addComplexColumnMapping(FieldMapping fm, List&lt;MetaDataContext&gt; rpath,
+            Column col, Object id) {
+<span class="nc bnc" id="L491" title="All 2 branches missed.">            if (fm.getColumns().length == 1)</span>
+<span class="nc" id="L492">                _mappings.put(rpath, new SingleColumnMap(id));</span>
+            else {
+<span class="nc" id="L494">                MultiColumnMap mcm = (MultiColumnMap) _mappings.get(rpath);</span>
+<span class="nc bnc" id="L495" title="All 2 branches missed.">                if (mcm == null) {</span>
+<span class="nc" id="L496">                    mcm = new MultiColumnMap(fm.getColumns());</span>
+<span class="nc" id="L497">                    _mappings.put(rpath, mcm);</span>
+                }
+<span class="nc" id="L499">                mcm.set(col, id);</span>
+            }
+<span class="nc" id="L501">        }</span>
+
+        /**
+         * For now, we only allow mappings with a single column. In the
+         * future we might introduce a syntax to map multiple columns.
+         */
+        private void assertSingleColumn(Column[] cols, String path) {
+<span class="nc bnc" id="L508" title="All 2 branches missed.">            if (cols.length != 1)</span>
+<span class="nc" id="L509">                throw new MetaDataException(_loc.get(&quot;num-cols-path&quot;,</span>
+                    QueryResultMapping.this, _candidate, path));
+<span class="nc" id="L511">        }</span>
+
+        /**
+         * Record that there may be eager data for the given field at the given
+         * path.
+         */
+        private void recordEager(ClassMapping candidate, List&lt;MetaDataContext&gt; path,
+            FieldMapping fm) {
+<span class="nc bnc" id="L519" title="All 2 branches missed.">            if (path.size() == 1) {</span>
+<span class="nc" id="L520">                _fetchInfo.eager.set(fm.getIndex());</span>
+<span class="nc" id="L521">                _fetchInfo.excludes.clear(fm.getIndex());</span>
+            } else {
+                // record at previous path
+<span class="nc" id="L524">                List&lt;MetaDataContext&gt; copy = new ArrayList&lt;&gt;(path.size() - 1);</span>
+<span class="nc bnc" id="L525" title="All 2 branches missed.">                for (int i = 0; i &lt; copy.size(); i++)</span>
+<span class="nc" id="L526">                    copy.add(path.get(i));</span>
+
+<span class="nc bnc" id="L528" title="All 2 branches missed.">                if (_eager == null)</span>
+<span class="nc" id="L529">                    _eager = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L530">                FetchInfo info = _eager.get(copy);</span>
+<span class="nc bnc" id="L531" title="All 2 branches missed.">                if (info == null) {</span>
+<span class="nc" id="L532">                    info = new FetchInfo(candidate);</span>
+<span class="nc" id="L533">                    _eager.put(copy, info);</span>
+                }
+<span class="nc" id="L535">                info.eager.set(fm.getIndex());</span>
+<span class="nc" id="L536">                info.excludes.clear(fm.getIndex());</span>
+            }
+<span class="nc" id="L538">        }</span>
+
+        /**
+         * Record that the field at the given path is included in the results.
+         */
+        private void recordIncluded(ClassMapping candidate, List&lt;MetaDataContext&gt; path,
+            FieldMapping fm) {
+<span class="nc bnc" id="L545" title="All 2 branches missed.">            if (path.isEmpty())</span>
+<span class="nc" id="L546">                _fetchInfo.excludes.clear(fm.getIndex());</span>
+            else {
+<span class="nc bnc" id="L548" title="All 2 branches missed.">                if (_eager == null)</span>
+<span class="nc" id="L549">                    _eager = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L550">                FetchInfo info = _eager.get(path);</span>
+<span class="nc bnc" id="L551" title="All 2 branches missed.">                if (info == null) {</span>
+<span class="nc" id="L552">                    info = new FetchInfo(candidate);</span>
+<span class="nc" id="L553">                    _eager.put(new ArrayList&lt;&gt;(path), info);</span>
+                }
+<span class="nc" id="L555">                info.excludes.clear(fm.getIndex());</span>
+            }
+<span class="nc" id="L557">        }</span>
+
+        public void addConstructorParam(final String name) {
+<span class="nc bnc" id="L560" title="All 2 branches missed.">            if (_constructorParams == null) {</span>
+<span class="nc" id="L561">                _constructorParams = new ArrayList&lt;&gt;();</span>
+            }
+<span class="nc" id="L563">            _constructorParams.add(name);</span>
+<span class="nc" id="L564">        }</span>
+    }
+
+    /**
+     * Fetch information.
+     */
+    private static class FetchInfo {
+
+        /**
+         * Indexes of fields to exclude from loading.
+         */
+        public final BitSet excludes;
+
+        /**
+         * Indexes of eager fields.
+         */
+        public final BitSet eager;
+
+<span class="nc" id="L582">        public FetchInfo(ClassMapping type) {</span>
+<span class="nc" id="L583">            FieldMapping[] fms = type.getFieldMappings();</span>
+<span class="nc" id="L584">            eager = new BitSet(fms.length);</span>
+<span class="nc" id="L585">            excludes = new BitSet(fms.length);</span>
+<span class="nc bnc" id="L586" title="All 2 branches missed.">            for (int i = 0; i &lt; fms.length; i++)</span>
+<span class="nc bnc" id="L587" title="All 2 branches missed.">                if (!fms[i].isPrimaryKey())</span>
+<span class="nc" id="L588">                    excludes.set(i);</span>
+<span class="nc" id="L589">        }</span>
+    }
+
+    /**
+     * Mapping of columns to result ids.
+     */
+    private interface ColumnMap {
+
+        /**
+         * Return the result id for the given column, or the given colum
+         * if none.
+         */
+        Object map(Column col);
+    }
+
+    /**
+     * {@link ColumnMap} specialized for a single column.
+     */
+    private static class SingleColumnMap
+        implements ColumnMap {
+
+        private final Object _id;
+
+<span class="nc" id="L612">        public SingleColumnMap(Object id) {</span>
+<span class="nc" id="L613">            _id = id;</span>
+<span class="nc" id="L614">        }</span>
+
+        @Override
+        public Object map(Column col) {
+<span class="nc" id="L618">            return _id;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L623">            return _id.toString();</span>
+        }
+    }
+
+    /**
+     * {@link ColumnMap} specialized for a multiple columns.
+     * Maps columns in linear time.
+     */
+    private static class MultiColumnMap
+        implements ColumnMap {
+
+        private final List&lt;Column&gt; _cols;
+        private final Object[] _ids;
+
+<span class="nc" id="L637">        public MultiColumnMap(Column[] cols) {</span>
+<span class="nc" id="L638">            _cols = Arrays.asList(cols);</span>
+<span class="nc" id="L639">            _ids = new Object[cols.length];</span>
+<span class="nc" id="L640">        }</span>
+
+        @Override
+        public Object map(Column col) {
+<span class="nc" id="L644">            int idx = _cols.indexOf(col);</span>
+<span class="nc bnc" id="L645" title="All 2 branches missed.">            return (idx == -1) ? col : _ids[idx];</span>
+        }
+
+        public void set(Column col, Object id) {
+<span class="nc" id="L649">            int idx = _cols.indexOf(col);</span>
+<span class="nc bnc" id="L650" title="All 2 branches missed.">            if (idx != -1)</span>
+<span class="nc" id="L651">                _ids[idx] = id;</span>
+<span class="nc" id="L652">        }</span>
+
+        @Override
+        public String toString() {
+<span class="nc" id="L656">            return _cols + &quot;=&quot; + Arrays.asList(_ids);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

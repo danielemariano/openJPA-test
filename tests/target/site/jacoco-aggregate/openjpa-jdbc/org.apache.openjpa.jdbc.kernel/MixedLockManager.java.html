@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MixedLockManager.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel</a> &gt; <span class="el_source">MixedLockManager.java</span></div><h1>MixedLockManager.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel;
+
+import java.sql.SQLException;
+import java.util.List;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.FieldMapping;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.SQLExceptions;
+import org.apache.openjpa.jdbc.sql.SQLFactory;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.LockLevels;
+import org.apache.openjpa.kernel.MixedLockLevels;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.OptimisticException;
+
+/**
+ * Mixed lock manager implements both optimistic and pessimistic locking
+ * semantics in parallel to the JPA 2.0 specification.
+ *
+ * @author Albert Lee
+ * @since 2.0.0
+ */
+<span class="nc" id="L45">public class MixedLockManager extends PessimisticLockManager {</span>
+
+<span class="nc" id="L47">    private static final Localizer _loc = Localizer</span>
+<span class="nc" id="L48">        .forPackage(MixedLockManager.class);</span>
+
+    /*
+     * (non-Javadoc)
+     * @see org.apache.openjpa.jdbc.kernel.PessimisticLockManager
+     *  #selectForUpdate(org.apache.openjpa.jdbc.sql.Select,int)
+     */
+    @Override
+    public boolean selectForUpdate(Select sel, int lockLevel) {
+<span class="nc bnc" id="L57" title="All 2 branches missed.">        return (lockLevel &gt;= MixedLockLevels.LOCK_PESSIMISTIC_READ)</span>
+<span class="nc" id="L58">            ? super.selectForUpdate(sel, lockLevel) : false;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     * @see org.apache.openjpa.jdbc.kernel.PessimisticLockManager#
+     *  lockInternal(org.apache.openjpa.kernel.OpenJPAStateManager, int, int,
+     *               java.lang.Object)
+     */
+    @Override
+    protected void lockInternal(OpenJPAStateManager sm, int level, int timeout,
+        Object sdata, boolean postLockVersionCheck) {
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        if (level &gt;= MixedLockLevels.LOCK_PESSIMISTIC_FORCE_INCREMENT) {</span>
+<span class="nc" id="L71">            setVersionCheckOnReadLock(true);</span>
+<span class="nc" id="L72">            setVersionUpdateOnWriteLock(true);</span>
+<span class="nc" id="L73">            super.lockInternal(sm, level, timeout, sdata, postLockVersionCheck);</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        } else if (level &gt;= MixedLockLevels.LOCK_PESSIMISTIC_READ) {</span>
+<span class="nc" id="L75">            setVersionCheckOnReadLock(true);</span>
+<span class="nc" id="L76">            setVersionUpdateOnWriteLock(false);</span>
+<span class="nc" id="L77">            super.lockInternal(sm, level, timeout, sdata, postLockVersionCheck);</span>
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        } else if (level &gt;= LockLevels.LOCK_READ) {</span>
+<span class="nc" id="L79">            setVersionCheckOnReadLock(true);</span>
+<span class="nc" id="L80">            setVersionUpdateOnWriteLock(true);</span>
+<span class="nc" id="L81">            optimisticLockInternal(sm, level, timeout, sdata,</span>
+                postLockVersionCheck);
+        }
+<span class="nc" id="L84">    }</span>
+
+    @Override
+    protected List&lt;SQLBuffer&gt; getLockRows(DBDictionary dict, Object id, ClassMapping mapping,
+            JDBCFetchConfiguration fetch, SQLFactory factory) {
+<span class="nc" id="L89">        List&lt;SQLBuffer&gt; sqls = super.getLockRows(dict, id, mapping, fetch, factory);</span>
+        //
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if(!dict.supportsLockingWithMultipleTables) {</span>
+            // look for columns mapped to secondary tables which need to be locked
+<span class="nc" id="L93">            FieldMapping fms[] = mapping.getFieldMappings();</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">            for( FieldMapping fm : fms) {</span>
+<span class="nc" id="L95">                DBIdentifier secTableName = fm.getMappingInfo().getTableIdentifier();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">                if (!DBIdentifier.isNull(secTableName)) {</span>
+                    // select only the PK columns, since we just want to lock
+<span class="nc" id="L98">                    Select select = factory.newSelect();</span>
+<span class="nc" id="L99">                    select.select(fm.getColumns());</span>
+<span class="nc" id="L100">                    select.whereForeignKey(fm.getJoinForeignKey(), id, mapping, _store);</span>
+<span class="nc" id="L101">                    sqls.add(select.toSelect(true, fetch));</span>
+                }
+            }
+        }
+<span class="nc" id="L105">        return sqls;</span>
+    }
+
+    @Override
+    protected void optimisticLockInternal(OpenJPAStateManager sm, int level,
+        int timeout, Object sdata, boolean postLockVersionCheck) {
+<span class="nc" id="L111">        super.optimisticLockInternal(sm, level, timeout, sdata,</span>
+            postLockVersionCheck);
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        if (postLockVersionCheck) {</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">            if (level &gt;= MixedLockLevels.LOCK_PESSIMISTIC_READ) {</span>
+<span class="nc" id="L115">                ClassMapping mapping = (ClassMapping) sm.getMetaData();</span>
+                try {
+<span class="nc bnc" id="L117" title="All 2 branches missed.">                    if (!mapping.getVersion().checkVersion(sm, this.getStore(),</span>
+                        false)) {
+<span class="nc" id="L119">                        throw (new OptimisticException(_loc.get(</span>
+<span class="nc" id="L120">                            &quot;optimistic-violation-lock&quot;).getMessage()))</span>
+<span class="nc" id="L121">                            .setFailedObject(sm.getObjectId());</span>
+                    }
+<span class="nc" id="L123">                } catch (SQLException se) {</span>
+<span class="nc" id="L124">                    throw SQLExceptions.getStore(se, sm.getObjectId(),</span>
+<span class="nc" id="L125">                        getStore().getDBDictionary());</span>
+<span class="nc" id="L126">                }</span>
+            }
+        }
+<span class="nc" id="L129">    }</span>
+
+    @Override
+    public boolean skipRelationFieldLock() {
+<span class="nc" id="L133">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

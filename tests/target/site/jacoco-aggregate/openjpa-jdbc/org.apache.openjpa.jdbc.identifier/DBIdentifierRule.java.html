@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DBIdentifierRule.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.identifier</a> &gt; <span class="el_source">DBIdentifierRule.java</span></div><h1>DBIdentifierRule.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.identifier;
+
+import java.util.Set;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
+import org.apache.openjpa.lib.identifier.IdentifierRule;
+
+/**
+ * The default DBIdentifier rule.  Closely matches SQL92 naming rules.
+ */
+public class DBIdentifierRule extends IdentifierRule {
+
+    public static final String DEFAULT_SQL_92 = &quot;DefaultSQL92&quot;;
+
+    public static final String SPECIAL_CHARS = &quot; #$&amp;%!?,.:;\&quot;\'&quot;;
+
+<span class="fc" id="L35">    public DBIdentifierRule() {</span>
+<span class="fc" id="L36">        setName(DEFAULT_SQL_92);</span>
+        // SQL92 Identifier rule 1) Can be up to 128 characters long
+//        setMaxLength(128);
+        // OpenJPA allows names with a length of 255 by default
+<span class="fc" id="L40">        setMaxLength(255);</span>
+        // SQL92 Identifier rule 2) Must begin with a letter
+<span class="fc" id="L42">        setMustBeginWithLetter(true);</span>
+        // SQL92 Identifier rule 3) Can contain letters, digits, and underscores
+<span class="fc" id="L44">        setOnlyLettersDigitsUnderscores(true);</span>
+        // SQL Identifier rule 4) Can't contain spaces or special characters such
+        // as #, $, &amp;, %, or punctuation.
+<span class="fc" id="L47">        setSpecialCharacters(SPECIAL_CHARS);</span>
+<span class="fc" id="L48">    }</span>
+
+    public DBIdentifierRule(DBIdentifierType id, Set&lt;String&gt; reservedWords) {
+<span class="nc" id="L51">        this();</span>
+<span class="nc" id="L52">        setName(id.toString());</span>
+        // SQL Identifier rule 5) Can't be reserved words
+<span class="nc" id="L54">        setReservedWords(reservedWords);</span>
+<span class="nc" id="L55">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SQLErrorCodeReader.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.sql</a> &gt; <span class="el_source">SQLErrorCodeReader.java</span></div><h1>SQLErrorCodeReader.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.sql;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.xml.parsers.DocumentBuilder;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.lib.log.Log;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.lib.util.StringUtil;
+import org.apache.openjpa.lib.xml.XMLFactory;
+import org.apache.openjpa.util.StoreException;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
+/**
+ * Parses XML content of SQL Error State codes to populate error codes for
+ * a given Database Dictionary.
+ *
+ * @author Pinaki Poddar
+ *
+ */
+<span class="nc" id="L49">public class SQLErrorCodeReader {</span>
+<span class="nc" id="L50">	private Log log = null;</span>
+	public static final String ERROR_CODE_DELIMITER = &quot;,&quot;;
+<span class="nc" id="L52">	public static final Map&lt;String, Integer&gt; storeErrorTypes =</span>
+		new HashMap&lt;&gt;();
+	static {
+<span class="nc" id="L55">		storeErrorTypes.put(&quot;lock&quot;, StoreException.LOCK);</span>
+<span class="nc" id="L56">        storeErrorTypes.put(&quot;object-exists&quot;, StoreException.OBJECT_EXISTS);</span>
+<span class="nc" id="L57">        storeErrorTypes.put(&quot;object-not-found&quot;,</span>
+<span class="nc" id="L58">                StoreException.OBJECT_NOT_FOUND);</span>
+<span class="nc" id="L59">		storeErrorTypes.put(&quot;optimistic&quot;, StoreException.OPTIMISTIC);</span>
+<span class="nc" id="L60">		storeErrorTypes.put(&quot;referential-integrity&quot;,</span>
+<span class="nc" id="L61">				StoreException.REFERENTIAL_INTEGRITY);</span>
+<span class="nc" id="L62">		storeErrorTypes.put(&quot;query&quot;, StoreException.QUERY);</span>
+	}
+
+<span class="nc" id="L65">	private static final Localizer _loc =</span>
+<span class="nc" id="L66">		Localizer.forPackage(SQLErrorCodeReader.class);</span>
+
+	public List&lt;String&gt; getDictionaries(InputStream in) {
+<span class="nc" id="L69">		List&lt;String&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L70">		DocumentBuilder builder = XMLFactory.getDOMParser(false, false);</span>
+		try {
+<span class="nc" id="L72">			Document doc = builder.parse(in);</span>
+<span class="nc" id="L73">			Element root = doc.getDocumentElement();</span>
+<span class="nc" id="L74">            NodeList nodes = root.getElementsByTagName(&quot;dictionary&quot;);</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">			for (int i = 0; i &lt; nodes.getLength(); i++) {</span>
+<span class="nc" id="L76">				Node node = nodes.item(i);</span>
+<span class="nc" id="L77">				NamedNodeMap attrs = node.getAttributes();</span>
+<span class="nc" id="L78">				Node dictionary = attrs.getNamedItem(&quot;class&quot;);</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">				if (dictionary != null) {</span>
+<span class="nc" id="L80">				   result.add(dictionary.getNodeValue());</span>
+				}
+			}
+<span class="nc" id="L83">		} catch (Throwable e) {</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">			if (log.isWarnEnabled()) {</span>
+<span class="nc" id="L85">				log.error(_loc.get(&quot;error-code-parse-error&quot;));</span>
+			}
+		} finally {
+			try {
+<span class="nc" id="L89">				in.close();</span>
+<span class="nc" id="L90">			} catch (IOException e) {</span>
+				// ignore
+<span class="nc" id="L92">			}</span>
+		}
+<span class="nc" id="L94">		return result;</span>
+	}
+
+	/**
+     * Parses given stream of XML content for error codes of the given database
+     * dictionary name. Populates the given dictionary with the error codes.
+	 *
+	 */
+	public void parse(InputStream in, String dictName, DBDictionary dict) {
+<span class="nc bnc" id="L103" title="All 4 branches missed.">		if (in == null || dict == null)</span>
+<span class="nc" id="L104">			return;</span>
+<span class="nc" id="L105">		log = dict.conf.getLog(JDBCConfiguration.LOG_JDBC);</span>
+<span class="nc" id="L106">		DocumentBuilder builder = XMLFactory.getDOMParser(false, false);</span>
+		try {
+<span class="nc" id="L108">			Document doc = builder.parse(in);</span>
+<span class="nc" id="L109">			Element root = doc.getDocumentElement();</span>
+<span class="nc" id="L110">            NodeList nodes = root.getElementsByTagName(&quot;dictionary&quot;);</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">			for (int i = 0; i &lt; nodes.getLength(); i++) {</span>
+<span class="nc" id="L112">				Node node = nodes.item(i);</span>
+<span class="nc" id="L113">				NamedNodeMap attrs = node.getAttributes();</span>
+<span class="nc" id="L114">				Node dictionary = attrs.getNamedItem(&quot;class&quot;);</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">				if (dictionary != null</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">                        &amp;&amp; dictionary.getNodeValue().equals(dictName)) {</span>
+<span class="nc" id="L117">					readErrorCodes(node, dict);</span>
+				}
+			}
+<span class="nc" id="L120">		} catch (Throwable e) {</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">			if (log.isWarnEnabled()) {</span>
+<span class="nc" id="L122">				log.error(_loc.get(&quot;error-code-parse-error&quot;));</span>
+			}
+		} finally {
+			try {
+<span class="nc" id="L126">				in.close();</span>
+<span class="nc" id="L127">			} catch (IOException e) {</span>
+				// ignore
+<span class="nc" id="L129">			}</span>
+		}
+<span class="nc" id="L131">	}</span>
+
+	static void readErrorCodes(Node node, DBDictionary dict) {
+<span class="nc" id="L134">		NodeList children = node.getChildNodes();</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">		for (int i = 0; i &lt; children.getLength(); i++) {</span>
+<span class="nc" id="L136">			Node child = children.item(i);</span>
+<span class="nc" id="L137">			short nodeType = child.getNodeType();</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">			if (nodeType == Node.ELEMENT_NODE) {</span>
+<span class="nc" id="L139">				String errorType = child.getNodeName();</span>
+<span class="nc" id="L140">				Node textNode = child.getFirstChild();</span>
+<span class="nc bnc" id="L141" title="All 4 branches missed.">                if (storeErrorTypes.containsKey(errorType) &amp;&amp; textNode != null){</span>
+<span class="nc" id="L142">                    String errorCodes = textNode.getNodeValue();</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">                    if (!StringUtil.isEmpty(errorCodes)) {</span>
+<span class="nc" id="L144">                        String[] codes = errorCodes.split(ERROR_CODE_DELIMITER);</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">                        for (String code : codes) {</span>
+<span class="nc" id="L146">                            dict.addErrorCode(storeErrorTypes.get(errorType),</span>
+<span class="nc" id="L147">                                    code.trim());</span>
+						}
+					}
+				}
+			}
+		}
+<span class="nc" id="L153">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

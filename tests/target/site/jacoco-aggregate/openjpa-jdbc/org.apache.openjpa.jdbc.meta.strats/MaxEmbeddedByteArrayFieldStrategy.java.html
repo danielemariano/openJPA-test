@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MaxEmbeddedByteArrayFieldStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">MaxEmbeddedByteArrayFieldStrategy.java</span></div><h1>MaxEmbeddedByteArrayFieldStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.lang.reflect.Array;
+import java.sql.Blob;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.JavaSQLTypes;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Mapping for byte array fields on a dictionary that has a maximum embedded
+ * BLOB size.
+ *
+ * @author Abe White
+ * @since 0.4.0
+ */
+<span class="nc" id="L44">public class MaxEmbeddedByteArrayFieldStrategy</span>
+    extends MaxEmbeddedLobFieldStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+
+<span class="nc" id="L50">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L51">        (MaxEmbeddedByteArrayFieldStrategy.class);</span>
+
+<span class="nc" id="L53">    private int _maxSize = 0;</span>
+
+    @Override
+    protected int getExpectedJavaType() {
+<span class="nc" id="L57">        return JavaSQLTypes.BYTES;</span>
+    }
+
+    @Override
+    protected void update(OpenJPAStateManager sm, Row row)
+        throws SQLException {
+<span class="nc" id="L63">        byte[] b = (byte[]) getValue(sm);</span>
+<span class="nc bnc" id="L64" title="All 2 branches missed.">         if (b == null)</span>
+<span class="nc" id="L65">            row.setBytes(field.getColumns()[0], null);</span>
+        else
+<span class="nc" id="L67">            row.setBytes(field.getColumns()[0], b);</span>
+<span class="nc" id="L68">    }</span>
+
+    @Override
+    protected Boolean isCustom(OpenJPAStateManager sm, JDBCStore store) {
+<span class="nc" id="L72">        Object val = sm.fetchObject(field.getIndex());</span>
+<span class="nc bnc" id="L73" title="All 4 branches missed.">        return (val != null &amp;&amp; Array.getLength(val) &gt; _maxSize) ? null</span>
+<span class="nc" id="L74">            : Boolean.FALSE;</span>
+    }
+
+    @Override
+    protected void putData(OpenJPAStateManager sm, ResultSet rs,
+        DBDictionary dict)
+        throws SQLException {
+<span class="nc" id="L81">        Blob blob = rs.getBlob(1);</span>
+<span class="nc" id="L82">        dict.putBytes(blob, PrimitiveWrapperArrays.toByteArray(sm.fetchObject</span>
+<span class="nc" id="L83">            (field.getIndex())));</span>
+<span class="nc" id="L84">    }</span>
+
+    @Override
+    protected Object load(Column col, Result res, Joins joins)
+        throws SQLException {
+<span class="nc" id="L89">        return PrimitiveWrapperArrays.toObjectValue(field,</span>
+<span class="nc" id="L90">            res.getBytes(col, joins));</span>
+    }
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc bnc" id="L95" title="All 4 branches missed.">        if (field.getType() != byte[].class &amp;&amp; field.getType() != Byte[].class)</span>
+<span class="nc" id="L96">            throw new MetaDataException(_loc.get(&quot;not-bytes&quot;, field));</span>
+<span class="nc" id="L97">        super.map(adapt);</span>
+<span class="nc" id="L98">    }</span>
+
+    @Override
+    public void initialize() {
+<span class="nc" id="L102">        DBDictionary dict = field.getMappingRepository().getDBDictionary();</span>
+<span class="nc" id="L103">        _maxSize = dict.maxEmbeddedBlobSize;</span>
+<span class="nc" id="L104">    }</span>
+
+    @Override
+    protected Object getValue(OpenJPAStateManager sm) {
+<span class="nc" id="L108">        byte[] b = PrimitiveWrapperArrays.toByteArray(sm.fetchObject</span>
+<span class="nc" id="L109">                (field.getIndex()));</span>
+<span class="nc bnc" id="L110" title="All 6 branches missed.">        if (b == null || (b.length &gt; _maxSize &amp;&amp; !field.getColumns()[0].isNotNull()))</span>
+<span class="nc" id="L111">            return null;</span>
+<span class="nc" id="L112">        return b;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

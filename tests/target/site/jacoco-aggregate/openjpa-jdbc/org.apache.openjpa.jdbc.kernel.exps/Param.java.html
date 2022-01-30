@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Param.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.kernel.exps</a> &gt; <span class="el_source">Param.java</span></div><h1>Param.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.kernel.exps;
+
+import java.util.Collection;
+import java.util.Map;
+
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.Discriminator;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.Filters;
+import org.apache.openjpa.kernel.exps.Parameter;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.ImplHelper;
+
+/**
+ * A parameter in a filter.
+ *
+ * @author Abe White
+ */
+public class Param
+    extends Const
+    implements Parameter {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L44">    private static final Localizer _loc = Localizer.forPackage(Param.class);</span>
+    private final Object _key;
+<span class="nc" id="L46">    private Class _type = null;</span>
+<span class="nc" id="L47">    private int _idx = -1;</span>
+<span class="nc" id="L48">    private boolean _container = false;</span>
+
+    /**
+     * Constructor. Supply parameter name and type.
+     */
+<span class="nc" id="L53">    public Param(Object key, Class type) {</span>
+<span class="nc" id="L54">        _key = key;</span>
+<span class="nc" id="L55">        setImplicitType(type);</span>
+<span class="nc" id="L56">    }</span>
+
+    @Override
+    public Object getParameterKey() {
+<span class="nc" id="L60">        return _key;</span>
+    }
+
+    @Override
+    public Class getType() {
+<span class="nc" id="L65">        return _type;</span>
+    }
+
+    @Override
+    public void setImplicitType(Class type) {
+<span class="nc" id="L70">        _type = type;</span>
+<span class="nc bnc" id="L71" title="All 4 branches missed.">        _container = (getMetaData() == null || !ImplHelper.isManagedType(</span>
+<span class="nc" id="L72">            getMetaData().getRepository().getConfiguration(), type))</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">            &amp;&amp; (Collection.class.isAssignableFrom(type)</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">            || Map.class.isAssignableFrom(type));</span>
+<span class="nc" id="L75">    }</span>
+
+    public int getIndex() {
+<span class="nc" id="L78">        return _idx;</span>
+    }
+
+    @Override
+    public void setIndex(int idx) {
+<span class="nc" id="L83">        _idx = idx;</span>
+<span class="nc" id="L84">    }</span>
+
+    public ClassMapping getValueMetaData(ExpContext ctx) {
+<span class="nc" id="L87">        Object[] params = ctx.params;</span>
+<span class="nc bnc" id="L88" title="All 4 branches missed.">        if (params[_idx] != null &amp;&amp; params[_idx] instanceof Class)</span>
+<span class="nc" id="L89">            return (ClassMapping) ctx.store.getConfiguration().getMetaDataRepositoryInstance().</span>
+<span class="nc" id="L90">                getMetaData((Class) params[_idx], getClass().getClassLoader(), true);</span>
+<span class="nc" id="L91">        return null;</span>
+    }
+
+    @Override
+    public Object getValue(Object[] params) {
+<span class="nc" id="L96">        return Filters.convert(params[_idx], getType());</span>
+    }
+
+    @Override
+    public Object getValue(ExpContext ctx, ExpState state) {
+<span class="nc" id="L101">        ParamExpState pstate = (ParamExpState) state;</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        return (pstate.discValue != null) ? pstate.discValue :</span>
+<span class="nc" id="L103">            getValue(ctx.params);</span>
+    }
+
+    @Override
+    public Object getSQLValue(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L108">        return ((ParamExpState) state).sqlValue;</span>
+    }
+
+    @Override
+    public ExpState initialize(Select sel, ExpContext ctx, int flags) {
+<span class="nc" id="L113">        return new ParamExpState();</span>
+    }
+
+    /**
+     * Expression state.
+     */
+<span class="nc" id="L119">    public static class ParamExpState</span>
+        extends ConstExpState {
+
+<span class="nc" id="L122">        public Object sqlValue = null;</span>
+<span class="nc" id="L123">        public int otherLength = 1;</span>
+<span class="nc" id="L124">        public ClassMapping mapping = null;</span>
+<span class="nc" id="L125">        public Discriminator disc = null;</span>
+<span class="nc" id="L126">        public Object discValue = null;</span>
+    }
+
+    @Override
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
+<span class="nc" id="L132">        super.calculateValue(sel, ctx, state, other, otherState);</span>
+<span class="nc" id="L133">        Object val = getValue(ctx.params);</span>
+<span class="nc" id="L134">        ParamExpState pstate = (ParamExpState) state;</span>
+<span class="nc bnc" id="L135" title="All 4 branches missed.">        if (other != null &amp;&amp; !_container) {</span>
+<span class="nc" id="L136">            pstate.sqlValue = other.toDataStoreValue(sel, ctx, otherState, val);</span>
+<span class="nc" id="L137">            pstate.otherLength = other.length(sel, ctx, otherState);</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            if (other instanceof Type) {</span>
+<span class="nc" id="L139">                pstate.mapping = ctx.store.getConfiguration().</span>
+<span class="nc" id="L140">                    getMappingRepositoryInstance().getMapping((Class) val,</span>
+<span class="nc" id="L141">                        ctx.store.getContext().getClassLoader(), true);</span>
+<span class="nc" id="L142">                pstate.disc = pstate.mapping.getDiscriminator();</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">                pstate.discValue = pstate.disc.getValue() != null ? pstate.disc.getValue() : &quot;1&quot;;</span>
+            }
+<span class="nc bnc" id="L145" title="All 2 branches missed.">        } else if (ImplHelper.isManageable(val)) {</span>
+<span class="nc" id="L146">            ClassMapping mapping = ctx.store.getConfiguration().</span>
+<span class="nc" id="L147">                getMappingRepositoryInstance().getMapping(val.getClass(),</span>
+<span class="nc" id="L148">                ctx.store.getContext().getClassLoader(), true);</span>
+<span class="nc" id="L149">            pstate.sqlValue = mapping.toDataStoreValue(val,</span>
+<span class="nc" id="L150">                mapping.getPrimaryKeyColumns(), ctx.store);</span>
+<span class="nc" id="L151">            pstate.otherLength = mapping.getPrimaryKeyColumns().length;</span>
+<span class="nc" id="L152">        } else</span>
+<span class="nc" id="L153">            pstate.sqlValue = val;</span>
+<span class="nc" id="L154">    }</span>
+
+    @Override
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
+<span class="nc" id="L159">        ParamExpState pstate = (ParamExpState) state;</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (pstate.otherLength &gt; 1)</span>
+<span class="nc" id="L161">            sql.appendValue(((Object[]) pstate.sqlValue)[index],</span>
+<span class="nc" id="L162">                pstate.getColumn(index), this);</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        else if (pstate.cols != null)</span>
+<span class="nc" id="L164">            sql.appendValue(pstate.sqlValue, pstate.getColumn(index), this);</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        else if (pstate.discValue != null)</span>
+<span class="nc" id="L166">            sql.appendValue(pstate.discValue);</span>
+        else
+<span class="nc" id="L168">            sql.appendValue(pstate.sqlValue, pstate.getColumn(index), this);</span>
+<span class="nc" id="L169">    }</span>
+
+    @Override
+    public int length(Select sel, ExpContext ctx, ExpState state) {
+<span class="nc" id="L173">        ParamExpState pstate = (ParamExpState) state;</span>
+<span class="nc bnc" id="L174" title="All 4 branches missed.">        if (getMetaData() == null || pstate.cols == null)</span>
+<span class="nc" id="L175">            return 1;</span>
+<span class="nc" id="L176">        return pstate.cols.length;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

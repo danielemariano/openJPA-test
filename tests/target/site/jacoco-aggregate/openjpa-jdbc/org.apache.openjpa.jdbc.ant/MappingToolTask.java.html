@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MappingToolTask.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.ant</a> &gt; <span class="el_source">MappingToolTask.java</span></div><h1>MappingToolTask.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.ant;
+
+import java.security.AccessController;
+
+import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
+import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
+import org.apache.openjpa.jdbc.meta.MappingTool;
+import org.apache.openjpa.jdbc.schema.SchemaTool;
+import org.apache.openjpa.lib.ant.AbstractTask;
+import org.apache.openjpa.lib.conf.ConfigurationImpl;
+import org.apache.openjpa.lib.util.Files;
+import org.apache.openjpa.lib.util.J2DoPrivHelper;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.util.MultiLoaderClassResolver;
+import org.apache.tools.ant.BuildException;
+import org.apache.tools.ant.types.EnumeratedAttribute;
+
+/**
+ * Executes the {@link MappingTool} on the specified files.
+ * This task can take the following arguments:
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;code&gt;action&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;meta&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;schemaAction&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;rollbackBeforeDDL&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;dropTables&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;ignoreErrors&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;readSchema&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;primaryKeys&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;foreignKeys&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;indexes&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;file&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;schemaFile&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;sqlFile&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;sqlEncode&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;sqlTerminator&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;tmpClassLoader&lt;/code&gt;&lt;/li&gt;
+ * &lt;/ul&gt; Of these arguments, only &lt;code&gt;action&lt;/code&gt; is required.
+ */
+<span class="nc" id="L58">public class MappingToolTask</span>
+    extends AbstractTask {
+
+<span class="nc" id="L61">    private static final Localizer _loc = Localizer.forPackage(MappingToolTask.class);</span>
+
+<span class="nc" id="L63">    protected MappingTool.Flags flags = new MappingTool.Flags();</span>
+    protected String file;
+    protected String schemaFile;
+    protected String sqlFile;
+    protected String sqlEncode;
+<span class="nc" id="L68">    protected boolean tmpClassLoader = true;</span>
+
+    /**
+     * Set the enumerated MappingTool action type.
+     */
+    public void setAction(Action act) {
+<span class="nc" id="L74">        flags.action = act.getValue();</span>
+<span class="nc" id="L75">    }</span>
+
+    /**
+     * Set the enumerated SchemaTool action type.
+     */
+    public void setSchemaAction(SchemaAction act) {
+<span class="nc" id="L81">        flags.schemaAction = act.getValue();</span>
+<span class="nc" id="L82">    }</span>
+
+    /**
+     * Set whether the MappingTool should read the full schema.
+     */
+    public void setReadSchema(boolean readSchema) {
+<span class="nc" id="L88">        flags.readSchema = readSchema;</span>
+<span class="nc" id="L89">    }</span>
+
+    /**
+     * Set whether we want the MappingTool to ignore SQL errors.
+     */
+    public void setIgnoreErrors(boolean ignoreErrors) {
+<span class="nc" id="L95">        flags.ignoreErrors = ignoreErrors;</span>
+<span class="nc" id="L96">    }</span>
+
+    /**
+     * Set whether the MappingTool should drop tables.
+     */
+    public void setDropTables(boolean dropTables) {
+<span class="nc" id="L102">        flags.dropTables = dropTables;</span>
+<span class="nc" id="L103">    }</span>
+
+    /**
+     * Set whether the MappingTool should rollback will be performed before each DDL statement is executed.
+     */
+    public void setRollbackBeforeDDL(boolean rollbackBeforeDDL) {
+<span class="nc" id="L109">        flags.rollbackBeforeDDL = rollbackBeforeDDL;</span>
+<span class="nc" id="L110">    }</span>
+
+    /**
+     * Set whether to drop OpenJPA tables.
+     */
+    public void setOpenJPATables(boolean openjpaTables) {
+<span class="nc" id="L116">        flags.openjpaTables = openjpaTables;</span>
+<span class="nc" id="L117">    }</span>
+
+    /**
+     * Set whether the MappingTool should drop sequences.
+     */
+    public void setDropSequences(boolean dropSequences) {
+<span class="nc" id="L123">        flags.dropSequences = dropSequences;</span>
+<span class="nc" id="L124">    }</span>
+
+    /**
+     * Set whether the MappingTool should manipulate sequences.
+     */
+    public void setSequences(boolean sequences) {
+<span class="nc" id="L130">        flags.sequences = sequences;</span>
+<span class="nc" id="L131">    }</span>
+
+    /**
+     * Set whether to generate primary key information.
+     */
+    public void setPrimaryKeys(boolean pks) {
+<span class="nc" id="L137">        flags.primaryKeys = pks;</span>
+<span class="nc" id="L138">    }</span>
+
+    /**
+     * Set whether to generate foreign key information.
+     */
+    public void setForeignKeys(boolean fks) {
+<span class="nc" id="L144">        flags.foreignKeys = fks;</span>
+<span class="nc" id="L145">    }</span>
+
+    /**
+     * Set whether to generate index information.
+     */
+    public void setIndexes(boolean idxs) {
+<span class="nc" id="L151">        flags.indexes = idxs;</span>
+<span class="nc" id="L152">    }</span>
+
+    /**
+     * Set the output file we want the MappingTool to write to.
+     */
+    public void setFile(String file) {
+<span class="nc" id="L158">        this.file = file;</span>
+<span class="nc" id="L159">    }</span>
+
+    /**
+     * Set the output file for an XML representation of the planned schema.
+     */
+    public void setSchemaFile(String schemaFile) {
+<span class="nc" id="L165">        this.schemaFile = schemaFile;</span>
+<span class="nc" id="L166">    }</span>
+
+    /**
+     * Set the output file we want the MappingTool to write a SQL script to.
+     */
+    public void setSQLFile(String sqlFile) {
+<span class="nc" id="L172">        this.sqlFile = sqlFile;</span>
+<span class="nc" id="L173">    }</span>
+
+    /**
+     * Set the output file charset encoding we want the MappingTool to use.
+     */
+    public void setSQLEncode(String sqlEncode) {
+<span class="nc" id="L179">        this.sqlEncode = sqlEncode;</span>
+<span class="nc" id="L180">    }</span>
+
+    /**
+     * Sets the characters used to terminate a generated SQL.
+     * By default, a semicolon.
+     */
+    public void setSQLTerminator(String t) {
+<span class="nc" id="L187">        flags.sqlTerminator = t;</span>
+<span class="nc" id="L188">    }</span>
+
+    /**
+     * Set whether this action applies to metadata as well as mappings.
+     */
+    public void setMeta(boolean meta) {
+<span class="nc" id="L194">        flags.meta = meta;</span>
+<span class="nc" id="L195">    }</span>
+
+    @Override
+    protected ConfigurationImpl newConfiguration() {
+<span class="nc" id="L199">        return new JDBCConfigurationImpl();</span>
+    }
+
+    @Override
+    protected void executeOn(String[] files)
+        throws Exception {
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if (MappingTool.ACTION_IMPORT.equals(flags.action))</span>
+<span class="nc" id="L206">            assertFiles(files);</span>
+
+<span class="nc" id="L208">        ClassLoader toolLoader = AccessController</span>
+<span class="nc" id="L209">                .doPrivileged(J2DoPrivHelper</span>
+<span class="nc" id="L210">                        .getClassLoaderAction(MappingTool.class));</span>
+<span class="nc" id="L211">        ClassLoader loader = toolLoader;</span>
+<span class="nc" id="L212">        MultiLoaderClassResolver resolver = new MultiLoaderClassResolver();</span>
+
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (tmpClassLoader) {</span>
+<span class="nc" id="L215">            loader = AccessController.doPrivileged(J2DoPrivHelper</span>
+<span class="nc" id="L216">                    .newTemporaryClassLoaderAction(getClassLoader()));</span>
+<span class="nc" id="L217">            resolver.addClassLoader(loader);</span>
+        }
+<span class="nc" id="L219">        resolver.addClassLoader(toolLoader);</span>
+
+<span class="nc bnc" id="L221" title="All 4 branches missed.">        if (flags.meta &amp;&amp; MappingTool.ACTION_ADD.equals(flags.action))</span>
+<span class="nc" id="L222">            flags.metaDataFile = Files.getFile(file, loader);</span>
+        else
+<span class="nc" id="L224">            flags.mappingWriter = Files.getWriter(file, loader);</span>
+
+<span class="nc" id="L226">        flags.schemaWriter = Files.getWriter(schemaFile, loader);</span>
+<span class="nc" id="L227">        flags.sqlWriter = Files.getWriter(sqlFile, loader, sqlEncode);</span>
+
+<span class="nc" id="L229">        JDBCConfiguration conf = (JDBCConfiguration) getConfiguration();</span>
+<span class="nc" id="L230">        conf.setClassResolver(resolver);</span>
+
+<span class="nc bnc" id="L232" title="All 2 branches missed.">        if (!MappingTool.run(conf, files, flags, loader))</span>
+<span class="nc" id="L233">            throw new BuildException(_loc.get(&quot;bad-conf&quot;, &quot;MappingToolTask&quot;)</span>
+<span class="nc" id="L234">                .getMessage());</span>
+<span class="nc" id="L235">    }</span>
+
+<span class="nc" id="L237">    public static class Action</span>
+        extends EnumeratedAttribute {
+
+        @Override
+        public String[] getValues() {
+<span class="nc" id="L242">            return MappingTool.ACTIONS;</span>
+        }
+    }
+
+<span class="nc" id="L246">    public static class SchemaAction</span>
+        extends EnumeratedAttribute {
+
+        @Override
+        public String[] getValues() {
+<span class="nc" id="L251">            String[] actions = new String[SchemaTool.ACTIONS.length + 1];</span>
+<span class="nc" id="L252">            System.arraycopy(SchemaTool.ACTIONS, 0, actions, 0,</span>
+                SchemaTool.ACTIONS.length);
+<span class="nc" id="L254">            actions[actions.length - 1] = &quot;none&quot;;</span>
+<span class="nc" id="L255">            return actions;</span>
+        }
+    }
+
+    /**
+     * &lt;P&gt;
+     * Set whether a temporary ClassLoader should be used by the MappingTool.
+     * The default value is true
+     * &lt;/P&gt;
+     *
+     * @param tmpClassLoader
+     *            Whether the temporary ClassLoader should be used.
+     */
+    public void setTmpClassLoader(boolean tmpClassLoader) {
+<span class="nc" id="L269">        this.tmpClassLoader = tmpClassLoader;</span>
+<span class="nc" id="L270">    }</span>
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

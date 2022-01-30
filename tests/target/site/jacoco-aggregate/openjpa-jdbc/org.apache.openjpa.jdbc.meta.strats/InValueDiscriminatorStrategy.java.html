@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="it"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>InValueDiscriminatorStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Tests</a> &gt; <a href="../index.html" class="el_bundle">openjpa-jdbc</a> &gt; <a href="index.source.html" class="el_package">org.apache.openjpa.jdbc.meta.strats</a> &gt; <span class="el_source">InValueDiscriminatorStrategy.java</span></div><h1>InValueDiscriminatorStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.openjpa.jdbc.meta.strats;
+
+import java.sql.SQLException;
+
+import org.apache.openjpa.jdbc.identifier.DBIdentifier;
+import org.apache.openjpa.jdbc.kernel.JDBCStore;
+import org.apache.openjpa.jdbc.meta.ClassMapping;
+import org.apache.openjpa.jdbc.meta.DiscriminatorMappingInfo;
+import org.apache.openjpa.jdbc.schema.Column;
+import org.apache.openjpa.jdbc.schema.Index;
+import org.apache.openjpa.jdbc.sql.DBDictionary;
+import org.apache.openjpa.jdbc.sql.Joins;
+import org.apache.openjpa.jdbc.sql.Result;
+import org.apache.openjpa.jdbc.sql.Row;
+import org.apache.openjpa.jdbc.sql.RowManager;
+import org.apache.openjpa.jdbc.sql.SQLBuffer;
+import org.apache.openjpa.jdbc.sql.Select;
+import org.apache.openjpa.kernel.OpenJPAStateManager;
+import org.apache.openjpa.lib.util.Localizer;
+import org.apache.openjpa.meta.JavaTypes;
+import org.apache.openjpa.util.MetaDataException;
+
+/**
+ * Base discriminator strategy that determines the class of database
+ * records using a column holding a value mapped to a class, and limits
+ * SELECTs using an IN (...) statement.
+ *
+ * @author Abe White
+ */
+<span class="nc" id="L48">public abstract class InValueDiscriminatorStrategy</span>
+    extends AbstractDiscriminatorStrategy {
+
+    
+    private static final long serialVersionUID = 1L;
+<span class="nc" id="L53">    private static final Localizer _loc = Localizer.forPackage</span>
+<span class="nc" id="L54">        (InValueDiscriminatorStrategy.class);</span>
+
+    /**
+     * Return the Java type code from {@link JavaTypes} for the discriminator
+     * values. This method is only used during mapping installation.
+     */
+    protected abstract int getJavaType();
+
+    /**
+     * Return the discriminator value for the given type.
+     */
+    protected abstract Object getDiscriminatorValue(ClassMapping cls);
+
+    /**
+     * Convert the given discriminator value to the corresponding class.
+     */
+    protected abstract Class getClass(Object val, JDBCStore store)
+        throws ClassNotFoundException;
+
+    @Override
+    public void map(boolean adapt) {
+<span class="nc" id="L75">        ClassMapping cls = disc.getClassMapping();</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        if (cls.getJoinablePCSuperclassMapping() != null</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">            || cls.getEmbeddingMetaData() != null)</span>
+<span class="nc" id="L78">            throw new MetaDataException(_loc.get(&quot;not-base-disc&quot;, cls));</span>
+
+<span class="nc" id="L80">        DiscriminatorMappingInfo info = disc.getMappingInfo();</span>
+<span class="nc" id="L81">        info.assertNoJoin(disc, true);</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        info.assertNoForeignKey(disc, !adapt);</span>
+<span class="nc" id="L83">        info.assertNoUnique(disc, false);</span>
+
+<span class="nc" id="L85">        Column tmplate = new Column();</span>
+<span class="nc" id="L86">        tmplate.setJavaType(getJavaType());</span>
+<span class="nc" id="L87">        DBDictionary dict = cls.getMappingRepository().getDBDictionary();</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">        DBIdentifier typName = DBIdentifier.newColumn(&quot;typ&quot;, dict != null ? dict.delimitAll() : false);</span>
+<span class="nc" id="L89">        tmplate.setIdentifier(typName);</span>
+
+<span class="nc" id="L91">        Column[] cols = info.getColumns(disc, new Column[]{ tmplate }, adapt);</span>
+<span class="nc" id="L92">        disc.setColumns(cols);</span>
+<span class="nc" id="L93">        disc.setColumnIO(info.getColumnIO());</span>
+
+<span class="nc" id="L95">        Index idx = info.getIndex(disc, cols, adapt);</span>
+<span class="nc" id="L96">        disc.setIndex(idx);</span>
+<span class="nc" id="L97">    }</span>
+
+    @Override
+    public void insert(OpenJPAStateManager sm, JDBCStore store, RowManager rm)
+        throws SQLException {
+<span class="nc" id="L102">        Row row = rm.getRow(disc.getClassMapping().getTable(),</span>
+            Row.ACTION_INSERT, sm, true);
+<span class="nc" id="L104">        Object cls = getDiscriminatorValue((ClassMapping) sm.getMetaData());</span>
+<span class="nc bnc" id="L105" title="All 4 branches missed.">        if (disc.getColumnIO().isInsertable(0, cls == null))</span>
+<span class="nc" id="L106">            row.setObject(disc.getColumns()[0], cls);</span>
+<span class="nc" id="L107">    }</span>
+
+    @Override
+    public boolean select(Select sel, ClassMapping mapping) {
+<span class="nc bnc" id="L111" title="All 2 branches missed.">        if (isFinal)</span>
+<span class="nc" id="L112">            return false;</span>
+<span class="nc" id="L113">        sel.select(disc.getColumns());</span>
+<span class="nc" id="L114">        return true;</span>
+    }
+
+    @Override
+    public Class getClass(JDBCStore store, ClassMapping base, Result res)
+        throws SQLException, ClassNotFoundException {
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        if (isFinal</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">                || !useDiscrimColumn(base, res)</span>
+<span class="nc bnc" id="L122" title="All 4 branches missed.">                || (base.getPCSuperclass() == null &amp;&amp; base.getJoinablePCSubclassMappings().length == 0)) {</span>
+<span class="nc" id="L123">            return base.getDescribedType();</span>
+        }
+
+<span class="nc" id="L126">        Object cls = res.getObject(disc.getColumns()[0], disc.getJavaType(), null);</span>
+<span class="nc" id="L127">        return getClass(cls, store);</span>
+    }
+
+    private boolean useDiscrimColumn(ClassMapping base, Result res) throws SQLException {
+<span class="nc bnc" id="L131" title="All 4 branches missed.">        if (res.getBaseMapping() != null &amp;&amp; base != null) {</span>
+            // check whether the result type is assignable to the base mapping.
+            // if not assignable the discriminator value will not be correct.
+<span class="nc bnc" id="L134" title="All 2 branches missed.">            if (!base.getDescribedType().isAssignableFrom(res.getBaseMapping().getDescribedType())) {</span>
+<span class="nc" id="L135">                return false;</span>
+            }
+        }
+<span class="nc" id="L138">        return res.contains(disc.getColumns()[0]);</span>
+    }
+
+    @Override
+    public boolean hasClassConditions(ClassMapping base, boolean subclasses) {
+        // if selecting the first mapped class and all subclasses, no need
+        // to limit the query
+<span class="nc bnc" id="L145" title="All 6 branches missed.">        if (isFinal || (base.getJoinablePCSuperclassMapping() == null</span>
+            &amp;&amp; subclasses))
+<span class="nc" id="L147">            return false;</span>
+
+        // if no subclasses or superclass, no need for conditions
+<span class="nc" id="L150">        ClassMapping[] subs = base.getJoinablePCSubclassMappings();</span>
+<span class="nc bnc" id="L151" title="All 4 branches missed.">        if (subs.length == 0 &amp;&amp; base.getJoinablePCSuperclassMapping() == null)</span>
+<span class="nc" id="L152">            return false;</span>
+
+<span class="nc" id="L154">        return true;</span>
+    }
+
+    @Override
+    public SQLBuffer getClassConditions(Select sel, Joins joins,
+        ClassMapping base, boolean subclasses) {
+<span class="nc" id="L160">        Column col = disc.getColumns()[0];</span>
+<span class="nc" id="L161">        SQLBuffer sql = new SQLBuffer(sel.getConfiguration().</span>
+<span class="nc" id="L162">            getDBDictionaryInstance());</span>
+<span class="nc" id="L163">        String alias = sel.getColumnAlias(col, joins);</span>
+<span class="nc bnc" id="L164" title="All 4 branches missed.">        boolean outer = joins != null &amp;&amp; joins.isOuter();</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        if (outer)</span>
+<span class="nc" id="L166">            sql.append(&quot;(&quot;);</span>
+<span class="nc" id="L167">        sql.append(alias);</span>
+
+        // if not selecting subclasses, limit to just the given class
+<span class="nc" id="L170">        ClassMapping[] subs = base.getJoinablePCSubclassMappings();</span>
+<span class="nc bnc" id="L171" title="All 6 branches missed.">        if (!outer &amp;&amp; (!subclasses || subs.length == 0))</span>
+<span class="nc" id="L172">            return sql.append(&quot; = &quot;).appendValue(getDiscriminatorValue(base),</span>
+                col);
+
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        if (outer)</span>
+<span class="nc" id="L176">            sql.append(&quot; IS &quot;).appendValue(null).append(&quot; OR &quot;).append(alias);</span>
+<span class="nc" id="L177">        sql.append(&quot; IN (&quot;);</span>
+<span class="nc" id="L178">        sql.appendValue(getDiscriminatorValue(base), col);</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        for (int i = 0; i &lt; subs.length; i++)</span>
+<span class="nc" id="L180">            sql.append(&quot;, &quot;).appendValue(getDiscriminatorValue(subs[i]), col);</span>
+<span class="nc" id="L181">        sql.append(&quot;)&quot;);</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">        if (outer)</span>
+<span class="nc" id="L183">            sql.append(&quot;)&quot;);</span>
+<span class="nc" id="L184">        return sql;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.4.201905082037</span></div></body></html>

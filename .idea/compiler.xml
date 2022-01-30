@@ -22,6 +22,7 @@
         <module name="openjpa-integration-jmx" />
         <module name="openbooks" />
         <module name="openjpa-fetch-statistics" />
+        <module name="tests" />
         <module name="openjpa-integration-daytrader" />
         <module name="image-gallery" />
         <module name="openjpa-integration-slf4j" />

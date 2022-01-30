@@ -110,31 +110,49 @@
             </execution>
         </executions>
     </plugin>
-
-        <!-- PIT plugin -->
-        <plugin>
-            <groupId>org.pitest</groupId>
-            <artifactId>pitest-maven</artifactId>
-            <version>1.5.1</version>
-            <configuration>
-                <maxMutationsPerClass>25</maxMutationsPerClass>
-                <targetClasses>
-
-                    <param>org.apache.bookkeeper.bookie.storage.ldb.WriteCache</param>
-                    <param>org.apache.bookkeeper.client.BookKeeperAdmin</param>
-
-                </targetClasses>
-                <targetTests>
-
-                    <param>org.apache.bookkeeper.bookie.storage.ldb.WriteCachePutTest</param>
-                    <param>org.apache.bookkeeper.bookie.storage.ldb.WriteCacheGetTest</param>
-                    <param>org.apache.bookkeeper.client.BookKeeperAdminFormatTest</param>
-
-                </targetTests>
-            </configuration>
-        </plugin>
-
     </plugins>
     </build>
 
+    <profiles>
+        <profile>
+            <id>pit</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>1.5.1</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.pitest</groupId>
+                                <artifactId>pitest-junit5-plugin</artifactId>
+                                <version>0.12</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <maxMutationsPerClass>50</maxMutationsPerClass>
+                            <targetClasses>
+                                <param>org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifier</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>
+                                    org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifierSplitPathTest
+                                    org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifierSetPathTest
+                                </param>
+
+                            </targetTests>
+
+                            <avoidCallsTo>
+                                <avoidCallsTo>java.util.logging</avoidCallsTo>
+                                <avoidCallsTo>org.apache.log4j</avoidCallsTo>
+                                <avoidCallsTo>org.slf4j</avoidCallsTo>
+                                <avoidCallsTo>org.apache.commons.logging</avoidCallsTo>
+                            </avoidCallsTo>
+
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -44,7 +44,8 @@ public class QualifiedDBIdentifierSetPathTest {
                 //aggiunto per aumentare la branch coverage
                 {true , "list" ,DBIdentifier.newSchema("Schema_1"), DBIdentifier.newTable("Table_1")},
 
-
+                //aggiunto per migliorare statement coverage
+                {true  , "monoMutation" , DBIdentifier.newSchema("Schema_1") , null},
 
 
 
@@ -120,6 +121,14 @@ public class QualifiedDBIdentifierSetPathTest {
 
             expectedName = i1.getName() + "." + i2.getName();
 
+        }else if (type=="monoMutation"){
+
+            qDBI.setPath(i1);
+
+            //assertEquals(i1.getName(),qDBI.getSchemaName());
+            //assertEquals(i1.getType(),qDBI.getType());
+
+            expectedName = i1.getName();
         }
 
 

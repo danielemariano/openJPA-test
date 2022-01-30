@@ -46,22 +46,9 @@ public class QualifiedDBIdentifierSplitPathTest {
     @Test
     public void spliPathTest() {
 
-
-        //QualifiedDBIdentifier qDBI = QualifiedDBIdentifier.newPath(DBIdentifier.newSchema("Schema1"),DBIdentifier.newTable("Table1") , DBIdentifier.newColumn("Column"));
-
-        //QualifiedDBIdentifier qDBI2 = QualifiedDBIdentifier.newPath( DBIdentifier.newSchema("Schema1") , DBIdentifier.newTable("THETABLE"));
-
-        //QualifiedDBIdentifier qDBI2 = QualifiedDBIdentifier.newPath( DBIdentifier.NULL );
-
         DBIdentifier[] list = QualifiedDBIdentifier.splitPath(i1);
 
-        //System.out.println(i1.getType()== DBIdentifier.DBIdentifierType.SCHEMA);
 
-        /*
-        for(DBIdentifier d : list){
-            System.out.println(d.getName());
-        }
-*/
         if(expectedResult == false){
 
             assertEquals(0, list.length );

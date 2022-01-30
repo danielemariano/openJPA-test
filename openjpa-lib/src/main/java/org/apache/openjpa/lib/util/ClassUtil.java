@@ -137,9 +137,6 @@ public final class ClassUtil {
         if (dims > 0) {
             if (fullName.length() == dims + 1) {
 
-                System.out.println(fullName.length());
-                System.out.println(dims);
-
                 String classCode = fullName.substring(dims);
                 for (int i = 0; i < _codes.length; i++) {
                     if (_codes[i][2].equals(classCode)) {

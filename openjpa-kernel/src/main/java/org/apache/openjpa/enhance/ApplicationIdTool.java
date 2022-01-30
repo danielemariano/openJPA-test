@@ -141,9 +141,9 @@ public class ApplicationIdTool {
         // in the current class
         FieldMetaData[] fields = meta.getPrimaryKeyFields();
         List decs = new ArrayList(fields.length);
-        for (FieldMetaData field : fields)
-            if (field.getDeclaringType() == meta.getDescribedType())
-                decs.add(field);
+        for (int i = 0; i < fields.length; i++)
+            if (fields[i].getDeclaringType() == meta.getDescribedType())
+                decs.add(fields[i]);
         return (FieldMetaData[]) decs.toArray(new FieldMetaData[decs.size()]);
     }
 
@@ -479,10 +479,10 @@ public class ApplicationIdTool {
         CodeFormat imports = newCodeFormat();
         String base = ClassUtil.getPackageName(_meta.getObjectIdType());
         String pkg;
-        for (Object o : pkgs) {
-            pkg = (String) o;
+        for (Iterator itr = pkgs.iterator(); itr.hasNext();) {
+            pkg = (String) itr.next();
             if (pkg.length() > 0 && !"java.lang".equals(pkg)
-                    && !base.equals(pkg)) {
+                && !base.equals(pkg)) {
                 if (imports.length() > 0)
                     imports.endl();
                 imports.append("import ").append(pkg).append(".*;");
@@ -507,10 +507,10 @@ public class ApplicationIdTool {
         pkgs.add("java.io");
         pkgs.add("java.util");
         Class type;
-        for (FieldMetaData field : _fields) {
-            type = field.getObjectIdFieldType();
+        for (int i = 0; i < _fields.length; i++) {
+            type = _fields[i].getObjectIdFieldType();
             if (type != byte[].class && type != char[].class
-                    && !type.getName().startsWith("java.sql.")) {
+                && !type.getName().startsWith("java.sql.")) {
                 pkgs.add(ClassUtil.getPackageName(type));
             }
         }
@@ -632,11 +632,11 @@ public class ApplicationIdTool {
         code.openBrace(2).endl();
 
         // if we have any Object-type fields, die immediately
-        for (FieldMetaData fieldMetaData : _fields) {
-            if (fieldMetaData.getObjectIdFieldType() != Object.class)
+        for (int i = 0; i < _fields.length; i++) {
+            if (_fields[i].getObjectIdFieldType() != Object.class)
                 continue;
             code.tab(2).append("throw new UnsupportedOperationException").
-                    parens().append(";").endl();
+                parens().append(";").endl();
             code.closeBrace(2);
             return code.toString();
         }
@@ -659,12 +659,12 @@ public class ApplicationIdTool {
             code.append(";").endl();
         }
 
-        for (FieldMetaData field : _fields) {
+        for (int i = 0; i < _fields.length; i++) {
             if (toke != null) {
                 code.tab(2).append("str = toke.nextToken").parens().
-                        append(";").endl();
+                    append(";").endl();
             }
-            code.tab(2).append(getConversionCode(field, "str")).endl();
+            code.tab(2).append(getConversionCode(_fields[i], "str")).endl();
         }
         if (_abstract || hasSuperclass)
             code.tab(2).append("return toke;").endl();
@@ -895,9 +895,9 @@ public class ApplicationIdTool {
                 code.append("17;");
             code.endl();
 
-            for (FieldMetaData field : _fields) {
+            for (int i = 0; i < _fields.length; i++) {
                 code.tab(2).append("rs = rs * 37 + ");
-                appendHashCodeCode(field, code);
+                appendHashCodeCode(_fields[i], code);
                 code.append(";").endl();
             }
             code.tab(2).append("return rs;").endl();
@@ -1365,9 +1365,8 @@ public class ApplicationIdTool {
                 getMetaDataFactory().newClassArgParser();
             cap.setClassLoader(loader);
             classes = new HashSet();
-            for (String arg : args) {
-                classes.addAll(Arrays.asList(cap.parseTypes(arg)));
-            }
+            for (int i = 0; i < args.length; i++)
+                classes.addAll(Arrays.asList(cap.parseTypes(args[i])));
         }
         if (flags.name != null && classes.size() > 1)
             throw new UserException(_loc.get("name-mult-args", classes));
@@ -1377,8 +1376,8 @@ public class ApplicationIdTool {
         ClassMetaData meta;
         BCClassLoader bc = AccessController
             .doPrivileged(J2DoPrivHelper.newBCClassLoaderAction(new Project()));
-        for (Object aClass : classes) {
-            cls = (Class) aClass;
+        for (Iterator itr = classes.iterator(); itr.hasNext();) {
+            cls = (Class) itr.next();
             log.info(_loc.get("appid-running", cls));
 
             meta = repos.getMetaData(cls, null, false);
@@ -1392,8 +1391,7 @@ public class ApplicationIdTool {
             if (tool.run()) {
                 log.info(_loc.get("appid-output", tool.getFile()));
                 tool.record();
-            }
-            else
+            } else
                 log.info(_loc.get("appid-norun"));
         }
         bc.getProject().clear();

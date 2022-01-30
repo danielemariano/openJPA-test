@@ -34,8 +34,7 @@ import org.apache.openjpa.lib.util.Options;
  * @version $Id$
  * @since 1.0
  */
-@Mojo(name="schema", defaultPhase=LifecyclePhase.PROCESS_CLASSES, requiresDependencyResolution=ResolutionScope.COMPILE,
-        threadSafe = true)
+@Mojo(name="schema", defaultPhase=LifecyclePhase.PROCESS_CLASSES, requiresDependencyResolution=ResolutionScope.COMPILE)
 public class OpenJpaSchemaMojo extends AbstractOpenJpaMappingToolMojo {
 
     /**

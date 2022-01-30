@@ -152,8 +152,8 @@ public class MultiClassLoader extends ClassLoader {
 
         // use iterator so that the thread loader is not resolved
         boolean added = false;
-        for (ClassLoader loader : multi._loaders) {
-            if (addClassLoader(index, loader)) {
+        for (Iterator<ClassLoader> itr = multi._loaders.iterator(); itr.hasNext();) {
+            if (addClassLoader(index, (ClassLoader) itr.next())) {
                 index++;
                 added = true;
             }
@@ -172,9 +172,8 @@ public class MultiClassLoader extends ClassLoader {
 
         // use iterator so that the thread loader is not resolved
         boolean added = false;
-        for (ClassLoader loader : multi._loaders) {
-            added = addClassLoader(loader) || added;
-        }
+        for (Iterator<ClassLoader> itr = multi._loaders.iterator(); itr.hasNext();)
+            added = addClassLoader((ClassLoader) itr.next()) || added;
         return added;
     }
 
@@ -211,15 +210,14 @@ public class MultiClassLoader extends ClassLoader {
     @Override
     protected Class<?> findClass(String name) throws ClassNotFoundException {
         ClassLoader loader;
-        for (ClassLoader classLoader : _loaders) {
-            loader = classLoader;
+        for (Iterator<ClassLoader> itr = _loaders.iterator(); itr.hasNext();) {
+            loader = (ClassLoader) itr.next();
             if (loader == THREAD_LOADER)
                 loader = AccessController.doPrivileged(
-                        J2DoPrivHelper.getContextClassLoaderAction());
+                    J2DoPrivHelper.getContextClassLoaderAction());
             try {
                 return Class.forName(name, false, loader);
-            }
-            catch (Throwable t) {
+            } catch (Throwable t) {
             }
         }
         throw new ClassNotFoundException(name);
@@ -229,17 +227,17 @@ public class MultiClassLoader extends ClassLoader {
     protected URL findResource(String name) {
         ClassLoader loader;
         URL rsrc;
-        for (ClassLoader classLoader : _loaders) {
-            loader = classLoader;
+        for (Iterator<ClassLoader> itr = _loaders.iterator(); itr.hasNext();) {
+            loader = (ClassLoader) itr.next();
             if (loader == THREAD_LOADER)
                 loader = AccessController.doPrivileged(
-                        J2DoPrivHelper.getContextClassLoaderAction());
+                    J2DoPrivHelper.getContextClassLoaderAction());
 
             if (loader == null) // skip
                 continue;
 
             rsrc = AccessController.doPrivileged(
-                    J2DoPrivHelper.getResourceAction(loader, name));
+                J2DoPrivHelper.getResourceAction(loader, name));
             if (rsrc != null)
                 return rsrc;
         }
@@ -252,25 +250,24 @@ public class MultiClassLoader extends ClassLoader {
         Enumeration<URL> rsrcs;
         URL rsrc;
         Vector<URL> all = new Vector<>();
-        for (ClassLoader classLoader : _loaders) {
-            loader = classLoader;
+        for (Iterator<ClassLoader> itr = _loaders.iterator(); itr.hasNext();) {
+            loader = itr.next();
             if (loader == THREAD_LOADER)
                 loader = AccessController.doPrivileged(
-                        J2DoPrivHelper.getContextClassLoaderAction());
+                    J2DoPrivHelper.getContextClassLoaderAction());
 
             if (loader == null) // skip
                 continue;
 
             try {
                 rsrcs = AccessController.doPrivileged(
-                        J2DoPrivHelper.getResourcesAction(loader, name));
+                    J2DoPrivHelper.getResourcesAction(loader, name));
                 while (rsrcs.hasMoreElements()) {
                     rsrc = rsrcs.nextElement();
                     if (!all.contains(rsrc))
                         all.addElement(rsrc);
                 }
-            }
-            catch (PrivilegedActionException pae) {
+            } catch (PrivilegedActionException pae) {
                 throw (IOException) pae.getException();
             }
         }

@@ -166,17 +166,16 @@ public class AttachManager {
      */
     private List invokeAfterAttach(List exceps) {
         Set entries = _attached.entrySet();
-        for (Object o : entries) {
-            Map.Entry entry = (Map.Entry) o;
+        for (Iterator i = entries.iterator(); i.hasNext();) {
+            Map.Entry entry = (Map.Entry) i.next();
             Object attached = entry.getValue();
             StateManagerImpl sm = _broker.getStateManagerImpl(attached, true);
             if (sm.isNew())
                 continue;
             try {
                 _broker.fireLifecycleEvent(attached, entry.getKey(),
-                        sm.getMetaData(), LifecycleEvent.AFTER_ATTACH);
-            }
-            catch (RuntimeException re) {
+                    sm.getMetaData(), LifecycleEvent.AFTER_ATTACH);
+            } catch (RuntimeException re) {
                 exceps = add(exceps, re);
                 if (_failFast && re instanceof CallbackException)
                     break;

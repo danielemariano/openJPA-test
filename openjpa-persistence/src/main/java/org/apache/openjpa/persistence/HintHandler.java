@@ -146,22 +146,21 @@ public class HintHandler  {
         if (QueryHints.HINT_SUBCLASSES.equals(key)) {
             if (value instanceof String)
                 value = Boolean.valueOf((String) value);
-            owner.setSubclasses((Boolean) value);
+            owner.setSubclasses(((Boolean) value).booleanValue());
         } else if (QueryHints.HINT_RELAX_BIND_PARAM_TYPE_CHECK.equals(key)) {
             owner.setRelaxBindParameterTypeChecking(value);
         } else if (QueryHints.HINT_FILTER_LISTENER.equals(key)) {
             owner.addFilterListener(Filters.hintToFilterListener(value, loader));
         } else if (QueryHints.HINT_FILTER_LISTENERS.equals(key)) {
             FilterListener[] arr = Filters.hintToFilterListeners(value, loader);
-            for (FilterListener filterListener : arr) {
-                owner.addFilterListener(filterListener);
-            }
+            for (int i = 0; i < arr.length; i++)
+                owner.addFilterListener(arr[i]);
         } else if (QueryHints.HINT_AGGREGATE_LISTENER.equals(key)) {
             owner.addAggregateListener(Filters.hintToAggregateListener(value, loader));
         } else if (QueryHints.HINT_AGGREGATE_LISTENERS.equals(key)) {
             AggregateListener[] arr = Filters.hintToAggregateListeners(value, loader);
-            for (AggregateListener aggregateListener : arr) {
-                owner.addAggregateListener(aggregateListener);
+            for (int i = 0; i < arr.length; i++) {
+                owner.addAggregateListener(arr[i]);
             }
         } else if (QueryHints.HINT_RESULT_COUNT.equals(key)) {
             int v = (Integer) Filters.convert(value, Integer.class);

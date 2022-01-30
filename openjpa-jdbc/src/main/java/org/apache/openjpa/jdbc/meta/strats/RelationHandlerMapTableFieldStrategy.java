@@ -20,6 +20,7 @@ package org.apache.openjpa.jdbc.meta.strats;
 
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.openjpa.jdbc.kernel.EagerFetchModes;
@@ -204,12 +205,12 @@ public class RelationHandlerMapTableFieldStrategy
         StoreContext ctx = store.getContext();
         OpenJPAStateManager keysm;
         Map.Entry entry;
-        for (Object o : map.entrySet()) {
-            entry = (Map.Entry) o;
+        for (Iterator itr = map.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
             keysm = RelationStrategies.getStateManager(entry.getKey(), ctx);
             key.setForeignKey(row, keysm);
             HandlerStrategies.set(val, entry.getValue(), store, row, _vcols,
-                    _vio, true);
+                _vio, true);
             rm.flushSecondaryRow(row);
         }
     }
@@ -241,8 +242,8 @@ public class RelationHandlerMapTableFieldStrategy
             Row delRow = rm.getSecondaryRow(field.getTable(),
                 Row.ACTION_DELETE);
             delRow.whereForeignKey(field.getJoinForeignKey(), sm);
-            for (Object o : rem) {
-                keysm = RelationStrategies.getStateManager(o, ctx);
+            for (Iterator itr = rem.iterator(); itr.hasNext();) {
+                keysm = RelationStrategies.getStateManager(itr.next(), ctx);
                 key.whereForeignKey(delRow, keysm);
                 rm.flushSecondaryRow(delRow);
             }
@@ -258,12 +259,12 @@ public class RelationHandlerMapTableFieldStrategy
             addRow.setForeignKey(field.getJoinForeignKey(),
                 field.getJoinColumnIO(), sm);
 
-            for (Object o : add) {
-                mkey = o;
+            for (Iterator itr = add.iterator(); itr.hasNext();) {
+                mkey = itr.next();
                 keysm = RelationStrategies.getStateManager(mkey, ctx);
                 key.setForeignKey(addRow, keysm);
                 HandlerStrategies.set(val, map.get(mkey), store, addRow,
-                        _vcols, _vio, true);
+                    _vcols, _vio, true);
                 rm.flushSecondaryRow(addRow);
             }
         }
@@ -275,12 +276,12 @@ public class RelationHandlerMapTableFieldStrategy
                 Row.ACTION_UPDATE);
             changeRow.whereForeignKey(field.getJoinForeignKey(), sm);
 
-            for (Object o : change) {
-                mkey = o;
+            for (Iterator itr = change.iterator(); itr.hasNext();) {
+                mkey = itr.next();
                 keysm = RelationStrategies.getStateManager(mkey, ctx);
                 key.whereForeignKey(changeRow, keysm);
                 HandlerStrategies.set(val, map.get(mkey), store, changeRow,
-                        _vcols, _vio, true);
+                    _vcols, _vio, true);
                 rm.flushSecondaryRow(changeRow);
             }
         }

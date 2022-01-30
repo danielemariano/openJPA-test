@@ -71,9 +71,8 @@ public class PrimaryKey extends LocalConstraint {
             && table.getSchema().getSchemaGroup() != null) {
             ForeignKey[] fks = table.getSchema().getSchemaGroup().
                 findExportedForeignKeys(this);
-            for (ForeignKey fk : fks) {
-                fk.getTable().removeForeignKey(fk);
-            }
+            for (int i = 0; i < fks.length; i++)
+                fks[i].getTable().removeForeignKey(fks[i]);
         }
         super.remove();
     }

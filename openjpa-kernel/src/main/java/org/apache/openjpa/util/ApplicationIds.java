@@ -152,7 +152,7 @@ public class ApplicationIds {
                 case JavaTypes.CHAR:
                 case JavaTypes.CHAR_OBJ:
                     return new CharId(meta.getDescribedType(),
-                        val == null ? 0 : (Character) val);
+                        val == null ? 0 : ((Character) val).charValue());
                 case JavaTypes.DOUBLE:
                 case JavaTypes.DOUBLE_OBJ:
                     if (!convert && !(val instanceof Double))
@@ -352,8 +352,8 @@ public class ApplicationIds {
      */
     private static boolean hasPCPrimaryKeyFields(ClassMetaData meta) {
         FieldMetaData[] fmds = meta.getPrimaryKeyFields();
-        for (FieldMetaData fmd : fmds)
-            if (fmd.getDeclaredTypeCode() == JavaTypes.PC)
+        for (int i = 0; i < fmds.length; i++)
+            if (fmds[i].getDeclaredTypeCode() == JavaTypes.PC)
                 return true;
         return false;
     }
@@ -379,22 +379,21 @@ public class ApplicationIds {
 
         Field field;
         Object val;
-        for (FieldMetaData fmd : fmds) {
-            if (fmd.getManagement() != FieldMetaData.MANAGE_PERSISTENT)
+        for (int i = 0; i < fmds.length; i++) {
+            if (fmds[i].getManagement() != FieldMetaData.MANAGE_PERSISTENT)
                 continue;
 
             if (AccessCode.isField(meta.getAccessType())) {
-                field = Reflection.findField(oidType, fmd.getName(),
+                    field = Reflection.findField(oidType, fmds[i].getName(),
                         true);
-                Reflection.set(copy, field, Reflection.get(oid, field));
+                    Reflection.set(copy, field, Reflection.get(oid, field));
+                } else { // property
+                    val = Reflection.get(oid, Reflection.findGetter(oidType,
+                        fmds[i].getName(), true));
+                    Reflection.set(copy, Reflection.findSetter(oidType, fmds[i].
+                        getName(), fmds[i].getObjectIdFieldType(), true), val);
+                }
             }
-            else { // property
-                val = Reflection.get(oid, Reflection.findGetter(oidType,
-                        fmd.getName(), true));
-                Reflection.set(copy, Reflection.findSetter(oidType, fmd.
-                        getName(), fmd.getObjectIdFieldType(), true), val);
-            }
-        }
             return copy;
     }
 
@@ -480,18 +479,18 @@ public class ApplicationIds {
      */
     private static boolean assign(OpenJPAStateManager sm, StoreManager store,
         FieldMetaData[] pks, boolean preFlush) {
-        // If we are generating values...
-        for (FieldMetaData pk : pks)
-            if (pk.getValueStrategy() != ValueStrategies.NONE) {
+        for (int i = 0; i < pks.length; i++)
+            // If we are generating values...
+            if (pks[i].getValueStrategy() != ValueStrategies.NONE) {
                 // If a value already exists on this field, throw exception.
                 // This is considered an application coding error.
-                if (!sm.isDefaultValue(pk.getIndex()))
+                if (!sm.isDefaultValue(pks[i].getIndex()))
                     throw new InvalidStateException(_loc2.get("existing-value-override-excep",
-                            pk.getFullName(false), Exceptions.toString(sm.getPersistenceCapable()),
+                            pks[i].getFullName(false), Exceptions.toString(sm.getPersistenceCapable()),
                             sm.getPCState().getClass().getSimpleName()));
                 // Assign the generated value
-                if (store.assignField(sm, pk.getIndex(), preFlush))
-                    pk.setValueGenerated(true);
+                if (store.assignField(sm, pks[i].getIndex(), preFlush))
+                    pks[i].setValueGenerated(true);
                 else
                     return false;
             }
@@ -612,17 +611,17 @@ public class ApplicationIds {
 
         @Override
         public void storeByteField(int field, byte val) {
-            store(val);
+            store(Byte.valueOf(val));
         }
 
         @Override
         public void storeCharField(int field, char val) {
-            store(val);
+            store(Character.valueOf(val));
         }
 
         @Override
         public void storeShortField(int field, short val) {
-            store(val);
+            store(Short.valueOf(val));
         }
 
         @Override
@@ -637,12 +636,12 @@ public class ApplicationIds {
 
         @Override
         public void storeFloatField(int field, float val) {
-            store(val);
+            store(Float.valueOf(val));
         }
 
         @Override
         public void storeDoubleField(int field, double val) {
-            store(val);
+            store(Double.valueOf(val));
         }
 
         @Override
@@ -662,7 +661,7 @@ public class ApplicationIds {
 
         @Override
         public char fetchCharField(int field) {
-            return (Character) retrieve(field);
+            return ((Character) retrieve(field)).charValue();
         }
 
         @Override

@@ -19,6 +19,7 @@
 package org.apache.openjpa.lib.meta;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -62,10 +63,14 @@ public abstract class CFMetaDataSerializer extends XMLMetaDataSerializer {
         String packageName;
         Collection<Object> packageObjs;
         Object obj;
-        for (Object o : objs) {
-            obj = o;
+        for (Iterator<Object> itr = objs.iterator(); itr.hasNext();) {
+            obj = itr.next();
             packageName = getPackage(obj);
-            packageObjs = packages.computeIfAbsent(packageName, k -> new LinkedList<>());
+            packageObjs = packages.get(packageName);
+            if (packageObjs == null) {
+                packageObjs = new LinkedList<>();
+                packages.put(packageName, packageObjs);
+            }
             packageObjs.add(obj);
         }
         return packages;
@@ -90,10 +95,10 @@ public abstract class CFMetaDataSerializer extends XMLMetaDataSerializer {
 
         // check other known packages
         String[] packages = CFMetaDataParser.PACKAGES;
-        for (String aPackage : packages)
-            if (name.startsWith(aPackage)
-                    && name.lastIndexOf('.') == aPackage.length() - 1)
-                return name.substring(aPackage.length());
+        for (int i = 0; i < packages.length; i++)
+            if (name.startsWith(packages[i])
+                && name.lastIndexOf('.') == packages[i].length() - 1)
+                return name.substring(packages[i].length());
         return name;
     }
 }

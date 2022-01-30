@@ -604,7 +604,7 @@ public class DistributedJDBCConfigurationImpl extends JDBCConfigurationImpl
         return result;
     }
 
-    Slice addSlice(String name, Map newProps) {
+    public Slice addSlice(String name, Map newProps) {
         String prefix = PREFIX_SLICE + DOT + name + DOT;
         for (Object key : newProps.keySet()) {
             if (!String.class.isInstance(key)

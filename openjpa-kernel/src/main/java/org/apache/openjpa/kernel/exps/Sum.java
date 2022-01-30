@@ -19,6 +19,7 @@
 package org.apache.openjpa.kernel.exps;
 
 import java.util.Collection;
+import java.util.Iterator;
 
 import org.apache.openjpa.kernel.Filters;
 
@@ -58,8 +59,8 @@ class Sum
         Class type = getType(c);
         Object sum = Filters.convert(0, type);
         Object cur;
-        for (Object o : os) {
-            cur = o;
+        for (Iterator itr = os.iterator(); itr.hasNext();) {
+            cur = itr.next();
             if (cur != null)
                 sum = Filters.add(sum, type, cur, c);
         }

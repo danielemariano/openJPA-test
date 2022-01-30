@@ -123,9 +123,8 @@ public class CoalesceExpression
     @Override
     public void acceptVisit(ExpressionVisitor visitor) {
         visitor.enter(this);
-        for (Val val : _vals) {
-            val.acceptVisit(visitor);
-        }
+        for (int i = 0; i < _vals.length; i++)
+            _vals[i].acceptVisit(visitor);
         visitor.exit(this);
     }
 

@@ -193,7 +193,7 @@ public class MethodStoreQuery
                             continue;
 
                         args[OBJ_INDEX] = obj;
-                        if ((Boolean) invoke(q, args))
+                        if (((Boolean) invoke(q, args)).booleanValue())
                             results.add(obj);
                     }
                 }
@@ -284,7 +284,7 @@ public class MethodStoreQuery
             int base = positionalParameterBase(userParams.keySet());
             for (Object key : paramTypes.keySet()) {
                 int idx = (key instanceof Integer)
-                    ? (Integer) key - base
+                    ? ((Integer)key).intValue() - base
                     : paramTypes.indexOf(key);
                 if (idx >= arr.length || idx < 0)
                         throw new UserException(_loc.get("gap-query-param",
@@ -302,8 +302,8 @@ public class MethodStoreQuery
             int low = Integer.MAX_VALUE;
             Object obj;
             int val;
-            for (Object param : params) {
-                obj = param;
+            for (Iterator itr = params.iterator(); itr.hasNext();) {
+                obj = itr.next();
                 if (!(obj instanceof Number))
                     return 0; // use 0 base when params are mixed types
 

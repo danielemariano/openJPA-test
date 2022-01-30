@@ -122,7 +122,6 @@ public class EntityManagerImpl
     protected RuntimeExceptionTranslator _ret = PersistenceExceptions.getRollbackTranslator(this);
     private boolean _convertPositionalParams = false;
     private boolean _isJoinedToTransaction;
-    private Map<String, Object> properties;
 
     public EntityManagerImpl() {
         // for Externalizable
@@ -262,7 +261,6 @@ public class EntityManagerImpl
     public void setMultithreaded(boolean multithreaded) {
         assertNotCloseInvoked();
         _broker.setMultithreaded(multithreaded);
-        properties = null;
     }
 
     @Override
@@ -274,7 +272,6 @@ public class EntityManagerImpl
     public void setIgnoreChanges(boolean val) {
         assertNotCloseInvoked();
         _broker.setIgnoreChanges(val);
-        properties = null;
     }
 
     @Override
@@ -286,7 +283,6 @@ public class EntityManagerImpl
     public void setNontransactionalRead(boolean val) {
         assertNotCloseInvoked();
         _broker.setNontransactionalRead(val);
-        properties = null;
     }
 
     @Override
@@ -298,7 +294,6 @@ public class EntityManagerImpl
     public void setNontransactionalWrite(boolean val) {
         assertNotCloseInvoked();
         _broker.setNontransactionalWrite(val);
-        properties = null;
     }
 
     @Override
@@ -310,7 +305,6 @@ public class EntityManagerImpl
     public void setOptimistic(boolean val) {
         assertNotCloseInvoked();
         _broker.setOptimistic(val);
-        properties = null;
     }
 
     @Override
@@ -322,14 +316,12 @@ public class EntityManagerImpl
     public void setRestoreState(RestoreStateType val) {
         assertNotCloseInvoked();
         _broker.setRestoreState(val.toKernelConstant());
-        properties = null;
     }
 
     @Override
     public void setRestoreState(int restore) {
         assertNotCloseInvoked();
         _broker.setRestoreState(restore);
-        properties = null;
     }
 
     @Override
@@ -341,7 +333,6 @@ public class EntityManagerImpl
     public void setRetainState(boolean val) {
         assertNotCloseInvoked();
         _broker.setRetainState(val);
-        properties = null;
     }
 
     @Override
@@ -353,14 +344,12 @@ public class EntityManagerImpl
     public void setAutoClear(AutoClearType val) {
         assertNotCloseInvoked();
         _broker.setAutoClear(val.toKernelConstant());
-        properties = null;
     }
 
     @Override
     public void setAutoClear(int autoClear) {
         assertNotCloseInvoked();
         _broker.setAutoClear(autoClear);
-        properties = null;
     }
 
     @Override
@@ -372,14 +361,12 @@ public class EntityManagerImpl
     public void setDetachState(DetachStateType type) {
         assertNotCloseInvoked();
         _broker.setDetachState(type.toKernelConstant());
-        properties = null;
     }
 
     @Override
     public void setDetachState(int detach) {
         assertNotCloseInvoked();
         _broker.setDetachState(detach);
-        properties = null;
     }
 
     @Override
@@ -391,35 +378,30 @@ public class EntityManagerImpl
     public void setAutoDetach(AutoDetachType flag) {
         assertNotCloseInvoked();
         _broker.setAutoDetach(AutoDetachType.fromEnumSet(EnumSet.of(flag)));
-        properties = null;
     }
 
     @Override
     public void setAutoDetach(EnumSet<AutoDetachType> flags) {
         assertNotCloseInvoked();
         _broker.setAutoDetach(AutoDetachType.fromEnumSet(flags));
-        properties = null;
     }
 
     @Override
     public void setAutoDetach(int autoDetachFlags) {
         assertNotCloseInvoked();
         _broker.setAutoDetach(autoDetachFlags);
-        properties = null;
     }
 
     @Override
     public void setAutoDetach(AutoDetachType value, boolean on) {
         assertNotCloseInvoked();
         _broker.setAutoDetach(AutoDetachType.fromEnumSet(EnumSet.of(value)),on);
-        properties = null;
     }
 
     @Override
     public void setAutoDetach(int flag, boolean on) {
         assertNotCloseInvoked();
         _broker.setAutoDetach(flag, on);
-        properties = null;
     }
 
     @Override
@@ -431,7 +413,6 @@ public class EntityManagerImpl
     public void setEvictFromStoreCache(boolean evict) {
         assertNotCloseInvoked();
         _broker.setEvictFromDataCache(evict);
-        properties = null;
     }
 
     @Override
@@ -443,7 +424,6 @@ public class EntityManagerImpl
     public void setPopulateStoreCache(boolean cache) {
         assertNotCloseInvoked();
         _broker.setPopulateDataCache(cache);
-        properties = null;
     }
 
     @Override
@@ -455,7 +435,6 @@ public class EntityManagerImpl
     public void setTrackChangesByType(boolean trackByType) {
         assertNotCloseInvoked();
         _broker.setTrackChangesByType(trackByType);
-        properties = null;
     }
 
     @Override
@@ -688,10 +667,11 @@ public class EntityManagerImpl
     public void commit() {
         try {
             _broker.commit();
-        } catch (RollbackException | IllegalStateException e) {
+        } catch (RollbackException e) {
             throw e;
-        }
-        catch (Exception e) {
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
         	// Per JPA 2.0 spec, if the exception was due to a JSR-303
             // constraint violation, the ConstraintViolationException should be
             // thrown.  Since JSR-303 is optional, the cast to RuntimeException
@@ -1368,7 +1348,6 @@ public class EntityManagerImpl
         _broker.assertOpen();
         _broker.getFetchConfiguration().setFlushBeforeQueries
             (toFlushBeforeQueries(flushMode));
-        properties = null;
     }
 
     @Override
@@ -1813,10 +1792,6 @@ public class EntityManagerImpl
         }
     }
 
-    public void setProperties(final Map<String, Object> emEmptyPropsProperties) {
-        this.properties = emEmptyPropsProperties;
-    }
-
     private static class BrokerBytesInputStream extends ObjectInputStream {
 
         private OpenJPAConfiguration conf;
@@ -1889,11 +1864,11 @@ public class EntityManagerImpl
                     String superName = PCEnhancer.toManagedTypeName(className);
                     ClassMetaData[] metas = conf.getMetaDataRepositoryInstance()
                         .getMetaDatas();
-                    for (ClassMetaData meta : metas) {
+                    for (int i = 0; i < metas.length; i++) {
                         if (superName.equals(
-                                meta.getDescribedType().getName())) {
+                            metas[i].getDescribedType().getName())) {
                             return PCRegistry.getPCType(
-                                    meta.getDescribedType());
+                                metas[i].getDescribedType());
                         }
                     }
 
@@ -1960,9 +1935,6 @@ public class EntityManagerImpl
      */
     @Override
     public Map<String, Object> getProperties() {
-        if (properties != null) {
-            return properties;
-        }
         Map<String,Object> props = _broker.getProperties();
         for (String s : _broker.getSupportedProperties()) {
             String kernelKey = getBeanPropertyName(s);
@@ -1985,7 +1957,6 @@ public class EntityManagerImpl
                 props.put(userKey.equals(kernelKey) ? s : userKey, JPAProperties.convertToUserValue(userKey, kvalue));
             }
         }
-        properties = props; // no need to synchronize, we don't care of the actual ref, we just want it as value
         return props;
     }
 
@@ -2142,7 +2113,6 @@ public class EntityManagerImpl
      */
     @Override
     public void setProperty(String prop, Object value) {
-        properties = null;
         if (!setKernelProperty(this, prop, value)) {
             if (!setKernelProperty(this.getFetchPlan(), prop, value)) {
                 Log log = getConfiguration().getLog(OpenJPAConfiguration.LOG_RUNTIME);
@@ -2170,7 +2140,6 @@ public class EntityManagerImpl
             kType  = setter.getParameterTypes()[0];
             kValue = convertUserValue(original, value, kType);
             Reflection.set(target, setter, kValue);
-            properties = null;
             return true;
         } else {
             Field field = Reflection.findField(target.getClass(), beanProp, false);
@@ -2178,7 +2147,6 @@ public class EntityManagerImpl
                 kType  = field.getType();
                 kValue = convertUserValue(original, value, kType);
                 Reflection.set(target, field, kValue);
-                properties = null;
                 return true;
             }
         }

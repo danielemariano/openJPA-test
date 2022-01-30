@@ -66,7 +66,7 @@ public class StoredProcedure {
      */
     public enum PARAM {UNKNOW, IN, INOUT, RESULT, OUT, RETURN}
 
-    public enum SQL {NONE,MODIFY,READ, CONTAINS}
+    public enum SQL {NONE,MODIFY,READ, CONTAINS};
 
     /**
      * Create a procedure of the given name.
@@ -243,9 +243,7 @@ public class StoredProcedure {
         }
         buf.append(") ");
         //buf.append("(");
-        for (String s : _sql) {
-            buf.append(s).append(" ");
-        }
+        for (String s : _sql) buf.append(s).append(" ");
         //buf.append(")");
 
         return buf.toString().trim();

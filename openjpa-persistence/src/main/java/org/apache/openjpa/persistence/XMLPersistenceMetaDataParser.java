@@ -1096,8 +1096,8 @@ public class XMLPersistenceMetaDataParser
             meta = repos.addMetaData(_cls, accessCode, metaDataComplete);
             FieldMetaData[] fmds = meta.getFields();
             if (metaDataComplete) {
-                for (FieldMetaData fmd : fmds) {
-                    fmd.setExplicit(true);
+                for (int i = 0; i < fmds.length; i++) {
+                    fmds[i].setExplicit(true);
                 }
             }
             meta.setEnvClassLoader(_envLoader);
@@ -1955,7 +1955,7 @@ public class XMLPersistenceMetaDataParser
             lm = lm.toLowerCase();
             if (lm.contains("pessimistic")) {
                 if (lmt == LockModeType.NONE && !optimistic) {
-                    if (log != null && log.isWarnEnabled()) {
+                    if (log != null && log.isWarnEnabled() == true) {
                         log.warn(_loc.get("override-named-query-lock-mode", new String[] { "xml", queryName,
                             _cls.getName() }));
                     }
@@ -2186,16 +2186,16 @@ public class XMLPersistenceMetaDataParser
             adapter = new MethodLifecycleCallbacks(_cls,
                 attrs.getValue("method-name"), false);
 
-        for (int event : events) {
+        for (int i = 0; i < events.length; i++) {
+            int event = events[i];
             if (_listener != null) {
                 MetaDataParsers.validateMethodsForSameCallback(_listener,
-                        _callbacks[event], ((BeanLifecycleCallbacks) adapter).
-                                getCallbackMethod(), callback, _conf, getLog());
-            }
-            else {
+                    _callbacks[event], ((BeanLifecycleCallbacks) adapter).
+                    getCallbackMethod(), callback, _conf, getLog());
+            } else {
                 MetaDataParsers.validateMethodsForSameCallback(_cls,
-                        _callbacks[event], ((MethodLifecycleCallbacks) adapter).
-                                getCallbackMethod(), callback, _conf, getLog());
+                    _callbacks[event], ((MethodLifecycleCallbacks) adapter).
+                    getCallbackMethod(), callback, _conf, getLog());
 
             }
             if (_callbacks[event] == null)
@@ -2342,7 +2342,11 @@ public class XMLPersistenceMetaDataParser
      * Add the fmd to the defer list for for the given embeddable type
      */
     protected void deferEmbeddable(Class<?> embedType, MetaDataContext fmd) {
-        ArrayList<MetaDataContext> fmds = _embeddables.computeIfAbsent(embedType, k -> new ArrayList<>());
+        ArrayList<MetaDataContext> fmds = _embeddables.get(embedType);
+        if (fmds == null) {
+            fmds = new ArrayList<>();
+            _embeddables.put(embedType, fmds);
+        }
         fmds.add(fmd);
     }
 

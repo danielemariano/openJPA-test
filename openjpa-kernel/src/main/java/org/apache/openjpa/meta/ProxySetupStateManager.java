@@ -45,43 +45,43 @@ class ProxySetupStateManager
 
     public void setProxyData(PersistenceCapable pc, ClassMetaData meta) {
         FieldMetaData[] fmds = meta.getFields();
-        for (FieldMetaData fmd : fmds) {
+        for (int i = 0; i < fmds.length; i++) {
             // This method only gets called for concrete types. We need to do this processing for fields that might
             // not be owned by pc.
 
-            switch (fmd.getDeclaredTypeCode()) {
+            switch (fmds[i].getDeclaredTypeCode()) {
                 case JavaTypes.CALENDAR:
-                    pc.pcProvideField(fmd.getIndex());
+                    pc.pcProvideField(fmds[i].getIndex());
                     if (_object != null) {
                         // specified timezone
-                        fmd
-                                .setInitializer(((Calendar) _object).getTimeZone());
+                        fmds[i]
+                            .setInitializer(((Calendar) _object).getTimeZone());
                     }
                     break;
                 case JavaTypes.COLLECTION:
-                    pc.pcProvideField(fmd.getIndex());
+                    pc.pcProvideField(fmds[i].getIndex());
                     if (_object != null) {
                         // more specific type?
-                        if (_object.getClass() != fmd.getDeclaredType())
-                            fmd.setProxyType(_object.getClass());
+                        if (_object.getClass() != fmds[i].getDeclaredType())
+                            fmds[i].setProxyType(_object.getClass());
 
                         // custom comparator?
                         if (_object instanceof SortedSet)
-                            fmd.setInitializer(((SortedSet) _object).
-                                    comparator());
+                            fmds[i].setInitializer(((SortedSet) _object).
+                                comparator());
                     }
                     break;
                 case JavaTypes.MAP:
-                    pc.pcProvideField(fmd.getIndex());
+                    pc.pcProvideField(fmds[i].getIndex());
                     if (_object != null) {
                         // more specific type?
-                        if (_object.getClass() != fmd.getDeclaredType())
-                            fmd.setProxyType(_object.getClass());
+                        if (_object.getClass() != fmds[i].getDeclaredType())
+                            fmds[i].setProxyType(_object.getClass());
 
                         // custom comparator?
                         if (_object instanceof SortedMap)
-                            fmd.setInitializer(((SortedMap) _object).
-                                    comparator());
+                            fmds[i].setInitializer(((SortedMap) _object).
+                                comparator());
                     }
                     break;
             }

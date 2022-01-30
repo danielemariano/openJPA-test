@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -185,8 +186,9 @@ public class ClassArgParser {
         Map.Entry<Object, String[]> entry;
         String[] names;
         Class<?>[] objs;
-        for (Map.Entry<Object, String[]> objectEntry : map.entrySet()) {
-            entry = objectEntry;
+        for (Iterator<Map.Entry<Object, String[]>> i =
+            map.entrySet().iterator(); i.hasNext();) {
+            entry = i.next();
             names = entry.getValue();
             objs = new Class[names.length];
             for (int j = 0; j < names.length; j++) {
@@ -214,8 +216,8 @@ public class ClassArgParser {
                 return new String[]{ getFromClassFile(file) };
             if (arg.endsWith(".java"))
                 return new String[]{ getFromJavaFile(file) };
-            if (AccessController.doPrivileged(
-                    J2DoPrivHelper.existsAction(file))) {
+            if ((AccessController.doPrivileged(
+                J2DoPrivHelper.existsAction(file))).booleanValue()) {
                 Collection<String> col = getFromMetaDataFile(file);
                 return col.toArray(new String[col.size()]);
             }
@@ -504,11 +506,11 @@ public class ClassArgParser {
 
         // make sure the rest of the element name matches
         char[] match = _endElements[matchIdx];
-        for (char c : match) {
+        for (int i = 0; i < match.length; i++) {
             ch = in.read();
             if (ch == -1)
                 return TOKEN_EOF;
-            if (ch != c)
+            if (ch != match[i])
                 return TOKEN_NONE;
         }
 

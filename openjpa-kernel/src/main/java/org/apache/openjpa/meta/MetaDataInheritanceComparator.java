@@ -50,15 +50,15 @@ public class MetaDataInheritanceComparator
         ClassMetaData m2 = (ClassMetaData) o2;
 
         FieldMetaData[] fmds = m1.getDeclaredFields();
-        for (FieldMetaData fieldMetaData : fmds) {
-            if (fieldMetaData.isPrimaryKey() && m2.getDescribedType().
-                    isAssignableFrom(fieldMetaData.getDeclaredType()))
+        for (int i = 0; i < fmds.length; i++) {
+            if (fmds[i].isPrimaryKey() && m2.getDescribedType().
+                isAssignableFrom(fmds[i].getDeclaredType()))
                 return 1;
         }
         fmds = m2.getDeclaredFields();
-        for (FieldMetaData fmd : fmds) {
-            if (fmd.isPrimaryKey() && m1.getDescribedType().
-                    isAssignableFrom(fmd.getDeclaredType()))
+        for (int i = 0; i < fmds.length; i++) {
+            if (fmds[i].isPrimaryKey() && m1.getDescribedType().
+                isAssignableFrom(fmds[i].getDeclaredType()))
                 return -1;
         }
         return super.compare(o1, o2);

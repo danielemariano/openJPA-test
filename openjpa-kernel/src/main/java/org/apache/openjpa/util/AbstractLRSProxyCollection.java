@@ -25,13 +25,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.function.Predicate;
 
+import org.apache.commons.collections4.Predicate;
+import org.apache.commons.collections4.iterators.FilterIterator;
+import org.apache.commons.collections4.iterators.IteratorChain;
 import org.apache.openjpa.kernel.OpenJPAStateManager;
 import org.apache.openjpa.lib.util.Closeable;
 import org.apache.openjpa.lib.util.Localizer;
-import org.apache.openjpa.lib.util.collections.FilterIterator;
-import org.apache.openjpa.lib.util.collections.IteratorChain;
 
 /**
  * A collection proxy designed for collections backed by extremely large
@@ -126,8 +126,8 @@ public abstract class AbstractLRSProxyCollection
         Proxies.dirty(this, false);
         boolean added = false;
         Object add;
-        for (Object o : all) {
-            add = o;
+        for (Iterator itr = all.iterator(); itr.hasNext();) {
+            add = itr.next();
             Proxies.assertAllowedType(add, _elementType);
             _ct.added(add);
             added = true;
@@ -150,8 +150,8 @@ public abstract class AbstractLRSProxyCollection
         Proxies.dirty(this, false);
         boolean removed = false;
         Object rem;
-        for (Object o : all) {
-            rem = o;
+        for (Iterator itr = all.iterator(); itr.hasNext();) {
+            rem = itr.next();
             if (remove(rem)) {
                 Proxies.removed(this, rem, false);
                 _ct.removed(rem);
@@ -219,8 +219,8 @@ public abstract class AbstractLRSProxyCollection
 
     @Override
     public boolean containsAll(Collection all) {
-        for (Object o : all)
-            if (!contains(o))
+        for (Iterator itr = all.iterator(); itr.hasNext();)
+            if (!contains(itr.next()))
                 return false;
         return true;
     }
@@ -318,7 +318,7 @@ public abstract class AbstractLRSProxyCollection
     ////////////////////////////
 
     @Override
-    public boolean test(Object o) {
+    public boolean evaluate(Object o) {
         return !_ct.getRemoved().contains(o);
     }
 

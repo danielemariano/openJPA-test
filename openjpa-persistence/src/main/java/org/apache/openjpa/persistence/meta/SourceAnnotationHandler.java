@@ -235,7 +235,8 @@ public class SourceAnnotationHandler
     }
 
     Set<Element> merge(Set<? extends Element> a, Set<? extends Element> b) {
-        Set<Element> result = new HashSet<>(a);
+    	Set<Element> result = new HashSet<>();
+    	result.addAll(a);
     	for (Element e1 : b) {
     		boolean hide = false;
     		String key = getPersistentMemberName(e1);
@@ -550,7 +551,7 @@ public class SourceAnnotationHandler
                 return (TypeMirror)target;
             }
 
-        }
+        };
         return null;
     }
 

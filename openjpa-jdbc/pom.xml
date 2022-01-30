@@ -27,7 +27,7 @@
     <parent>
         <groupId>org.apache.openjpa</groupId>
         <artifactId>openjpa-parent</artifactId>
-        <version>3.2.1-SNAPSHOT</version>
+        <version>3.1.3-SNAPSHOT</version>
     </parent>
 
     <artifactId>openjpa-jdbc</artifactId>
@@ -36,9 +36,18 @@
     <description>OpenJPA JDBC</description>
 
     <properties>
-        <automatic-module-name>org.apache.openjpa.jdbc</automatic-module-name>
+        <sonar.coverage.jacoco.xmlReportPaths>${basedir}/../${aggregate.report.dir}</sonar.coverage.jacoco.xmlReportPaths>
+        <mockito.version>2.23.0</mockito.version>
+        <surefire.version>3.0.0-M4</surefire.version>
     </properties>
+
     <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.openjpa</groupId>
             <artifactId>openjpa-kernel</artifactId>
@@ -87,4 +96,45 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+    <plugins>
+    <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+            <execution>
+                <goals>
+                    <goal>test-jar</goal>
+                </goals>
+            </execution>
+        </executions>
+    </plugin>
+
+        <!-- PIT plugin -->
+        <plugin>
+            <groupId>org.pitest</groupId>
+            <artifactId>pitest-maven</artifactId>
+            <version>1.5.1</version>
+            <configuration>
+                <maxMutationsPerClass>25</maxMutationsPerClass>
+                <targetClasses>
+
+                    <param>org.apache.bookkeeper.bookie.storage.ldb.WriteCache</param>
+                    <param>org.apache.bookkeeper.client.BookKeeperAdmin</param>
+
+                </targetClasses>
+                <targetTests>
+
+                    <param>org.apache.bookkeeper.bookie.storage.ldb.WriteCachePutTest</param>
+                    <param>org.apache.bookkeeper.bookie.storage.ldb.WriteCacheGetTest</param>
+                    <param>org.apache.bookkeeper.client.BookKeeperAdminFormatTest</param>
+
+                </targetTests>
+            </configuration>
+        </plugin>
+
+    </plugins>
+    </build>
+
 </project>

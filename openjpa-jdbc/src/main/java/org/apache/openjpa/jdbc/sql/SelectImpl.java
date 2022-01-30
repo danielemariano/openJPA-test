@@ -38,6 +38,7 @@ import java.util.SortedMap;
 import java.util.Stack;
 import java.util.TreeMap;
 
+import org.apache.commons.collections4.iterators.EmptyIterator;
 import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
 import org.apache.openjpa.jdbc.kernel.EagerFetchModes;
 import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
@@ -62,8 +63,6 @@ import org.apache.openjpa.meta.ClassMetaData;
 import org.apache.openjpa.util.ApplicationIds;
 import org.apache.openjpa.util.Id;
 import org.apache.openjpa.util.InternalException;
-
-import static java.util.Collections.emptyIterator;
 
 /**
  * Standard {@link Select} implementation. Usage note: though this class
@@ -369,8 +368,8 @@ public class SelectImpl
         if (_eager == null)
             return false;
         Map.Entry entry;
-        for (Object o : _eager.entrySet()) {
-            entry = (Map.Entry) o;
+        for (Iterator itr = _eager.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
             if (entry.getValue() != this)
                 return true;
         }
@@ -478,8 +477,8 @@ public class SelectImpl
         Map.Entry entry;
         Result eres;
         Map eager;
-        for (Object o : sel._eager.entrySet()) {
-            entry = (Map.Entry) o;
+        for (Iterator itr = sel._eager.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
 
             // simulated batched selects for inner/outer joins; for separate
             // selects, don't pass on lock level, because they're probably
@@ -488,7 +487,7 @@ public class SelectImpl
                 eres = res;
             else
                 eres = ((SelectExecutor) entry.getValue()).execute(store,
-                        fetch);
+                    fetch);
 
             eager = res.getEagerMap(false);
             if (eager == null) {
@@ -751,7 +750,7 @@ public class SelectImpl
     @Override
     public Iterator getJoinIterator() {
         if (_joins == null || _joins.isEmpty())
-            return emptyIterator();
+            return EmptyIterator.INSTANCE;
         return _joins.joins().joinIterator();
     }
 
@@ -1206,7 +1205,7 @@ public class SelectImpl
         boolean seld = sel && select(col, pj, false);
         if (asc != null) {
             String alias = (as != null) ? as : getColumnAlias(col, pj);
-            appendOrdering(alias, asc);
+            appendOrdering(alias, asc.booleanValue());
         }
         return seld;
     }
@@ -1386,9 +1385,8 @@ public class SelectImpl
         if (_ordered == null)
             return null;
         List idxs = new ArrayList(_ordered.size());
-        for (Object o : _ordered) {
-            idxs.add(_selects.indexOf(o));
-        }
+        for (int i = 0; i < _ordered.size(); i++)
+            idxs.add(_selects.indexOf(_ordered.get(i)));
         return idxs;
     }
 
@@ -1693,8 +1691,8 @@ public class SelectImpl
     @Override
     public void groupBy(Column[] cols, Joins joins) {
         PathJoins pj = getJoins(joins, true);
-        for (Column col : cols) {
-            groupByAppend(getColumnAlias(col, pj));
+        for (int i = 0; i < cols.length; i++) {
+            groupByAppend(getColumnAlias(cols[i], pj));
         }
     }
 
@@ -2171,13 +2169,13 @@ public class SelectImpl
         }
 
         if (i != null)
-            return i;
+            return i.intValue();
 
         // check out existing aliases
         i = findAlias(table, key);
 
         if (i != null)
-            return i;
+            return i.intValue();
         if (!create)
             return -1;
 
@@ -2188,7 +2186,7 @@ public class SelectImpl
 //                " created alias: "+
 //                i.intValue()+ " "+ key);
         recordTableAlias(table, key, i);
-        return i;
+        return i.intValue();
     }
 
     private Integer findAliasForQuery(Table table, PathJoins pj, Object key,
@@ -2250,7 +2248,7 @@ public class SelectImpl
 //                "Query created alias: "+
 //                i.intValue()+ " "+ key);
         recordTableAlias(table, key, i);
-        return i;
+        return i.intValue();
     }
 
     private Integer findAlias(Table table, Object key) {
@@ -2279,7 +2277,7 @@ public class SelectImpl
         _aliases.put(key, alias);
 
         String tableString = _dict.getFullName(table, false) + " "
-            + toAlias(alias);
+            + toAlias(alias.intValue());
         if (_tables == null)
             _tables = new TreeMap();
         _tables.put(alias, tableString);
@@ -2576,11 +2574,11 @@ public class SelectImpl
             throws SQLException {
             PathJoins pj = getJoins(joins);
             Object obj;
-            for (Object o : objs) {
+            for (int i = 0; i < objs.length; i++) {
                 if (pj != null && pj.path() != null)
-                    obj = getColumnAlias((Column) o, pj);
+                    obj = getColumnAlias((Column) objs[i], pj);
                 else
-                    obj = o;
+                    obj = objs[i];
                 if (obj == null || !_sel._selects.contains(obj))
                     return false;
             }
@@ -2645,7 +2643,7 @@ public class SelectImpl
             if (pk == null)
                 pk = (obj instanceof Column && ((Column) obj).isPrimaryKey())
                     ? Boolean.TRUE : Boolean.FALSE;
-            if (pk) {
+            if (pk.booleanValue()) {
                 for (int i = _pos - 1; i >= 0 && i >= _pos - 3; i--)
                     if (_sel._selects.get(i).equals(obj))
                         return i + 1;
@@ -3019,7 +3017,7 @@ public class SelectImpl
         @Override
         public String toString() {
             return "PathJoinsImpl<" + hashCode() + ">: "
-                + path;
+                + String.valueOf(path);
         }
 
     @Override
@@ -3262,8 +3260,8 @@ public class SelectImpl
             boolean found1 = false;
             boolean found2 = false;
 
-            for (Object o : aliases) {
-                int alias = (Integer) o;
+            for (int i = 0; i < aliases.length; i++) {
+                int alias = ((Integer)aliases[i]).intValue();
                 if (alias == j.getIndex1())
                     found1 = true;
                 if (alias == j.getIndex2())
@@ -3306,8 +3304,8 @@ public class SelectImpl
             boolean found1 = false;
             boolean found2 = false;
 
-            for (Object o : aliases) {
-                int alias = (Integer) o;
+            for (int i = 0; i < aliases.length; i++) {
+                int alias = ((Integer)aliases[i]).intValue();
                 if (alias == join.getIndex1())
                     found1 = true;
                 if (alias == join.getIndex2())

@@ -18,6 +18,21 @@
  */
 package org.apache.openjpa.persistence;
 
+import java.lang.instrument.ClassFileTransformer;
+import java.lang.instrument.IllegalClassFormatException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.security.ProtectionDomain;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.persistence.EntityManager;
+import javax.persistence.spi.ClassTransformer;
+import javax.persistence.spi.LoadState;
+import javax.persistence.spi.PersistenceProvider;
+import javax.persistence.spi.PersistenceUnitInfo;
+import javax.persistence.spi.ProviderUtil;
+
 import org.apache.openjpa.conf.BrokerValue;
 import org.apache.openjpa.conf.OpenJPAConfiguration;
 import org.apache.openjpa.conf.OpenJPAConfigurationImpl;
@@ -39,20 +54,6 @@ import org.apache.openjpa.meta.MetaDataRepository;
 import org.apache.openjpa.persistence.osgi.BundleUtils;
 import org.apache.openjpa.persistence.validation.ValidationUtils;
 import org.apache.openjpa.util.ClassResolver;
-
-import javax.persistence.EntityManager;
-import javax.persistence.spi.ClassTransformer;
-import javax.persistence.spi.LoadState;
-import javax.persistence.spi.PersistenceProvider;
-import javax.persistence.spi.PersistenceUnitInfo;
-import javax.persistence.spi.ProviderUtil;
-import java.lang.instrument.ClassFileTransformer;
-import java.lang.instrument.IllegalClassFormatException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.security.ProtectionDomain;
-import java.util.HashMap;
-import java.util.Map;
 
 
 /**
@@ -147,7 +148,7 @@ public class PersistenceProviderImpl
             throw new IllegalArgumentException(poolValue.toString());
         }
 
-        if (poolValue == null || !(Boolean) poolValue)
+        if (poolValue == null || !((Boolean) poolValue).booleanValue())
             return Bootstrap.newBrokerFactory(cp, loader);
         else
             return Bootstrap.getBrokerFactory(cp, loader);
@@ -227,11 +228,6 @@ public class PersistenceProviderImpl
     @Override
     public void generateSchema(final PersistenceUnitInfo info, final Map map) {
         final Map runMap = map == null ? new HashMap<>() : new HashMap<>(map);
-
-        if (!acceptProvider(runMap)) {
-            return;
-        }
-
         runMap.put("javax.persistence.schema-generation.database.action", "create");
         final OpenJPAEntityManagerFactory factory = createContainerEntityManagerFactory(info, runMap);
         try {
@@ -244,11 +240,6 @@ public class PersistenceProviderImpl
     @Override
     public boolean generateSchema(final String persistenceUnitName, final Map map) {
         final Map runMap = map == null ? new HashMap<>() : new HashMap<>(map);
-
-        if (!acceptProvider(runMap)) {
-            return false;
-        }
-
         runMap.put("javax.persistence.schema-generation.database.action", "create");
         final OpenJPAEntityManagerFactory factory = createEntityManagerFactory(persistenceUnitName, runMap);
         try {
@@ -257,32 +248,6 @@ public class PersistenceProviderImpl
         } finally {
             factory.close();
         }
-    }
-
-    // if persistence provider is specific, don't do anything
-    // only allowed to process if persistence provider matches or if not provider is specified
-    public boolean acceptProvider(final Map properties) {
-        Object provider = properties.get("javax.persistence.provider");
-
-        // provider is specified, so it has to match
-        if (provider != null) {
-            if (provider instanceof Class) {
-                provider = ((Class) provider).getName();
-            }
-            try {
-                if (!((String) provider).equals(org.apache.openjpa.persistence.PersistenceProviderImpl.class.getName())) {
-                    return false;
-                }
-
-            } catch (final ClassCastException e) {
-                return false;
-                // not a recognized provider property value so must be another provider.
-            }
-        }
-
-        // no provider specified
-        return true;
-
     }
 
     private Object synchronizeMappings(final OpenJPAEntityManagerFactory factory) {
@@ -377,7 +342,7 @@ public class PersistenceProviderImpl
 
             MetaDataRepository repos = conf.getMetaDataRepositoryInstance();
             repos.setResolve(MetaDataModes.MODE_MAPPING, false);
-            _trans = PCClassFileTransformer.newInstance(repos,
+            _trans = new PCClassFileTransformer(repos,
                 Configurations.parseProperties(props), tmpLoader);
         }
 
@@ -396,9 +361,9 @@ public class PersistenceProviderImpl
         OpenJPAConfiguration conf = factory.getConfiguration();
         Log log = conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);
 
-        if (conf.getDynamicEnhancementAgent()) {
+        if (conf.getDynamicEnhancementAgent() == true) {
             boolean res = PCEnhancerAgent.loadDynamicAgent(log);
-            if (log.isInfoEnabled() && res){
+            if (log.isInfoEnabled() && res == true ){
                 log.info(_loc.get("dynamic-agent"));
             }
         }
@@ -414,7 +379,7 @@ public class PersistenceProviderImpl
         OpenJPAConfiguration conf = factory.getConfiguration();
         Log log = conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);
 
-        if ((ValidationUtils.setupValidation(conf)) &&
+        if ((ValidationUtils.setupValidation(conf) == true) &&
                 log.isInfoEnabled()) {
             log.info(_loc.get("vlem-creation-info"));
         }

@@ -20,6 +20,7 @@ package org.apache.openjpa.kernel.exps;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.openjpa.kernel.StoreContext;
@@ -45,7 +46,9 @@ public abstract class Val
         StoreContext ctx, Object[] params) {
         try {
             return eval(candidate, candidate, ctx, params);
-        } catch (NullPointerException | ClassCastException npe) {
+        } catch (NullPointerException npe) {
+            return null;
+        } catch (ClassCastException cce) {
             return null;
         }
     }
@@ -61,7 +64,9 @@ public abstract class Val
             if (c.isEmpty())
                 return null;
             return c.iterator().next();
-        } catch (NullPointerException | ClassCastException npe) {
+        } catch (NullPointerException npe) {
+            return null;
+        } catch (ClassCastException cce) {
             return null;
         }
     }
@@ -83,10 +88,10 @@ public abstract class Val
         StoreContext ctx, Object[] params) {
         Collection ret = new ArrayList(candidates.size());
         Object candidate;
-        for (Object o : candidates) {
-            candidate = o;
+        for (Iterator itr = candidates.iterator(); itr.hasNext();) {
+            candidate = itr.next();
             ret.add(evaluate(candidate, (orig == null) ? candidate : orig,
-                    ctx, params));
+                ctx, params));
         }
         return ret;
     }

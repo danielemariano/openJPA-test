@@ -333,8 +333,8 @@ public class PrimaryRow
         while (cls.getJoinablePCSuperclassMapping() != null)
             cls = cls.getJoinablePCSuperclassMapping();
         Column[] cols = cls.getPrimaryKeyColumns();
-        for (Column col : cols)
-            if (col.isAutoAssigned())
+        for (int i = 0; i < cols.length; i++)
+            if (cols[i].isAutoAssigned())
                 return true;
         return false;
     }

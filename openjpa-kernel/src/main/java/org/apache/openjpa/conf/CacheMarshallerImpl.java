@@ -80,9 +80,8 @@ public class CacheMarshallerImpl
 
             if (o != null && o.getClass().isArray()) {
                 Object[] array = (Object[]) o;
-                for (Object value : array) {
-                    configure(value);
-                }
+                for (int i = 0; i < array.length; i++)
+                    configure(array[i]);
             } else {
                 configure(o);
             }
@@ -254,7 +253,8 @@ public class CacheMarshallerImpl
         } catch (IOException ioe) {
             IllegalStateException ise = new IllegalStateException(
                 _loc.get("cache-marshaller-bad-url", getId(),
-                    _inputResourceLocation).getMessage(), ioe);
+                    _inputResourceLocation).getMessage());
+            ise.initCause(ioe);
             throw ise;
         }
     }

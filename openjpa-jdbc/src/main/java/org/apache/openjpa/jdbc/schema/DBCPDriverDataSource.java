@@ -20,6 +20,7 @@ package org.apache.openjpa.jdbc.schema;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -47,7 +48,7 @@ extends SimpleDriverDataSource implements Configurable, Closeable {
     private static RuntimeException _dbcpEx;
 
     protected JDBCConfiguration conf;
-    private volatile DataSource _ds;
+    private DataSource _ds;
 
     @Override
     public Connection getConnection(Properties props) throws SQLException {
@@ -62,11 +63,11 @@ extends SimpleDriverDataSource implements Configurable, Closeable {
                     ((org.apache.commons.dbcp2.BasicDataSource)_dbcpClass.cast(_ds)).close();
                 }
             }
-        }
-        catch (Throwable e) {
+        } catch (Exception e) {
             // no-op
-        }
-        finally {
+        } catch (Throwable t) {
+            // no-op
+        } finally {
             _ds = null;
         }
     }
@@ -136,7 +137,7 @@ extends SimpleDriverDataSource implements Configurable, Closeable {
                 // save exception details for later instead of throwing here
                 _dbcpEx = new RuntimeException(_eloc.get("driver-null", DBCPBASICDATASOURCENAME).getMessage(), e);
             }
-            return _dbcpAvail;
+            return _dbcpAvail.booleanValue();
         }
     }
 
@@ -218,8 +219,8 @@ extends SimpleDriverDataSource implements Configurable, Closeable {
 
         // now, merge in any passed in properties
         if (props != null && !props.isEmpty()) {
-            for (Object o : props.keySet()) {
-                String key = (String) o;
+            for (Iterator<Object> itr = props.keySet().iterator(); itr.hasNext();) {
+                String key = (String)itr.next();
                 String value = props.getProperty(key);
                 // need to map "user" to "username" for Commons DBCP
                 if ("user".equalsIgnoreCase(key)) {
@@ -230,8 +231,7 @@ extends SimpleDriverDataSource implements Configurable, Closeable {
                 if (existingKey != null) {
                     // update existing entry
                     mergedProps.setProperty(existingKey, value);
-                }
-                else {
+                } else {
                     // add property to the merged set
                     mergedProps.setProperty(key, value);
                 }
@@ -260,8 +260,8 @@ extends SimpleDriverDataSource implements Configurable, Closeable {
     private String hasKey(Properties props, String key, String defaultKey)
     {
         if (props != null && key != null) {
-            for (Object o : props.keySet()) {
-                String entry = (String) o;
+            for (Iterator<Object> itr = props.keySet().iterator(); itr.hasNext();) {
+                String entry = (String)itr.next();
                 if (key.equalsIgnoreCase(entry))
                     return entry;
             }

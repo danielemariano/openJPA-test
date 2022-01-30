@@ -61,8 +61,7 @@ public class MappingDefaultsImpl
     private int _joinFKAction = ForeignKey.ACTION_NONE;
     private int _fkAction = ForeignKey.ACTION_NONE;
     private boolean _defer = false;
-    private boolean _indexLogicalFK = true;
-    private boolean _indexPhysicalFK = false;
+    private boolean _indexFK = true;
     private boolean _indexDisc = true;
     private boolean _indexVers = false;
     private boolean _orderLists = true;
@@ -249,30 +248,14 @@ public class MappingDefaultsImpl
      * Whether to index logical foreign keys by default. Defaults to true.
      */
     public boolean getIndexLogicalForeignKeys() {
-        return _indexLogicalFK;
+        return _indexFK;
     }
 
     /**
      * Whether to index logical foreign keys by default. Defaults to true.
      */
     public void setIndexLogicalForeignKeys(boolean indexFK) {
-        _indexLogicalFK = indexFK;
-    }
-
-    /**
-     * Whether to use DbDictionary specific index on real foreign keys by default.
-     * Defaults to false i.e. old compatibility behaviour (i.e. no foreign key indices for FKs)
-     */
-    public boolean getIndexPhysicalForeignKeys() {
-        return _indexPhysicalFK;
-    }
-
-    /**
-     * Whether to use DbDictionary specific index on real foreign keys by default.
-     * Defaults to false i.e. old compatibility behaviour (i.e. no foreign key indices for FKs)
-     */
-    public void setIndexPhysicalForeignKeys(boolean indexPhysFKCompat) {
-        _indexPhysicalFK = indexPhysFKCompat;
+        _indexFK = indexFK;
     }
 
     /**
@@ -590,9 +573,9 @@ public class MappingDefaultsImpl
 
         switch (disc.getJavaType()) {
             case JavaTypes.INT:
-                return alias.hashCode();
+                return Integer.valueOf(alias.hashCode());
             case JavaTypes.CHAR:
-                return alias.charAt(0);
+                return Character.valueOf(alias.charAt(0));
             case JavaTypes.STRING:
             default:
                 return alias;
@@ -743,9 +726,8 @@ public class MappingDefaultsImpl
     @Override
     public void populateColumns(ValueMapping vm, DBIdentifier name, Table table,
         Column[] cols) {
-        for (Column col : cols) {
-            correctName(table, col);
-        }
+        for (int i = 0; i < cols.length; i++)
+            correctName(table, cols[i]);
     }
 
     @Override
@@ -830,31 +812,23 @@ public class MappingDefaultsImpl
 
     @Override
     public Index getJoinIndex(FieldMapping fm, Table table, Column[] cols) {
-        if (!needsFkIndex(fm.getJoinForeignKey())) {
+        if (!_indexFK || fm.getJoinForeignKey() == null
+            || !fm.getJoinForeignKey().isLogical())
             return null;
-        }
-        if (areAllPrimaryKeyColumns(cols)) {
+        if (areAllPrimaryKeyColumns(cols))
             return null;
-        }
 
         Index idx = new Index();
         idx.setIdentifier(getIndexName(DBIdentifier.NULL, table, cols));
         return idx;
     }
 
-    private boolean needsFkIndex(ForeignKey fk) {
-        if (fk == null)
-            return false;
-        boolean fkIsLogical = fk.isLogical();
-        return (_indexLogicalFK && fkIsLogical) || (_indexPhysicalFK && !fkIsLogical && dict.indexPhysicalForeignKeys);
-    }
-
     /**
      * Return whether all the given columns are primary key columns.
      */
     protected boolean areAllPrimaryKeyColumns(Column[] cols) {
-        for (Column col : cols)
-            if (!col.isPrimaryKey())
+        for (int i = 0; i < cols.length; i++)
+            if (!cols[i].isPrimaryKey())
                 return false;
         return true;
     }
@@ -894,9 +868,9 @@ public class MappingDefaultsImpl
     @Override
     public Index getIndex(ValueMapping vm, DBIdentifier name, Table table,
         Column[] cols) {
-        if (!needsFkIndex(vm.getForeignKey())) {
+        if (!_indexFK || vm.getForeignKey() == null
+            || !vm.getForeignKey().isLogical())
             return null;
-        }
         if (areAllPrimaryKeyColumns(cols))
             return null;
 

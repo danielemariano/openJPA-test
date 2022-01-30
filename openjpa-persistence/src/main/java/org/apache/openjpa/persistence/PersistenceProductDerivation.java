@@ -340,7 +340,7 @@ public class PersistenceProductDerivation
         ConfigurationProviderImpl cp = new ConfigurationProviderImpl();
         Boolean ret = load(cp, rsrc, name, m, null, explicit);
         if (ret != null)
-            return (ret) ? cp : null;
+            return (ret.booleanValue()) ? cp : null;
         if (explicit)
             return null;
 
@@ -777,7 +777,6 @@ public class PersistenceProductDerivation
 
         private static final String PERSISTENCE_XSD_2_0 = "persistence_2_0.xsd";
         private static final String PERSISTENCE_XSD_2_1 = "persistence_2_1.xsd";
-        private static final String PERSISTENCE_XSD_2_2 = "persistence_2_2.xsd";
 
         private static final Localizer _loc = Localizer.forPackage
             (ConfigurationParser.class);
@@ -846,18 +845,14 @@ public class PersistenceProductDerivation
             // if the version and/or schema location is for 1.0, use the 1.0
             // schema
             if (XMLVersionParser.VERSION_2_0.equals(_persistenceVersion)
-                    || (_schemaLocation != null && _schemaLocation.indexOf(PERSISTENCE_XSD_2_0) != -1)) {
+                    || (_schemaLocation != null && _schemaLocation.indexOf(PERSISTENCE_XSD_2_0) != -1))
+            {
                 persistencexsd = "persistence_2_0-xsd.rsrc";
-            }
-            else if (XMLVersionParser.VERSION_2_1.equals(_persistenceVersion)
-                    || (_schemaLocation != null && _schemaLocation.indexOf(PERSISTENCE_XSD_2_1) != -1)) {
+            } else if (XMLVersionParser.VERSION_2_1.equals(_persistenceVersion)
+                    || (_schemaLocation != null && _schemaLocation.indexOf(PERSISTENCE_XSD_2_1) != -1))
+            {
                 persistencexsd = "persistence_2_1-xsd.rsrc";
             }
-            else if (XMLVersionParser.VERSION_2_2.equals(_persistenceVersion)
-                    || (_schemaLocation != null && _schemaLocation.indexOf(PERSISTENCE_XSD_2_2) != -1)) {
-                persistencexsd = "persistence_2_2-xsd.rsrc";
-            }
-
             return getClass().getResourceAsStream(persistencexsd);
         }
 

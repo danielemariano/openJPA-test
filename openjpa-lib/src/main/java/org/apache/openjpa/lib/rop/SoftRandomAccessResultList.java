@@ -18,9 +18,9 @@
  */
 package org.apache.openjpa.lib.rop;
 
-import org.apache.openjpa.lib.util.collections.ReferenceMap;
-
 import java.util.Map;
+
+import org.apache.commons.collections4.map.ReferenceMap;
 
 /**
  * Specialization of the {@link RandomAccessResultList} that only maintains

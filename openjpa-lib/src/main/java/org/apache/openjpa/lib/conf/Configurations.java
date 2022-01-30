@@ -24,6 +24,7 @@ import java.security.PrivilegedActionException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.MissingResourceException;
@@ -34,7 +35,7 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap.ReferenceStrength;
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.lib.log.Log;
 import org.apache.openjpa.lib.util.ClassUtil;
 import org.apache.openjpa.lib.util.J2DoPrivHelper;
@@ -340,13 +341,13 @@ public class Configurations {
             String anchor = result.get(CONFIG_RESOURCE_ANCHOR);
 
             File file = new File(path);
-            if (AccessController.doPrivileged(J2DoPrivHelper
-                    .isFileAction(file)))
+            if ((AccessController.doPrivileged(J2DoPrivHelper
+                .isFileAction(file))).booleanValue())
                 provider = ProductDerivations.load(file, anchor, null);
             else {
                 file = new File("META-INF" + File.separatorChar + path);
-                if (AccessController.doPrivileged(J2DoPrivHelper
-                        .isFileAction(file)))
+                if ((AccessController.doPrivileged(J2DoPrivHelper
+                    .isFileAction(file))).booleanValue())
                     provider = ProductDerivations.load(file, anchor, null);
                 else
                     provider = ProductDerivations.load(path, anchor, null);
@@ -554,8 +555,8 @@ public class Configurations {
         StringBuilder buf = new StringBuilder();
         Map.Entry entry;
         String val;
-        for (Object o : map.entrySet()) {
-            entry = (Map.Entry) o;
+        for (Iterator itr = map.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
             if (buf.length() > 0)
                 buf.append(", ");
             buf.append(entry.getKey()).append('=');

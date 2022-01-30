@@ -1,1 +1,0 @@
-# openJPA-test

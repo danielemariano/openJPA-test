@@ -168,8 +168,8 @@ public class PersistenceMetaDataDefaults
         if (member == null)
             return null;
         AnnotatedElement el = (AnnotatedElement) member;
-        if (!ignoreTransient && AccessController.doPrivileged(J2DoPrivHelper
-                .isAnnotationPresentAction(el, Transient.class)))
+        if (!ignoreTransient && (AccessController.doPrivileged(J2DoPrivHelper
+            .isAnnotationPresentAction(el, Transient.class))).booleanValue())
             return TRANSIENT;
         if (fmd != null
             && fmd.getManagement() != FieldMetaData.MANAGE_PERSISTENT)
@@ -240,8 +240,8 @@ public class PersistenceMetaDataDefaults
         }
 
         //### EJB3: what if defined in XML?
-        if (AccessController.doPrivileged(J2DoPrivHelper
-                .isAnnotationPresentAction(type, Embeddable.class)))
+        if ((AccessController.doPrivileged(J2DoPrivHelper
+            .isAnnotationPresentAction(type, Embeddable.class))).booleanValue())
             return EMBEDDED;
         if (Serializable.class.isAssignableFrom(type))
             return BASIC;
@@ -660,9 +660,9 @@ public class PersistenceMetaDataDefaults
 
     private boolean isAnnotatedTransient(Member member) {
         return member instanceof AnnotatedElement
-            && AccessController.doPrivileged(J2DoPrivHelper
+            && (AccessController.doPrivileged(J2DoPrivHelper
                 .isAnnotationPresentAction(((AnnotatedElement) member),
-                        Transient.class));
+                    Transient.class))).booleanValue();
     }
 
     /**
@@ -701,7 +701,7 @@ public class PersistenceMetaDataDefaults
     public Member getMemberByProperty(ClassMetaData meta, String property,
     	int access, boolean applyDefaultRule) {
     	Class<?> cls = meta.getDescribedType();
-        Field field = Reflection.findField(cls, property, false);
+        Field field = Reflection.findField(cls, property, false);;
         Method getter = Reflection.findGetter(cls, property, false);
         Method setter = Reflection.findSetter(cls, property, false);
         int accessCode = AccessCode.isUnknown(access) ? meta.getAccessType() :

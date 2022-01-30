@@ -75,8 +75,6 @@ public class EntityManagerFactoryImpl
     private transient StoreCache _cache = null;
     private transient QueryResultCache _queryCache = null;
     private transient MetamodelImpl _metaModel;
-    private transient Map<String, Object> properties;
-    private transient Map<String, Object> emEmptyPropsProperties;
 
     /**
      * Default constructor provided for auto-instantiation.
@@ -113,19 +111,10 @@ public class EntityManagerFactoryImpl
 
     @Override
     public Map<String,Object> getProperties() {
-        if (properties == null) {
-            Map<String,Object> props = _factory.getProperties();
-            // convert to user readable values
-            if (emEmptyPropsProperties != null) {
-                props.putAll(emEmptyPropsProperties);
-            } else {
-                props.putAll(doCreateEM(SynchronizationType.SYNCHRONIZED, null, true).getProperties());
-            }
-            // no need to sync or volatile, worse case concurrent threads create 2 instances
-            // we just want to avoid to do it after some "init" phase
-            this.properties = props;
-        }
-        return properties;
+        Map<String,Object> props = _factory.getProperties();
+        // convert to user readable values
+        props.putAll(createEntityManager().getProperties());
+        return props;
     }
 
     @Override
@@ -198,12 +187,6 @@ public class EntityManagerFactoryImpl
      */
     @Override
     public OpenJPAEntityManagerSPI createEntityManager(SynchronizationType synchronizationType, Map props) {
-        return doCreateEM(synchronizationType, props, false);
-    }
-
-    private OpenJPAEntityManagerSPI doCreateEM(SynchronizationType synchronizationType,
-                                               Map props,
-                                               boolean byPassSynchronizeMappings) {
         if (synchronizationType == null) {
             throw new NullPointerException("SynchronizationType must not be null");
         }
@@ -218,7 +201,6 @@ public class EntityManagerFactoryImpl
             props = new HashMap(props);
         }
 
-        boolean canCacheGetProperties = props.isEmpty(); // nominal case
 
         OpenJPAConfiguration conf = getConfiguration();
         Log log = conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);
@@ -277,9 +259,7 @@ public class EntityManagerFactoryImpl
         }
         validateCfNameProps(conf, cfName, cf2Name);
 
-        Broker broker = byPassSynchronizeMappings ?
-                conf.newBrokerInstance(user, pass) :
-                _factory.newBroker(user, pass, managed, retainMode, false, cfName, cf2Name);
+        Broker broker = _factory.newBroker(user, pass, managed, retainMode, false, cfName, cf2Name);
 
         // add autodetach for close and rollback conditions to the configuration
         broker.setAutoDetach(AutoDetach.DETACH_CLOSE, true);
@@ -289,18 +269,9 @@ public class EntityManagerFactoryImpl
         OpenJPAEntityManagerSPI em = newEntityManagerImpl(broker);
 
         // allow setting of other bean properties of EM
-        if (!props.isEmpty()) {
-            Set<Map.Entry> entrySet = props.entrySet();
-            for (Map.Entry entry : entrySet) {
-                em.setProperty(entry.getKey().toString(), entry.getValue());
-            }
-        }
-        if (canCacheGetProperties) {
-            if (emEmptyPropsProperties == null) {
-                emEmptyPropsProperties = em.getProperties();
-            } else if (EntityManagerImpl.class.isInstance(em)) {
-                EntityManagerImpl.class.cast(em).setProperties(emEmptyPropsProperties);
-            }
+        Set<Map.Entry> entrySet = props.entrySet();
+        for (Map.Entry entry : entrySet) {
+            em.setProperty(entry.getKey().toString(), entry.getValue());
         }
         if (log != null && log.isTraceEnabled()) {
             log.trace(this + " created EntityManager " + em + ".");

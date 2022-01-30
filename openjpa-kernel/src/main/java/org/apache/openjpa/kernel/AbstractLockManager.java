@@ -19,6 +19,7 @@
 package org.apache.openjpa.kernel;
 
 import java.util.Collection;
+import java.util.Iterator;
 
 import org.apache.openjpa.conf.OpenJPAConfiguration;
 import org.apache.openjpa.lib.log.Log;
@@ -58,9 +59,8 @@ public abstract class AbstractLockManager
     @Override
     public void lockAll(Collection sms, int level, int timeout,
         Object context) {
-        for (Object sm : sms) {
-            lock((OpenJPAStateManager) sm, level, timeout, context);
-        }
+        for (Iterator<?> itr = sms.iterator(); itr.hasNext();)
+            lock((OpenJPAStateManager) itr.next(), level, timeout, context);
     }
 
     /**

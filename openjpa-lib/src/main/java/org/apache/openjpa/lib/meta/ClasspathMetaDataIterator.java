@@ -55,24 +55,23 @@ public class ClasspathMetaDataIterator extends MetaDataIteratorChain {
         String[] tokens = StringUtil.split(path,
             props.getProperty("path.separator"), 0);
 
-        for (String token : tokens) {
-            if (dirs != null && dirs.length != 0 && !endsWith(token, dirs))
+        for (int i = 0; i < tokens.length; i++) {
+            if (dirs != null && dirs.length != 0 && !endsWith(tokens[i], dirs))
                 continue;
 
-            File file = new File(token);
-            if (!AccessController.doPrivileged(
-                    J2DoPrivHelper.existsAction(file)))
+            File file = new File(tokens[i]);
+            if (!(AccessController.doPrivileged(
+                J2DoPrivHelper.existsAction(file))).booleanValue())
                 continue;
             if (AccessController.doPrivileged(J2DoPrivHelper
-                    .isDirectoryAction(file)))
+                .isDirectoryAction(file)).booleanValue())
                 addIterator(new FileMetaDataIterator(file, filter));
-            else if (token.endsWith(".jar")) {
+            else if (tokens[i].endsWith(".jar")) {
                 try {
                     ZipFile zFile = AccessController
-                            .doPrivileged(J2DoPrivHelper.newZipFileAction(file));
+                        .doPrivileged(J2DoPrivHelper.newZipFileAction(file));
                     addIterator(new ZipFileMetaDataIterator(zFile, filter));
-                }
-                catch (PrivilegedActionException pae) {
+                } catch (PrivilegedActionException pae) {
                     throw (IOException) pae.getException();
                 }
             }
@@ -83,8 +82,8 @@ public class ClasspathMetaDataIterator extends MetaDataIteratorChain {
      * Return true if the given token ends with any of the given strings.
      */
     private static boolean endsWith(String token, String[] suffs) {
-        for (String suff : suffs)
-            if (token.endsWith(suff))
+        for (int i = 0; i < suffs.length; i++)
+            if (token.endsWith(suffs[i]))
                 return true;
         return false;
     }

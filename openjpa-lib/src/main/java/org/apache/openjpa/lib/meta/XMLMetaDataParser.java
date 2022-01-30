@@ -305,8 +305,8 @@ public abstract class XMLMetaDataParser extends DefaultHandler
     public void parse(File file) throws IOException {
         if (file == null)
             return;
-        if (!AccessController.doPrivileged(J2DoPrivHelper
-                .isDirectoryAction(file)))
+        if (!(AccessController.doPrivileged(J2DoPrivHelper
+            .isDirectoryAction(file))).booleanValue())
             parse(new FileMetaDataIterator(file));
         else {
             String suff = (_suffix == null) ? "" : _suffix;
@@ -394,7 +394,7 @@ public abstract class XMLMetaDataParser extends DefaultHandler
             ClassLoader newLoader = null;
 
             try {
-                if (overrideCL) {
+                if (overrideCL == true) {
                     oldLoader =
                         (ClassLoader) AccessController.doPrivileged(J2DoPrivHelper.getContextClassLoaderAction());
                     newLoader = XMLMetaDataParser.class.getClassLoader();
@@ -432,10 +432,11 @@ public abstract class XMLMetaDataParser extends DefaultHandler
                 parser.parse(is, this);
                 finish();
             } catch (SAXException se) {
-                IOException ioe = new IOException(se.toString(), se);
+                IOException ioe = new IOException(se.toString());
+                ioe.initCause(se);
                 throw ioe;
             } finally {
-                if (overrideCL) {
+                if (overrideCL == true) {
                     // Restore the old ContextClassloader
                     try {
                         if (_log != null && _log.isTraceEnabled()) {
@@ -465,7 +466,11 @@ public abstract class XMLMetaDataParser extends DefaultHandler
             _parsed = new HashMap<>();
 
         ClassLoader loader = currentClassLoader();
-        Set<String> set = _parsed.computeIfAbsent(loader, k -> new HashSet<>());
+        Set<String> set = _parsed.get(loader);
+        if (set == null) {
+            set = new HashSet<>();
+            _parsed.put(loader, set);
+        }
         boolean added = set.add(src);
         if (!added && _log != null && _log.isTraceEnabled())
             _log.trace(_loc.get("already-parsed", src));

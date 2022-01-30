@@ -21,6 +21,7 @@ package org.apache.openjpa.meta;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -69,9 +70,8 @@ public abstract class Extensions
             return new String[0];
 
         Set vendors = new TreeSet();
-        for (Object o : _exts.keySet()) {
-            vendors.add(getVendor(o));
-        }
+        for (Iterator itr = _exts.keySet().iterator(); itr.hasNext();)
+            vendors.add(getVendor(itr.next()));
         return (String[]) vendors.toArray(new String[vendors.size()]);
     }
 
@@ -91,8 +91,8 @@ public abstract class Extensions
 
         Collection keys = new TreeSet();
         Object key;
-        for (Object o : _exts.keySet()) {
-            key = o;
+        for (Iterator itr = _exts.keySet().iterator(); itr.hasNext();) {
+            key = itr.next();
             if (vendor.equals(getVendor(key)))
                 keys.add(getKey(key));
         }
@@ -220,7 +220,7 @@ public abstract class Extensions
      */
     public boolean getBooleanExtension(String vendor, String key) {
         String str = getStringExtension(vendor, key);
-        return (str == null) ? false : Boolean.valueOf(str);
+        return (str == null) ? false : Boolean.valueOf(str).booleanValue();
     }
 
     /**
@@ -279,8 +279,9 @@ public abstract class Extensions
                 _exts = new HashMap();
 
             Map.Entry entry;
-            for (Object o : exts._exts.entrySet()) {
-                entry = (Map.Entry) o;
+            for (Iterator itr = exts._exts.entrySet().iterator();
+                itr.hasNext();) {
+                entry = (Map.Entry) itr.next();
                 if (!_exts.containsKey(entry.getKey()))
                     _exts.put(entry.getKey(), entry.getValue());
             }
@@ -292,8 +293,9 @@ public abstract class Extensions
 
             Map.Entry entry;
             Extensions embedded;
-            for (Object o : exts._embed.entrySet()) {
-                entry = (Map.Entry) o;
+            for (Iterator itr = exts._embed.entrySet().iterator();
+                itr.hasNext();) {
+                entry = (Map.Entry) itr.next();
                 embedded = (Extensions) _embed.get(entry.getKey());
                 if (embedded == null) {
                     embedded = new EmbeddedExtensions(this);
@@ -335,8 +337,8 @@ public abstract class Extensions
         Object next;
         String key;
         outer:
-        for (Object o : _exts.keySet()) {
-            next = o;
+        for (Iterator itr = _exts.keySet().iterator(); itr.hasNext();) {
+            next = itr.next();
             if (!OPENJPA.equals(getVendor(next)))
                 continue;
             key = getKey(next);
@@ -344,10 +346,10 @@ public abstract class Extensions
                 continue;
 
             if (allowedPrefixes != null) {
-                for (String allowedPrefix : allowedPrefixes) {
-                    if (key.startsWith(allowedPrefix)
-                            && !validateDataStoreExtensionPrefix
-                            (allowedPrefix))
+                for (int j = 0; j < allowedPrefixes.length; j++) {
+                    if (key.startsWith(allowedPrefixes[j])
+                        && !validateDataStoreExtensionPrefix
+                        (allowedPrefixes[j]))
                         continue outer;
                 }
             }
@@ -355,14 +357,14 @@ public abstract class Extensions
             // try to determine if there are any other names that are
             // similiar to this one, so we can add in a hint
             String closestName = StringDistance.getClosestLevenshteinDistance
-                    (key, validNames, 0.5f);
+                (key, validNames, 0.5f);
 
             if (closestName == null)
                 log.warn(_loc.get("unrecognized-extension", this,
-                        key, validNames));
+                    key, validNames));
             else
                 log.warn(_loc.get("unrecognized-extension-hint",
-                        new Object[]{this, key, validNames, closestName}));
+                    new Object[]{ this, key, validNames, closestName }));
         }
     }
 

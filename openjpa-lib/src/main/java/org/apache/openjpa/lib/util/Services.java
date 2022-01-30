@@ -101,7 +101,9 @@ public class Services {
 
             return (String[]) resourceList.toArray(new String[resourceList
                 .size()]);
-        } catch (PrivilegedActionException | IOException pae) {
+        } catch (PrivilegedActionException pae) {
+            // silently swallow all exceptions.
+        } catch (IOException ioe) {
             // silently swallow all exceptions.
         }
         return new String[0];
@@ -164,9 +166,9 @@ public class Services {
 
         // filter out any classes that have any classloader issues wrt.
         // the specified service class.
-        for (Class aClass : classes)
-            if (!serviceClass.isAssignableFrom(aClass))
-                invalid.add(aClass);
+        for (int i = 0; i < classes.length; i++)
+            if (!serviceClass.isAssignableFrom(classes[i]))
+                invalid.add(classes[i]);
         if (invalid.size() != 0) {
             List list = new ArrayList(Arrays.asList(classes));
             list.removeAll(invalid);
@@ -214,17 +216,18 @@ public class Services {
             return new Class[0];
 
         List classes = new ArrayList(names.length);
-        for (String name : names) {
+        for (int i = 0; i < names.length; i++) {
             try {
-                classes.add(Class.forName(name, false, loader));
-            }
-            catch (UnsupportedClassVersionError ecve) {
-                if (!skipMissing)
-                    throw ecve;
-            }
-            catch (ClassNotFoundException | LinkageError e) {
+                classes.add(Class.forName(names[i], false, loader));
+            } catch (ClassNotFoundException e) {
                 if (!skipMissing)
                     throw e;
+            } catch (UnsupportedClassVersionError ecve) {
+                if (!skipMissing)
+                    throw ecve;
+            } catch (LinkageError le) {
+                if (!skipMissing)
+                    throw le;
             }
         }
         return (Class[]) classes.toArray(new Class[classes.size()]);

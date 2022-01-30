@@ -39,6 +39,7 @@ import java.time.OffsetTime;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 
@@ -138,13 +139,12 @@ public abstract class AbstractResult
     protected void closeEagerMap(Map eager) {
         if (eager != null) {
             Object res;
-            for (Object o : eager.values()) {
-                res = o;
+            for (Iterator itr = eager.values().iterator(); itr.hasNext();) {
+                res = itr.next();
                 if (res != this && res instanceof Closeable)
                     try {
                         ((Closeable) res).close();
-                    }
-                    catch (Exception e) {
+                    } catch (Exception e) {
                     }
             }
         }
@@ -244,8 +244,8 @@ public abstract class AbstractResult
      */
     protected boolean containsAllInternal(Object[] objs, Joins joins)
         throws SQLException {
-        for (Object obj : objs)
-            if (!containsInternal(obj, joins))
+        for (int i = 0; i < objs.length; i++)
+            if (!containsInternal(objs[i], joins))
                 return false;
         return true;
     }
@@ -453,7 +453,7 @@ public abstract class AbstractResult
             null, joins));
         if (val == null)
             return false;
-        return Boolean.valueOf(val.toString());
+        return Boolean.valueOf(val.toString()).booleanValue();
     }
 
     @Override
@@ -612,7 +612,7 @@ public abstract class AbstractResult
         if (val == null)
             return 0;
         if (val instanceof Character)
-            return (Character) val;
+            return ((Character) val).charValue();
 
         String str = val.toString();
         return (str.length() == 0) ? 0 : str.charAt(0);

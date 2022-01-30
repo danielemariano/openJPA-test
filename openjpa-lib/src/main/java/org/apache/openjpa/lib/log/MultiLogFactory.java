@@ -106,110 +106,100 @@ public class MultiLogFactory implements LogFactory {
 
         @Override
         public void trace(Object msg) {
-            for (Log log : _logs) {
-                log.trace(msg);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].trace(msg);
         }
 
         @Override
         public void trace(Object msg, Throwable t) {
-            for (Log log : _logs) {
-                log.trace(msg, t);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].trace(msg, t);
         }
 
         @Override
         public void info(Object msg) {
-            for (Log log : _logs) {
-                log.info(msg);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].info(msg);
         }
 
         @Override
         public void info(Object msg, Throwable t) {
-            for (Log log : _logs) {
-                log.info(msg, t);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].info(msg, t);
         }
 
         @Override
         public void warn(Object msg) {
-            for (Log log : _logs) {
-                log.warn(msg);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].warn(msg);
         }
 
         @Override
         public void warn(Object msg, Throwable t) {
-            for (Log log : _logs) {
-                log.warn(msg, t);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].warn(msg, t);
         }
 
         @Override
         public void error(Object msg) {
-            for (Log log : _logs) {
-                log.error(msg);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].error(msg);
         }
 
         @Override
         public void error(Object msg, Throwable t) {
-            for (Log log : _logs) {
-                log.error(msg, t);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].error(msg, t);
         }
 
         @Override
         public void fatal(Object msg) {
-            for (Log log : _logs) {
-                log.fatal(msg);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].fatal(msg);
         }
 
         @Override
         public void fatal(Object msg, Throwable t) {
-            for (Log log : _logs) {
-                log.fatal(msg, t);
-            }
+            for (int i = 0; i < _logs.length; i++)
+                _logs[i].fatal(msg, t);
         }
 
         @Override
         public boolean isTraceEnabled() {
-            for (Log log : _logs)
-                if (log.isTraceEnabled())
+            for (int i = 0; i < _logs.length; i++)
+                if (_logs[i].isTraceEnabled())
                     return true;
             return false;
         }
 
         @Override
         public boolean isInfoEnabled() {
-            for (Log log : _logs)
-                if (log.isInfoEnabled())
+            for (int i = 0; i < _logs.length; i++)
+                if (_logs[i].isInfoEnabled())
                     return true;
             return false;
         }
 
         @Override
         public boolean isWarnEnabled() {
-            for (Log log : _logs)
-                if (log.isWarnEnabled())
+            for (int i = 0; i < _logs.length; i++)
+                if (_logs[i].isWarnEnabled())
                     return true;
             return false;
         }
 
         @Override
         public boolean isErrorEnabled() {
-            for (Log log : _logs)
-                if (log.isErrorEnabled())
+            for (int i = 0; i < _logs.length; i++)
+                if (_logs[i].isErrorEnabled())
                     return true;
             return false;
         }
 
         @Override
         public boolean isFatalEnabled() {
-            for (Log log : _logs)
-                if (log.isFatalEnabled())
+            for (int i = 0; i < _logs.length; i++)
+                if (_logs[i].isFatalEnabled())
                     return true;
             return false;
         }

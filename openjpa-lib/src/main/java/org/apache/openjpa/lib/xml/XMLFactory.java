@@ -78,8 +78,10 @@ public class XMLFactory {
         try {
             sp = _saxFactories[factoryIndex(validating, namespaceAware)].
                 newSAXParser();
-        } catch (ParserConfigurationException | SAXException pce) {
+        } catch (ParserConfigurationException pce) {
             throw new RuntimeException(pce);
+        } catch (SAXException se) {
+            throw new RuntimeException(se);
         }
 
         if (validating) {

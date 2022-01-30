@@ -18,6 +18,8 @@
  */
 package org.apache.openjpa.jdbc.kernel.exps;
 
+import org.apache.openjpa.kernel.Filters;
+
 /**
  * Sum.
  *
@@ -33,26 +35,13 @@ class Sum extends NullableAggregateUnaryOp { // OPENJPA-1794
         super(val);
     }
 
-    /**
-     * As per spec section 4.8.5 Aggregate Functions in the SELECT Clause we
-     * need to handle a few types in a special way.
-     */
     @Override
     protected Class getType(Class c) {
-        if (c == Integer.class ||
-            c == int.class ||
-            c == Short.class ||
-            c == short.class ||
-            c == Byte.class ||
-            c == byte.class) {
-            return Long.class;
-        }
-        if (c == Float.class ||
-            c == float.class ||
-            c == Double.class ||
-            c == double.class ) {
-            return Double.class;
-        }
+        Class wrap = Filters.wrap(c);
+        if (wrap == Integer.class
+            || wrap == Short.class
+            || wrap == Byte.class)
+            return long.class;
         return c;
     }
 

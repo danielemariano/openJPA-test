@@ -72,7 +72,6 @@ import javax.sql.DataSource;
 
 import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
 import org.apache.openjpa.jdbc.identifier.ColumnDefIdentifierRule;
-import org.apache.openjpa.jdbc.identifier.ColumnIdentifierRule;
 import org.apache.openjpa.jdbc.identifier.DBIdentifier;
 import org.apache.openjpa.jdbc.identifier.DBIdentifier.DBIdentifierType;
 import org.apache.openjpa.jdbc.identifier.DBIdentifierRule;
@@ -313,11 +312,6 @@ public class DBDictionary
     public int maxEmbeddedBlobSize = -1;
     public int maxEmbeddedClobSize = -1;
     public int inClauseLimit = -1;
-
-    /**
-     * Attention, while this is named datePrecision it actually only get used for Timestamp handling!
-     * @see StateManagerImpl#roundTimestamp(Timestamp, int)
-     */
     public int datePrecision = MILLI;
 
     /**
@@ -341,8 +335,7 @@ public class DBDictionary
      * database will become '2010-01-01 12:00:00.687' in the Date field
      * of the entity.
      */
-    public enum DateMillisecondBehaviors { DROP, ROUND, RETAIN }
-
+    public enum DateMillisecondBehaviors { DROP, ROUND, RETAIN };
     private DateMillisecondBehaviors dateMillisecondBehavior;
 
     /**
@@ -351,16 +344,6 @@ public class DBDictionary
      * for backward compatibility.
      */
     protected BooleanRepresentation booleanRepresentation = BooleanRepresentationFactory.INT_10;
-
-    /**
-     * Whether an index is generated for a relation that is also a foreign key.
-     * Some database systems (e.g. MySQL) will automatically create an index for a foreign key,
-     * others (e.g. Oracle, MS-SQL-Server) do not.
-     *
-     * See also {@link org.apache.openjpa.jdbc.meta.MappingDefaultsImpl#_indexPhysicalFK}
-     * which may disable this feature for backwards compatibility.
-     */
-    public boolean indexPhysicalForeignKeys = false;
 
     public int characterColumnSize = 255;
     public String arrayTypeName = "ARRAY";
@@ -425,12 +408,6 @@ public class DBDictionary
     public int nativeSequenceType= Seq.TYPE_CONTIGUOUS;
 
     /**
-     * reservedWordSet subset that CANNOT be used as valid column names
-     * (i.e., without surrounding them with double-quotes).
-     */
-    public Set<String> invalidColumnWordSet = new HashSet<>();
-
-    /**
      * This variable was used in 2.1.x and prior releases to indicate that
      * OpenJPA should not use the CACHE clause when getting a native
      * sequence; instead the INCREMENT BY clause gets its value equal to the
@@ -456,6 +433,9 @@ public class DBDictionary
     protected boolean isJDBC3 = false;
     protected boolean isJDBC4 = false;
     protected final Set<String> reservedWordSet = new HashSet<>();
+    // reservedWordSet subset that CANNOT be used as valid column names
+    // (i.e., without surrounding them with double-quotes)
+    protected Set<String> invalidColumnWordSet = new HashSet<>();
     protected final Set<String> systemSchemaSet = new HashSet<>();
     protected final Set<String> systemTableSet = new HashSet<>();
     protected final Set<String> fixedSizeTypeNameSet = new HashSet<>();
@@ -526,19 +506,7 @@ public class DBDictionary
             "TINYINT",
         }));
 
-        // initialize the set of reserved SQL92 words from resource
-        reservedWordSet.addAll(loadFromResource("sql-keywords.rsrc"));
-
         selectWordSet.add("SELECT");
-    }
-
-    private Collection<String> loadFromResource(String resourcename) {
-        try (InputStream in = DBDictionary.class.getResourceAsStream(resourcename)) {
-            String keywords = new BufferedReader(new InputStreamReader(in)).readLine();
-            return Arrays.asList(StringUtil.split(keywords, ",", 0));
-        } catch (IOException ioe) {
-            throw new GeneralException(ioe);
-        }
     }
 
     /**
@@ -620,11 +588,9 @@ public class DBDictionary
         // Disable delimiting of column definition.  DB platforms are very
         // picky about delimiters in column definitions. Base column types
         // do not require delimiters and will cause failures if delimited.
-        DBIdentifierRule columnDefinitionNamingRule = new ColumnDefIdentifierRule();
-        namingRules.put(columnDefinitionNamingRule.getName(), columnDefinitionNamingRule);
-
-        DBIdentifierRule columnNamingRule = new ColumnIdentifierRule(invalidColumnWordSet);
-        namingRules.put(columnNamingRule.getName(), columnNamingRule);
+        DBIdentifierRule cdRule = new ColumnDefIdentifierRule();
+        cdRule.setCanDelimit(false);
+        namingRules.put(cdRule.getName(), cdRule);
     }
 
     //////////////////////
@@ -678,10 +644,10 @@ public class DBDictionary
             return getBigDecimal(rs, column);
         } catch (Exception e1) {
             try {
-                return getDouble(rs, column);
+                return Double.valueOf(getDouble(rs, column));
             } catch (Exception e2) {
                 try {
-                    return getFloat(rs, column);
+                    return Float.valueOf(getFloat(rs, column));
                 } catch (Exception e3) {
                     try {
                         return getLong(rs, column);
@@ -1389,9 +1355,9 @@ public class DBDictionary
         // check for known floating point types to give driver a chance to
         // handle special numbers like NaN and infinity; bug #1053
         if (num instanceof Double)
-            setDouble(stmnt, idx, (Double) num, col);
+            setDouble(stmnt, idx, ((Double) num).doubleValue(), col);
         else if (num instanceof Float)
-            setFloat(stmnt, idx, (Float) num, col);
+            setFloat(stmnt, idx, ((Float) num).floatValue(), col);
         else
             setBigDecimal(stmnt, idx, new BigDecimal(num.toString()), col);
     }
@@ -1449,27 +1415,7 @@ public class DBDictionary
     public void setTimestamp(PreparedStatement stmnt, int idx, Timestamp val, Calendar cal, Column col)
         throws SQLException {
 
-        int usePrecision = datePrecision;
-        if (col != null) {
-            int columnPrecision = col.getPrecision();
-            if (columnPrecision >= 0) { // negative value means we don't know
-                if (columnPrecision == 0) {
-                    usePrecision = SEC;
-                }
-                else if (columnPrecision == 3) {
-                    usePrecision = MILLI;
-                }
-                else if (columnPrecision == 6) {
-                    usePrecision = MICRO;
-                }
-                else if (columnPrecision == 9) {
-                    usePrecision = NANO;
-                }
-                // rest defaults to datePrecision
-            }
-        }
-
-        val = StateManagerImpl.roundTimestamp(val, usePrecision);
+        val = StateManagerImpl.roundTimestamp(val, datePrecision);
 
         if (cal == null)
             stmnt.setTimestamp(idx, val);
@@ -1500,7 +1446,7 @@ public class DBDictionary
         switch (type) {
             case JavaTypes.BOOLEAN:
             case JavaTypes.BOOLEAN_OBJ:
-                setBoolean(stmnt, idx, (Boolean) val, col);
+                setBoolean(stmnt, idx, ((Boolean) val).booleanValue(), col);
                 break;
             case JavaTypes.BYTE:
             case JavaTypes.BYTE_OBJ:
@@ -1508,7 +1454,7 @@ public class DBDictionary
                 break;
             case JavaTypes.CHAR:
             case JavaTypes.CHAR_OBJ:
-                setChar(stmnt, idx, (Character) val, col);
+                setChar(stmnt, idx, ((Character) val).charValue(), col);
                 break;
             case JavaTypes.DOUBLE:
             case JavaTypes.DOUBLE_OBJ:
@@ -1670,21 +1616,21 @@ public class DBDictionary
         else if (val instanceof String)
             setString(stmnt, idx, val.toString(), col);
         else if (val instanceof Integer)
-            setInt(stmnt, idx, (Integer) val, col);
+            setInt(stmnt, idx, ((Integer) val).intValue(), col);
         else if (val instanceof Boolean)
-            setBoolean(stmnt, idx, (Boolean) val, col);
+            setBoolean(stmnt, idx, ((Boolean) val).booleanValue(), col);
         else if (val instanceof Long)
-            setLong(stmnt, idx, (Long) val, col);
+            setLong(stmnt, idx, ((Long) val).longValue(), col);
         else if (val instanceof Float)
-            setFloat(stmnt, idx, (Float) val, col);
+            setFloat(stmnt, idx, ((Float) val).floatValue(), col);
         else if (val instanceof Double)
-            setDouble(stmnt, idx, (Double) val, col);
+            setDouble(stmnt, idx, ((Double) val).doubleValue(), col);
         else if (val instanceof Byte)
-            setByte(stmnt, idx, (Byte) val, col);
+            setByte(stmnt, idx, ((Byte) val).byteValue(), col);
         else if (val instanceof Character)
-            setChar(stmnt, idx, (Character) val, col);
+            setChar(stmnt, idx, ((Character) val).charValue(), col);
         else if (val instanceof Short)
-            setShort(stmnt, idx, (Short) val, col);
+            setShort(stmnt, idx, ((Short) val).shortValue(), col);
         else if (val instanceof Locale)
             setLocale(stmnt, idx, (Locale) val, col);
         else if (val instanceof BigDecimal)
@@ -2124,8 +2070,8 @@ public class DBDictionary
             String s;
             idx = typeName.length();
             int curIdx = -1;
-            for (String value : typeModifierSet) {
-                s = value;
+            for (Iterator<String> i = typeModifierSet.iterator(); i.hasNext();) {
+                s = i.next();
                 if (typeName.toUpperCase(Locale.ENGLISH).indexOf(s) != -1) {
                     curIdx = typeName.toUpperCase(Locale.ENGLISH).indexOf(s);
                     if (curIdx != -1 && curIdx < idx) {
@@ -2522,16 +2468,16 @@ public class DBDictionary
         Collection<String> deleteSQL = new ArrayList<>(tables.length);
         Collection<ForeignKey> restrictConstraints =
             new LinkedHashSet<>();
-        for (Table table : tables) {
-            ForeignKey[] fks = table.getForeignKeys();
-            for (ForeignKey fk : fks) {
-                if (!fk.isLogical() && !fk.isDeferred()
-                        && fk.getDeleteAction() == ForeignKey.ACTION_RESTRICT)
-                    restrictConstraints.add(fk);
+        for (int i = 0; i < tables.length; i++) {
+            ForeignKey[] fks = tables[i].getForeignKeys();
+            for (int j = 0; j < fks.length; j++) {
+                if (!fks[j].isLogical() && !fks[j].isDeferred()
+                    && fks[j].getDeleteAction() == ForeignKey.ACTION_RESTRICT)
+                restrictConstraints.add(fks[j]);
             }
 
             deleteSQL.add("DELETE FROM " +
-                    toDBName(table.getFullIdentifier()));
+                toDBName(tables[i].getFullIdentifier()));
         }
 
         for(ForeignKey fk : restrictConstraints) {
@@ -2623,8 +2569,8 @@ public class DBDictionary
                 }
             }
 
-            for (Object alias : aliases) {
-                String tableAlias = alias.toString();
+            for (Iterator itr2 = aliases.iterator(); itr2.hasNext();) {
+                String tableAlias = itr2.next().toString();
                 if (fromSQL.getSQL().indexOf(tableAlias) == -1) {
                     if (!first && fromSQL.getSQL().length() > 0)
                         fromSQL.append(", ");
@@ -3610,8 +3556,8 @@ public class DBDictionary
             return false;
 
         char[] vowels = { 'A', 'E', 'I', 'O', 'U', };
-        for (char vowel : vowels) {
-            int index = name.toString().toUpperCase(Locale.ENGLISH).indexOf(vowel);
+        for (int i = 0; i < vowels.length; i++) {
+            int index = name.toString().toUpperCase(Locale.ENGLISH).indexOf(vowels[i]);
             if (index != -1) {
                 name.replace(index, index + 1, "");
                 return true;
@@ -3723,8 +3669,8 @@ public class DBDictionary
 
         Unique[] unqs = table.getUniques();
         String unqStr;
-        for (Unique unq : unqs) {
-            unqStr = getUniqueConstraintSQL(unq);
+        for (int i = 0; i < unqs.length; i++) {
+            unqStr = getUniqueConstraintSQL(unqs[i]);
             if (unqStr != null) {
                 if (endBuf.length() > 0)
                     endBuf.append(", ");
@@ -3884,7 +3830,7 @@ public class DBDictionary
             return new String[0];
         return new String[]{ "ALTER TABLE "
             + getFullName(column.getTable(), false)
-            + " DROP COLUMN " + toDBName(column.getIdentifier()) };
+            + " DROP COLUMN " + column };
     }
 
     /**
@@ -4034,8 +3980,8 @@ public class DBDictionary
 
         int delActionId = fk.getDeleteAction();
         if (delActionId == ForeignKey.ACTION_NULL) {
-            for (Column local : locals) {
-                if (local.isNotNull())
+            for (int i = 0; i < locals.length; i++) {
+                if (locals[i].isNotNull())
                     delActionId = ForeignKey.ACTION_NONE;
             }
         }
@@ -4265,7 +4211,8 @@ public class DBDictionary
      * @deprecated
      */
     @Deprecated
-    public boolean isSystemSequence(String name, String schema, boolean targetSchema) {
+    public boolean isSystemSequence(String name, String schema,
+        boolean targetSchema) {
         return isSystemSequence(DBIdentifier.newSequence(name),
             DBIdentifier.newSchema(schema), targetSchema);
     }
@@ -4281,7 +4228,8 @@ public class DBDictionary
      * @param targetSchema if true, then the given schema was listed by
      * the user as one of his schemas
      */
-    public boolean isSystemSequence(DBIdentifier name, DBIdentifier schema, boolean targetSchema) {
+    public boolean isSystemSequence(DBIdentifier name, DBIdentifier schema,
+        boolean targetSchema) {
         return !targetSchema && !DBIdentifier.isNull(schema)
             && systemSchemaSet.contains(DBIdentifier.toUpper(schema).getName());
     }
@@ -5070,6 +5018,20 @@ public class DBDictionary
 
     @Override
     public void endConfiguration() {
+        // initialize the set of reserved SQL92 words from resource
+        InputStream in = DBDictionary.class.getResourceAsStream
+            ("sql-keywords.rsrc");
+        try {
+            String keywords = new BufferedReader(new InputStreamReader(in)).
+                readLine();
+            reservedWordSet.addAll(Arrays.asList(StringUtil.split
+                (keywords, ",", 0)));
+        } catch (IOException ioe) {
+            throw new GeneralException(ioe);
+        } finally {
+            try { in.close(); } catch (IOException e) {}
+        }
+
         // add additional reserved words set by user
         if (reservedWords != null)
             reservedWordSet.addAll(Arrays.asList(StringUtil.split(reservedWords.toUpperCase(Locale.ENGLISH), ",", 0)));
@@ -5092,10 +5054,6 @@ public class DBDictionary
 
         if (selectWords != null)
             selectWordSet.addAll(Arrays.asList(StringUtil.split(selectWords.toUpperCase(Locale.ENGLISH), ",", 0)));
-
-        if (invalidColumnWordSet.isEmpty()) {
-            invalidColumnWordSet.addAll(loadFromResource("sql-invalid-column-names.rsrc"));
-        }
 
         // initialize the error codes
         SQLErrorCodeReader codeReader = new SQLErrorCodeReader();
@@ -5191,7 +5149,7 @@ public class DBDictionary
                 timeout = 0;
             } else if (timeout < 0) {
                 if (log.isWarnEnabled())
-                    log.warn(_loc.get("invalid-timeout", timeout));
+                    log.warn(_loc.get("invalid-timeout", Integer.valueOf(timeout)));
                 return;
             } else if (timeout > 0 && timeout < 1000) {
                 // round up to 1 sec
@@ -5783,7 +5741,7 @@ public class DBDictionary
      * @param supportsDelimitedIds the supportsDelimitedIds to set
      */
     public void setSupportsDelimitedIdentifiers(boolean supportsDelimitedIds) {
-        supportsDelimitedIdentifiers = supportsDelimitedIds;
+        supportsDelimitedIdentifiers = Boolean.valueOf(supportsDelimitedIds);
     }
 
     /**
@@ -5791,11 +5749,12 @@ public class DBDictionary
      */
     private void setSupportsDelimitedIdentifiers(DatabaseMetaData metaData) {
         try {
-            supportsDelimitedIdentifiers = metaData.supportsMixedCaseQuotedIdentifiers() ||
-                    metaData.storesLowerCaseQuotedIdentifiers() ||
-                    metaData.storesUpperCaseQuotedIdentifiers();
+            supportsDelimitedIdentifiers = Boolean.valueOf(
+                metaData.supportsMixedCaseQuotedIdentifiers() ||
+                metaData.storesLowerCaseQuotedIdentifiers() ||
+                metaData.storesUpperCaseQuotedIdentifiers());
         } catch (SQLException e) {
-            supportsDelimitedIdentifiers = Boolean.FALSE;
+            supportsDelimitedIdentifiers = Boolean.valueOf(false);
             getLog().warn(_loc.get("unknown-delim-support", e));
         }
     }
@@ -5932,9 +5891,6 @@ public class DBDictionary
     }
 
     public DBIdentifier fromDBName(String name, DBIdentifierType id) {
-        if (delimitAll()) {
-            name = Normalizer.delimit(name, true);
-        }
         return getNamingUtil().fromDBName(name, id);
     }
 

@@ -21,6 +21,7 @@ package org.apache.openjpa.jdbc.schema;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -92,13 +93,11 @@ public class XMLSchemaSerializer
         if (schema == null)
             return;
         Table[] tables = schema.getTables();
-        for (Table table : tables) {
-            addTable(table);
-        }
+        for (int i = 0; i < tables.length; i++)
+            addTable(tables[i]);
         Sequence[] seqs = schema.getSequences();
-        for (Sequence seq : seqs) {
-            addSequence(seq);
-        }
+        for (int i = 0; i < seqs.length; i++)
+            addSequence(seqs[i]);
     }
 
     @Override
@@ -106,9 +105,8 @@ public class XMLSchemaSerializer
         if (group == null)
             return;
         Schema[] schemas = group.getSchemas();
-        for (Schema schema : schemas) {
-            addAll(schema);
-        }
+        for (int i = 0; i < schemas.length; i++)
+            addAll(schemas[i]);
     }
 
     @Override
@@ -118,13 +116,11 @@ public class XMLSchemaSerializer
 
         boolean removed = false;
         Table[] tables = schema.getTables();
-        for (Table table : tables) {
-            removed |= removeTable(table);
-        }
+        for (int i = 0; i < tables.length; i++)
+            removed |= removeTable(tables[i]);
         Sequence[] seqs = schema.getSequences();
-        for (Sequence seq : seqs) {
-            removed |= removeSequence(seq);
-        }
+        for (int i = 0; i < seqs.length; i++)
+            removed |= removeSequence(seqs[i]);
         return removed;
     }
 
@@ -135,9 +131,8 @@ public class XMLSchemaSerializer
 
         boolean removed = false;
         Schema[] schemas = group.getSchemas();
-        for (Schema schema : schemas) {
-            removed |= removeAll(schema);
-        }
+        for (int i = 0; i < schemas.length; i++)
+            removed |= removeAll(schemas[i]);
         return removed;
     }
 
@@ -167,8 +162,8 @@ public class XMLSchemaSerializer
         String schemaName;
         Collection schemaObjs;
         Object obj;
-        for (Object value : objs) {
-            obj = value;
+        for (Iterator itr = objs.iterator(); itr.hasNext();) {
+            obj = itr.next();
             if (obj instanceof Table)
                 schemaName = ((Table) obj).getSchemaName();
             else
@@ -183,10 +178,10 @@ public class XMLSchemaSerializer
 
         startElement("schemas");
         Map.Entry entry;
-        for (Object o : schemas.entrySet()) {
-            entry = (Map.Entry) o;
+        for (Iterator itr = schemas.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
             serializeSchema((String) entry.getKey(), (Collection)
-                    entry.getValue());
+                entry.getValue());
         }
         endElement("schemas");
     }
@@ -208,8 +203,8 @@ public class XMLSchemaSerializer
 
         // tables and seqs
         Object obj;
-        for (Object o : objs) {
-            obj = o;
+        for (Iterator<?> itr = objs.iterator(); itr.hasNext();) {
+            obj = itr.next();
             if (obj instanceof Table)
                 serializeTable((Table) obj);
             else
@@ -251,27 +246,23 @@ public class XMLSchemaSerializer
 
         // columns
         Column[] cols = table.getColumns();
-        for (Column col : cols) {
-            serializeColumn(col);
-        }
+        for (int i = 0; i < cols.length; i++)
+            serializeColumn(cols[i]);
 
         // foreign keys
         ForeignKey[] fks = table.getForeignKeys();
-        for (ForeignKey fk : fks) {
-            serializeForeignKey(fk);
-        }
+        for (int i = 0; i < fks.length; i++)
+            serializeForeignKey(fks[i]);
 
         // indexes
         Index[] idxs = table.getIndexes();
-        for (Index idx : idxs) {
-            serializeIndex(idx);
-        }
+        for (int i = 0; i < idxs.length; i++)
+            serializeIndex(idxs[i]);
 
         // unique constraints
         Unique[] unqs = table.getUniques();
-        for (Unique unq : unqs) {
-            serializeUnique(unq);
-        }
+        for (int i = 0; i < unqs.length; i++)
+            serializeUnique(unqs[i]);
 
         endElement("table");
     }
@@ -319,9 +310,8 @@ public class XMLSchemaSerializer
 
         // columns
         if (cols.length > 1)
-            for (Column col : cols) {
-                serializeOn(col);
-            }
+            for (int i = 0; i < cols.length; i++)
+                serializeOn(cols[i]);
 
         endElement("pk");
     }
@@ -341,9 +331,8 @@ public class XMLSchemaSerializer
 
         // columns
         if (cols.length > 1)
-            for (Column col : cols) {
-                serializeOn(col);
-            }
+            for (int i = 0; i < cols.length; i++)
+                serializeOn(cols[i]);
 
         endElement("index");
     }
@@ -364,9 +353,8 @@ public class XMLSchemaSerializer
 
         // columns
         if (cols.length > 1)
-            for (Column col : cols) {
-                serializeOn(col);
-            }
+            for (int i = 0; i < cols.length; i++)
+                serializeOn(cols[i]);
 
         endElement("unique");
     }
@@ -403,12 +391,10 @@ public class XMLSchemaSerializer
         if (cols.length > 1 || consts.length > 0 || constsPK.length > 0)
             for (int i = 0; i < cols.length; i++)
                 serializeJoin(cols[i], pks[i]);
-        for (Column aConst : consts) {
-            serializeJoin(aConst, fk.getConstant(aConst));
-        }
-        for (Column column : constsPK) {
-            serializeJoin(fk.getPrimaryKeyConstant(column), column);
-        }
+        for (int i = 0; i < consts.length; i++)
+            serializeJoin(consts[i], fk.getConstant(consts[i]));
+        for (int i = 0; i < constsPK.length; i++)
+            serializeJoin(fk.getPrimaryKeyConstant(constsPK[i]), constsPK[i]);
 
         endElement("fk");
     }

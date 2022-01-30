@@ -22,16 +22,15 @@ import org.apache.openjpa.conf.OpenJPAConfigurationImpl;
 import org.apache.openjpa.enhance.AsmAdaptor;
 import org.apache.openjpa.enhance.PCEnhancer;
 import org.apache.openjpa.enhance.PersistenceCapable;
-import org.apache.openjpa.lib.log.JULLogFactory;
 import org.apache.openjpa.lib.log.LogFactory;
 import org.apache.openjpa.lib.log.LogFactoryImpl;
 import org.apache.openjpa.lib.log.SLF4JLogFactory;
 import org.apache.openjpa.meta.MetaDataRepository;
 import org.apache.openjpa.persistence.PersistenceMetaDataFactory;
-import org.apache.xbean.asm9.AnnotationVisitor;
-import org.apache.xbean.asm9.ClassReader;
-import org.apache.xbean.asm9.Type;
-import org.apache.xbean.asm9.shade.commons.EmptyVisitor;
+import org.apache.xbean.asm8.AnnotationVisitor;
+import org.apache.xbean.asm8.ClassReader;
+import org.apache.xbean.asm8.Type;
+import org.apache.xbean.asm8.shade.commons.EmptyVisitor;
 import org.apache.xbean.finder.ClassLoaders;
 import serp.bytecode.BCClass;
 import serp.bytecode.Project;
@@ -59,9 +58,9 @@ import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
-import static org.apache.xbean.asm9.ClassReader.SKIP_CODE;
-import static org.apache.xbean.asm9.ClassReader.SKIP_DEBUG;
-import static org.apache.xbean.asm9.ClassReader.SKIP_FRAMES;
+import static org.apache.xbean.asm8.ClassReader.SKIP_CODE;
+import static org.apache.xbean.asm8.ClassReader.SKIP_DEBUG;
+import static org.apache.xbean.asm8.ClassReader.SKIP_FRAMES;
 
 public class OpenJPADirectoriesEnhancer implements Runnable {
     private static final Logger LOGGER = Logger.getLogger(OpenJPADirectoriesEnhancer.class.getName());
@@ -126,11 +125,7 @@ public class OpenJPADirectoriesEnhancer implements Runnable {
                 try {
                     return new SLF4JLogFactory();
                 } catch (final Error | Exception e) {
-                    try {
-                        return new LogFactoryImpl();
-                    } catch (final Error | Exception e2) {
-                        return new JULLogFactory();
-                    }
+                    return new LogFactoryImpl();
                 }
             }
             return logFactory.asSubclass(LogFactory.class).getConstructor().newInstance();

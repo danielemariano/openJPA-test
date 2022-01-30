@@ -94,9 +94,8 @@ public class PrimitiveFieldStrategy
         if (field.getValueStrategy() == ValueStrategies.AUTOASSIGN)
             cols[0].setAutoAssigned(true);
         if (vinfo.isImplicitRelation())
-            for (Column col : cols) {
-                col.setImplicitRelation(true);
-            }
+        	for (int i = 0; i < cols.length; i++)
+        		cols[i].setImplicitRelation(true);
         field.setColumns(cols);
         field.setColumnIO(vinfo.getColumnIO());
         field.mapConstraints(fieldName, adapt);
@@ -351,7 +350,7 @@ public class PrimitiveFieldStrategy
                 if (autoInc == null)
                     sm.storeBoolean(idx, false);
                 else if (autoInc instanceof Boolean)
-                    sm.storeBoolean(idx, (Boolean) autoInc);
+                    sm.storeBoolean(idx, ((Boolean) autoInc).booleanValue());
                 else
                     sm.storeBoolean(idx, ((Number) autoInc).intValue() != 0);
                 break;
@@ -365,7 +364,7 @@ public class PrimitiveFieldStrategy
                 if (autoInc == null)
                     sm.storeChar(idx, (char) 0);
                 else if (autoInc instanceof Character)
-                    sm.storeChar(idx, (Character) autoInc);
+                    sm.storeChar(idx, ((Character) autoInc).charValue());
                 else if (autoInc instanceof String)
                     sm.storeChar(idx, ((String) autoInc).charAt(0));
                 else

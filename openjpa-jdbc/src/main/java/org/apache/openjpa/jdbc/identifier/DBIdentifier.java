@@ -42,13 +42,7 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
         SCHEMA,
         CATALOG,
         DATABASE,
-        /**
-         * used for column names
-         */
         COLUMN,
-        /**
-         * used for column type definition
-         */
         COLUMN_DEFINITION,
         SEQUENCE,
         CONSTRAINT,
@@ -148,7 +142,6 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
         if (DBIdentifierType.CONSTANT != getType() && DBIdentifierType.COLUMN_DEFINITION != getType()) {
             if (delimit) {
                 name = Normalizer.delimit(name, true);
-                setNameDelimited(true);
              } else {
                  name = Normalizer.normalizeString(name);
              }
@@ -158,6 +151,7 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
 
     /**
      * Set the type of the identifier
+     * @param type
      */
     protected void setType(DBIdentifierType type) {
         _type = type;
@@ -176,6 +170,9 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
      * Splits a string delimited by the specified delimiter of a given name type
      * into an array of DBIdentifier objects.
      * Example:  COL1|"COL 2"|COL3  delim=| --> DBIdentifier[]{ COL1, "COL 2", COL3 }
+     * @param name
+     * @param id
+     * @param delim
      */
     public static DBIdentifier[] split(String name, DBIdentifierType id, String delim) {
 
@@ -197,6 +194,8 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
     /**
      * Joins the list of identifiers using the appropriate delimiters and
      * returns a string based identifier.
+     * @param resultId
+     * @param names
      */
     public static String join(DBIdentifier...names) {
         if (names == null || names.length == 0) {
@@ -326,7 +325,6 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
         sName.setNameInternal(getNameInternal());
         sName.setType(getType());
         sName.setIgnoreCase(getIgnoreCase());
-        sName.setNameDelimited(isNameDelimited());
         return sName;
     }
 
@@ -804,6 +802,7 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
 
     /**
      * Equality operator which ignores case.
+     * @param name
      */
    public boolean equalsIgnoreCase(DBIdentifier name) {
        return equals(name, true);
@@ -811,6 +810,8 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
 
    /**
     * Static equality operator which ignores case.
+    * @param name
+    * @return
     */
     public static boolean equalsIgnoreCase(DBIdentifier name1, DBIdentifier name2) {
         boolean name1Null = DBIdentifier.isNull(name1);
@@ -840,6 +841,7 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
     /**
      * Returns a new identifier with a combined prefix and name using the standard name
      * concatenation character ('_').
+     * @param prefix
      */
     public static DBIdentifier preCombine(DBIdentifier name, String prefix) {
         if (DBIdentifier.isNull(name)) {
@@ -854,9 +856,10 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
 
     /**
      * Returns a new identifier with delimiters removed.
+     * @param name
      */
     public static DBIdentifier removeDelimiters(DBIdentifier name) {
-        if (DBIdentifier.isNull(name) || !name.isDelimited()) {
+        if (DBIdentifier.isNull(name)) {
             return name;
         }
         if (!name.isDelimited()) {
@@ -872,6 +875,8 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
      * Combine {@link #removeDelimiters(org.apache.openjpa.jdbc.identifier.DBIdentifier) }
      * with {@link #toUpper(org.apache.openjpa.jdbc.identifier.DBIdentifier, boolean) }
      * in order to save allocations and CPU cycles.
+     * @param name
+     * @return
      */
     public static DBIdentifier removeDelimitersAndMakeUpper(DBIdentifier name) {
         if (DBIdentifier.isNull(name) || name.getNameInternal() == null) {
@@ -888,6 +893,7 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
 
     /**
      * Returns a new delimiter with leading and trailing spaces removed.
+     * @param name
      */
     public static DBIdentifier trim(DBIdentifier name) {
         if (DBIdentifier.isNull(name)) {
@@ -921,7 +927,7 @@ public class DBIdentifier extends IdentifierImpl implements Cloneable, Identifie
         if (DBIdentifier.isEmpty(this)) {
             return false;
         }
-        return isNameDelimited() || Normalizer.isDelimited(getNameInternal());
+        return Normalizer.isDelimited(getNameInternal());
     }
 
     /**

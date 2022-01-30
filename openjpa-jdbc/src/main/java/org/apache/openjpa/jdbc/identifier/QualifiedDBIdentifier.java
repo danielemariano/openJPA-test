@@ -78,6 +78,7 @@ public class QualifiedDBIdentifier extends DBIdentifier implements Identifier, C
             if (DBIdentifier.isNull(sName)) {
                 continue;
             }
+
             if (i == (sNames.length - 1) && sNames.length != 1) {
                 setName(sName.clone());
             } else {

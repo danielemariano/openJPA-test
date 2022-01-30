@@ -30,7 +30,7 @@ public final class CharId extends OpenJPAId {
     private final char key;
 
     public CharId(Class cls, Character key) {
-        this(cls, (key == null) ? (char) 0 : key);
+        this(cls, (key == null) ? (char) 0 : key.charValue());
     }
 
     public CharId(Class cls, String key) {
@@ -53,7 +53,7 @@ public final class CharId extends OpenJPAId {
 
     @Override
     public Object getIdObject() {
-        return key;
+        return Character.valueOf(key);
     }
 
     @Override

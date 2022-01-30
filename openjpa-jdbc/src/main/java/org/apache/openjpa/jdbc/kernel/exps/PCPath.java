@@ -262,8 +262,8 @@ public class PCPath extends CandidatePath implements JDBCPath {
 
         StringBuilder path = new StringBuilder();
         Action action;
-        for (Object o : _actions) {
-            action = (Action) o;
+        for (Iterator itr = _actions.iterator(); itr.hasNext();) {
+            action = (Action) itr.next();
             if (action.op == Action.VAR || action.op == Action.SUBQUERY)
                 path.append(action.data);
             else if (action.op == Action.UNBOUND_VAR)
@@ -752,14 +752,14 @@ public class PCPath extends CandidatePath implements JDBCPath {
         Action action;
         OpenJPAStateManager sm;
         Broker tmpBroker;
-        for (Object o : _actions) {
-            action = (Action) o;
+        for (Iterator itr = _actions.iterator(); itr.hasNext();) {
+            action = (Action)itr.next();
             sm = null;
             tmpBroker = null;
             if (ImplHelper.isManageable(candidate))
                 sm = (OpenJPAStateManager) (ImplHelper.toPersistenceCapable(
-                        candidate, ctx.getConfiguration())).
-                        pcGetStateManager();
+                    candidate, ctx.getConfiguration())).
+                    pcGetStateManager();
             if (sm == null) {
                 tmpBroker = ctx.getBroker();
                 tmpBroker.transactional(candidate, false, null);
@@ -769,12 +769,10 @@ public class PCPath extends CandidatePath implements JDBCPath {
                 continue;
             try {
                 candidate = sm.fetchField(
-                        ((FieldMapping) action.data).getIndex(), true);
-            }
-            catch (ClassCastException cce) {
+                        ((FieldMapping)action.data).getIndex(), true);
+            } catch (ClassCastException cce) {
                 throw new RuntimeException(action.data + " not a field path");
-            }
-            finally {
+            } finally {
                 // transactional does not clear the state, which is
                 // important since tmpCandidate might be also managed by
                 // another broker if it's a proxied non-pc instance

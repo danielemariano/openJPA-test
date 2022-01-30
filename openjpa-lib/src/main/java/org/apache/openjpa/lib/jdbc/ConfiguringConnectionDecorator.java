@@ -107,8 +107,8 @@ public class ConfiguringConnectionDecorator implements ConnectionDecorator {
             super(conn);
             if (_autoCommit != null) {
                 _curAutoCommit = ConfiguringConnection.this.getAutoCommit();
-                if (_curAutoCommit != _autoCommit)
-                    setAutoCommit(_autoCommit);
+                if (_curAutoCommit != _autoCommit.booleanValue())
+                    setAutoCommit(_autoCommit.booleanValue());
             }
         }
 
@@ -125,8 +125,8 @@ public class ConfiguringConnectionDecorator implements ConnectionDecorator {
             if (_isolation != TRANSACTION_NONE)
                 super.commit();
             if (_autoCommit != null
-                && _autoCommit != _curAutoCommit)
-                setAutoCommit(_autoCommit);
+                && _autoCommit.booleanValue() != _curAutoCommit)
+                setAutoCommit(_autoCommit.booleanValue());
         }
 
         @Override
@@ -134,8 +134,8 @@ public class ConfiguringConnectionDecorator implements ConnectionDecorator {
             if (_isolation != TRANSACTION_NONE)
                 super.rollback();
             if (_autoCommit != null
-                && _autoCommit != _curAutoCommit)
-                setAutoCommit(_autoCommit);
+                && _autoCommit.booleanValue() != _curAutoCommit)
+                setAutoCommit(_autoCommit.booleanValue());
         }
 
         @Override

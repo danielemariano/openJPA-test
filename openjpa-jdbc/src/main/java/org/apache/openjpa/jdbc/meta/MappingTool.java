@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
@@ -519,29 +520,28 @@ public class MappingTool
                 // now run the schematool as long as we're doing some schema
                 // action and the user doesn't just want an xml output
                 String[] schemaActions = _schemaActions.split(",");
-                for (String schemaAction : schemaActions) {
-                    if (!SCHEMA_ACTION_NONE.equals(schemaAction)
-                            && (_schemaWriter == null || (_schemaTool != null
+                for (int i = 0; i < schemaActions.length; i++) {
+                    if (!SCHEMA_ACTION_NONE.equals(schemaActions[i])
+                        && (_schemaWriter == null || (_schemaTool != null
                             && _schemaTool.getWriter() != null))) {
 
                         SchemaTool tool;
-                        if (schemaAction.equals(ACTION_SCRIPT_CREATE) ||
-                                schemaAction.equals(ACTION_SCRIPT_DROP) ||
-                                schemaAction.equals(ACTION_SCRIPT_LOAD)) {
+                        if (schemaActions[i].equals(ACTION_SCRIPT_CREATE) ||
+                            schemaActions[i].equals(ACTION_SCRIPT_DROP) ||
+                            schemaActions[i].equals(ACTION_SCRIPT_LOAD)) {
                             tool = newSchemaTool(SchemaTool.ACTION_EXECUTE_SCRIPT);
-                        }
-                        else {
-                            tool = newSchemaTool(schemaAction);
+                        } else {
+                            tool = newSchemaTool(schemaActions[i]);
                         }
 
-                        if (schemaAction.equals(SchemaTool.ACTION_BUILD) && _conf.getCreateScriptTarget() != null) {
+                        if (schemaActions[i].equals(ACTION_ADD) && _conf.getCreateScriptTarget() != null) {
                             tool.setWriter(new PrintWriter(_conf.getCreateScriptTarget()));
                             tool.setIndexes(true);
                             tool.setForeignKeys(true);
                             tool.setSequences(true);
                         }
 
-                        if (schemaAction.equals(SchemaTool.ACTION_DROP) && _conf.getDropScriptTarget() != null) {
+                        if (schemaActions[i].equals(ACTION_DROP) && _conf.getDropScriptTarget() != null) {
                             tool.setWriter(new PrintWriter(_conf.getDropScriptTarget()));
                         }
 
@@ -555,7 +555,7 @@ public class MappingTool
                             tool.setSQLTerminator(flags.sqlTerminator);
                         }
 
-                        switch (schemaAction) {
+                        switch (schemaActions[i]) {
                             case ACTION_SCRIPT_CREATE:
                                 tool.setScriptToExecute(_conf.getCreateScriptSource());
                                 break;
@@ -595,15 +595,15 @@ public class MappingTool
             if (_mappingWriter != null) {
                 output = new HashMap<>();
                 File tmp = new File("openjpatmp");
-                for (ClassMapping mapping : mappings) {
-                    mapping.setSource(tmp, SourceTracker.SRC_OTHER, "openjpatmp");
+                for (int i = 0; i < mappings.length; i++) {
+                    mappings[i].setSource(tmp, SourceTracker.SRC_OTHER, "openjpatmp");
                 }
-                for (QueryMetaData query : queries) {
-                    query.setSource(tmp, query.getSourceScope(), SourceTracker.SRC_OTHER, "openjpatmp");
+                for (int i = 0; i < queries.length; i++) {
+                    queries[i].setSource(tmp, queries[i].getSourceScope(), SourceTracker.SRC_OTHER, "openjpatmp");
                 }
-                for (SequenceMetaData seq : seqs)
-                    seq.setSource(tmp, seq.getSourceScope(),
-                            SourceTracker.SRC_OTHER);
+                for (int i = 0; i < seqs.length; i++)
+                    seqs[i].setSource(tmp, seqs[i].getSourceScope(),
+                        SourceTracker.SRC_OTHER);
             }
 
             // store
@@ -613,9 +613,9 @@ public class MappingTool
             // write to stream
             if (_mappingWriter != null) {
                 PrintWriter out = new PrintWriter(_mappingWriter);
-                for (String s : output.values()) {
-                    out.println(s);
-                }
+                for (Iterator<String> itr = output.values().iterator();
+                    itr.hasNext();)
+                    out.println(itr.next());
                 out.flush();
             }
         }
@@ -634,14 +634,13 @@ public class MappingTool
      */
     private void dropUnusedSchemaComponents(ClassMapping[] mappings) {
         FieldMapping[] fields;
-        for (ClassMapping mapping : mappings) {
-            mapping.refSchemaComponents();
-            mapping.getDiscriminator().refSchemaComponents();
-            mapping.getVersion().refSchemaComponents();
-            fields = mapping.getDefinedFieldMappings();
-            for (FieldMapping field : fields) {
-                field.refSchemaComponents();
-            }
+        for (int i = 0; i < mappings.length; i++) {
+            mappings[i].refSchemaComponents();
+            mappings[i].getDiscriminator().refSchemaComponents();
+            mappings[i].getVersion().refSchemaComponents();
+            fields = mappings[i].getDefinedFieldMappings();
+            for (int j = 0; j < fields.length; j++)
+                fields[j].refSchemaComponents();
         }
 
         // also allow the dbdictionary to ref any schema components that
@@ -649,11 +648,10 @@ public class MappingTool
         SchemaGroup group = getSchemaGroup();
         Schema[] schemas = group.getSchemas();
         Table[] tables;
-        for (Schema schema : schemas) {
-            tables = schema.getTables();
-            for (Table table : tables) {
-                _dict.refSchemaComponents(table);
-            }
+        for (int i = 0; i < schemas.length; i++) {
+            tables = schemas[i].getTables();
+            for (int j = 0; j < tables.length; j++)
+                _dict.refSchemaComponents(tables[j]);
         }
 
         group.removeUnusedComponents();
@@ -664,9 +662,8 @@ public class MappingTool
      */
     private void addSequenceComponents(ClassMapping[] mappings) {
         SchemaGroup group = getSchemaGroup();
-        for (ClassMapping mapping : mappings) {
-            addSequenceComponents(mapping, group);
-        }
+        for (int i = 0; i < mappings.length; i++)
+            addSequenceComponents(mappings[i], group);
     }
 
     /**
@@ -691,15 +688,14 @@ public class MappingTool
             fmds = mapping.getDefinedFieldMappings();
         else
             fmds = mapping.getFieldMappings();
-        for (FieldMapping fmd : fmds) {
-            smd = fmd.getValueSequenceMetaData();
+        for (int i = 0; i < fmds.length; i++) {
+            smd = fmds[i].getValueSequenceMetaData();
             if (smd != null) {
                 seq = smd.getInstance(_loader);
                 if (seq instanceof JDBCSeq)
                     ((JDBCSeq) seq).addSchema(mapping, group);
-            }
-            else if (fmd.getEmbeddedMapping() != null)
-                addSequenceComponents(fmd.getEmbeddedMapping(), group);
+            } else if (fmds[i].getEmbeddedMapping() != null)
+                addSequenceComponents(fmds[i].getEmbeddedMapping(), group);
         }
     }
 
@@ -774,10 +770,10 @@ public class MappingTool
 
         ClassMetaData meta = repos.addMetaData(cls);
         FieldMetaData[] fmds = meta.getDeclaredFields();
-        for (FieldMetaData fmd : fmds) {
-            if (fmd.getDeclaredTypeCode() == JavaTypes.OBJECT
-                    && fmd.getDeclaredType() != Object.class)
-                fmd.setDeclaredTypeCode(JavaTypes.PC);
+        for (int i = 0; i < fmds.length; i++) {
+            if (fmds[i].getDeclaredTypeCode() == JavaTypes.OBJECT
+                && fmds[i].getDeclaredType() != Object.class)
+                fmds[i].setDeclaredTypeCode(JavaTypes.PC);
         }
         meta.setSource(_file, meta.getSourceType(), _file == null ? "": _file.getPath() );
         meta.setResolve(MODE_META, true);
@@ -829,17 +825,16 @@ public class MappingTool
         Schema[] schemas = _schema.getSchemas();
         Table[] tables;
         Column[] cols;
-        for (Schema schema : schemas) {
-            tables = schema.getTables();
-            for (Table table : tables) {
-                if (table.getPrimaryKey() == null)
+        for (int i = 0; i < schemas.length; i++) {
+            tables = schemas[i].getTables();
+            for (int j = 0; j < tables.length; j++) {
+                if (tables[j].getPrimaryKey() == null)
                     continue;
 
-                table.getPrimaryKey().setLogical(false);
-                cols = table.getPrimaryKey().getColumns();
-                for (Column col : cols) {
-                    col.setNotNull(true);
-                }
+                tables[j].getPrimaryKey().setLogical(false);
+                cols = tables[j].getPrimaryKey().getColumns();
+                for (int k = 0; k < cols.length; k++)
+                    cols[k].setNotNull(true);
             }
         }
     }
@@ -1106,8 +1101,8 @@ public class MappingTool
                 getMetaDataFactory().newClassArgParser();
             classParser.setClassLoader(loader);
             Class<?>[] parsed;
-            for (String arg : args) {
-                parsed = classParser.parseTypes(arg);
+            for (int i = 0; i < args.length; i++) {
+                parsed = classParser.parseTypes(args[i]);
                 classes.addAll(Arrays.asList(parsed));
             }
         }
@@ -1116,9 +1111,9 @@ public class MappingTool
         if (ACTION_EXPORT.equals(flags.action)) {
             // run exports until the first export succeeds
             ImportExport[] instances = newImportExports();
-            for (ImportExport instance : instances) {
-                if (instance.exportMappings(conf, act, flags.meta, log,
-                        flags.mappingWriter))
+            for (int i = 0; i < instances.length; i++) {
+                if (instances[i].exportMappings(conf, act, flags.meta, log,
+                    flags.mappingWriter))
                     return true;
             }
             return false;
@@ -1126,15 +1121,20 @@ public class MappingTool
         if (ACTION_IMPORT.equals(flags.action)) {
             // run exports until the first export succeeds
             ImportExport[] instances = newImportExports();
-            for (ImportExport instance : instances) {
-                if (instance.importMappings(conf, act, args, flags.meta,
-                        log, loader))
+            for (int i = 0; i < instances.length; i++) {
+                if (instances[i].importMappings(conf, act, args, flags.meta,
+                    log, loader))
                     return true;
             }
             return false;
         }
 
-        MappingTool tool = new MappingTool(conf, flags.action, flags.meta, loader);
+        MappingTool tool;
+        try {
+            tool = new MappingTool(conf, flags.action, flags.meta, loader);
+        } catch (IllegalArgumentException iae) {
+            return false;
+        }
 
         // setup the tool
         tool.setIgnoreErrors(flags.ignoreErrors);

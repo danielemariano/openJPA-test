@@ -187,14 +187,14 @@ public class PreparedQueryImpl implements PreparedQuery {
             return new PreparedQueryCacheImpl.StrongExclusion(_id, _loc.get("exclude-no-select", _id).getMessage());
         SQLBuffer buffer = selector.getSQL();
         if (buffer == null)
-            return new PreparedQueryCacheImpl.StrongExclusion(_id, _loc.get("exclude-no-sql", _id).getMessage());
+            return new PreparedQueryCacheImpl.StrongExclusion(_id, _loc.get("exclude-no-sql", _id).getMessage());;
         if (isUsingFieldStrategy())
             return new PreparedQueryCacheImpl.StrongExclusion(_id,
-                _loc.get("exclude-user-strategy", _id).getMessage());
+                _loc.get("exclude-user-strategy", _id).getMessage());;
 
         if (isPaginated())
             return new PreparedQueryCacheImpl.StrongExclusion(_id,
-                _loc.get("exclude-pagination", _id).getMessage());
+                _loc.get("exclude-pagination", _id).getMessage());;
 
         setTargetQuery(buffer.getSQL());
         setParameters(buffer.getParameters());
@@ -212,17 +212,18 @@ public class PreparedQueryImpl implements PreparedQuery {
      * not be extracted.
      */
     private Object[] extractSelectExecutor(Object result) {
-        if (!(result instanceof ResultList))
+        if (result instanceof ResultList == false)
             return new Object[]{null, _loc.get("exclude-not-result", _id)};
         Object userObject = ((ResultList<?>)result).getUserObject();
         if (userObject == null || !userObject.getClass().isArray() || ((Object[])userObject).length != 2)
             return new Object[]{null, _loc.get("exclude-no-user-object", _id)};
         Object provider = ((Object[])userObject)[0];
         Object executor = ((Object[])userObject)[1];
-        if (!(executor instanceof StoreQuery.Executor))
+        if (executor instanceof StoreQuery.Executor == false)
             return new Object[]{null, _loc.get("exclude-not-executor", _id)};
         _exps = ((StoreQuery.Executor)executor).getQueryExpressions();
-        for (QueryExpressions exp : _exps) {
+        for (int i = 0; i < _exps.length; i++) {
+            QueryExpressions exp = _exps[i];
             if (exp.hasInExpression)
                 return new Object[]{null, _loc.get("exclude-in-expression", _id)};
             if (isUsingExternalizedParameter(exp)) {
@@ -284,8 +285,8 @@ public class PreparedQueryImpl implements PreparedQuery {
         return false;
     }
     private boolean isUsingFieldStrategy() {
-        for (QueryExpressions exp : _exps) {
-            if (isUsingFieldStrategy(exp)) {
+        for (int i = 0; i < _exps.length; i++) {
+            if (isUsingFieldStrategy(_exps[i])) {
                 return true;
             }
         }

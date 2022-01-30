@@ -310,7 +310,7 @@ public class DataCacheStoreManager extends DelegatingStoreManager {
             for(int i = 0; i < oids.size(); i++) {
                 Object oid = oids.get(i);
                 // Only check the cache if we haven't found the current oid.
-                if (!edata.get(i) && cache.contains(oid)) {
+                if (edata.get(i) == false && cache.contains(oid)) {
                     edata.set(i);
                 }
             }
@@ -546,7 +546,11 @@ public class DataCacheStoreManager extends DelegatingStoreManager {
             if (sm.getManagedInstance() == null
                 || load != FORCE_LOAD_NONE
                 || sm.getPCState() == PCState.HOLLOW) {
-                smList = caches.computeIfAbsent(cache, k -> new ArrayList<>());
+                smList = caches.get(cache);
+                if (smList == null) {
+                    smList = new ArrayList<>();
+                    caches.put(cache, smList);
+                }
                 smList.add(sm);
             } else if (!cache.contains(sm.getObjectId()))
                 unloaded = addUnloaded(sm, null, unloaded);

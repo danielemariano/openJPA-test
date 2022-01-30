@@ -71,9 +71,8 @@ class AutoDetachValue
     public int getConstant() {
         if (!_flagsSet) {
             String[] vals = get();
-            for (String val : vals) {
-                _flags |= Integer.parseInt(unalias(val));
-            }
+            for (int i = 0; i < vals.length; i++)
+                _flags |= Integer.parseInt(unalias(vals[i]));
             _flagsSet = true;
         }
 

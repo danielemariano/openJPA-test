@@ -68,8 +68,7 @@ public abstract class AbstractRemoteCommitProvider
         if (es.length > 0 && log.isWarnEnabled())
             log.warn(_loc.get("remote-listener-ex", Arrays.asList(es)));
         if (log.isTraceEnabled())
-            for (Exception e : es) {
-                log.trace(e);
-            }
+            for (int i = 0; i < es.length; i++)
+                log.trace(es[i]);
     }
 }

@@ -31,7 +31,7 @@ public final class FloatId
     private final float key;
 
     public FloatId(Class cls, Float key) {
-        this(cls, (key == null) ? 0F : key);
+        this(cls, (key == null) ? 0F : key.floatValue());
     }
 
     public FloatId(Class cls, String key) {
@@ -54,7 +54,7 @@ public final class FloatId
 
     @Override
     public Object getIdObject() {
-        return key;
+        return Float.valueOf(key);
     }
 
     @Override

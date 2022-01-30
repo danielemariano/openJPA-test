@@ -24,6 +24,7 @@ import java.sql.ResultSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 
 import org.apache.openjpa.conf.OpenJPAConfiguration;
@@ -163,7 +164,7 @@ public class JDBCFetchConfigurationImpl
             && mode != EagerFetchModes.EAGER_NONE
             && mode != EagerFetchModes.EAGER_JOIN
             && mode != EagerFetchModes.EAGER_PARALLEL)
-            throw new IllegalArgumentException(_loc.get("bad-fetch-mode", mode).getMessage());
+            throw new IllegalArgumentException(_loc.get("bad-fetch-mode", Integer.valueOf(mode)).getMessage());
 
         if (mode == DEFAULT) {
             JDBCConfiguration conf = getJDBCConfiguration();
@@ -196,7 +197,7 @@ public class JDBCFetchConfigurationImpl
             && mode != EagerFetchModes.EAGER_NONE
             && mode != EagerFetchModes.EAGER_JOIN
             && mode != EagerFetchModes.EAGER_PARALLEL)
-            throw new IllegalArgumentException(_loc.get("bad-fetch-mode", mode).getMessage());
+            throw new IllegalArgumentException(_loc.get("bad-fetch-mode", Integer.valueOf(mode)).getMessage());
 
         if (mode == DEFAULT) {
             JDBCConfiguration conf = getJDBCConfiguration();
@@ -219,7 +220,7 @@ public class JDBCFetchConfigurationImpl
             && type != ResultSet.TYPE_FORWARD_ONLY
             && type != ResultSet.TYPE_SCROLL_INSENSITIVE
             && type != ResultSet.TYPE_SCROLL_SENSITIVE)
-            throw new IllegalArgumentException(_loc.get("bad-resultset-type", type).getMessage());
+            throw new IllegalArgumentException(_loc.get("bad-resultset-type", Integer.valueOf(type)).getMessage());
 
         if (type == DEFAULT) {
             JDBCConfiguration conf = getJDBCConfiguration();
@@ -241,7 +242,7 @@ public class JDBCFetchConfigurationImpl
             && direction != ResultSet.FETCH_FORWARD
             && direction != ResultSet.FETCH_REVERSE
             && direction != ResultSet.FETCH_UNKNOWN)
-            throw new IllegalArgumentException(_loc.get("bad-fetch-direction", direction)
+            throw new IllegalArgumentException(_loc.get("bad-fetch-direction", Integer.valueOf(direction))
                 .getMessage());
 
         if (direction == DEFAULT) {
@@ -264,7 +265,7 @@ public class JDBCFetchConfigurationImpl
             && size != LRSSizes.SIZE_QUERY
             && size != LRSSizes.SIZE_LAST
             && size != LRSSizes.SIZE_UNKNOWN)
-            throw new IllegalArgumentException(_loc.get("bad-lrs-size", size).getMessage());
+            throw new IllegalArgumentException(_loc.get("bad-lrs-size", Integer.valueOf(size)).getMessage());
 
         if (size == DEFAULT) {
             JDBCConfiguration conf = getJDBCConfiguration();
@@ -286,7 +287,7 @@ public class JDBCFetchConfigurationImpl
             && syntax != JoinSyntaxes.SYNTAX_SQL92
             && syntax != JoinSyntaxes.SYNTAX_TRADITIONAL
             && syntax != JoinSyntaxes.SYNTAX_DATABASE)
-            throw new IllegalArgumentException(_loc.get("bad-join-syntax", syntax).getMessage());
+            throw new IllegalArgumentException(_loc.get("bad-join-syntax", Integer.valueOf(syntax)).getMessage());
 
         if (syntax == DEFAULT) {
             JDBCConfiguration conf = getJDBCConfiguration();
@@ -362,9 +363,8 @@ public class JDBCFetchConfigurationImpl
     public JDBCFetchConfiguration addJoins(Collection<String> joins) {
         if (joins == null || joins.isEmpty())
             return this;
-        for (String join : joins) {
-            addJoin(join);
-        }
+        for (Iterator<String> itr = joins.iterator(); itr.hasNext();)
+            addJoin(itr.next());
         return this;
     }
 
@@ -417,7 +417,7 @@ public class JDBCFetchConfigurationImpl
             && level != Connection.TRANSACTION_READ_COMMITTED
             && level != Connection.TRANSACTION_REPEATABLE_READ
             && level != Connection.TRANSACTION_SERIALIZABLE)
-            throw new IllegalArgumentException(_loc.get("bad-level", level).getMessage());
+            throw new IllegalArgumentException(_loc.get("bad-level", Integer.valueOf(level)).getMessage());
 
         if (level == DEFAULT)
             _state.isolationLevel = -1;
@@ -479,9 +479,8 @@ public class JDBCFetchConfigurationImpl
     public JDBCFetchConfiguration addFetchInnerJoins(Collection<String> joins) {
         if (joins == null || joins.isEmpty())
             return this;
-        for (String join : joins) {
-            addFetchInnerJoin(join);
-        }
+        for (Iterator<String> itr = joins.iterator(); itr.hasNext();)
+            addFetchInnerJoin(itr.next());
         return this;
     }
 }

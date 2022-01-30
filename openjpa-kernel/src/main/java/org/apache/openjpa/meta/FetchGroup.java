@@ -317,7 +317,7 @@ public class FetchGroup
      */
     public boolean isPostLoad () {
     	if (_postLoad != null)
-            return _postLoad;
+            return _postLoad.booleanValue();
 
         if (_meta != null) {
             ClassMetaData sup = _meta.getPCSuperclassMetaData();

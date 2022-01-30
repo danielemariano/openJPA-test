@@ -82,16 +82,16 @@ public abstract class EmbedValueHandler
         Column[] curCols;
         Object[] curArgs;
         ColumnIO curIO;
-        for (FieldMapping fm : fms) {
-            if (fm.getManagement() != FieldMetaData.MANAGE_PERSISTENT)
+        for (int i = 0; i < fms.length; i++) {
+            if (fms[i].getManagement() != FieldMetaData.MANAGE_PERSISTENT)
                 continue;
-            FieldStrategy strat = fm.getStrategy();
+            FieldStrategy strat = fms[i].getStrategy();
 
             if (!(strat instanceof Embeddable))
                 throw new MetaDataException(_loc.get("not-embeddable",
-                        vm, fm));
+                    vm, fms[i]));
 
-            ValueMapping val = fm.getValueMapping();
+            ValueMapping val = fms[i].getValueMapping();
             if (val.getEmbeddedMapping() != null)
                 map(val, name, io, adapt, cols, args);
 
@@ -100,19 +100,19 @@ public abstract class EmbedValueHandler
             for (int j = 0; j < curCols.length; j++) {
                 io.setInsertable(cols.size(), curIO.isInsertable(j, false));
                 io.setNullInsertable(cols.size(),
-                        curIO.isInsertable(j, true));
+                    curIO.isInsertable(j, true));
                 io.setUpdatable(cols.size(), curIO.isUpdatable(j, false));
                 io.setNullUpdatable(cols.size(), curIO.isUpdatable(j, true));
                 cols.add(curCols[j]);
             }
 
-            curArgs = ((Embeddable) fm.getStrategy()).getResultArguments();
+            curArgs = ((Embeddable) fms[i].getStrategy()).getResultArguments();
             if (curCols.length == 1)
                 args.add(curArgs);
             else if (curCols.length > 1)
                 for (int j = 0; j < curCols.length; j++)
                     args.add((curArgs == null) ? null
-                            : ((Object[]) curArgs)[j]);
+                        : ((Object[]) curArgs)[j]);
         }
     }
 
@@ -235,32 +235,29 @@ public abstract class EmbedValueHandler
         Embeddable embed;
         Object cval;
         Column[] ecols;
-        for (FieldMapping fm : fms) {
-            if (fm.getManagement() != FieldMetaData.MANAGE_PERSISTENT)
+        for (int i = 0; i < fms.length; i++) {
+            if (fms[i].getManagement() != FieldMetaData.MANAGE_PERSISTENT)
                 continue;
 
-            ValueMapping vm1 = fm.getValueMapping();
+            ValueMapping vm1 = fms[i].getValueMapping();
             OpenJPAStateManager em1 = null;
 
-            embed = (Embeddable) fm.getStrategy();
+            embed = (Embeddable) fms[i].getStrategy();
             if (vm1.getEmbeddedMapping() != null) {
                 if (em instanceof StateManagerImpl) {
-                    em1 = store.getContext().embed(null, null, em, vm1);
-                    idx = toObjectValue1(em1, vm1, val, store, fetch, cols, idx);
-                }
-                else if (em instanceof ObjectIdStateManager) {
+                em1 = store.getContext().embed(null, null, em, vm1);
+                idx = toObjectValue1(em1, vm1, val, store, fetch, cols, idx);
+                } else if (em instanceof ObjectIdStateManager) {
                     em1 = new ObjectIdStateManager(null, null, vm1);
                     idx = toObjectValue1(em1, vm1, val, store, null,
-                            getColumns(fm), idx);
+                            getColumns(fms[i]), idx);
                 }
                 if (em1 != null) {
                     cval = em1.getManagedInstance();
-                }
-                else {
+                } else {
                     cval = null;
                 }
-            }
-            else {
+            } else {
                 ecols = embed.getColumns();
                 if (ecols.length == 0)
                     cval = null;
@@ -280,10 +277,10 @@ public abstract class EmbedValueHandler
             else {
                 if (!(em instanceof ObjectIdStateManager))
                     cval = embed.toEmbeddedObjectValue(cval);
-                if (fm.getHandler() != null)
-                    cval = fm.getHandler().toObjectValue(fm, cval);
+                if (fms[i].getHandler() != null)
+                    cval = fms[i].getHandler().toObjectValue(fms[i], cval);
 
-                em.store(fm.getIndex(), cval);
+                em.store(fms[i].getIndex(), cval);
             }
         }
         return idx;
@@ -302,21 +299,20 @@ public abstract class EmbedValueHandler
     public static void getEmbeddedIdCols(FieldMapping fmd, List cols) {
         ClassMapping embed = fmd.getEmbeddedMapping();
         FieldMapping[] fmds = embed.getFieldMappings();
-        for (FieldMapping fieldMapping : fmds) {
-            if (fieldMapping.getValue().getEmbeddedMetaData() == null) {
-                getIdColumns(fieldMapping, cols);
-            }
-            else {
-                getEmbeddedIdCols(fieldMapping, cols);
+        for (int i = 0; i < fmds.length; i++) {
+            if (fmds[i].getValue().getEmbeddedMetaData() == null) {
+                getIdColumns(fmds[i], cols);
+            } else {
+                getEmbeddedIdCols(fmds[i], cols);
             }
         }
     }
 
     public static void getIdColumns(FieldMapping fmd, List cols) {
         Column[] pkCols =  ((ValueMappingImpl)fmd.getValue()).getColumns();
-        for (Column pkCol : pkCols) {
+        for (int j = 0; j < pkCols.length; j++) {
             Column newCol = new Column();
-            newCol.copy(pkCol);
+            newCol.copy(pkCols[j]);
             cols.add(newCol);
         }
     }

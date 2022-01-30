@@ -25,11 +25,13 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.conf.OpenJPAConfiguration;
 import org.apache.openjpa.event.RemoteCommitEvent;
 import org.apache.openjpa.event.RemoteCommitListener;
@@ -39,7 +41,6 @@ import org.apache.openjpa.lib.conf.Configuration;
 import org.apache.openjpa.lib.log.Log;
 import org.apache.openjpa.lib.util.J2DoPrivHelper;
 import org.apache.openjpa.lib.util.Localizer;
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.lib.util.concurrent.AbstractConcurrentEventManager;
 import org.apache.openjpa.lib.util.concurrent.ConcurrentReferenceHashMap;
 import org.apache.openjpa.lib.util.concurrent.ConcurrentReferenceHashSet;
@@ -119,7 +120,7 @@ public abstract class AbstractQueryCache
             // Pre-load all the entity types into the HashMap to handle
             // synchronization on the map efficiently
             for (Object o : perTypes)
-                entityTimestampMap.put((String)o, 0L);
+                entityTimestampMap.put((String)o, Long.valueOf(0));
         }
     }
 
@@ -152,7 +153,7 @@ public abstract class AbstractQueryCache
             Collection changedTypes = ev.getTypes();
             HashMap<String,Long> changedClasses =
                 new HashMap<>();
-            Long tstamp = System.currentTimeMillis();
+            Long tstamp = Long.valueOf(System.currentTimeMillis());
             for (Object o: changedTypes) {
                 String name = ((Class) o).getName();
                 if(!changedClasses.containsKey(name)) {
@@ -314,8 +315,8 @@ public abstract class AbstractQueryCache
         MetaDataRepository repos = conf.getMetaDataRepositoryInstance();
         ClassMetaData meta;
         Object oid;
-        for (Object o : oids) {
-            oid = o;
+        for (Iterator itr = oids.iterator(); itr.hasNext();) {
+            oid = itr.next();
             if (oid instanceof Id)
                 classes.add(((Id) oid).getType());
             else {
@@ -358,9 +359,8 @@ public abstract class AbstractQueryCache
      * Remove all results under the given keys from the cache.
      */
     protected void removeAllInternal(Collection qks) {
-        for (Object qk : qks) {
-            removeInternal((QueryKey) qk);
-        }
+        for (Iterator iter = qks.iterator(); iter.hasNext();)
+            removeInternal((QueryKey) iter.next());
     }
 
     /**

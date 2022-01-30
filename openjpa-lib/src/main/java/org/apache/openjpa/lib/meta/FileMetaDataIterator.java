@@ -96,9 +96,8 @@ public class FileMetaDataIterator implements MetaDataIterator {
                 File[] files = (File[]) AccessController
                     .doPrivileged(J2DoPrivHelper.listFilesAction(file));
                 if (files != null)
-                    for (File value : files) {
-                        scanned = scan(value, filter, rsrc, metas, scanned);
-                    }
+                    for (int i = 0; i < files.length; i++)
+                        scanned = scan(files[i], filter, rsrc, metas, scanned);
             }
         }
         return scanned;
@@ -165,8 +164,8 @@ public class FileMetaDataIterator implements MetaDataIterator {
 
         @Override
         public byte[] getContent() throws IOException {
-            long len = AccessController.doPrivileged(
-                    J2DoPrivHelper.lengthAction(_file));
+            long len = (AccessController.doPrivileged(
+                J2DoPrivHelper.lengthAction(_file))).longValue();
             FileInputStream fin = null;
             try {
                 fin = AccessController.doPrivileged(

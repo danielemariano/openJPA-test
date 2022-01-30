@@ -20,6 +20,7 @@ package org.apache.openjpa.kernel;
 
 import java.lang.reflect.Field;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.openjpa.enhance.PersistenceCapable;
@@ -154,18 +155,18 @@ class VersionAttachStrategy
         FetchConfiguration fetch = broker.getFetchConfiguration();
         try {
             FieldMetaData[] fmds = sm.getMetaData().getFields();
-            for (FieldMetaData fmd : fmds) {
+            for (int i = 0; i < fmds.length; i++) {
                 switch (detach) {
                     case DETACH_ALL:
-                        attachField(manager, toAttach, sm, fmd, true);
+                        attachField(manager, toAttach, sm, fmds[i], true);
                         break;
                     case DETACH_FETCH_GROUPS:
-                        if (fetch.requiresFetch(fmd)
-                                != FetchConfiguration.FETCH_NONE)
-                            attachField(manager, toAttach, sm, fmd, true);
+                        if (fetch.requiresFetch(fmds[i])
+                            != FetchConfiguration.FETCH_NONE)
+                            attachField(manager, toAttach, sm, fmds[i], true);
                         break;
                     case DETACH_LOADED:
-                        attachField(manager, toAttach, sm, fmd, false);
+                        attachField(manager, toAttach, sm, fmds[i], false);
                         break;
                 }
             }
@@ -192,7 +193,7 @@ class VersionAttachStrategy
                 Object pcField = Reflection.get(pc, pcVersionInitField);
                 if (pcField != null) {
                     boolean bool = (Boolean) pcField;
-                    if (!bool) {
+                    if (bool == false) {
                         // If this field if false, that means that the pcGetVersion returned a default value rather than
                         // and actual value.
                         version = null;
@@ -318,8 +319,8 @@ class VersionAttachStrategy
         if (fmd.getElement().isEmbedded())
             copy = (Collection) sm.newFieldProxy(fmd.getIndex());
         else {
-            for (Object o : coll) {
-                if (manager.getBroker().isDetached(o)) {
+            for (Iterator itr = coll.iterator(); itr.hasNext();) {
+                if (manager.getBroker().isDetached(itr.next())) {
                     copy = (Collection) sm.newFieldProxy(fmd.getIndex());
                     break;
                 }
@@ -327,9 +328,9 @@ class VersionAttachStrategy
         }
 
         Object attached;
-        for (Object o : coll) {
+        for (Iterator itr = coll.iterator(); itr.hasNext();) {
             attached = attachInPlace(manager, sm, fmd.getElement(),
-                    o);
+                itr.next());
             if (copy != null)
                 copy.add(attached);
         }
@@ -354,11 +355,11 @@ class VersionAttachStrategy
         if (fmd.getKey().isEmbeddedPC() || fmd.getElement().isEmbeddedPC())
             copy = (Map) sm.newFieldProxy(fmd.getIndex());
         else {
-            for (Object o : map.entrySet()) {
-                entry = (Map.Entry) o;
+            for (Iterator itr = map.entrySet().iterator(); itr.hasNext();) {
+                entry = (Map.Entry) itr.next();
                 if ((keyPC && manager.getBroker().isDetached(entry.getKey()))
-                        || (valPC && manager.getBroker().isDetached
-                        (entry.getValue()))) {
+                    || (valPC && manager.getBroker().isDetached
+                    (entry.getValue()))) {
                     copy = (Map) sm.newFieldProxy(fmd.getIndex());
                     break;
                 }
@@ -366,8 +367,8 @@ class VersionAttachStrategy
         }
 
         Object key, val;
-        for (Object o : map.entrySet()) {
-            entry = (Map.Entry) o;
+        for (Iterator itr = map.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
             key = entry.getKey();
             if (keyPC)
                 key = attachInPlace(manager, sm, fmd.getKey(), key);
@@ -407,8 +408,8 @@ class VersionAttachStrategy
 
     private boolean isPrimaryKeysGenerated(ClassMetaData meta) {
         FieldMetaData[] pks = meta.getPrimaryKeyFields();
-        for (FieldMetaData pk : pks) {
-            if (pk.getValueStrategy() != ValueStrategies.NONE)
+        for (int i = 0; i < pks.length; i++) {
+            if (pks[i].getValueStrategy() != ValueStrategies.NONE)
                 return true;
         }
         return false;

@@ -190,14 +190,14 @@ public class XMLSchemaParser
         PrimaryKeyInfo pkInfo;
         String colName;
         Column col;
-        for (PrimaryKeyInfo info : _pkInfos) {
-            pkInfo = info;
-            for (String s : pkInfo.cols) {
-                colName = s;
+        for (Iterator<PrimaryKeyInfo> itr = _pkInfos.iterator(); itr.hasNext();) {
+            pkInfo = itr.next();
+            for (Iterator<String> cols = pkInfo.cols.iterator(); cols.hasNext();) {
+                colName = cols.next();
                 col = pkInfo.pk.getTable().getColumn(colName);
                 if (col == null)
                     throwUserException(_loc.get("pk-resolve", new Object[]
-                            {colName, pkInfo.pk.getTable()}));
+                        { colName, pkInfo.pk.getTable() }));
                 pkInfo.pk.addColumn(col);
             }
         }
@@ -211,15 +211,15 @@ public class XMLSchemaParser
         IndexInfo indexInfo;
         String colName;
         Column col;
-        for (IndexInfo info : _indexInfos) {
-            indexInfo = info;
-            for (String s : indexInfo.cols) {
-                colName = s;
+        for (Iterator<IndexInfo> itr = _indexInfos.iterator(); itr.hasNext();) {
+            indexInfo = itr.next();
+            for (Iterator<String> cols = indexInfo.cols.iterator(); cols.hasNext();) {
+                colName = cols.next();
                 col = indexInfo.index.getTable().getColumn(colName);
                 if (col == null)
                     throwUserException(_loc.get("index-resolve", new Object[]
-                            {indexInfo.index, colName,
-                                    indexInfo.index.getTable()}));
+                        { indexInfo.index, colName,
+                            indexInfo.index.getTable() }));
                 indexInfo.index.addColumn(col);
             }
         }
@@ -239,12 +239,12 @@ public class XMLSchemaParser
         PrimaryKey pk;
         Iterator<String> pks;
         Iterator<String> cols;
-        for (ForeignKeyInfo info : _fkInfos) {
-            fkInfo = info;
+        for (Iterator<ForeignKeyInfo> itr = _fkInfos.iterator(); itr.hasNext();) {
+            fkInfo = itr.next();
             toTable = _group.findTable(fkInfo.toTable);
             if (toTable == null || toTable.getPrimaryKey() == null)
                 throwUserException(_loc.get("fk-totable", new Object[]
-                        {fkInfo.fk, fkInfo.toTable, fkInfo.fk.getTable()}));
+                    { fkInfo.fk, fkInfo.toTable, fkInfo.fk.getTable() }));
 
             // check if only one fk column listed using shortcut
             pk = toTable.getPrimaryKey();
@@ -253,45 +253,45 @@ public class XMLSchemaParser
 
             // make joins
             pks = fkInfo.pks.iterator();
-            for (cols = fkInfo.cols.iterator(); cols.hasNext(); ) {
+            for (cols = fkInfo.cols.iterator(); cols.hasNext();) {
                 colName = (String) cols.next();
                 col = fkInfo.fk.getTable().getColumn(colName);
                 if (col == null)
                     throwUserException(_loc.get("fk-nocol",
-                            fkInfo.fk, colName, fkInfo.fk.getTable()));
+                        fkInfo.fk, colName, fkInfo.fk.getTable()));
 
                 pkColName = (String) pks.next();
                 pkCol = toTable.getColumn(pkColName);
                 if (pkCol == null)
                     throwUserException(_loc.get("fk-nopkcol", new Object[]
-                            {fkInfo.fk, pkColName, toTable,
-                                    fkInfo.fk.getTable()}));
+                        { fkInfo.fk, pkColName, toTable,
+                            fkInfo.fk.getTable() }));
 
                 fkInfo.fk.join(col, pkCol);
             }
 
             // make constant joins
             cols = fkInfo.constCols.iterator();
-            for (Object value : fkInfo.consts) {
+            for (Iterator<Object> vals = fkInfo.consts.iterator(); vals.hasNext();) {
                 colName = cols.next();
                 col = fkInfo.fk.getTable().getColumn(colName);
                 if (col == null)
                     throwUserException(_loc.get("fk-nocol",
-                            fkInfo.fk, colName, fkInfo.fk.getTable()));
+                        fkInfo.fk, colName, fkInfo.fk.getTable()));
 
-                fkInfo.fk.joinConstant(col, value);
+                fkInfo.fk.joinConstant(col, vals.next());
             }
 
             pks = fkInfo.constColsPK.iterator();
-            for (Object o : fkInfo.constsPK) {
+            for (Iterator<Object> vals = fkInfo.constsPK.iterator(); vals.hasNext();) {
                 pkColName = pks.next();
                 pkCol = toTable.getColumn(pkColName);
                 if (pkCol == null)
                     throwUserException(_loc.get("fk-nopkcol", new Object[]
-                            {fkInfo.fk, pkColName, toTable,
-                                    fkInfo.fk.getTable()}));
+                        { fkInfo.fk, pkColName, toTable,
+                            fkInfo.fk.getTable() }));
 
-                fkInfo.fk.joinConstant(o, pkCol);
+                fkInfo.fk.joinConstant(vals.next(), pkCol);
             }
         }
     }
@@ -304,14 +304,14 @@ public class XMLSchemaParser
         UniqueInfo unqInfo;
         String colName;
         Column col;
-        for (UniqueInfo info : _unqInfos) {
-            unqInfo = info;
-            for (String s : unqInfo.cols) {
-                colName = s;
+        for (Iterator<UniqueInfo> itr = _unqInfos.iterator(); itr.hasNext();) {
+            unqInfo = itr.next();
+            for (Iterator<String> cols = unqInfo.cols.iterator(); cols.hasNext();) {
+                colName = (String) cols.next();
                 col = unqInfo.unq.getTable().getColumn(colName);
                 if (col == null)
                     throwUserException(_loc.get("unq-resolve", new Object[]
-                            {unqInfo.unq, colName, unqInfo.unq.getTable()}));
+                        { unqInfo.unq, colName, unqInfo.unq.getTable() }));
                 unqInfo.unq.addColumn(col);
             }
         }

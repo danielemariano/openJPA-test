@@ -88,7 +88,7 @@ public class PCEnhancerAgent {
      * @return True if the agent is loaded successfully
      */
     public static synchronized boolean loadDynamicAgent(Log log) {
-        if (!loadAttempted && !disableDynamicAgent) {
+        if (loadAttempted == false && disableDynamicAgent == false) {
             Instrumentation inst =
                 InstrumentationFactory.getInstrumentation(log);
             if (inst != null) {
@@ -113,7 +113,7 @@ public class PCEnhancerAgent {
         // The agent will be disabled when running in an application
         // server.
         synchronized (PCEnhancerAgent.class) {
-            if (loadAttempted) {
+            if (loadAttempted == true) {
                 return;
             }
             // See the comment in loadDynamicAgent as to why we set this to true
@@ -182,7 +182,7 @@ public class PCEnhancerAgent {
     		conf.setReadOnly(Configuration.INIT_STATE_FREEZING);
     		conf.instantiateAll(); // avoid threading issues
 
-    		PCClassFileTransformer transformer = PCClassFileTransformer.newInstance
+    		PCClassFileTransformer transformer = new PCClassFileTransformer
     		    (conf.newMetaDataRepositoryInstance(), clonedOptions,
     		    tmpLoader);
     		inst.addTransformer(transformer);

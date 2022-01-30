@@ -45,6 +45,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -156,9 +157,7 @@ public class ConfigurationImpl
             "openjpa", LogFactoryImpl.class.getName(),
             "commons", "org.apache.openjpa.lib.log.CommonsLogFactory",
             "log4j", "org.apache.openjpa.lib.log.Log4JLogFactory",
-            "log4j2", "org.apache.openjpa.lib.log.Log4J2LogFactory",
             "slf4j", "org.apache.openjpa.lib.log.SLF4JLogFactory",
-            "jul", "org.apache.openjpa.lib.log.JULLogFactory",
             "none", NoneLogFactory.class.getName(),
             "false", NoneLogFactory.class.getName(),
         };
@@ -469,9 +468,9 @@ public class ConfigurationImpl
 
         PropertyDescriptor[] pds = getPropertyDescriptors();
         List<MethodDescriptor> descs = new ArrayList<>();
-        for (PropertyDescriptor pd : pds) {
-            Method write = pd.getWriteMethod();
-            Method read = pd.getReadMethod();
+        for (int i = 0; i < pds.length; i++) {
+            Method write = pds[i].getWriteMethod();
+            Method read = pds[i].getReadMethod();
             if (read != null && write != null) {
                 descs.add(new MethodDescriptor(write));
                 descs.add(new MethodDescriptor(read));
@@ -495,7 +494,11 @@ public class ConfigurationImpl
             val = (Value) _vals.get(i);
             try {
                 _pds[i] = getPropertyDescriptor(val);
-            } catch (MissingResourceException | IntrospectionException mre) {
+            } catch (MissingResourceException mre) {
+                if (failures == null)
+                    failures = new ArrayList<>();
+                failures.add(val.getProperty());
+            } catch (IntrospectionException ie) {
                 if (failures == null)
                     failures = new ArrayList<>();
                 failures.add(val.getProperty());
@@ -519,13 +522,13 @@ public class ConfigurationImpl
         // set up property descriptor
         PropertyDescriptor pd;
         try {
-            pd = new PropertyDescriptor((String)Introspector.decapitalize(prop),
+            pd = new PropertyDescriptor(Introspector.decapitalize(prop),
                 getClass());
         } catch (IntrospectionException ie) {
             // if there aren't any methods for this value(i.e., if it's a
             // dynamically-added value), then an IntrospectionException will
             // be thrown. Try to create a PD with no read or write methods.
-            pd = new PropertyDescriptor((String)Introspector.decapitalize(prop),
+            pd = new PropertyDescriptor(Introspector.decapitalize(prop),
                 (Method) null, (Method) null);
         }
         pd.setDisplayName(findLocalized(prop + "-name", true, val.getScope()));
@@ -571,18 +574,18 @@ public class ConfigurationImpl
         }
         String[] vals = StringUtil.split(findLocalized(prop
             + "-values", false, val.getScope()), ",", 0);
-        for (String s : vals)
-            if (!aliases.contains(s))
-                allowed.add(s);
+        for (int i = 0; i < vals.length; i++)
+            if (!aliases.contains(vals[i]))
+                allowed.add(vals[i]);
         try {
             Class<?> intf = Class.forName(findLocalized(prop
                 + "-interface", true, val.getScope()), false,
                 getClass().getClassLoader());
             pd.setValue(ATTRIBUTE_INTERFACE, intf.getName());
             String[] impls = Services.getImplementors(intf);
-            for (String impl : impls)
-                if (!aliases.contains(impl))
-                    allowed.add(impl);
+            for (int i = 0; i < impls.length; i++)
+                if (!aliases.contains(impls[i]))
+                    allowed.add(impls[i]);
         } catch (Throwable t) {
         }
         if (!allowed.isEmpty())
@@ -720,8 +723,8 @@ public class ConfigurationImpl
         // now warn if there are any remaining properties that there
         // is an unhandled prop, and remove the unknown properties
         Map.Entry entry;
-        for (Object value : remaining.entrySet()) {
-            entry = (Map.Entry) value;
+        for (Iterator itr = remaining.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
             Object key = entry.getKey();
             if (key != null) {
                 warnInvalidProperty((String) key);
@@ -861,9 +864,8 @@ public class ConfigurationImpl
         String[] prefixes = ProductDerivations.getConfigurationPrefixes();
         List<String> l = new ArrayList<>(_vals.size() * prefixes.length);
         for(Value v : _vals) {
-            for (String prefix : prefixes) {
-                l.add(prefix + "." + v.getProperty());
-            }
+            for (int j = 0; j < prefixes.length; j++)
+                l.add(prefixes[j] + "." + v.getProperty());
         }
         return l;
     }

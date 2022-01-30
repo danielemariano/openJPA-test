@@ -63,7 +63,7 @@ public class PreparedSQLStoreQuery extends SQLStoreQuery {
 
     @Override
     public boolean setQuery(Object query) {
-        if (!(query instanceof PreparedQueryImpl)) {
+        if (query instanceof PreparedQueryImpl == false) {
             throw new InternalException(query.getClass() + " not recognized");
         }
         _cached = (PreparedQueryImpl)query;
@@ -115,8 +115,8 @@ public class PreparedSQLStoreQuery extends SQLStoreQuery {
                 stmnt = !range.lrs ? buf.prepareStatement(conn) : buf.prepareStatement(conn, fetch, -1, -1);
 
                 int index = 0;
-                for (Object param : params) {
-                    dict.setUnknown(stmnt, ++index, param, null);
+                for (int i = 0; i < params.length; i++) {
+                    dict.setUnknown(stmnt, ++index, params[i], null);
                 }
                 dict.setTimeouts(stmnt, fetch, false);
 
@@ -163,7 +163,7 @@ public class PreparedSQLStoreQuery extends SQLStoreQuery {
 
             Set<Map.Entry<Object,Object>> userSet = userParams.entrySet();
             for (Map.Entry<Object,Object> userEntry : userSet) {
-                int idx = (Integer) userEntry.getKey();
+                int idx = ((Integer)userEntry.getKey()).intValue();
                 array[idx] = userEntry.getValue();
             }
             return array;

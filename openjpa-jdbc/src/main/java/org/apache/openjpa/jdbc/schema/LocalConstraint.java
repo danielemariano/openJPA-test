@@ -90,14 +90,12 @@ public abstract class LocalConstraint extends Constraint {
      */
     public void setColumns(Column[] cols) {
         Column[] cur = getColumns();
-        for (Column column : cur) {
-            removeColumn(column);
-        }
+        for (int i = 0; i < cur.length; i++)
+            removeColumn(cur[i]);
 
         if (cols != null)
-            for (Column col : cols) {
-                addColumn(col);
-            }
+            for (int i = 0; i < cols.length; i++)
+                addColumn(cols[i]);
     }
 
     /**
@@ -150,9 +148,8 @@ public abstract class LocalConstraint extends Constraint {
      */
     public void refColumns() {
         Column[] cols = getColumns();
-        for (Column col : cols) {
-            col.ref();
-        }
+        for (int i = 0; i < cols.length; i++)
+            cols[i].ref();
     }
 
     /**
@@ -160,9 +157,8 @@ public abstract class LocalConstraint extends Constraint {
      */
     public void derefColumns() {
         Column[] cols = getColumns();
-        for (Column col : cols) {
-            col.deref();
-        }
+        for (int i = 0; i < cols.length; i++)
+            cols[i].deref();
     }
 
     /**
@@ -172,8 +168,8 @@ public abstract class LocalConstraint extends Constraint {
         Column[] cols = getColumns();
         if (cols.length != ocols.length)
             return false;
-        for (Column ocol : ocols)
-            if (!hasColumn(cols, ocol))
+        for (int i = 0; i < ocols.length; i++)
+            if (!hasColumn(cols, ocols[i]))
                 return false;
         return true;
     }
@@ -182,8 +178,8 @@ public abstract class LocalConstraint extends Constraint {
      * Return whether the given column exists in the array.
      */
     private static boolean hasColumn(Column[] cols, Column col) {
-        for (Column column : cols)
-            if (column.getQualifiedPath().equals(col.getQualifiedPath()))
+        for (int i = 0; i < cols.length; i++)
+            if (cols[i].getQualifiedPath().equals(col.getQualifiedPath()))
                 return true;
         return false;
     }

@@ -665,7 +665,7 @@ public class XMLPersistenceMappingParser
 
         FieldMapping fm = (FieldMapping) currentElement();
         String strat = EnumValueHandler.class.getName() + "(StoreOrdinal="
-            + (type == EnumType.ORDINAL) + ")";
+            + String.valueOf(type == EnumType.ORDINAL) + ")";
         if (fm.isElementCollection())
             fm.getElementMapping().getValueInfo().setStrategy(strat);
         else
@@ -683,7 +683,7 @@ public class XMLPersistenceMappingParser
 
         FieldMapping fm = (FieldMapping) currentElement();
         String strat = EnumValueHandler.class.getName() + "(StoreOrdinal="
-            + (type == EnumType.ORDINAL) + ")";
+            + String.valueOf(type == EnumType.ORDINAL) + ")";
         fm.getKeyMapping().getValueInfo().setStrategy(strat);
     }
 
@@ -1449,7 +1449,11 @@ public class XMLPersistenceMappingParser
     private void deferEmbeddableOverrides(
         Class<?> cls, DeferredEmbeddableOverrides defMap) {
         ArrayList<DeferredEmbeddableOverrides> defMappings =
-                _deferredMappings.computeIfAbsent(cls, k -> new ArrayList<>());
+            _deferredMappings.get(cls);
+        if (defMappings == null) {
+            defMappings = new ArrayList<>();
+            _deferredMappings.put(cls, defMappings);
+        }
         defMappings.add(defMap);
     }
 
@@ -1514,12 +1518,11 @@ public class XMLPersistenceMappingParser
         if (_deferredMappings.size() > 0) {
             Set<Class<?>> keys = _deferredMappings.keySet();
             Class<?>[] classes = keys.toArray(new Class[keys.size()]);
-            for (Class<?> aClass : classes) {
+            for (int i = 0; i < classes.length; i++) {
                 try {
-                    applyDeferredEmbeddableOverrides(aClass);
-                }
-                catch (Exception e) {
-                    throw new MetaDataException(_loc.get("no-embeddable-metadata", aClass.getName()), e);
+                    applyDeferredEmbeddableOverrides(classes[i]);
+                } catch (Exception e) {
+                    throw new MetaDataException(_loc.get("no-embeddable-metadata", classes[i].getName()), e);
                 }
             }
         }

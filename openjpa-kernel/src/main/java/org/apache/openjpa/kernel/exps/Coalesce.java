@@ -94,9 +94,8 @@ public class Coalesce
     @Override
     public void acceptVisit(ExpressionVisitor visitor) {
         visitor.enter(this);
-        for (Val val : _val) {
-            val.acceptVisit(visitor);
-        }
+        for (int i = 0; i < _val.length; i++)
+            _val[i].acceptVisit(visitor);
         visitor.exit(this);
     }
 }

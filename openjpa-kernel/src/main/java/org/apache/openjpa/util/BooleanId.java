@@ -54,7 +54,7 @@ public class BooleanId extends OpenJPAId {
 
     @Override
     public Object getIdObject() {
-        return key;
+        return Boolean.valueOf(key);
     }
 
     @Override

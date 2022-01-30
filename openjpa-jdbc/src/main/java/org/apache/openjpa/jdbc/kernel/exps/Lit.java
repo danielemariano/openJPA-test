@@ -39,6 +39,7 @@ public class Lit
     private Object _val;
     private int _ptype;
     private boolean _isRaw;
+    private Object _rawVal;
 
     /**
      * Constructor. Supply literal value.
@@ -53,10 +54,9 @@ public class Lit
 
     @Override
     public Class getType() {
-        if (_val == null) {
-            return Object.class;
-        }
-        return _val.getClass();
+        if (_isRaw && _rawVal != null)
+            return Raw.class;
+        return (_val == null) ? Object.class : _val.getClass();
     }
 
     @Override
@@ -92,6 +92,10 @@ public class Lit
         _isRaw = isRaw;
     }
 
+    public Object getRawValue() {
+        return _rawVal;
+    }
+
     @Override
     public ExpState initialize(Select sel, ExpContext ctx, int flags) {
         return new LitExpState();
@@ -108,7 +112,8 @@ public class Lit
     }
 
     @Override
-    public void calculateValue(Select sel, ExpContext ctx, ExpState state, Val other, ExpState otherState) {
+    public void calculateValue(Select sel, ExpContext ctx, ExpState state,
+        Val other, ExpState otherState) {
         super.calculateValue(sel, ctx, state, other, otherState);
         LitExpState lstate = (LitExpState) state;
         if (other != null) {
@@ -119,7 +124,8 @@ public class Lit
     }
 
     @Override
-    public void appendTo(Select sel, ExpContext ctx, ExpState state, SQLBuffer sql, int index) {
+    public void appendTo(Select sel, ExpContext ctx, ExpState state,
+        SQLBuffer sql, int index) {
         LitExpState lstate = (LitExpState) state;
         if (lstate.otherLength > 1) {
             sql.appendValue(((Object[]) lstate.sqlValue)[index], lstate.getColumn(index));
@@ -127,21 +133,7 @@ public class Lit
             return;
         } else if (_isRaw) {
             int parseType = getParseType();
-            if (parseType == Literal.TYPE_SQ_STRING || parseType == Literal.TYPE_STRING) {
-                lstate.sqlValue = new Raw("'" + _val.toString() + "'");
-            } else if (parseType == Literal.TYPE_BOOLEAN) {
-                Boolean boolVal = (Boolean)_val;
-                Object dbRepresentation = ctx.store.getDBDictionary().getBooleanRepresentation().getRepresentation(boolVal);
-                if (dbRepresentation instanceof String) {
-                    lstate.sqlValue = new Raw("'" + dbRepresentation.toString() + "'");
-                } else if (dbRepresentation instanceof Boolean ||
-                           dbRepresentation instanceof Integer) {
-                    lstate.sqlValue = new Raw(dbRepresentation.toString());
-                } else {
-                    // continue without Raw
-                    lstate.sqlValue = _val;
-                }
-            } else if (parseType == Literal.TYPE_ENUM) {
+            if (parseType == Literal.TYPE_ENUM) {
                 StringBuilder value = new StringBuilder();
                 boolean isOrdinal = false;
                 if (lstate.sqlValue instanceof Integer)
@@ -152,16 +144,18 @@ public class Lit
                 if (!isOrdinal)
                     value.append("'");
                 lstate.sqlValue = new Raw(value.toString());
+                _rawVal = lstate.sqlValue;
             } else if (parseType == Literal.TYPE_DATE || parseType == Literal.TYPE_TIME ||
                 parseType == Literal.TYPE_TIMESTAMP) {
                 lstate.sqlValue = new Raw(_val.toString());
-            } else if (parseType == Literal.TYPE_NUMBER) {
-                lstate.sqlValue = new Raw(_val.toString());
+                _rawVal = lstate.sqlValue;
             } else {
                 lstate.sqlValue = new Raw(_val instanceof String ? "'"+_val+"'" : _val.toString());
+                _rawVal = lstate.sqlValue;
             }
         }
         Object useLiteral = ctx.fetch.getHint(QueryHints.HINT_USE_LITERAL_IN_SQL);
+//        useLiteral = true;
         boolean useParamToken = useLiteral != null ? !(Boolean)useLiteral : true;
         sql.appendValue(lstate.sqlValue, lstate.getColumn(index), null, useParamToken);
     }

@@ -25,6 +25,11 @@ import static org.apache.openjpa.conf.SchemaGenerationSource.METADATA;
 import static org.apache.openjpa.conf.SchemaGenerationSource.METADATA_THEN_SCRIPT;
 import static org.apache.openjpa.conf.SchemaGenerationSource.SCRIPT;
 import static org.apache.openjpa.conf.SchemaGenerationSource.SCRIPT_THEN_METADATA;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_ADD;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_DROP;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_SCRIPT_CREATE;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_SCRIPT_DROP;
+import static org.apache.openjpa.jdbc.meta.MappingTool.ACTION_SCRIPT_LOAD;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -35,7 +40,6 @@ import org.apache.openjpa.jdbc.conf.JDBCConfiguration;
 import org.apache.openjpa.jdbc.conf.JDBCConfigurationImpl;
 import org.apache.openjpa.jdbc.meta.MappingRepository;
 import org.apache.openjpa.jdbc.meta.MappingTool;
-import org.apache.openjpa.jdbc.schema.SchemaTool;
 import org.apache.openjpa.kernel.AbstractBrokerFactory;
 import org.apache.openjpa.kernel.Bootstrap;
 import org.apache.openjpa.kernel.BrokerImpl;
@@ -193,7 +197,7 @@ public class JDBCBrokerFactory extends AbstractBrokerFactory {
 
         String loadFile = conf.getLoadScriptSource();
         if (loadFile != null) {
-            actions += "," + MappingTool.ACTION_SCRIPT_LOAD;
+            actions += "," + ACTION_SCRIPT_LOAD;
         }
 
         if (actions.length() > 0) {
@@ -203,7 +207,7 @@ public class JDBCBrokerFactory extends AbstractBrokerFactory {
 
     private String generateSchemaCreation(JDBCConfiguration conf) {
         if (conf.getCreateScriptTarget() != null) {
-            return SchemaTool.ACTION_BUILD;
+            return MappingTool.ACTION_ADD;
         } else {
             int createSource = conf.getCreateSourceConstant();
             if (createSource == SchemaGenerationSource.NONE && conf.getCreateScriptSource() != null) {
@@ -211,13 +215,13 @@ public class JDBCBrokerFactory extends AbstractBrokerFactory {
             } else {
                 createSource = METADATA;
             }
-            return mapGenerationStrategyActions(createSource, SchemaTool.ACTION_ADD, MappingTool.ACTION_SCRIPT_CREATE);
+            return mapGenerationStrategyActions(createSource, ACTION_ADD, ACTION_SCRIPT_CREATE);
         }
     }
 
     private String generateSchemaDrop(JDBCConfiguration conf) {
         if (conf.getDropScriptTarget() != null) {
-            return SchemaTool.ACTION_DROP;
+            return MappingTool.ACTION_DROP;
         } else {
             int dropSource = conf.getDropSourceConstant();
             if (dropSource == SchemaGenerationSource.NONE && conf.getDropScriptSource() != null) {
@@ -225,16 +229,16 @@ public class JDBCBrokerFactory extends AbstractBrokerFactory {
             } else {
                 dropSource = METADATA;
             }
-            return mapGenerationStrategyActions(dropSource, SchemaTool.ACTION_DROP, MappingTool.ACTION_SCRIPT_DROP);
+            return mapGenerationStrategyActions(dropSource, ACTION_DROP, ACTION_SCRIPT_DROP);
         }
     }
 
     private String generateSchemaDropCreate(JDBCConfiguration conf) {
         if (conf.getCreateScriptTarget() != null && conf.getDropScriptTarget() != null) {
-            return SchemaTool.ACTION_BUILD + "," + SchemaTool.ACTION_DROP;
+            return MappingTool.ACTION_ADD + "," + MappingTool.ACTION_DROP;
         } else {
-            return mapGenerationStrategyActions(conf.getDropSourceConstant(), SchemaTool.ACTION_DROP, MappingTool.ACTION_SCRIPT_DROP) + "," +
-                   mapGenerationStrategyActions(conf.getCreateSourceConstant(), SchemaTool.ACTION_ADD, MappingTool.ACTION_SCRIPT_CREATE);
+            return mapGenerationStrategyActions(conf.getDropSourceConstant(), ACTION_DROP, ACTION_SCRIPT_DROP) + "," +
+                   mapGenerationStrategyActions(conf.getCreateSourceConstant(), ACTION_ADD, ACTION_SCRIPT_CREATE);
         }
     }
 

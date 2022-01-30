@@ -118,7 +118,7 @@ public class RandomAccessResultList extends AbstractNonSequentialResultList {
     private Object instantiateRow(Integer i) {
         _requests++;
         try {
-            if (!_rop.absolute(i))
+            if (!_rop.absolute(i.intValue()))
                 return PAST_END;
 
             Object ob = _rop.getResultObject();
@@ -157,7 +157,7 @@ public class RandomAccessResultList extends AbstractNonSequentialResultList {
         Integer key;
         for (Iterator itr = _rows.keySet().iterator(); itr.hasNext(); count++) {
             key = (Integer) itr.next();
-            full[key] = _rows.get(key);
+            full[key.intValue()] = _rows.get(key);
         }
 
         // double-check, in case any of the soft references were
@@ -204,9 +204,8 @@ public class RandomAccessResultList extends AbstractNonSequentialResultList {
         if (_full != null)
             return new ListResultList(Arrays.asList(_full));
         ArrayList list = new ArrayList();
-        for (Object o : this) {
-            list.add(o);
-        }
+        for (Iterator itr = iterator(); itr.hasNext();)
+            list.add(itr.next());
         return list;
     }
 

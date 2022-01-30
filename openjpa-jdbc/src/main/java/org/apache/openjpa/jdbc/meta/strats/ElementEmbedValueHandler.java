@@ -198,8 +198,8 @@ public class ElementEmbedValueHandler
             if (fms[i].getManagement() != FieldMetaData.MANAGE_PERSISTENT)
                 continue;
             cols = ((Embeddable) fms[i]).getColumns();
-            for (Column column : cols)
-                if (column == col)
+            for (int j = 0; j < cols.length; j++)
+                if (cols[j] == col)
                     return fms[i];
         }
         return null;

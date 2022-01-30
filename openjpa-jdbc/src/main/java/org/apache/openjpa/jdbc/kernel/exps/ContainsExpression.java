@@ -52,7 +52,7 @@ class ContainsExpression
             if (count == null)
                 count = 0;
             else
-                count = count + 1;
+                count = count.intValue() + 1;
             contains.put(path, count);
 
             sql.setContainsId(count.toString());

@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 
 import org.apache.openjpa.conf.OpenJPAConfiguration;
@@ -124,9 +125,8 @@ public class RemoteCommitEventManager
         if (_provider != null) {
             _provider.close();
             Collection listeners = getListeners();
-            for (Object listener : listeners) {
-                ((RemoteCommitListener) listener).close();
-            }
+            for (Iterator itr = listeners.iterator(); itr.hasNext();)
+                ((RemoteCommitListener) itr.next()).close();
         }
     }
 
@@ -192,8 +192,8 @@ public class RemoteCommitEventManager
             Object oid;
             Object obj;
             OpenJPAStateManager sm;
-            for (Object tran : trans) {
-                obj = tran;
+            for (Iterator itr = trans.iterator(); itr.hasNext();) {
+                obj = itr.next();
                 sm = broker.getStateManager(obj);
 
                 if (sm == null || !sm.isPersistent() || !sm.isDirty())
@@ -211,13 +211,11 @@ public class RemoteCommitEventManager
                     if (addClassNames == null)
                         addClassNames = new HashSet();
                     addClassNames.add(obj.getClass().getName());
-                }
-                else if (sm.isDeleted()) {
+                } else if (sm.isDeleted()) {
                     if (deletes == null)
                         deletes = new ArrayList();
                     deletes.add(oid);
-                }
-                else {
+                } else {
                     if (updates == null)
                         updates = new ArrayList();
                     updates.add(oid);

@@ -20,7 +20,7 @@ package org.apache.openjpa.util;
 
 import java.io.Serializable;
 
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap.ReferenceStrength;
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.lib.util.concurrent.ConcurrentReferenceHashMap;
 
 /**
@@ -119,9 +119,9 @@ public abstract class OpenJPAId
                     superclass = base.getSuperclass();
                 }
                 _typeHash = base.getName().hashCode();
-                _typeCache.put(type, _typeHash);
+                _typeCache.put(type, Integer.valueOf(_typeHash));
             } else {
-                _typeHash = typeHashInt;
+                _typeHash = typeHashInt.intValue();
             }
         }
         return _typeHash ^ idHash();

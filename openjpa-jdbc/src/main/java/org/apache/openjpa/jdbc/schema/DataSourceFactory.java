@@ -24,6 +24,7 @@ import java.sql.Driver;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 import javax.sql.DataSource;
@@ -139,17 +140,17 @@ public class DataSourceFactory {
         DecoratingDataSource dds = new DecoratingDataSource(ds);
         try {
             // add user-defined decorators
-            List<ConnectionDecorator> decorators = new ArrayList<>(Arrays.asList(conf.
-                    getConnectionDecoratorInstances()));
+            List<ConnectionDecorator> decorators = new ArrayList<>();
+            decorators.addAll(Arrays.asList(conf.
+                getConnectionDecoratorInstances()));
 
             // add jdbc events decorator
             JDBCEventConnectionDecorator ecd =
                 new JDBCEventConnectionDecorator();
             Configurations.configureInstance(ecd, conf, opts);
             JDBCListener[] listeners = conf.getJDBCListenerInstances();
-            for (JDBCListener listener : listeners) {
-                ecd.addListener(listener);
-            }
+            for (int i = 0; i < listeners.length; i++)
+                ecd.addListener(listeners[i]);
             decorators.add(ecd);
 
             // ask the DriverDataSource to provide any additional decorators
@@ -193,8 +194,8 @@ public class DataSourceFactory {
         try {
             // add the dictionary as a warning handler on the logging decorator
             ConnectionDecorator cd;
-            for (ConnectionDecorator connectionDecorator : ds.getDecorators()) {
-                cd = connectionDecorator;
+            for (Iterator<ConnectionDecorator> itr = ds.getDecorators().iterator(); itr.hasNext();) {
+                cd = itr.next();
                 if (cd instanceof LoggingConnectionDecorator)
                     ((LoggingConnectionDecorator) cd).setWarningHandler(dict);
             }

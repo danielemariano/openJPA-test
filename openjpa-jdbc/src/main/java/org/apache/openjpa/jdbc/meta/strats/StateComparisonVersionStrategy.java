@@ -256,17 +256,17 @@ public class StateComparisonVersionStrategy
             StringBuilder buf = new StringBuilder();
             boolean hasWhere = false;
             Object val;
-            for (Column col : cols) {
-                val = getWhere(col);
+            for (int i = 0; i < cols.length; i++) {
+                val = getWhere(cols[i]);
                 if (val == null)
                     continue;
 
                 if (hasWhere)
                     buf.append(" AND ");
                 if (val == NULL)
-                    buf.append(dict.getColumnDBName(col) + " IS NULL");
+                    buf.append(dict.getColumnDBName(cols[i]) + " IS NULL");
                 else
-                    buf.append(dict.getColumnDBName(col) + " = ?");
+                    buf.append(dict.getColumnDBName(cols[i]) + " = ?");
                 hasWhere = true;
             }
             return buf.toString();

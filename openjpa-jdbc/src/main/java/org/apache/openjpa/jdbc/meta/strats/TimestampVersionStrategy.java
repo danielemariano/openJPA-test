@@ -57,9 +57,8 @@ public class TimestampVersionStrategy
         Column[] cols = vers.getColumns();
         Map map = new HashMap(cols.length);
         Object d = nextVersion(null);
-        for (Column col : cols) {
-            map.put(col, d);
-        }
+        for (int i = 0; i < cols.length; i++)
+            map.put(cols[i], d);
         return map;
     }
 }

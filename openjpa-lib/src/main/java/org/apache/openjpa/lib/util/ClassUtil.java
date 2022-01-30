@@ -136,10 +136,14 @@ public final class ClassUtil {
         int dims = getArrayDimensions(fullName);
         if (dims > 0) {
             if (fullName.length() == dims + 1) {
+
+                System.out.println(fullName.length());
+                System.out.println(dims);
+
                 String classCode = fullName.substring(dims);
-                for (Object[] code : _codes) {
-                    if (code[2].equals(classCode)) {
-                        fullName = (String) code[1];
+                for (int i = 0; i < _codes.length; i++) {
+                    if (_codes[i][2].equals(classCode)) {
+                        fullName = (String)_codes[i][1];
                         break;
                     }
                 }

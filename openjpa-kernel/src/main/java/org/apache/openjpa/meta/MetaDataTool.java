@@ -24,6 +24,7 @@ import java.io.PrintWriter;
 import java.io.Writer;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
@@ -169,10 +170,10 @@ public class MetaDataTool
         // assume all user-defined types are PCs
         ClassMetaData meta = getRepository().addMetaData(cls);
         FieldMetaData[] fmds = meta.getDeclaredFields();
-        for (FieldMetaData fmd : fmds) {
-            if (fmd.getDeclaredTypeCode() == JavaTypes.OBJECT
-                    && fmd.getDeclaredType() != Object.class)
-                fmd.setDeclaredTypeCode(JavaTypes.PC);
+        for (int i = 0; i < fmds.length; i++) {
+            if (fmds[i].getDeclaredTypeCode() == JavaTypes.OBJECT
+                && fmds[i].getDeclaredType() != Object.class)
+                fmds[i].setDeclaredTypeCode(JavaTypes.PC);
         }
         meta.setSource(_file, meta.getSourceType(), _file == null ? "" : _file.getPath());
         _flush = true;
@@ -203,18 +204,17 @@ public class MetaDataTool
             if (_writer != null) {
                 output = new HashMap();
                 File tmp = new File("openjpatmp");
-                for (ClassMetaData meta : metas) {
-                    meta.setSource(tmp, meta.getSourceType(), tmp.getPath());
-                }
+                for (int i = 0; i < metas.length; i++)
+                    metas[i].setSource(tmp, metas[i].getSourceType(), tmp.getPath());
             }
             if (!mdf.store(metas, new QueryMetaData[0],
                 new SequenceMetaData[0], MODE_META, output))
                 throw new MetaDataException(_loc.get("bad-store"));
             if (_writer != null) {
                 PrintWriter out = new PrintWriter(_writer);
-                for (Object o : output.values()) {
-                    out.println((String) o);
-                }
+                for (Iterator itr = output.values().iterator();
+                    itr.hasNext();)
+                    out.println((String) itr.next());
                 out.flush();
             }
         }
@@ -326,14 +326,13 @@ public class MetaDataTool
             getMetaDataFactory().newClassArgParser();
         cap.setClassLoader(loader);
         Class[] classes;
-        for (String arg : args) {
-            classes = cap.parseTypes(arg);
-            for (Class aClass : classes) {
-                log.info(_loc.get("tool-running", aClass, flags.action));
+        for (int i = 0; i < args.length; i++) {
+            classes = cap.parseTypes(args[i]);
+            for (int j = 0; j < classes.length; j++) {
+                log.info(_loc.get("tool-running", classes[j], flags.action));
                 try {
-                    tool.run(aClass);
-                }
-                catch (IllegalArgumentException iae) {
+                    tool.run(classes[j]);
+                } catch (IllegalArgumentException iae) {
                     return false;
                 }
             }

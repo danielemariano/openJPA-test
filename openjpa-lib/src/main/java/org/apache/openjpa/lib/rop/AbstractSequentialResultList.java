@@ -55,8 +55,8 @@ public abstract class AbstractSequentialResultList extends AbstractResultList {
     @Override
     public boolean containsAll(Collection c) {
         assertOpen();
-        for (Object o : c)
-            if (!contains(o))
+        for (Iterator itr = c.iterator(); itr.hasNext();)
+            if (!contains(itr.next()))
                 return false;
         return true;
     }

@@ -207,13 +207,13 @@ public abstract class AbstractTask extends MatchingTask {
             DirectoryScanner ds = fs.getDirectoryScanner(getProject());
 
             String[] dsFiles = ds.getIncludedFiles();
-            for (String dsFile : dsFiles) {
-                File f = new File(dsFile);
-                if (!AccessController.doPrivileged(J2DoPrivHelper
-                        .isFileAction(f)))
-                    f = new File(ds.getBasedir(), dsFile);
+            for (int j = 0; j < dsFiles.length; j++) {
+                File f = new File(dsFiles[j]);
+                if (!( AccessController.doPrivileged(J2DoPrivHelper
+                    .isFileAction(f))).booleanValue())
+                    f = new File(ds.getBasedir(), dsFiles[j]);
                 files.add(AccessController.doPrivileged(
-                        J2DoPrivHelper.getAbsolutePathAction(f)));
+                    J2DoPrivHelper.getAbsolutePathAction(f)));
             }
         }
         return (String[]) files.toArray(new String[files.size()]);

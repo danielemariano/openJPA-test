@@ -147,8 +147,7 @@ public class MultiQueryMetaData extends QueryMetaData {
      *
      */
     public static class Parameter {
-        public enum Mode {IN,OUT,INOUT,CURSOR}
-
+        public enum Mode {IN,OUT,INOUT,CURSOR};
         private final String name;
         private final Class<?> type;
         private final Mode mode;

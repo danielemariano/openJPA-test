@@ -286,8 +286,8 @@ public final class SQLBuffer
         if (_subsels == null)
             return false;
         Subselect sub;
-        for (Object subsel : _subsels) {
-            sub = (Subselect) subsel;
+        for (int i = 0; i < _subsels.size(); i++) {
+            sub = (Subselect) _subsels.get(i);
             if (sub.select == old) {
                 sub.select = sel;
                 return true;
@@ -366,14 +366,14 @@ public final class SQLBuffer
 
                 } else if ( type == Character.class ) {
                     if (_dict.storeCharsAsNumbers) {
-                        _sql.append(Integer.toString((Character) o));
+                        _sql.append(Integer.toString(((Character)o).charValue()));
                     } else {
                         _sql.append("'" + o.toString().replace("'", "''") + "'");
                     }
                 } else if (type == Boolean.class) {
                     Boolean b = (Boolean) o;
                     // We store B(b)ooleans as ints. Convert
-                    _sql.append(_dict.getBooleanRepresentation().getRepresentation(b));
+                    _sql.append(_dict.getBooleanRepresentation().getRepresentation(b.booleanValue()));
                 } else {
                     _sql.append(o.toString());
                 }

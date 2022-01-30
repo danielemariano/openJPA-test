@@ -27,13 +27,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Predicate;
 
+import org.apache.commons.collections4.Predicate;
+import org.apache.commons.collections4.iterators.FilterIterator;
+import org.apache.commons.collections4.iterators.IteratorChain;
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.lib.util.LRUMap;
 import org.apache.openjpa.lib.util.SizedMap;
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap;
-import org.apache.openjpa.lib.util.collections.FilterIterator;
-import org.apache.openjpa.lib.util.collections.IteratorChain;
 import org.apache.openjpa.lib.util.concurrent.ConcurrentHashMap;
 import org.apache.openjpa.lib.util.concurrent.ConcurrentReferenceHashMap;
 
@@ -112,8 +112,8 @@ public class CacheMap
         if (size < 0)
             size = 500;
 
-        softMap = new ConcurrentReferenceHashMap(AbstractReferenceMap.ReferenceStrength.HARD,
-            AbstractReferenceMap.ReferenceStrength.SOFT, size, load) {
+        softMap = new ConcurrentReferenceHashMap(ReferenceStrength.HARD,
+            ReferenceStrength.SOFT, size, load) {
             @Override
             public void overflowRemoved(Object key, Object value) {
                 softMapOverflowRemoved(key, value);
@@ -430,9 +430,9 @@ public class CacheMap
 
     public void putAll(Map map, boolean replaceExisting) {
         Map.Entry entry;
-        for (Object o : map.entrySet()) {
-            entry = (Entry) o;
-            if (replaceExisting || !containsKey(entry.getKey())) {
+        for (Iterator itr = map.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
+            if(replaceExisting || !containsKey(entry.getKey())) {
                 put(entry.getKey(), entry.getValue());
             }
         }
@@ -494,8 +494,8 @@ public class CacheMap
 
     private void notifyEntryRemovals(Set set) {
         Map.Entry entry;
-        for (Object o : set) {
-            entry = (Entry) o;
+        for (Iterator itr = set.iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
             if (entry.getValue() != null)
                 entryRemoved(entry.getKey(), entry.getValue(), false);
         }
@@ -672,7 +672,7 @@ public class CacheMap
         }
 
         @Override
-        public boolean test(Object obj) {
+        public boolean evaluate(Object obj) {
             switch (_type) {
                 case ENTRY:
                     return ((Map.Entry) obj).getValue() != null;

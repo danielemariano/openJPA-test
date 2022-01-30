@@ -113,7 +113,7 @@ public class Discriminator
             try {
                 strategy.setDiscriminator(this);
                 if (adapt != null)
-                    strategy.map(adapt);
+                    strategy.map(adapt.booleanValue());
             } catch (RuntimeException re) {
                 // reset strategy
                 _strategy = orig;
@@ -191,9 +191,8 @@ public class Discriminator
      * Increment the reference count of used schema components.
      */
     public void refSchemaComponents() {
-        for (Column col : _cols) {
-            col.ref();
-        }
+        for (int i = 0; i < _cols.length; i++)
+            _cols[i].ref();
     }
 
     /**

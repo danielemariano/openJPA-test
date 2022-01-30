@@ -312,23 +312,23 @@ public class ResultPacker {
 
         // check public fields first
         Field field = null;
-        for (Field item : fields) {
+        for (int i = 0; i < fields.length; i++) {
             // if we find a field with the exact name, either return it
             // if it's the right type or give up if it's not
-            if (item.getName().equals(alias)) {
+            if (fields[i].getName().equals(alias)) {
                 if (type == null
-                        || Filters.canConvert(type, item.getType(), true))
-                    return item;
+                    || Filters.canConvert(type, fields[i].getType(), true))
+                    return fields[i];
                 break;
             }
 
             // otherwise if we find a field with the right name but the
             // wrong case, record it and if we don't find an exact match
             // for a field or setter we'll use it
-            if (field == null && item.getName().equalsIgnoreCase(alias)
-                    && (type == null
-                    || Filters.canConvert(type, item.getType(), true)))
-                field = item;
+            if (field == null && fields[i].getName().equalsIgnoreCase(alias)
+                && (type == null
+                || Filters.canConvert(type, fields[i].getType(), true)))
+                field = fields[i];
         }
 
         // check setter methods
@@ -336,10 +336,10 @@ public class ResultPacker {
         Method method = null;
         boolean eqName = false;
         Class<?>[] params;
-        for (Method value : methods) {
-            if (!value.getName().equalsIgnoreCase(setName))
+        for (int i = 0; i < methods.length; i++) {
+            if (!methods[i].getName().equalsIgnoreCase(setName))
                 continue;
-            params = value.getParameterTypes();
+            params = methods[i].getParameterTypes();
             if (params.length != 1)
                 continue;
 
@@ -349,22 +349,21 @@ public class ResultPacker {
                 // don't find an exact type match later, we'll use it.  if
                 // the names are not an exact match, only record this setter
                 // if we haven't found any others that match at all
-                if (value.getName().equals(setName)) {
+                if (methods[i].getName().equals(setName)) {
                     eqName = true;
-                    method = value;
-                }
-                else if (method == null)
-                    method = value;
-            }
-            else if (type == null || Filters.canConvert(type, params[0], true)) {
+                    method = methods[i];
+                } else if (method == null)
+                    method = methods[i];
+            } else
+            if (type == null || Filters.canConvert(type, params[0], true)) {
                 // we found a setter with the right type; now see if the name
                 // is an exact match.  if so, return the setter.  if not,
                 // record the setter only if we haven't found a generic one
                 // with an exact name match
-                if (value.getName().equals(setName))
-                    return value;
+                if (methods[i].getName().equals(setName))
+                    return methods[i];
                 if (method == null || !eqName)
-                    method = value;
+                    method = methods[i];
             }
         }
 
@@ -380,15 +379,15 @@ public class ResultPacker {
      */
     private static Method findPut(Method[] methods) {
         Class<?>[] params;
-        for (Method method : methods) {
-            if (!method.getName().equals("put"))
+        for (int i = 0; i < methods.length; i++) {
+            if (!methods[i].getName().equals("put"))
                 continue;
 
-            params = method.getParameterTypes();
+            params = methods[i].getParameterTypes();
             if (params.length == 2
-                    && params[0] == Object.class
-                    && params[1] == Object.class)
-                return method;
+                && params[0] == Object.class
+                && params[1] == Object.class)
+                return methods[i];
         }
 		return null;
 	}

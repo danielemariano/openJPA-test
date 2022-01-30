@@ -24,8 +24,8 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap;
-import org.apache.openjpa.lib.util.collections.MapBackedSet;
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
+import org.apache.commons.collections4.set.MapBackedSet;
 
 /**
  * A concurrent set whose values may be stored as weak or soft references. If
@@ -45,12 +45,12 @@ public class ConcurrentReferenceHashSet<E> implements Set<E>, Serializable {
     /**
      * Construct a set with the given reference type.
      */
-    public ConcurrentReferenceHashSet(AbstractReferenceMap.ReferenceStrength refType) {
-        if (refType == AbstractReferenceMap.ReferenceStrength.HARD)
+    public ConcurrentReferenceHashSet(ReferenceStrength refType) {
+        if (refType == ReferenceStrength.HARD)
             _set = MapBackedSet.mapBackedSet(new ConcurrentHashMap<>(), DUMMY_VAL);
         else {
             _set = MapBackedSet.mapBackedSet(new ConcurrentReferenceHashMap
-                (refType, AbstractReferenceMap.ReferenceStrength.HARD), DUMMY_VAL);
+                (refType, ReferenceStrength.HARD), DUMMY_VAL);
         }
     }
 

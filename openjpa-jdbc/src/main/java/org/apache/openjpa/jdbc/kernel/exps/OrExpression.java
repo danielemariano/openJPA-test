@@ -19,6 +19,7 @@
 package org.apache.openjpa.jdbc.kernel.exps;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.openjpa.jdbc.sql.SQLBuffer;
@@ -63,11 +64,11 @@ class OrExpression
         // combine the contains counts from the copy into the main map
         Map.Entry entry;
         Integer val1, val2;
-        for (Object o : contains2.entrySet()) {
-            entry = (Map.Entry) o;
+        for (Iterator itr = contains2.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
             val2 = (Integer) entry.getValue();
             val1 = (Integer) contains.get(entry.getKey());
-            if (val1 == null || val2 > val1)
+            if (val1 == null || val2.intValue() > val1.intValue())
                 contains.put(entry.getKey(), val2);
         }
         return ret;

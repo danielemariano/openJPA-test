@@ -167,8 +167,8 @@ public class SolidDBDictionary
 
         Unique[] unqs = table.getUniques();
         String unqStr;
-        for (Unique unq : unqs) {
-            unqStr = getUniqueConstraintSQL(unq);
+        for (int i = 0; i < unqs.length; i++) {
+            unqStr = getUniqueConstraintSQL(unqs[i]);
             if (unqStr != null)
                 buf.append(", ").append(unqStr);
         }
@@ -248,14 +248,14 @@ public class SolidDBDictionary
 
     protected boolean sequenceExists(String schemaName, String seqName, SchemaGroup group) {
         Schema[] schemas = group.getSchemas();
-        for (Schema schema : schemas) {
-            String dbSchemaName = schema.getIdentifier().getName();
+        for (int i = 0; i < schemas.length; i++) {
+            String dbSchemaName = schemas[i].getIdentifier().getName();
             if (schemaName != null && !schemaName.equalsIgnoreCase(dbSchemaName))
                 continue;
 
-            Sequence[] seqs = schema.getSequences();
-            for (Sequence seq : seqs) {
-                String dbSeqName = seq.getName();
+            Sequence[] seqs = schemas[i].getSequences();
+            for (int j = 0; j < seqs.length; j++) {
+                String dbSeqName = seqs[j].getName();
                 if (dbSeqName != null && dbSeqName.equalsIgnoreCase(seqName))
                     return true;
             }
@@ -444,25 +444,23 @@ public class SolidDBDictionary
        Column[] icols = idx.getColumns();
        boolean isDuplicate = false;
        boolean mayBeDuplicate = false;
-        for (Unique unique : uniques) {
-            Column[] ucols = unique.getColumns();
-            if (ucols.length < icols.length)
-                continue;
-            for (int j = 0, k = 0; j < ucols.length && k < icols.length; j++, k++) {
-                if (mayBeDuplicate && ucols[j].getQualifiedPath().equals(icols[k].getQualifiedPath())) {
-                    if (k == icols.length - 1) {
-                        isDuplicate = true;
-                    }
-                    else {
-                        mayBeDuplicate = true;
-                    }
-                }
-                else
-                    mayBeDuplicate = false;
-            }
-            if (isDuplicate)
-                break;
-        }
+       for (int i = 0; i < uniques.length; i++) {
+           Column[] ucols = uniques[i].getColumns();
+           if (ucols.length < icols.length)
+               continue;
+           for (int j = 0, k = 0; j < ucols.length && k < icols.length; j++, k++) {
+               if (mayBeDuplicate && ucols[j].getQualifiedPath().equals(icols[k].getQualifiedPath())) {
+                   if (k == icols.length - 1) {
+                       isDuplicate = true;
+                   } else {
+                       mayBeDuplicate = true;
+                   }
+               } else
+                   mayBeDuplicate = false;
+           }
+           if (isDuplicate)
+               break;
+       }
        return isDuplicate;
     }
 

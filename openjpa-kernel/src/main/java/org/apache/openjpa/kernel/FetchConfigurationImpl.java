@@ -253,7 +253,7 @@ public class FetchConfigurationImpl
 
 
     void copyHints(FetchConfiguration fetch) {
-        if (!(fetch instanceof FetchConfigurationImpl))
+        if (fetch instanceof FetchConfigurationImpl == false)
             return;
         FetchConfigurationImpl from = (FetchConfigurationImpl)fetch;
         if (from._state == null || from._state.hints == null)
@@ -331,7 +331,7 @@ public class FetchConfigurationImpl
             && flush != QueryFlushModes.FLUSH_FALSE
             && flush != QueryFlushModes.FLUSH_WITH_CONNECTION)
             throw new IllegalArgumentException(_loc.get(
-                "bad-flush-before-queries", flush).getMessage());
+                "bad-flush-before-queries", Integer.valueOf(flush)).getMessage());
 
         if (flush == DEFAULT && _state.ctx != null)
             _state.flushQuery = _state.ctx.getConfiguration().
@@ -681,7 +681,7 @@ public class FetchConfigurationImpl
                 && scope != LockScopes.LOCKSCOPE_NORMAL
                 && scope != LockScopes.LOCKSCOPE_EXTENDED)
                 throw new IllegalArgumentException(_loc.get(
-                    "bad-lock-scope", scope).getMessage());
+                    "bad-lock-scope", Integer.valueOf(scope)).getMessage());
         if (scope == DEFAULT )
             _state.lockScope = LOCKSCOPE_NORMAL;
         else
@@ -709,7 +709,7 @@ public class FetchConfigurationImpl
             && level != MixedLockLevels.LOCK_PESSIMISTIC_WRITE
             && level != MixedLockLevels.LOCK_PESSIMISTIC_FORCE_INCREMENT)
             throw new IllegalArgumentException(_loc.get(
-                "bad-lock-level", level).getMessage());
+                "bad-lock-level", Integer.valueOf(level)).getMessage());
 
         lock();
         try {
@@ -746,7 +746,7 @@ public class FetchConfigurationImpl
             && level != MixedLockLevels.LOCK_PESSIMISTIC_WRITE
             && level != MixedLockLevels.LOCK_PESSIMISTIC_FORCE_INCREMENT)
             throw new IllegalArgumentException(_loc.get(
-                "bad-lock-level", level).getMessage());
+                "bad-lock-level", Integer.valueOf(level)).getMessage());
 
         lock();
         try {
@@ -1025,8 +1025,8 @@ public class FetchConfigurationImpl
         || hasExtendedLookupPath(fmd))
             return true;
         String[] fgs = fmd.getCustomFetchGroups();
-        for (String fg : fgs)
-            if (hasFetchGroup(fg))
+        for (int i = 0; i < fgs.length; i++)
+            if (hasFetchGroup(fgs[i]))
                 return true;
         return false;
     }
@@ -1141,7 +1141,7 @@ public class FetchConfigurationImpl
     List<FetchConfigurationImpl> getPath() {
         if (isRoot())
             return Collections.emptyList();
-        return trackPath(new ArrayList<>());
+        return trackPath(new ArrayList<FetchConfigurationImpl>());
     }
 
     List<FetchConfigurationImpl> trackPath(List<FetchConfigurationImpl> path) {

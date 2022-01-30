@@ -19,6 +19,7 @@
 package org.apache.openjpa.conf;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.openjpa.kernel.Bootstrap;
@@ -119,9 +120,8 @@ public class MetaDataCacheMaintenance {
         MetaDataRepository repos = conf.getMetaDataRepositoryInstance();
         repos.setSourceMode(MetaDataModes.MODE_ALL);
         Collection types = repos.loadPersistentTypes(devpath, null);
-        for (Object type : types) {
-            repos.getMetaData((Class) type, null, true);
-        }
+        for (Iterator iter = types.iterator(); iter.hasNext(); )
+            repos.getMetaData((Class) iter.next(), null, true);
 
         loadQueries();
 
@@ -139,9 +139,8 @@ public class MetaDataCacheMaintenance {
         try {
             QueryMetaData[] qmds =
                 conf.getMetaDataRepositoryInstance().getQueryMetaDatas();
-            for (QueryMetaData qmd : qmds) {
-                loadQuery(broker, qmd);
-            }
+            for (int i = 0; i < qmds.length; i++)
+                loadQuery(broker, qmds[i]);
         } finally {
             broker.close();
         }
@@ -182,29 +181,26 @@ public class MetaDataCacheMaintenance {
         ClassMetaData[] metas = repos.getMetaDatas();
         log.info("  Types: " + metas.length);
         if (log.isTraceEnabled())
-            for (ClassMetaData meta : metas) {
-                log.trace("    " + meta.getDescribedType().getName());
-            }
+            for (int i = 0; i < metas.length; i++)
+                log.trace("    " + metas[i].getDescribedType().getName());
 
         QueryMetaData[] qmds = repos.getQueryMetaDatas();
         log.info("  Queries: " + qmds.length);
         if (log.isTraceEnabled())
-            for (QueryMetaData qmd : qmds)
-                log.trace("    " + qmd.getName() + ": "
-                        + qmd.getQueryString());
+            for (int i = 0; i < qmds.length; i++)
+                log.trace("    " + qmds[i].getName() + ": "
+                    + qmds[i].getQueryString());
 
         SequenceMetaData[] smds = repos.getSequenceMetaDatas();
         log.info("  Sequences: " + smds.length);
         if (log.isTraceEnabled())
-            for (SequenceMetaData smd : smds) {
-                log.trace("    " + smd.getName());
-            }
+            for (int i = 0; i < smds.length; i++)
+                log.trace("    " + smds[i].getName());
 
         log.info("  Compiled queries: "
             + (qcc == null ? "0" : "" + qcc.size()));
         if (log.isTraceEnabled() && qcc != null)
-            for (Object o : qcc.keySet()) {
-                log.trace("    " + o);
-            }
+            for (Iterator iter = qcc.keySet().iterator(); iter.hasNext(); )
+                log.trace("    " + iter.next());
     }
 }

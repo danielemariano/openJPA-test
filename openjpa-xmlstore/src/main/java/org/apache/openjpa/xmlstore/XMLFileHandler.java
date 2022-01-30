@@ -36,6 +36,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 
@@ -80,10 +81,10 @@ public class XMLFileHandler {
      */
     public Collection load(ClassMetaData meta) {
         File f = getFile(meta);
-        if (!AccessController.doPrivileged(
-                J2DoPrivHelper.existsAction(f)) ||
-                AccessController.doPrivileged(
-                        J2DoPrivHelper.lengthAction(f)) == 0)
+        if (!(AccessController.doPrivileged(
+            J2DoPrivHelper.existsAction(f))).booleanValue() ||
+            (AccessController.doPrivileged(
+            J2DoPrivHelper.lengthAction(f))).longValue() == 0)
             return Collections.EMPTY_SET;
         try {
             return read(f);
@@ -136,8 +137,8 @@ public class XMLFileHandler {
             throw new InternalException();
 
         File f = getFile(meta);
-        if (!AccessController.doPrivileged(
-                J2DoPrivHelper.existsAction(f.getParentFile())))
+        if (!(AccessController.doPrivileged(
+            J2DoPrivHelper.existsAction(f.getParentFile()))).booleanValue())
             AccessController.doPrivileged(
                 J2DoPrivHelper.mkdirsAction(f.getParentFile()));
 
@@ -171,8 +172,8 @@ public class XMLFileHandler {
         out.write("<extent>");
 
         // run through each object in the collection
-        for (Object data : datas) {
-            ObjectData obj = (ObjectData) data;
+        for (Iterator itr = datas.iterator(); itr.hasNext();) {
+            ObjectData obj = (ObjectData) itr.next();
             ClassMetaData meta = obj.getMetaData();
 
             // write out the "object" element start
@@ -204,9 +205,9 @@ public class XMLFileHandler {
 
                         // write out each of the elements
                         int elemType = fmds[i].getElement().getTypeCode();
-                        for (Object o : c) {
+                        for (Iterator ci = c.iterator(); ci.hasNext();) {
                             out.write("<element>");
-                            writeDataValue(out, elemType, o);
+                            writeDataValue(out, elemType, ci.next());
                             out.write("</element>");
                         }
                         break;
@@ -220,8 +221,8 @@ public class XMLFileHandler {
                         Collection entries = m.entrySet();
                         int keyType = fmds[i].getKey().getTypeCode();
                         int valueType = fmds[i].getElement().getTypeCode();
-                        for (Object entry : entries) {
-                            Map.Entry e = (Map.Entry) entry;
+                        for (Iterator ei = entries.iterator(); ei.hasNext();) {
+                            Map.Entry e = (Map.Entry) ei.next();
                             out.write("<key>");
                             writeDataValue(out, keyType, e.getKey());
                             out.write("</key>");
@@ -233,7 +234,7 @@ public class XMLFileHandler {
 
                     default:
                         writeDataValue(out, fmds[i].getTypeCode(),
-                                obj.getField(i));
+                            obj.getField(i));
                 }
                 out.write("</field>");
             }
@@ -276,7 +277,7 @@ public class XMLFileHandler {
             case JavaTypes.CHAR_OBJ:
                 // quote chars so we can distinguish whitespace chars; special
                 // case for \0
-                char c = (Character) val;
+                char c = ((Character) val).charValue();
                 out.write("'");
                 if (c == '\0')
                     out.write("0x0");
@@ -345,10 +346,11 @@ public class XMLFileHandler {
             throws SAXException {
             try {
                 startElement(qName, attrs);
-            } catch (RuntimeException | SAXException re) {
+            } catch (RuntimeException re) {
                 throw re;
-            }
-            catch (Exception e) {
+            } catch (SAXException se) {
+                throw se;
+            } catch (Exception e) {
                 throw new SAXException(e);
             }
         }
@@ -406,10 +408,11 @@ public class XMLFileHandler {
             throws SAXException {
             try {
                 endElement(qName);
-                } catch (RuntimeException | SAXException re) {
+                } catch (RuntimeException re) {
                 throw re;
-            }
-            catch (Exception e) {
+            } catch (SAXException se) {
+                throw se;
+            } catch (Exception e) {
                 throw new SAXException(e);
             }
         }
@@ -490,8 +493,8 @@ public class XMLFileHandler {
                     // strip quotes; special case for 0x0
                     str = str.substring(1, str.length() - 1);
                     if (str.equals("0x0"))
-                        return '\0';
-                    return XMLEncoder.decode(str).charAt(0);
+                        return new Character('\0');
+                    return new Character(XMLEncoder.decode(str).charAt(0));
 
                 case JavaTypes.DOUBLE:
                 case JavaTypes.DOUBLE_OBJ:

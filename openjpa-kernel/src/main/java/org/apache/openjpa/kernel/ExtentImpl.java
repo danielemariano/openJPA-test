@@ -23,15 +23,15 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Predicate;
 
+import org.apache.commons.collections4.Predicate;
+import org.apache.commons.collections4.iterators.FilterIterator;
+import org.apache.commons.collections4.iterators.IteratorChain;
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.lib.rop.ResultObjectProvider;
 import org.apache.openjpa.lib.rop.ResultObjectProviderIterator;
 import org.apache.openjpa.lib.util.Closeable;
 import org.apache.openjpa.lib.util.ReferenceHashSet;
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap;
-import org.apache.openjpa.lib.util.collections.FilterIterator;
-import org.apache.openjpa.lib.util.collections.IteratorChain;
 import org.apache.openjpa.meta.ClassMetaData;
 import org.apache.openjpa.meta.MetaDataRepository;
 import org.apache.openjpa.util.GeneralException;
@@ -140,9 +140,9 @@ public class ExtentImpl<T>
                 metas = EMPTY_METAS;
 
             ResultObjectProvider rop;
-            for (ClassMetaData classMetaData : metas) {
-                rop = _broker.getStoreManager().executeExtent(classMetaData,
-                        _subs, _fc);
+            for (int i = 0; i < metas.length; i++) {
+                rop = _broker.getStoreManager().executeExtent(metas[i],
+                    _subs, _fc);
                 if (rop != null)
                     chain.addIterator(new ResultObjectProviderIterator(rop));
             }
@@ -162,7 +162,7 @@ public class ExtentImpl<T>
         lock();
         try {
             if (_openItrs == null)
-                _openItrs = new ReferenceHashSet(AbstractReferenceMap.ReferenceStrength.WEAK);
+                _openItrs = new ReferenceHashSet(ReferenceStrength.WEAK);
             _openItrs.add(citr);
         } finally {
             unlock();
@@ -193,13 +193,12 @@ public class ExtentImpl<T>
         lock();
         try {
             CloseableIterator citr;
-            for (Object openItr : _openItrs) {
-                citr = (CloseableIterator) openItr;
+            for (Iterator itr = _openItrs.iterator(); itr.hasNext();) {
+                citr = (CloseableIterator) itr.next();
                 citr.setRemoveOnClose(null);
                 try {
                     citr.close();
-                }
-                catch (Exception e) {
+                } catch (Exception e) {
                 }
             }
             _openItrs.clear();
@@ -340,7 +339,7 @@ public class ExtentImpl<T>
         }
 
         @Override
-        public boolean test(Object o) {
+        public boolean evaluate(Object o) {
             return !_extent._broker.isDeleted(o);
         }
     }
@@ -363,7 +362,7 @@ public class ExtentImpl<T>
         }
 
         @Override
-        public boolean test(Object o) {
+        public boolean evaluate(Object o) {
             if (!_broker.isNew(o))
                 return false;
 

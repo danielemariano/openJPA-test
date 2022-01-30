@@ -71,8 +71,8 @@ abstract class Const
 
         // all-null array is considered null
         Object[] arr = (Object[]) val;
-        for (Object o : arr)
-            if (o != null)
+        for (int i = 0; i < arr.length; i++)
+            if (arr[i] != null)
                 return false;
         return true;
     }

@@ -38,6 +38,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -58,7 +59,6 @@ import org.apache.openjpa.jdbc.schema.ForeignKey.FKMapKey;
 import org.apache.openjpa.jdbc.schema.Index;
 import org.apache.openjpa.jdbc.schema.PrimaryKey;
 import org.apache.openjpa.jdbc.schema.Table;
-import org.apache.openjpa.jdbc.schema.Unique;
 import org.apache.openjpa.lib.jdbc.DelegatingDatabaseMetaData;
 import org.apache.openjpa.lib.jdbc.DelegatingPreparedStatement;
 import org.apache.openjpa.lib.util.J2DoPrivHelper;
@@ -97,14 +97,6 @@ public class OracleDictionary
      * The global sequence name to use for autoassign simulation.
      */
     public String autoAssignSequenceName = null;
-
-    /**
-     * Whether this JDBC driver has native java.time support for
-     * LocalDate, LocalDateTime, LocalTime, OffsetTime and OffsetDateTime
-     *
-     *
-     */
-    public boolean nativeJavaTimeSupport = true;
 
     /**
      * Flag to use OpenJPA 0.3 style naming for auto assign sequence name and
@@ -181,10 +173,6 @@ public class OracleDictionary
         maxEmbeddedClobSize = 4000;
         inClauseLimit = 1000;
 
-        // support auto increment columns javax.persistence.GenerationType#IDENTITY
-        supportsAutoAssign = true;
-        autoAssignClause = "GENERATED ALWAYS AS IDENTITY";
-
         supportsDeferredConstraints = true;
         supportsLockingWithDistinctClause = false;
         supportsSelectStartIndex = true;
@@ -210,10 +198,6 @@ public class OracleDictionary
         longVarbinaryTypeName = "BLOB";
         timeTypeName = "DATE";
         timeWithZoneTypeName = "DATE";
-
-        // default TIMESTAMP is TIMESTAMP(6) which means MICROs
-        datePrecision = MICRO;
-
         varcharTypeName = "VARCHAR2{0}";
         fixedSizeTypeNameSet.addAll(Arrays.asList(new String[]{
             "LONG RAW", "RAW", "LONG", "REF",
@@ -227,22 +211,21 @@ public class OracleDictionary
 
         // reservedWordSet subset that CANNOT be used as valid column names
         // (i.e., without surrounding them with double-quotes)
-        // generated at 2021-05-02T16:36:42.608 via org.apache.openjpa.reservedwords.ReservedWordsIT
-        invalidColumnWordSet.addAll(Arrays.asList(new String[] {
-            "ACCESS", "ADD", "ALL", "ALTER", "AND", "ANY", "AS", "ASC", "AUDIT", "BETWEEN", "BY", "CHAR", "CHECK", "CLUSTER",
-            "COLUMN", "COMMENT", "COMPRESS", "CONNECT", "CREATE", "CURRENT", "DATE", "DECIMAL", "DEFAULT", "DELETE", "DESC",
-            "DISTINCT", "DROP", "ELSE", "END-EXEC", "EXCLUSIVE", "EXISTS", "FILE", "FLOAT", "FOR", "FROM", "GRANT", "GROUP",
-            "HAVING", "IDENTIFIED", "IMMEDIATE", "IN", "INCREMENT", "INDEX", "INITIAL", "INSERT", "INTEGER", "INTERSECT", "INTO",
-            "IS", "LEVEL", "LIKE", "LOCK", "LONG", "MAXEXTENTS", "MINUS", "MLSLABEL", "MODE", "MODIFY", "NOAUDIT", "NOCOMPRESS",
-            "NOT", "NOWAIT", "NULL", "NUMBER", "OF", "OFFLINE", "ON", "ONLINE", "OPTION", "OR", "ORDER", "PCTFREE", "PRIOR",
-            "PUBLIC", "RAW", "RENAME", "RESOURCE", "REVOKE", "ROW", "ROWID", "ROWNUM", "ROWS", "SELECT", "SESSION", "SET",
-            "SHARE", "SIZE", "SMALLINT", "START", "SUCCESSFUL", "SYNONYM", "SYSDATE", "TABLE", "THEN", "TO", "TRIGGER", "UID",
-            "UNION", "UNIQUE", "UPDATE", "USER", "VALIDATE", "VALUES", "VARCHAR", "VARCHAR2", "VIEW", "WHENEVER", "WHERE",
-            "WITH",
-            // end generated.
-            // The following keywords used to be defined as reserved words in the past, but now seem to work
-            // we still add them for compat reasons
-            "PRIVILEGES"
+        invalidColumnWordSet.addAll(Arrays.asList(new String[]{
+            "ACCESS", "ADD", "ALL", "ALTER", "AND", "ANY", "AS", "ASC", "AUDIT",
+            "BETWEEN", "BY", "CHAR", "CHECK", "CLUSTER", "COLUMN", "COMMENT",
+            "COMPRESS", "CONNECT", "CREATE", "CURRENT", "DATE", "DECIMAL",
+            "DEFAULT", "DELETE", "DESC", "DISTINCT", "DROP", "ELSE", "END-EXEC",
+            "EXCLUSIVE", "EXISTS", "FILE", "FLOAT", "FOR", "FROM", "GRANT",
+            "GROUP", "HAVING", "IDENTIFIED", "IMMEDIATE", "IN", "INCREMENT",
+            "INDEX", "INITIAL", "INSERT", "INTEGER", "INTERSECT", "INTO",
+            "IS", "LEVEL", "LIKE", "LOCK", "LONG", "MAXEXTENTS", "MINUS",
+            "MODE", "NOAUDIT", "NOCOMPRESS", "NOT", "NOWAIT", "NULL", "NUMBER",
+            "OF", "OFFLINE", "ON", "ONLINE", "OPTION", "OR", "ORDER", "PCTFREE",
+            "PRIOR", "PRIVILEGES", "PUBLIC", "REVOKE", "ROW", "ROWS", "SELECT",
+            "SESSION", "SET", "SIZE", "SMALLINT", "TABLE", "THEN", "TO",
+            "UNION", "UNIQUE", "UPDATE", "USER", "VALUES", "VARCHAR", "VIEW",
+            "WHENEVER", "WHERE", "WITH",
         }));
 
         substringFunctionName = "SUBSTR";
@@ -268,7 +251,6 @@ public class OracleDictionary
         oracleBlob_empty_lob_Method = getMethodByReflection("oracle.sql.BLOB", "getEmptyBLOB");
         oracleClob_isEmptyLob_Method = getMethodByReflection("oracle.sql.CLOB", "isEmptyLob");
 
-        indexPhysicalForeignKeys = true; // Oracle does not automatically create an index for a foreign key so we will
     }
 
     private Method getMethodByReflection(String className, String methodName, Class<?>... paramTypes) {
@@ -319,10 +301,6 @@ public class OracleDictionary
                 if( jdbcVersion >= 11002) {
                     maxEmbeddedBlobSize = -1;
                     maxEmbeddedClobSize = -1;
-                }
-                if (jdbcMajor < 18) {
-                    // no native java.time support for old JDBC drivers.
-                    nativeJavaTimeSupport = false;
                 }
                 String productVersion = meta.getDatabaseProductVersion()
                     .split("Release ",0)[1].split("\\.",0)[0];
@@ -401,41 +379,6 @@ public class OracleDictionary
             return false;
         return !requiresSubselectForRange(sel.getStartIndex(),
             sel.getEndIndex(), sel.isDistinct(), sel.getOrdering());
-    }
-
-    /**
-     * Return the declaration SQL for the given column. This method is used
-     * for each column from within {@link #getCreateTableSQL} and
-     * {@link #getAddColumnSQL}.
-     *
-     * Oracle needs a bit special handling for auto assign columns.
-     * For those ("GENERATED ALWAYS AS IDENTITY") we must not generate NOT NULL
-     * as this would create invalid statements for Oracle.
-     */
-    @Override
-    protected String getDeclareColumnSQL(Column col, boolean alter) {
-        StringBuilder buf = new StringBuilder();
-        String columnName = checkNameLength(toDBName(col.getIdentifier()), maxColumnNameLength,
-                "long-column-name");
-        buf.append(columnName).append(" ");
-        buf.append(getTypeName(col));
-
-        // can't add constraints to a column we're adding after table
-        // creation, cause some data might already be inserted
-        if (!alter
-            && !col.isAutoAssigned()) { // this is actually the only 'special' case for oracle
-            if (col.getDefaultString() != null && !col.isAutoAssigned())
-                buf.append(" DEFAULT ").append(col.getDefaultString());
-            if (col.isNotNull() || (!supportsNullUniqueColumn && col.hasConstraint(Unique.class)))
-                buf.append(" NOT NULL");
-        }
-        if (col.isAutoAssigned()) {
-            if (!supportsAutoAssign)
-                log.warn(_loc.get("invalid-autoassign", platform, col));
-            else if (autoAssignClause != null)
-                buf.append(" ").append(autoAssignClause);
-        }
-        return buf.toString();
     }
 
     @Override
@@ -646,7 +589,7 @@ public class OracleDictionary
                         new Class[]{ int.class, short.class }).
                         invoke(inner,
                             new Object[]{
-                                    idx,
+                                Integer.valueOf(idx),
                                 oraclePreparedStatementFormNvarcharField.get(null)
                             });
                 } catch (Exception e) {
@@ -674,7 +617,7 @@ public class OracleDictionary
                         setFixedCharMethod.setAccessible(true);
                     }
 
-                    setFixedCharMethod.invoke(inner, new Object[]{idx, val });
+                    setFixedCharMethod.invoke(inner, new Object[]{ new Integer(idx), val });
                     return;
                 } catch (Exception e) {
                     log.warn(e);
@@ -705,18 +648,18 @@ public class OracleDictionary
         Column col)
         throws SQLException {
 
-        //We need a place to detect if the user is setting the 'supportsSetClob' property.
-        //While in previous releases this property had meaning, it is no longer useful
-        //given the code added via OPENJPA-1691.  As such, we need to warn user's the
-        //property no longer has meaning.  While it would be nice to have a better way
-        //to detect if the supportsSetClob property has been set, the best we can do
-        //is detect the variable in this code path as this is the path a user's code
-        //would go down if they are still executing code which actually made use of
-        //the support provided via setting supportsSetClob.
-        if (supportsSetClob && logSupportsSetClobWarning){
-            log.warn(_loc.get("oracle-set-clob-warning"));
-            logSupportsSetClobWarning=false;
-        }
+    	//We need a place to detect if the user is setting the 'supportsSetClob' property.
+    	//While in previous releases this property had meaning, it is no longer useful
+    	//given the code added via OPENJPA-1691.  As such, we need to warn user's the
+    	//property no longer has meaning.  While it would be nice to have a better way
+    	//to detect if the supportsSetClob property has been set, the best we can do
+    	//is detect the variable in this code path as this is the path a user's code
+    	//would go down if they are still executing code which actually made use of
+    	//the support provided via setting supportsSetClob.
+    	if (supportsSetClob && logSupportsSetClobWarning){
+    		log.warn(_loc.get("oracle-set-clob-warning"));
+    		logSupportsSetClobWarning=false;
+    	}
 
         if (col.isXML()) {
             if (isJDBC4) {
@@ -762,46 +705,6 @@ public class OracleDictionary
     }
 
     @Override
-    public void setLocalDate(PreparedStatement stmnt, int idx, LocalDate val, Column col) throws SQLException {
-        stmnt.setObject(idx, val);
-    }
-
-    @Override
-    public LocalDate getLocalDate(ResultSet rs, int column) throws SQLException {
-        return rs.getObject(column, LocalDate.class);
-    }
-
-    @Override
-    public void setLocalTime(PreparedStatement stmnt, int idx, LocalTime val, Column col) throws SQLException {
-        stmnt.setObject(idx, val);
-    }
-
-    @Override
-    public LocalTime getLocalTime(ResultSet rs, int column) throws SQLException {
-        return rs.getObject(column, LocalTime.class);
-    }
-
-    @Override
-    public void setLocalDateTime(PreparedStatement stmnt, int idx, LocalDateTime val, Column col) throws SQLException {
-        stmnt.setObject(idx, val);
-    }
-
-    @Override
-    public LocalDateTime getLocalDateTime(ResultSet rs, int column) throws SQLException {
-        return rs.getObject(column, LocalDateTime.class);
-    }
-
-    @Override
-    public void setOffsetDateTime(PreparedStatement stmnt, int idx, OffsetDateTime val, Column col) throws SQLException {
-        stmnt.setObject(idx, val);
-    }
-
-    @Override
-    public OffsetDateTime getOffsetDateTime(ResultSet rs, int column) throws SQLException {
-        return rs.getObject(column, OffsetDateTime.class);
-    }
-
-    @Override
     public String getClobString(ResultSet rs, int column)
         throws SQLException {
         if (_driverBehavior != BEHAVE_ORACLE)
@@ -812,7 +715,7 @@ public class OracleDictionary
             return null;
         if (oracleClob_isEmptyLob_Method != null && clob.getClass().getName().equals("oracle.sql.CLOB")) {
             try {
-                if ((Boolean) oracleClob_isEmptyLob_Method.invoke(clob, new Object[0])) {
+                if (((Boolean) oracleClob_isEmptyLob_Method.invoke(clob, new Object[0])).booleanValue()) {
                     return null;
                 }
             } catch (Exception e) {
@@ -928,10 +831,6 @@ public class OracleDictionary
      */
     @Override
     public int getPreferredType(int type) {
-        if (nativeJavaTimeSupport) {
-            return type;
-        }
-
         switch (type) {
             case Types.TIME_WITH_TIMEZONE:
                 return Types.TIME;

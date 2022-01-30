@@ -72,13 +72,11 @@ public class Schema
      */
     void remove() {
         Table[] tabs = getTables();
-        for (Table tab : tabs) {
-            removeTable(tab);
-        }
+        for (int i = 0; i < tabs.length; i++)
+            removeTable(tabs[i]);
         Sequence[] seqs = getSequences();
-        for (Sequence seq : seqs) {
-            removeSequence(seq);
-        }
+        for (int i = 0; i < seqs.length; i++)
+            removeSequence(seqs[i]);
         _group = null;
     }
 
@@ -231,9 +229,8 @@ public class Schema
 
         Table copy = addTable(table.getIdentifier());
         Column[] cols = table.getColumns();
-        for (Column col : cols) {
-            copy.importColumn(col);
-        }
+        for (int i = 0; i < cols.length; i++)
+            copy.importColumn(cols[i]);
 
         copy.importPrimaryKey(table.getPrimaryKey());
         return copy;

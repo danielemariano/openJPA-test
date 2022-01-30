@@ -117,11 +117,11 @@ public class LifecycleEventManager
         if (_classListeners == null)
             _classListeners = new HashMap<>();
         ListenerList listeners;
-        for (Class<?> aClass : classes) {
-            listeners = _classListeners.get(aClass);
+        for (int i = 0; i < classes.length; i++) {
+            listeners = _classListeners.get(classes[i]);
             if (listeners == null) {
                 listeners = new ListenerList(3);
-                _classListeners.put(aClass, listeners);
+                _classListeners.put(classes[i], listeners);
             }
             listeners.add(listener);
         }
@@ -140,8 +140,9 @@ public class LifecycleEventManager
             return;
         if (_classListeners != null) {
             ListenerList listeners;
-            for (ListenerList objects : _classListeners.values()) {
-                listeners = objects;
+            for (Iterator<ListenerList> itr = _classListeners.values().iterator();
+                itr.hasNext();) {
+                listeners = itr.next();
                 listeners.remove(listener);
             }
         }
@@ -235,8 +236,8 @@ public class LifecycleEventManager
             getCallbacks(type);
         if (callbacks.length == 0)
             return false;
-        for (LifecycleCallbacks callback : callbacks)
-            if (callback.hasCallback(source, type))
+        for (int i = 0; i < callbacks.length; i++)
+            if (callbacks[i].hasCallback(source, type))
                 return true;
         return false;
     }
@@ -324,13 +325,11 @@ public class LifecycleEventManager
             _firing = false;
             _fail = false;
             if (!_addListeners.isEmpty())
-                for (Iterator<Object> itr = _addListeners.iterator(); itr.hasNext();) {
+                for (Iterator<Object> itr = _addListeners.iterator(); itr.hasNext();)
                     addListener(itr.next(), (Class[]) itr.next());
-                }
             if (!_remListeners.isEmpty())
-                for (Object remListener : _remListeners) {
-                    removeListener(remListener);
-                }
+                for (Iterator<Object> itr = _remListeners.iterator(); itr.hasNext();)
+                    removeListener(itr.next());
             _addListeners.clear();
             _remListeners.clear();
             _exceps.clear();

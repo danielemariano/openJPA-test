@@ -109,12 +109,12 @@ public class MethodLifecycleCallbacks
         do {
             Method[] methods = (Method[]) AccessController.doPrivileged(
                 J2DoPrivHelper.getDeclaredMethodsAction(currentClass));
-            for (Method value : methods) {
-                if (!method.equals(value.getName()))
+            for (int i = 0; i < methods.length; i++) {
+                if (!method.equals(methods[i].getName()))
                     continue;
 
-                if (isAssignable(value.getParameterTypes(), args))
-                    return value;
+                if (isAssignable(methods[i].getParameterTypes(), args))
+                    return methods[i];
             }
         } while ((currentClass = currentClass.getSuperclass()) != null);
 

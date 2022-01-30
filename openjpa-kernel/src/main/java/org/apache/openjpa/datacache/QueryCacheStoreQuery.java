@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.apache.commons.collections4.map.LinkedMap;
 import org.apache.openjpa.datacache.AbstractQueryCache.EvictPolicy;
 import org.apache.openjpa.kernel.FetchConfiguration;
 import org.apache.openjpa.kernel.LockLevels;
@@ -44,7 +45,6 @@ import org.apache.openjpa.kernel.exps.QueryExpressions;
 import org.apache.openjpa.lib.rop.ListResultObjectProvider;
 import org.apache.openjpa.lib.rop.ResultObjectProvider;
 import org.apache.openjpa.lib.util.OrderedMap;
-import org.apache.openjpa.lib.util.collections.LinkedMap;
 import org.apache.openjpa.meta.ClassMetaData;
 import org.apache.openjpa.meta.JavaTypes;
 import org.apache.openjpa.meta.MetaDataRepository;
@@ -130,7 +130,8 @@ public class QueryCacheStoreQuery
             AbstractQueryCache qcache = (AbstractQueryCache) _cache;
             if (qcache.getEvictPolicy() == EvictPolicy.TIMESTAMP) {
                 Set<String> classNames = qk.getAcessPathClassNames();
-                List<String> keyList = new ArrayList<>(classNames);
+                List<String> keyList = new ArrayList<>();
+                keyList.addAll(classNames);
 
                 List<Long> timestamps =
                     qcache.getAllEntityTimestamp(keyList);
@@ -156,7 +157,7 @@ public class QueryCacheStoreQuery
         if (projs == 0) {
             // We're only going to return the cached results if we have ALL results cached. This could be improved
             // in the future to be a little more intelligent.
-            if (!getContext().getStoreContext().isCached(res)) {
+            if (getContext().getStoreContext().isCached(res) == false) {
                 return null;
             }
         }
@@ -408,9 +409,8 @@ public class QueryCacheStoreQuery
                 return;
 
             List<Class<?>> classes = new ArrayList<>(cmd.length);
-            for (ClassMetaData metaData : cmd) {
-                classes.add(metaData.getDescribedType());
-            }
+            for (int i = 0; i < cmd.length; i++)
+                classes.add(cmd[i].getDescribedType());
 
             // evict from the query cache
             QueryCacheStoreQuery cq = (QueryCacheStoreQuery) q;
@@ -418,10 +418,10 @@ public class QueryCacheStoreQuery
                 (q.getContext(), classes));
 
             // evict from the data cache
-            for (ClassMetaData classMetaData : cmd) {
-                if (classMetaData.getDataCache() != null && classMetaData.getDataCache().getEvictOnBulkUpdate())
-                    classMetaData.getDataCache().removeAll(
-                            classMetaData.getDescribedType(), true);
+            for (int i = 0; i < cmd.length; i++) {
+                if (cmd[i].getDataCache() != null && cmd[i].getDataCache().getEvictOnBulkUpdate())
+                    cmd[i].getDataCache().removeAll(
+                        cmd[i].getDescribedType(), true);
             }
         }
 

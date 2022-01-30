@@ -22,8 +22,10 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Map;
 
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.conf.OpenJPAConfiguration;
 import org.apache.openjpa.enhance.ManagedInstanceProvider;
 import org.apache.openjpa.enhance.PCRegistry;
@@ -39,7 +41,6 @@ import org.apache.openjpa.kernel.StoreContext;
 import org.apache.openjpa.kernel.StoreManager;
 import org.apache.openjpa.lib.util.Closeable;
 import org.apache.openjpa.lib.util.UUIDGenerator;
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.lib.util.concurrent.ConcurrentReferenceHashMap;
 import org.apache.openjpa.meta.ClassMetaData;
 import org.apache.openjpa.meta.FieldMetaData;
@@ -96,20 +97,18 @@ public class ImplHelper {
         Collection failed = null;
         OpenJPAStateManager sm;
         LockManager lm;
-        for (Object o : sms) {
-            sm = (OpenJPAStateManager) o;
+        for (Iterator itr = sms.iterator(); itr.hasNext();) {
+            sm = (OpenJPAStateManager) itr.next();
             if (sm.getManagedInstance() == null) {
                 if (!store.initialize(sm, state, fetch, context))
                     failed = addFailedId(sm, failed);
-            }
-            else if (load != StoreManager.FORCE_LOAD_NONE
-                    || sm.getPCState() == PCState.HOLLOW) {
+            } else if (load != StoreManager.FORCE_LOAD_NONE
+                || sm.getPCState() == PCState.HOLLOW) {
                 lm = sm.getContext().getLockManager();
                 if (!store.load(sm, sm.getUnloaded(fetch), fetch,
-                        lm.getLockLevel(sm), context))
+                    lm.getLockLevel(sm), context))
                     failed = addFailedId(sm, failed);
-            }
-            else if (!store.exists(sm, context))
+            } else if (!store.exists(sm, context))
                 failed = addFailedId(sm, failed);
         }
         return (failed == null) ? Collections.EMPTY_LIST : failed;
@@ -263,11 +262,11 @@ public class ImplHelper {
         }
 
         if (isAssignable == null) {// we don't have a record of this pair...
-            isAssignable = from.isAssignableFrom(to);
+            isAssignable = Boolean.valueOf(from.isAssignableFrom(to));
             assignableTo.put(to, isAssignable);
         }
 
-        return isAssignable;
+        return isAssignable.booleanValue();
     }
 
     /**

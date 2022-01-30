@@ -173,15 +173,15 @@ public class QueryKey
 
         // can't cache non-serializable non-managed complex types
         Class<?>[] types = q.getProjectionTypes();
-        for (Class<?> type : types) {
-            switch (JavaTypes.getTypeCode(type)) {
+        for (int i = 0; i < types.length; i++) {
+            switch (JavaTypes.getTypeCode(types[i])) {
                 case JavaTypes.ARRAY:
                     return null;
                 case JavaTypes.COLLECTION:
                 case JavaTypes.MAP:
                 case JavaTypes.OBJECT:
                     if (!ImplHelper.isManagedType(
-                            q.getStoreContext().getConfiguration(), type))
+                        q.getStoreContext().getConfiguration(), types[i]))
                         return null;
                     break;
             }
@@ -195,10 +195,10 @@ public class QueryKey
 
         Set<String> accessPathClassNames = new HashSet<>((int) (metas.length * 1.33 + 1));
         ClassMetaData meta;
-        for (ClassMetaData metaData : metas) {
+        for (int i = 0; i < metas.length; i++) {
             // since the class change framework deals with least-derived types,
             // record the least-derived access path types
-            meta = metaData;
+            meta = metas[i];
             accessPathClassNames.add(meta.getDescribedType().getName());
             while (meta.getPCSuperclass() != null) {
                 meta = meta.getPCSuperclassMetaData();
@@ -226,12 +226,12 @@ public class QueryKey
         if (subclasses) {
             metas = meta.getPCSubclassMetaDatas();
             int subTimeout;
-            for (ClassMetaData classMetaData : metas) {
-                if (classMetaData.getDataCache() == null)
+            for (int i = 0; i < metas.length; i++) {
+                if (metas[i].getDataCache() == null)
                     return null;
 
-                accessPathClassNames.add(classMetaData.getDescribedType().getName());
-                subTimeout = classMetaData.getDataCacheTimeout();
+                accessPathClassNames.add(metas[i].getDescribedType().getName());
+                subTimeout = metas[i].getDataCacheTimeout();
                 if (subTimeout != -1 && subTimeout < timeout)
                     timeout = subTimeout;
             }
@@ -327,9 +327,8 @@ public class QueryKey
                         if (contentsAreDates) {
                             // must go through by hand and do the
                             // copy, since Date is mutable.
-                            for (Object value : c) {
-                                copy.add(((Date) value).clone());
-                            }
+                            for (Iterator<Object> itr2 = c.iterator(); itr2.hasNext();)
+                                copy.add(((Date) itr2.next()).clone());
                         } else
                             copy.addAll(c);
 

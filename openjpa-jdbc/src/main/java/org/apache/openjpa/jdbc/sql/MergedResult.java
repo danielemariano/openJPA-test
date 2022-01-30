@@ -101,9 +101,8 @@ public class MergedResult implements Result {
 
     @Override
     public void close() {
-        for (Result re : _res) {
-            re.close();
-        }
+        for (int i = 0; i < _res.length; i++)
+            _res[i].close();
     }
 
     @Override
@@ -198,9 +197,8 @@ public class MergedResult implements Result {
     public int size()
         throws SQLException {
         int size = 0;
-        for (Result re : _res) {
-            size += re.size();
-        }
+        for (int i = 0; i < _res.length; i++)
+            size += _res[i].size();
         return size;
     }
 
@@ -652,16 +650,14 @@ public class MergedResult implements Result {
 
     @Override
     public void startDataRequest(Object mapping) {
-        for (Result re : _res) {
-            re.startDataRequest(mapping);
-        }
+        for (int i = 0; i < _res.length; i++)
+            _res[i].startDataRequest(mapping);
     }
 
     @Override
     public void endDataRequest() {
-        for (Result re : _res) {
-            re.endDataRequest();
-        }
+        for (int i = 0; i < _res.length; i++)
+            _res[i].endDataRequest();
     }
 
     /**

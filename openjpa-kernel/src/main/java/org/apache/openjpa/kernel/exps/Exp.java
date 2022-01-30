@@ -40,7 +40,9 @@ public class Exp
         StoreContext ctx, Object[] params) {
         try {
             return eval(candidate, candidate, ctx, params);
-        } catch (ClassCastException | NullPointerException cce) {
+        } catch (ClassCastException cce) {
+            return false;
+        } catch (NullPointerException npe) {
             return false;
         }
     }
@@ -52,7 +54,9 @@ public class Exp
         StoreContext ctx, Object[] params) {
         try {
             return eval(candidates, ctx, params);
-        } catch (ClassCastException | NullPointerException cce) {
+        } catch (ClassCastException cce) {
+            return false;
+        } catch (NullPointerException npe) {
             return false;
         }
     }

@@ -167,7 +167,7 @@ public class TableJDBCSeq extends AbstractJDBCSeq implements Configurable {
      * <code>ID</code>.
      */
     public void setPrimaryKeyColumn(String primaryKeyColumn) {
-        _pkColumnName = DBIdentifier.newColumn(primaryKeyColumn, _conf.getDBDictionaryInstance().delimitAll());
+        _pkColumnName = DBIdentifier.newColumn(primaryKeyColumn);
     }
 
     /**
@@ -259,14 +259,14 @@ public class TableJDBCSeq extends AbstractJDBCSeq implements Configurable {
         // in here.
 
         Schema[] schemas = group.getSchemas();
-        for (Schema value : schemas) {
+        for (int i = 0; i < schemas.length; i++) {
             QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(_table);
             DBIdentifier schemaName = path.getSchemaName();
             if (DBIdentifier.isEmpty(schemaName)) {
                 schemaName = Schemas.getNewTableSchemaIdentifier(_conf);
             }
             if (DBIdentifier.isNull(schemaName)) {
-                schemaName = value.getIdentifier();
+                schemaName = schemas[i].getIdentifier();
             }
 
             // create table in this group
@@ -279,7 +279,7 @@ public class TableJDBCSeq extends AbstractJDBCSeq implements Configurable {
             // importTable() does not import unique constraints
             Unique[] uniques = _pkColumn.getTable().getUniques();
             for (Unique u : uniques) {
-                copy.importUnique(u);
+            	copy.importUnique(u);
             }
             // we need to reset the table name in the column with the
             // fully qualified name for matching the table name from the
@@ -375,7 +375,8 @@ public class TableJDBCSeq extends AbstractJDBCSeq implements Configurable {
      */
     protected Column addPrimaryKeyColumn(Table table) {
         DBDictionary dict = _conf.getDBDictionaryInstance();
-        Column pkColumn = table.addColumn(dict.getValidColumnName(getPrimaryKeyColumnIdentifier(), table));
+        Column pkColumn = table.addColumn(dict.getValidColumnName
+            (getPrimaryKeyColumnIdentifier(), table));
         pkColumn.setType(dict.getPreferredType(Types.TINYINT));
         pkColumn.setJavaType(JavaTypes.INT);
         return pkColumn;
@@ -416,10 +417,8 @@ public class TableJDBCSeq extends AbstractJDBCSeq implements Configurable {
         pk.addColumn(_pkColumn);
 
         DBDictionary dict = _conf.getDBDictionaryInstance();
-        DBIdentifier _delimitedSeqColumnName = dict.delimitAll() ?
-                DBIdentifier.newColumn(this._seqColumnName.getName(), true) : this._seqColumnName;
         _seqColumn = table.addColumn(dict.getValidColumnName
-            (_delimitedSeqColumnName, table));
+            (_seqColumnName, table));
         _seqColumn.setType(dict.getPreferredType(Types.BIGINT));
         _seqColumn.setJavaType(JavaTypes.LONG);
 
@@ -459,7 +458,8 @@ public class TableJDBCSeq extends AbstractJDBCSeq implements Configurable {
                 }
                 catch(NotSupportedException nse) {
                     SQLException sqlEx = new SQLException(
-                            nse.getLocalizedMessage(), nse);
+                            nse.getLocalizedMessage());
+                    sqlEx.initCause(nse);
                     throw sqlEx;
                 }
             } else {
@@ -950,7 +950,8 @@ public class TableJDBCSeq extends AbstractJDBCSeq implements Configurable {
                 if (conn != null) {
                     closeConnection(conn);
                 }
-                RuntimeException re = new RuntimeException(e.getMessage(), e);
+                RuntimeException re = new RuntimeException(e.getMessage());
+                re.initCause(e);
                 throw re;
             }
         }
@@ -987,7 +988,8 @@ public class TableJDBCSeq extends AbstractJDBCSeq implements Configurable {
                 if (cur != -1 ) // USE the constant
                     current = cur;
             } catch (SQLException sqle) {
-                RuntimeException re = new RuntimeException(sqle.getMessage(), sqle);
+                RuntimeException re = new RuntimeException(sqle.getMessage());
+                re.initCause(sqle);
                 throw re;
             } finally {
                 if (conn != null) {

@@ -20,6 +20,7 @@ package org.apache.openjpa.kernel.exps;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 
 import org.apache.openjpa.kernel.Filters;
 import org.apache.openjpa.kernel.StoreContext;
@@ -68,9 +69,8 @@ class Cast
             return res;
 
         Collection casts = new ArrayList(res.size());
-        for (Object re : res) {
-            casts.add(Filters.convert(re, _cast));
-        }
+        for (Iterator itr = res.iterator(); itr.hasNext();)
+            casts.add(Filters.convert(itr.next(), _cast));
         return casts;
     }
 

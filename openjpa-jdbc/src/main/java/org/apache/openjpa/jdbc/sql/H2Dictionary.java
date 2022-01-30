@@ -126,13 +126,10 @@ public class H2Dictionary extends DBDictionary {
 
         // reservedWordSet subset that CANNOT be used as valid column names
         // (i.e., without surrounding them with double-quotes)
-        // generated at 2021-05-02T14:32:50.704 via org.apache.openjpa.reservedwords.ReservedWordsIT
-        invalidColumnWordSet.addAll(Arrays.asList(new String[] {
-            "CHECK", "CONSTRAINT", "CROSS", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "DISTINCT", "END-EXEC",
-            "EXCEPT", "EXISTS", "FALSE", "FETCH", "FOR", "FOREIGN", "FROM", "FULL", "GROUP", "HAVING", "INNER", "INTERSECT",
-            "IS", "JOIN", "LIKE", "LIMIT", "MINUS", "NATURAL", "NOT", "NULL", "OFFSET", "ON", "ORDER", "PRIMARY", "ROWNUM",
-            "SELECT", "SYSDATE", "TRUE", "UNION", "UNIQUE", "WHERE", "WITH",
+        invalidColumnWordSet.addAll(Arrays.asList(new String[]{
+            "ORDER",
         }));
+
     }
 
     @Override
@@ -195,8 +192,8 @@ public class H2Dictionary extends DBDictionary {
 
         Unique[] unqs = table.getUniques();
         String unqStr;
-        for (Unique unq : unqs) {
-            unqStr = getUniqueConstraintSQL(unq);
+        for (int i = 0; i < unqs.length; i++) {
+            unqStr = getUniqueConstraintSQL(unqs[i]);
             if (unqStr != null)
                 buf.append(", ").append(unqStr);
         }

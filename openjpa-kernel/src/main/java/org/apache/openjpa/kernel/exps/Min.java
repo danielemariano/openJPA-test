@@ -19,6 +19,7 @@
 package org.apache.openjpa.kernel.exps;
 
 import java.util.Collection;
+import java.util.Iterator;
 
 /**
  * Find the min.
@@ -47,8 +48,8 @@ class Min
     protected Object operate(Collection os, Class c) {
         Comparable min = null;
         Comparable cur;
-        for (Object o : os) {
-            cur = (Comparable) o;
+        for (Iterator itr = os.iterator(); itr.hasNext();) {
+            cur = (Comparable) itr.next();
             if (cur != null && (min == null || min.compareTo(cur) > 0))
                 min = cur;
         }

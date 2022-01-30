@@ -29,12 +29,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.lib.util.J2DoPrivHelper;
 import org.apache.openjpa.lib.util.Localizer;
 import org.apache.openjpa.lib.util.Localizer.Message;
 import org.apache.openjpa.lib.util.Reflectable;
 import org.apache.openjpa.lib.util.StringUtil;
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap.ReferenceStrength;
 import org.apache.openjpa.lib.util.concurrent.ConcurrentReferenceHashMap;
 import org.apache.openjpa.util.GeneralException;
 import org.apache.openjpa.util.UserException;
@@ -202,14 +202,14 @@ public class Reflection {
         Method[] methods = (Method[]) AccessController.doPrivileged(
             J2DoPrivHelper.getDeclaredMethodsAction(cls));
         Method candidate = null;
-        for (Method method : methods) {
-            if (name.equals(method.getName())) {
-                Class[] methodParams = method.getParameterTypes();
+        for (int i = 0 ; i < methods.length; i++) {
+    	    if (name.equals(methods[i].getName())) {
+                Class[] methodParams = methods[i].getParameterTypes();
                 if (param == null && methodParams.length == 0)
-                    candidate = mostDerived(method, candidate);
+                    candidate = mostDerived(methods[i], candidate);
                 else if (param != null && methodParams.length == 1
-                        && param.equals(methodParams[0]))
-                    candidate = mostDerived(method, candidate);
+                    && param.equals(methodParams[0]))
+                    candidate = mostDerived(methods[i], candidate);
             }
         }
         return candidate;
@@ -279,9 +279,9 @@ public class Reflection {
     private static Field getDeclaredField(Class cls, String name) {
         Field[] fields = AccessController.doPrivileged(
             J2DoPrivHelper.getDeclaredFieldsAction(cls));
-        for (Field field : fields) {
-            if (name.equals(field.getName()))
-                return field;
+        for (int i = 0 ; i < fields.length; i++) {
+    	    if (name.equals(fields[i].getName()))
+		        return fields[i];
         }
         return null;
     }
@@ -481,7 +481,7 @@ public class Reflection {
      */
     public static boolean getBoolean(Object target, Method getter) {
         Object o = get(target, getter);
-        return (o == null) ? false : (Boolean) o;
+        return (o == null) ? false : ((Boolean) o).booleanValue();
     }
 
     /**
@@ -497,7 +497,7 @@ public class Reflection {
      */
     public static char getChar(Object target, Method getter) {
         Object o = get(target, getter);
-        return (o == null) ? (char) 0 : (Character) o;
+        return (o == null) ? (char) 0 : ((Character) o).charValue();
     }
 
     /**
@@ -917,7 +917,8 @@ public class Reflection {
             && canReflect(f)) {
                 try {
                     result.add((T)f.get(null));
-                } catch (IllegalArgumentException | IllegalAccessException e) {
+                } catch (IllegalArgumentException e) {
+                } catch (IllegalAccessException e) {
                 }
             }
         }
@@ -945,9 +946,9 @@ public class Reflection {
     */
     static boolean canReflect(Reflectable cls, Reflectable member) {
         if (cls == null || cls.value()) {
-            return member == null || member.value();
+            return member == null || member.value() == true;
         } else {
-            return member != null && member.value();
+            return member != null && member.value() == true;
         }
     }
 

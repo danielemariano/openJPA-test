@@ -25,13 +25,6 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
-import java.time.OffsetTime;
-import java.time.ZoneId;
-import java.time.temporal.Temporal;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
@@ -273,8 +266,6 @@ public class Filters {
 
     /**
      * Convert the given value to the given type.
-     * @param o the given value
-     * @param type the target type
      */
     public static Object convert(Object o, Class<?> type, boolean strictNumericConversion) {
         if (o == null)
@@ -292,93 +283,42 @@ public class Filters {
         // String to Integer
         boolean num = o instanceof Number;
         if (!num) {
-            if (type == String.class) {
+            if (type == String.class)
                 return o.toString();
-            }
-            else if (type == Boolean.class && o instanceof String) {
+            else if (type == Boolean.class && o instanceof String)
                 return Boolean.valueOf(o.toString());
-            }
-            else if (type == Integer.class && o instanceof String) {
+            else if (type == Integer.class && o instanceof String)
                 try {
                     return new Integer(o.toString());
+                } catch (NumberFormatException e) {
+                    throw new ClassCastException(_loc.get("cant-convert", o,
+                        o.getClass(), type).getMessage());
                 }
-                catch (NumberFormatException e) {
-                    throw new ClassCastException(_loc.get("cant-convert", o, o.getClass(), type).getMessage());
-                }
-            }
             else if (type == Character.class) {
                 String str = o.toString();
-                if (str != null && str.length() == 1) {
-                    return str.charAt(0);
-                }
-            }
-            else if (Calendar.class.isAssignableFrom(type) && o instanceof Date) {
+                if (str != null && str.length() == 1)
+                    return Character.valueOf(str.charAt(0));
+            } else if (Calendar.class.isAssignableFrom(type) &&
+                o instanceof Date) {
                 Calendar cal = Calendar.getInstance();
                 cal.setTime((Date) o);
                 return cal;
-            }
-            else if (Date.class.isAssignableFrom(type) && o instanceof Calendar) {
+            } else if (Date.class.isAssignableFrom(type) &&
+                o instanceof Calendar) {
                 return ((Calendar) o).getTime();
-            }
-            else if (Number.class.isAssignableFrom(type)) {
+            } else if (Number.class.isAssignableFrom(type)) {
                 Integer i = null;
                 if (o instanceof Character) {
-                    i = Integer.valueOf((Character) o);
+                    i = Integer.valueOf((Character)o);
                 }
-                else if (o instanceof String && ((String) o).length() == 1) {
-                    i = Integer.valueOf(((String) o));
-                }
+                else if (o instanceof String && ((String) o).length() == 1)
+                    i = Integer.valueOf(((String)o));
 
                 if (i != null) {
-                    if (type == Integer.class) {
+                    if (type == Integer.class)
                         return i;
-                    }
                     num = true;
                 }
-            } else if (Temporal.class.isAssignableFrom(type)) {
-                // handling of Java8 time API.
-                if (LocalDate.class.equals(type)) {
-                    if (o instanceof java.sql.Date) {
-                        return ((java.sql.Date) o).toLocalDate();
-                    } else if (o instanceof java.util.Date) {
-                        return new java.sql.Date(((java.util.Date)o).getTime()).toLocalDate();
-                    } else if (o instanceof CharSequence) {
-                        return LocalDate.parse((CharSequence) o);
-                    }
-                } else if (LocalDateTime.class.equals(type)) {
-                    if (o instanceof java.sql.Timestamp) {
-                        return ((java.sql.Timestamp) o).toLocalDateTime();
-                    } else if (o instanceof java.util.Date) {
-                        return ((java.util.Date)o).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-                    } else if (o instanceof CharSequence) {
-                        return LocalDateTime.parse((CharSequence) o);
-                    }
-                } else if (LocalTime.class.equals(type)) {
-                    if (o instanceof java.sql.Time) {
-                        return ((java.sql.Time) o).toLocalTime();
-                    } else if (o instanceof java.util.Date) {
-                        return ((java.util.Date)o).toInstant().atZone(ZoneId.systemDefault()).toLocalTime();
-                    } else if (o instanceof CharSequence) {
-                        return LocalTime.parse((CharSequence) o);
-                    }
-                } else if (OffsetTime.class.equals(type)) {
-                    if (o instanceof java.sql.Time) {
-                        return ((java.sql.Time) o).toLocalTime().atOffset(OffsetDateTime.now().getOffset());
-                    } else if (o instanceof java.util.Date) {
-                        return ((java.util.Date)o).toInstant().atZone(ZoneId.systemDefault()).toOffsetDateTime().toOffsetTime();
-                    } else if (o instanceof CharSequence) {
-                        return OffsetTime.parse((CharSequence) o);
-                    }
-                } else if (OffsetDateTime.class.equals(type)) {
-                    if (o instanceof java.sql.Timestamp) {
-                        return ((java.sql.Timestamp) o).toInstant().atZone(ZoneId.systemDefault()).toOffsetDateTime();
-                    } else if (o instanceof java.util.Date) {
-                        return ((java.util.Date)o).toInstant().atZone(ZoneId.systemDefault()).toOffsetDateTime();
-                    } else if (o instanceof CharSequence) {
-                        return LocalTime.parse((CharSequence) o);
-                    }
-                }
-
             } else if (o instanceof String && isJDBCTemporalSyntax(o.toString())) {
                 try {
                     Object temporal = parseJDBCTemporalSyntax(o.toString());
@@ -391,16 +331,16 @@ public class Filters {
                 return Enum.valueOf((Class<Enum>)type, o.toString());
             }
         }
-        if (!num) {
-            throw new ClassCastException(_loc.get("cant-convert", o, o.getClass(), type).getMessage());
-        }
+        if (!num)
+            throw new ClassCastException(_loc.get("cant-convert", o,
+                o.getClass(), type).getMessage());
 
         if (type == Integer.class && allowNumericConversion(o.getClass(), type, strictNumericConversion)) {
             return ((Number) o).intValue();
         } else if (type == Float.class && allowNumericConversion(o.getClass(), type, strictNumericConversion)) {
-            return ((Number) o).floatValue();
+            return Float.valueOf(((Number) o).floatValue());
         } else if (type == Double.class) {
-            return ((Number) o).doubleValue();
+            return Double.valueOf(((Number) o).doubleValue());
         } else if (type == Long.class && allowNumericConversion(o.getClass(), type, strictNumericConversion)) {
             return ((Number) o).longValue();
         } else if (type == BigDecimal.class) {
@@ -409,23 +349,22 @@ public class Filters {
             // does it handle infinity; we need to instead use the Double
             // and Float versions, despite wanting to cast it to BigDecimal
             double dval = ((Number) o).doubleValue();
-            if (Double.isNaN(dval) || Double.isInfinite(dval)) {
-                return dval;
-            }
+            if (Double.isNaN(dval) || Double.isInfinite(dval))
+                return Double.valueOf(dval);
+
             float fval = ((Number) o).floatValue();
-            if (Float.isNaN(fval) || Float.isInfinite(fval)) {
-                return fval;
-            }
+            if (Float.isNaN(fval) || Float.isInfinite(fval))
+                return Float.valueOf(fval);
 
             return new BigDecimal(o.toString());
         } else if (type == BigInteger.class) {
             return new BigInteger(o.toString());
         } else if (type == Short.class && allowNumericConversion(o.getClass(), type, strictNumericConversion)) {
-            return ((Number) o).shortValue();
+            return Short.valueOf(((Number) o).shortValue());
         } else if (type == Byte.class && allowNumericConversion(o.getClass(), type, strictNumericConversion)) {
-            return ((Number) o).byteValue();
+            return Byte.valueOf(((Number) o).byteValue());
         } else if (type == Character.class) {
-            return (char) ((Number) o).intValue();
+        	return (char) ((Number) o).intValue();
         } else if (!strictNumericConversion) {
             return ((Number) o).intValue();
         } else {
@@ -576,7 +515,7 @@ public class Filters {
             default:
                 throw new InternalException();
         }
-        return tot;
+        return Float.valueOf(tot);
     }
 
     /**
@@ -603,7 +542,7 @@ public class Filters {
             default:
                 throw new InternalException();
         }
-        return tot;
+        return Double.valueOf(tot);
     }
 
     /**
@@ -832,19 +771,18 @@ public class Filters {
         // at least it's n^2 of a small n...
         ClassMetaData meta;
         boolean add;
-        for (ClassMetaData classMetaData : path) {
+        for (int i = 0; i < path.length; i++) {
             add = true;
             for (int j = 0; add && j < last; j++) {
                 meta = metas.get(j);
 
-                if (meta.getDescribedType().isAssignableFrom(classMetaData.getDescribedType())) {
+                if (meta.getDescribedType().isAssignableFrom(path[i].getDescribedType())) {
                     // list already contains base class
                     add = false;
-                }
-                else if (classMetaData.getDescribedType().isAssignableFrom(meta.getDescribedType())) {
+                } else if (path[i].getDescribedType().isAssignableFrom(meta.getDescribedType())) {
                     // this element replaces its subclass
                     add = false;
-                    metas.set(j, classMetaData);
+                    metas.set(j, path[i]);
                 }
             }
 
@@ -852,7 +790,7 @@ public class Filters {
             // list and path element didn't replace a subclass in the
             // list, then add it now as a new base
             if (add)
-                metas.add(classMetaData);
+                metas.add(path[i]);
         }
         return metas;
     }
@@ -1075,25 +1013,20 @@ public class Filters {
             && (Date.class.isAssignableFrom(c)
              || Time.class.isAssignableFrom(c)
              || Timestamp.class.isAssignableFrom(c)
-             || Calendar.class.isAssignableFrom(c)
-             || LocalDate.class == c  // java.time classes are final, so we can compare with ==
-             || LocalDateTime.class == c
-             || LocalTime.class == c
-             || OffsetTime.class ==c
-             || OffsetDateTime.class == c);
+             || Calendar.class.isAssignableFrom(c));
     }
 
     public static Object getDefaultForNull(Class<?> nType) {
         if (nType == Long.class)
-            return 0L;
+            return Long.valueOf(0);
         if (nType == Integer.class)
-            return 0;
+            return Integer.valueOf(0);
         if (nType == Double.class)
-            return 0.0;
+            return Double.valueOf(0.0);
         if (nType == Float.class)
-            return 0.0F;
+            return new Float(0.0);
         if (nType == Short.class)
-            return (short) 0;
+            return Short.valueOf((short)0);
         return null;
     }
 

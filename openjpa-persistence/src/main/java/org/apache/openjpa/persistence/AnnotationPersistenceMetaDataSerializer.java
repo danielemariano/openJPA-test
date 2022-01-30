@@ -376,17 +376,14 @@ public class AnnotationPersistenceMetaDataSerializer
 
         boolean removed = false;
         ClassMetaData[] metas = repos.getMetaDatas();
-        for (ClassMetaData meta : metas) {
-            removed |= removeMetaData(meta);
-        }
+        for (int i = 0; i < metas.length; i++)
+            removed |= removeMetaData(metas[i]);
         SequenceMetaData[] seqs = repos.getSequenceMetaDatas();
-        for (SequenceMetaData seq : seqs) {
-            removed |= removeSequenceMetaData(seq);
-        }
+        for (int i = 0; i < seqs.length; i++)
+            removed |= removeSequenceMetaData(seqs[i]);
         QueryMetaData[] queries = repos.getQueryMetaDatas();
-        for (QueryMetaData query : queries) {
-            removed |= removeQueryMetaData(query);
-        }
+        for (int i = 0; i < queries.length; i++)
+            removed |= removeQueryMetaData(queries[i]);
         return removed;
     }
 
@@ -486,7 +483,11 @@ public class AnnotationPersistenceMetaDataSerializer
     protected void addAnnotation(AnnotationBuilder ab, ClassMetaData meta) {
         if (_clsAnnos == null)
             _clsAnnos = new HashMap<>();
-        List<AnnotationBuilder> list = _clsAnnos.computeIfAbsent(meta, k -> new ArrayList<>());
+        List<AnnotationBuilder> list = _clsAnnos.get(meta);
+        if (list == null) {
+            list = new ArrayList<>();
+            _clsAnnos.put(meta, list);
+        }
         list.add(ab);
     }
 
@@ -497,7 +498,11 @@ public class AnnotationPersistenceMetaDataSerializer
     protected void addAnnotation(AnnotationBuilder ab, FieldMetaData meta) {
         if (_fldAnnos == null)
             _fldAnnos = new HashMap<>();
-        List<AnnotationBuilder> list = _fldAnnos.computeIfAbsent(meta, k -> new ArrayList<>());
+        List<AnnotationBuilder> list = _fldAnnos.get(meta);
+        if (list == null) {
+            list = new ArrayList<>();
+            _fldAnnos.put(meta, list);
+        }
         list.add(ab);
     }
 
@@ -508,7 +513,11 @@ public class AnnotationPersistenceMetaDataSerializer
     protected void addAnnotation(AnnotationBuilder ab, SequenceMetaData meta) {
         if (_seqAnnos == null)
             _seqAnnos = new HashMap<>();
-        List<AnnotationBuilder> list = _seqAnnos.computeIfAbsent(meta, k -> new ArrayList<>());
+        List<AnnotationBuilder> list = _seqAnnos.get(meta);
+        if (list == null) {
+            list = new ArrayList<>();
+            _seqAnnos.put(meta, list);
+        }
         list.add(ab);
     }
 
@@ -519,7 +528,11 @@ public class AnnotationPersistenceMetaDataSerializer
     protected void addAnnotation(AnnotationBuilder ab, QueryMetaData meta) {
         if (_qryAnnos == null)
             _qryAnnos = new HashMap<>();
-        List<AnnotationBuilder> list = _qryAnnos.computeIfAbsent(meta, k -> new ArrayList<>());
+        List<AnnotationBuilder> list = _qryAnnos.get(meta);
+        if (list == null) {
+            list = new ArrayList<>();
+            _qryAnnos.put(meta, list);
+        }
         list.add(ab);
     }
 
@@ -590,12 +603,14 @@ public class AnnotationPersistenceMetaDataSerializer
                     serializeQuery((QueryMetaData) obj);
                     break;
                 case TYPE_CLASS_QUERIES:
-                    for (QueryMetaData query : ((ClassQueries) obj).getQueries())
+                    for (QueryMetaData query : ((ClassQueries) obj)
+                        .getQueries())
                         serializeQuery(query);
                     break;
                 case TYPE_CLASS_SEQS:
                     if (isMappingMode())
-                        for (SequenceMetaData seq : ((ClassSeqs) obj).getSequences())
+                        for (SequenceMetaData seq : ((ClassSeqs) obj)
+                            .getSequences())
                             serializeSequence(seq);
                     break;
                 default:
@@ -742,9 +757,8 @@ public class AnnotationPersistenceMetaDataSerializer
                 (meta.getDescribedType().getName());
             if (seqs != null) {
                 serializationSort(seqs);
-                for (Object seq : seqs) {
-                    serializeSequence((SequenceMetaData) seq);
-                }
+                for (int i = 0; i < seqs.size(); i++)
+                    serializeSequence((SequenceMetaData) seqs.get(i));
             }
         }
 
@@ -753,9 +767,8 @@ public class AnnotationPersistenceMetaDataSerializer
                 (meta.getDescribedType().getName());
             if (queries != null) {
                 serializationSort(queries);
-                for (Object query : queries) {
-                    serializeQuery((QueryMetaData) query);
-                }
+                for (int i = 0; i < queries.size(); i++)
+                    serializeQuery((QueryMetaData) queries.get(i));
             }
             if (isMappingMode())
                 serializeQueryMappings(meta);

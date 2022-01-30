@@ -44,6 +44,10 @@ import java.util.concurrent.locks.ReentrantLock;
 import javax.transaction.Status;
 import javax.transaction.Synchronization;
 
+import org.apache.commons.collections4.iterators.IteratorChain;
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
+import org.apache.commons.collections4.map.LinkedMap;
+import org.apache.commons.collections4.set.MapBackedSet;
 import org.apache.openjpa.conf.Compatibility;
 import org.apache.openjpa.conf.OpenJPAConfiguration;
 import org.apache.openjpa.datacache.DataCache;
@@ -69,10 +73,6 @@ import org.apache.openjpa.lib.util.ReferenceHashMap;
 import org.apache.openjpa.lib.util.ReferenceHashSet;
 import org.apache.openjpa.lib.util.ReferenceMap;
 import org.apache.openjpa.lib.util.StringUtil;
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap;
-import org.apache.openjpa.lib.util.collections.IteratorChain;
-import org.apache.openjpa.lib.util.collections.LinkedMap;
-import org.apache.openjpa.lib.util.collections.MapBackedSet;
 import org.apache.openjpa.meta.ClassMetaData;
 import org.apache.openjpa.meta.FieldMetaData;
 import org.apache.openjpa.meta.MetaDataRepository;
@@ -432,8 +432,7 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
      * {@link ReferenceMap} with soft values.
      */
     protected Map<?,?> newManagedObjectCache() {
-        return new ReferenceHashMap(
-                AbstractReferenceMap.ReferenceStrength.HARD, AbstractReferenceMap.ReferenceStrength.SOFT);
+        return new ReferenceHashMap(ReferenceStrength.HARD, ReferenceStrength.SOFT);
     }
 
     //////////////////////////////////
@@ -791,10 +790,7 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
     public Map<String, Object> getProperties() {
         Map<String, Object> props = _conf.toProperties(true);
         for (String s : _supportedPropertyNames) {
-            final Object value = Reflection.getValue(this, s, !"CacheFinderQuery".equals(s));
-            if (value != null) {
-                props.put("openjpa." + s, value);
-            }
+            props.put("openjpa." + s, Reflection.getValue(this, s, true));
         }
         return props;
     }
@@ -1214,9 +1210,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
                 if (failed != null && !failed.isEmpty()) {
                     if ((flags & OID_NOVALIDATE) != 0)
                         throw newObjectNotFoundException(failed);
-                    for (Object o : failed) {
-                        _loading.put(o, null);
-                    }
+                    for (Iterator<Object> itr = failed.iterator(); itr.hasNext();)
+                        _loading.put(itr.next(), null);
                 }
             }
 
@@ -1377,14 +1372,16 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             default:
                 throw new UserException(_loc.get("meta-unknownid", cls));
             }
-        } catch (IllegalArgumentException | ClassCastException iae) {
+        } catch (IllegalArgumentException iae) {
         	// OPENJPA-365
         	throw new UserException(_loc.get("bad-id-value", val,
                 val.getClass().getName(), cls)).setCause(iae);
         } catch (OpenJPAException ke) {
             throw ke;
-        }
-        catch (RuntimeException re) {
+        } catch (ClassCastException cce) {
+            throw new UserException(_loc.get("bad-id-value", val,
+                val.getClass().getName(), cls)).setCause(cce);
+        } catch (RuntimeException re) {
             throw new GeneralException(re);
         } finally {
             endOperation();
@@ -1484,8 +1481,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
 
         if (_pending != null) {
             StateManagerImpl sm;
-            for (StateManagerImpl stateManager : _pending) {
-                sm = stateManager;
+            for (Iterator<StateManagerImpl> it = _pending.iterator(); it.hasNext();) {
+                sm = it.next();
                 sm.transactional();
                 if (sm.isDirty())
                     setDirty(sm, true);
@@ -1756,7 +1753,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
                     && (tranStatus != Status.STATUS_COMMITTED))
                 _runtime.setRollbackOnly(cause);
             else if (_log.isTraceEnabled())
-                _log.trace(_loc.get("invalid-tran-status", tranStatus, "setRollbackOnly"));
+                _log.trace(_loc.get("invalid-tran-status", Integer.valueOf(
+                        tranStatus), "setRollbackOnly"));
         } catch (OpenJPAException ke) {
             throw ke;
         } catch (Exception e) {
@@ -1894,8 +1892,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
                 // more info per state
                 SavepointFieldManager fm;
                 StateManagerImpl sm;
-                for (Object value : saved) {
-                    fm = (SavepointFieldManager) value;
+                for (Iterator<?> itr = saved.iterator(); itr.hasNext();) {
+                    fm = (SavepointFieldManager) itr.next();
                     sm = fm.getStateManager();
                     sm.rollbackToSavepoint(fm);
                     oldTransCache.remove(sm);
@@ -1904,8 +1902,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
                     else
                         newTransCache.addClean(sm);
                 }
-                for (Object o : oldTransCache) {
-                    sm = (StateManagerImpl) o;
+                for (Iterator<?> itr = oldTransCache.iterator(); itr.hasNext();) {
+                    sm = (StateManagerImpl) itr.next();
                     sm.rollback();
                     removeFromTransaction(sm);
                 }
@@ -2237,9 +2235,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
         try {
             if (flush) {
                 // call pre store on all currently transactional objs
-                for (Object o : transactional) {
-                    ((StateManagerImpl) o).beforeFlush(reason, _call);
-                }
+                for (Iterator itr = transactional.iterator(); itr.hasNext();)
+                    ((StateManagerImpl) itr.next()).beforeFlush(reason, _call);
                 flushAdditions(transactional, reason);
             }
 
@@ -2248,9 +2245,10 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             // dependents
             _flags |= FLAG_DEREFDELETING;
             if (flush && _derefCache != null && !_derefCache.isEmpty()) {
+                Set<StateManagerImpl> statesMarkedForDelete = new HashSet<>();
                 // mark for delete all elements in deref, otherwise in some situations it
                 // throws ConcurrentModificationException
-                Set<StateManagerImpl> statesMarkedForDelete = new HashSet<>(_derefCache);
+                statesMarkedForDelete.addAll(_derefCache);
                 for (StateManagerImpl state: statesMarkedForDelete) {
                     deleteDeref(state);
                 }
@@ -2320,8 +2318,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             // mark states as flushed
             if (flush) {
                 StateManagerImpl sm;
-                for (Object o : transactional) {
-                    sm = (StateManagerImpl) o;
+                for (Iterator itr = transactional.iterator(); itr.hasNext();) {
+                    sm = (StateManagerImpl) itr.next();
                     try {
                         // the state may have become transient, such as if
                         // it is embedded and the owner has been deleted during
@@ -2338,8 +2336,7 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
                             sm.proxyFields(true, false);
                             _transCache.flushed(sm);
                         }
-                    }
-                    catch (Exception e) {
+                    } catch (Exception e) {
                         exceps = add(exceps, e);
                     }
                 }
@@ -2384,9 +2381,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             toArray(new StateManagerImpl[_transAdditions.size()]);
         _transAdditions = null;
 
-        for (StateManagerImpl state : states) {
-            state.beforeFlush(reason, _call);
-        }
+        for (int i = 0; i < states.length; i++)
+            states[i].beforeFlush(reason, _call);
         return true;
     }
 
@@ -2404,9 +2400,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             toArray(new StateManagerImpl[_derefAdditions.size()]);
         _derefAdditions = null;
 
-        for (StateManagerImpl state : states) {
-            deleteDeref(state);
-        }
+        for (int i = 0; i < states.length; i++)
+            deleteDeref(states[i]);
         return true;
     }
 
@@ -2458,7 +2453,7 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             }
         }
         if (opt && !failed.isEmpty()) {
-            if(_suppressBatchOLELogging){
+            if(_suppressBatchOLELogging == true){
                 return new OptimisticException(_loc.get("broker-suppressing-exceptions",t.length));
             }else{
                 return new OptimisticException(failed, t);
@@ -2533,32 +2528,29 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
         // rely on rollback and commit calls below cause some instances might
         // not be transactional
         if (_derefCache != null && !_derefCache.isEmpty()) {
-            for (StateManagerImpl stateManager : _derefCache) {
-                stateManager.setDereferencedDependent(false, false);
-            }
+            for (Iterator<StateManagerImpl> itr = _derefCache.iterator(); itr.hasNext();)
+                itr.next().setDereferencedDependent(false, false);
             _derefCache = null;
         }
 
         // perform commit or rollback state transitions on each instance
         StateManagerImpl sm;
-        for (Object transState : transStates) {
-            sm = (StateManagerImpl) transState;
+        for (Iterator itr = transStates.iterator(); itr.hasNext();) {
+            sm = (StateManagerImpl) itr.next();
             try {
                 if (rollback) {
                     // tell objects that may have been derefed then flushed
                     // (and therefore deleted) to un-deref
                     sm.setDereferencedDependent(false, false);
                     sm.rollback();
-                }
-                else {
+                } else {
                     if (sm.getPCState() == PCState.PNEWDELETED || sm.getPCState() == PCState.PDELETED) {
                         fireLifecycleEvent(sm.getPersistenceCapable(), null, sm.getMetaData(),
-                                LifecycleEvent.AFTER_DELETE_PERFORMED);
+                            LifecycleEvent.AFTER_DELETE_PERFORMED);
                     }
                     sm.commit();
                 }
-            }
-            catch (RuntimeException re) {
+            } catch (RuntimeException re) {
                 exceps = add(exceps, re);
             }
         }
@@ -2667,9 +2659,9 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
 
         boolean fatal = false;
         Throwable[] t = exceps.toArray(new Throwable[exceps.size()]);
-        for (Throwable throwable : t) {
-            if (throwable instanceof OpenJPAException
-                    && ((OpenJPAException) throwable).isFatal())
+        for (int i = 0; i < t.length; i++) {
+            if (t[i] instanceof OpenJPAException
+                && ((OpenJPAException) t[i]).isFatal())
                 fatal = true;
         }
         OpenJPAException err;
@@ -3118,15 +3110,14 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
         try {
             assertNontransactionalRead();
 
-            for (Object obj : objs) {
-                gatherCascadeRefresh(obj, call);
-            }
+            for (Iterator<?> itr = objs.iterator(); itr.hasNext();)
+                gatherCascadeRefresh(itr.next(), call);
             if (_operating.isEmpty())
-                return;
+            	return;
             if (_operating.size() == 1)
-                refreshInternal(_operating.iterator().next(), call);
+            	refreshInternal(_operating.iterator().next(), call);
             else
-                refreshInternal(_operating, call);
+            	refreshInternal(_operating, call);
         } finally {
             endOperation();
         }
@@ -3187,35 +3178,33 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             Collection<OpenJPAStateManager> load = null;
             StateManagerImpl sm;
             Object obj;
-            for (Object o : objs) {
-                obj = o;
+            for (Iterator<?> itr = objs.iterator(); itr.hasNext();) {
+                obj = itr.next();
                 if (obj == null)
                     continue;
 
                 try {
                     sm = getStateManagerImpl(obj, true);
                     if ((processArgument(OpCallbacks.OP_REFRESH, obj, sm, call)
-                            & OpCallbacks.ACT_RUN) == 0)
+                        & OpCallbacks.ACT_RUN) == 0)
                         continue;
 
                     if (sm != null) {
                         if (sm.isDetached())
                             throw newDetachedException(obj, "refresh");
                         else if (sm.beforeRefresh(true)) {
-                            if (load == null)
-                                load = new ArrayList<>(objs.size());
+                        	if (load == null)
+                        		load = new ArrayList<>(objs.size());
                             load.add(sm);
                         }
                         int level = _fc.getReadLockLevel();
                         int timeout = _fc.getLockTimeout();
                         _lm.refreshLock(sm, level, timeout, null);
                         sm.readLocked(level, level);
-                    }
-                    else if (assertPersistenceCapable(obj).pcIsDetached()
-                            == Boolean.TRUE)
+                    } else if (assertPersistenceCapable(obj).pcIsDetached()
+                        == Boolean.TRUE)
                         throw newDetachedException(obj, "refresh");
-                }
-                catch (OpenJPAException ke) {
+                } catch (OpenJPAException ke) {
                     exceps = add(exceps, ke);
                 }
             }
@@ -3229,17 +3218,16 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
 
                 // perform post-refresh transitions and make sure all fetch
                 // group fields are loaded
-                for (OpenJPAStateManager openJPAStateManager : load) {
-                    sm = (StateManagerImpl) openJPAStateManager;
+                for (Iterator<OpenJPAStateManager> itr = load.iterator(); itr.hasNext();) {
+                    sm = (StateManagerImpl) itr.next();
                     if (failed != null && failed.contains(sm.getId()))
                         continue;
 
                     try {
                         sm.afterRefresh();
                         sm.load(_fc, StateManagerImpl.LOAD_FGS, null, null,
-                                false);
-                    }
-                    catch (OpenJPAException ke) {
+                            false);
+                    } catch (OpenJPAException ke) {
                         exceps = add(exceps, ke);
                     }
                 }
@@ -3319,15 +3307,15 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             Collection<OpenJPAStateManager> load = null;
             StateManagerImpl sm;
             Collection<StateManagerImpl> sms = new ArrayList<>(objs.size());
-            for (Object o : objs) {
-                obj = o;
+            for (Iterator<?> itr = objs.iterator(); itr.hasNext();) {
+                obj = itr.next();
                 if (obj == null)
                     continue;
 
                 try {
                     sm = getStateManagerImpl(obj, true);
                     if ((processArgument(OpCallbacks.OP_RETRIEVE, obj, sm, call)
-                            & OpCallbacks.ACT_RUN) == 0)
+                        & OpCallbacks.ACT_RUN) == 0)
                         continue;
 
                     if (sm != null) {
@@ -3341,12 +3329,10 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
                                 load.add(sm);
                             }
                         }
-                    }
-                    else if (assertPersistenceCapable(obj).pcIsDetached()
-                            == Boolean.TRUE)
+                    } else if (assertPersistenceCapable(obj).pcIsDetached()
+                        == Boolean.TRUE)
                         throw newDetachedException(obj, "retrieve");
-                }
-                catch (UserException ue) {
+                } catch (UserException ue) {
                     exceps = add(exceps, ue);
                 }
             }
@@ -3362,18 +3348,17 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             }
 
             // retrieve all non-failed instances
-            for (StateManagerImpl stateManager : sms) {
-                sm = stateManager;
+            for (Iterator<StateManagerImpl> itr = sms.iterator(); itr.hasNext();) {
+                sm = itr.next();
                 if (failed != null && failed.contains(sm.getId()))
                     continue;
 
                 int mode = (dfgOnly) ? StateManagerImpl.LOAD_FGS
-                        : StateManagerImpl.LOAD_ALL;
+                    : StateManagerImpl.LOAD_ALL;
                 try {
                     sm.beforeRead(-1);
                     sm.load(_fc, mode, null, null, false);
-                }
-                catch (OpenJPAException ke) {
+                } catch (OpenJPAException ke) {
                     exceps = add(exceps, ke);
                 }
             }
@@ -3430,8 +3415,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             // evict all PClean and PNonTrans objects
             Collection<StateManagerImpl> c = getManagedStates();
             StateManagerImpl sm;
-            for (StateManagerImpl stateManager : c) {
-                sm = stateManager;
+            for (Iterator<StateManagerImpl> itr = c.iterator(); itr.hasNext();) {
+                sm = itr.next();
                 if (sm.isPersistent() && !sm.isDirty())
                     evict(sm.getManagedInstance(), call);
             }
@@ -3470,13 +3455,13 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             Collection<StateManagerImpl> c = getManagedStates();
             StateManagerImpl sm;
             Class<?> cls;
-            for (StateManagerImpl stateManager : c) {
-                sm = stateManager;
+            for (Iterator<StateManagerImpl> itr = c.iterator(); itr.hasNext();) {
+                sm = itr.next();
                 if (sm.isPersistent() && !sm.isDirty()) {
                     cls = sm.getMetaData().getDescribedType();
                     if (cls == extent.getElementType()
-                            || (extent.hasSubclasses()
-                            && extent.getElementType().isAssignableFrom(cls)))
+                        || (extent.hasSubclasses()
+                        && extent.getElementType().isAssignableFrom(cls)))
                         evict(sm.getManagedInstance(), call);
                 }
             }
@@ -3579,7 +3564,7 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
     }
 
     private void detachAllInternal(OpCallbacks call) {
-        if(_conf.getDetachStateInstance().getLiteAutoDetach()){
+        if(_conf.getDetachStateInstance().getLiteAutoDetach() == true){
             detachAllInternalLite();
             return;
         }
@@ -3749,15 +3734,15 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             ClassMetaData meta;
             Collection<StateManagerImpl> sms = new LinkedHashSet<>(objs.size());
             List<Exception> exceps = null;
-            for (Object o : objs) {
-                obj = o;
+            for (Iterator<?> itr = objs.iterator(); itr.hasNext();) {
+                obj = itr.next();
                 if (obj == null)
                     continue;
 
                 try {
                     sm = getStateManagerImpl(obj, true);
                     if ((processArgument(OpCallbacks.OP_TRANSACTIONAL, obj, sm,
-                            call) & OpCallbacks.ACT_RUN) == 0)
+                        call) & OpCallbacks.ACT_RUN) == 0)
                         continue;
 
                     if (sm == null) {
@@ -3765,11 +3750,10 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
                         meta = _repo.getMetaData(obj.getClass(), _loader, true);
 
                         sm = newStateManagerImpl
-                                (StateManagerId.newInstance(this), meta);
+                            (StateManagerId.newInstance(this), meta);
                         sm.initialize(assertPersistenceCapable(obj),
-                                PCState.TCLEAN);
-                    }
-                    else if (sm.isPersistent()) {
+                            PCState.TCLEAN);
+                    } else if (sm.isPersistent()) {
                         assertActiveTransaction();
                         sms.add(sm);
                         if (sm.getPCState() == PCState.HOLLOW) {
@@ -3858,16 +3842,15 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
         List<Exception> exceps) {
         // make instances transactional and make sure they are loaded
         StateManagerImpl sm;
-        for (Object o : sms) {
-            sm = (StateManagerImpl) o;
+        for (Iterator<?> itr = sms.iterator(); itr.hasNext();) {
+            sm = (StateManagerImpl) itr.next();
             if (failed != null && failed.contains(sm.getId()))
                 continue;
 
             try {
                 sm.transactional();
                 sm.load(_fc, StateManagerImpl.LOAD_FGS, null, null, false);
-            }
-            catch (OpenJPAException ke) {
+            } catch (OpenJPAException ke) {
                 exceps = add(exceps, ke);
             }
         }
@@ -3889,7 +3872,7 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
         try {
             ExtentImpl extent = new ExtentImpl(this, type, subclasses, fetch);
             if (_extents == null)
-                _extents = new ReferenceHashSet(AbstractReferenceMap.ReferenceStrength.WEAK);
+                _extents = new ReferenceHashSet(ReferenceStrength.WEAK);
             _extents.add(extent);
 
             return extent;
@@ -3943,7 +3926,7 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
 
             // track queries
             if (_queries == null)
-                _queries = new ReferenceHashSet(AbstractReferenceMap.ReferenceStrength.WEAK);
+                _queries = new ReferenceHashSet(ReferenceStrength.WEAK);
             _queries.add(q);
             return q;
         } catch (OpenJPAException ke) {
@@ -4104,23 +4087,22 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             Collection<StateManagerImpl> sms = new LinkedHashSet<>(objs.size());
             Object obj;
             StateManagerImpl sm;
-            for (Object o : objs) {
-                obj = o;
+            for (Iterator<?> itr = objs.iterator(); itr.hasNext();) {
+                obj = itr.next();
                 if (obj == null)
                     continue;
 
                 sm = getStateManagerImpl(obj, true);
                 if ((processArgument(OpCallbacks.OP_LOCK, obj, sm, call)
-                        & OpCallbacks.ACT_RUN) == 0)
+                    & OpCallbacks.ACT_RUN) == 0)
                     continue;
                 if (sm != null && sm.isPersistent())
                     sms.add(sm);
             }
 
             _lm.lockAll(sms, level, timeout, null);
-            for (StateManagerImpl stateManager : sms) {
-                stateManager.readLocked(level, level);
-            }
+            for (Iterator<StateManagerImpl> itr = sms.iterator(); itr.hasNext();)
+                itr.next().readLocked(level, level);
         } catch (OpenJPAException ke) {
             throw ke;
         } catch (RuntimeException re) {
@@ -4616,12 +4598,11 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
 
         if (_extents != null) {
             Extent e;
-            for (Object extent : _extents) {
-                e = (Extent) extent;
+            for (Iterator<?> itr = _extents.iterator(); itr.hasNext();) {
+                e = (Extent) itr.next();
                 try {
                     e.closeAll();
-                }
-                catch (RuntimeException re) {
+                } catch (RuntimeException re) {
                 }
             }
             _extents = null;
@@ -4799,7 +4780,7 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             return true;
         Boolean detached = pc.pcIsDetached();
         if (detached != null)
-            return detached;
+            return detached.booleanValue();
 
         if(!find){
             return false;
@@ -5059,13 +5040,11 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
             // big by some
             Set copy = new LinkedHashSet(size());
             if (_dirty != null)
-                for (StateManagerImpl stateManager : _dirty) {
-                    copy.add(stateManager);
-                }
+                for (Iterator<StateManagerImpl> itr = _dirty.iterator(); itr.hasNext();)
+                    copy.add(itr.next());
             if (_clean != null)
-                for (StateManagerImpl stateManager : _clean) {
-                    copy.add(stateManager);
-                }
+                for (Iterator<StateManagerImpl> itr = _clean.iterator(); itr.hasNext();)
+                    copy.add(itr.next());
             return copy;
         }
 
@@ -5096,7 +5075,7 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
 
         private boolean addCleanInternal(StateManagerImpl sm) {
             if (_clean == null)
-                _clean = new ReferenceHashSet(AbstractReferenceMap.ReferenceStrength.SOFT);
+                _clean = new ReferenceHashSet(ReferenceStrength.SOFT);
             return _clean.add(sm);
         }
 
@@ -5144,8 +5123,8 @@ public class BrokerImpl implements Broker, FindCallbacks, Cloneable, Serializabl
 
         @Override
         public boolean containsAll(Collection coll) {
-            for (Object o : coll)
-                if (!contains(o))
+            for (Iterator<?> itr = coll.iterator(); itr.hasNext();)
+                if (!contains(itr.next()))
                     return false;
             return true;
         }

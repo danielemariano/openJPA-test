@@ -39,7 +39,8 @@ import javax.transaction.Synchronization;
 import javax.transaction.Transaction;
 import javax.transaction.TransactionManager;
 
-import org.apache.openjpa.lib.util.collections.AbstractReferenceMap.ReferenceStrength;
+import org.apache.commons.collections4.map.AbstractReferenceMap.ReferenceStrength;
+import org.apache.commons.collections4.set.MapBackedSet;
 import org.apache.openjpa.audit.Auditor;
 import org.apache.openjpa.conf.BrokerValue;
 import org.apache.openjpa.conf.OpenJPAConfiguration;
@@ -60,7 +61,6 @@ import org.apache.openjpa.lib.log.Log;
 import org.apache.openjpa.lib.util.J2DoPrivHelper;
 import org.apache.openjpa.lib.util.Localizer;
 import org.apache.openjpa.lib.util.StringUtil;
-import org.apache.openjpa.lib.util.collections.MapBackedSet;
 import org.apache.openjpa.lib.util.concurrent.ConcurrentReferenceHashSet;
 import org.apache.openjpa.meta.MetaDataModes;
 import org.apache.openjpa.meta.MetaDataRepository;
@@ -83,7 +83,7 @@ public abstract class AbstractBrokerFactory implements BrokerFactory {
 
     // static mapping of configurations to pooled broker factories
     private static final Map<Object,AbstractBrokerFactory> _pool =
-       Collections.synchronizedMap(new HashMap<>());
+       Collections.synchronizedMap(new HashMap<Object,AbstractBrokerFactory>());
 
     // configuration
     private final OpenJPAConfiguration _conf;
@@ -253,8 +253,9 @@ public abstract class AbstractBrokerFactory implements BrokerFactory {
         }
 
         if (_transactionListeners != null && !_transactionListeners.isEmpty()) {
-            for (Object transactionListener : _transactionListeners) {
-                broker.addTransactionListener(transactionListener);
+            for (Iterator<Object> itr = _transactionListeners.iterator();
+                itr.hasNext(); ) {
+                broker.addTransactionListener(itr.next());
             }
         }
     }
@@ -286,7 +287,8 @@ public abstract class AbstractBrokerFactory implements BrokerFactory {
                 _pcClassNames = Collections.emptyList();
             else {
                 Collection<String> c = new ArrayList<>(clss.size());
-                for (Class<?> cls : clss) {
+                for (Iterator<Class<?>> itr = clss.iterator(); itr.hasNext();) {
+                    Class<?> cls = itr.next();
                     c.add(cls.getName());
                     if (needsSub(cls))
                         toRedefine.add(cls);
@@ -894,7 +896,7 @@ public abstract class AbstractBrokerFactory implements BrokerFactory {
 
         // Don't get a MetaDataRepository yet if not preloading because it is possible that someone has extended the MDR
         // and the extension hasn't been plugged in yet.
-        if (MetaDataRepository.needsPreload(_conf)) {
+        if (MetaDataRepository.needsPreload(_conf) == true) {
             // Don't catch any exceptions here because we want to fail-fast if something bad happens when we're
             // preloading.
             MetaDataRepository mdr = _conf.getMetaDataRepositoryInstance();

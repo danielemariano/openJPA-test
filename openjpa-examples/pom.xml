@@ -28,7 +28,7 @@
     <parent>
         <groupId>org.apache.openjpa</groupId>
         <artifactId>openjpa-parent</artifactId>
-        <version>3.2.1-SNAPSHOT</version>
+        <version>3.1.3-SNAPSHOT</version>
     </parent>
 
     <artifactId>openjpa-examples</artifactId>
@@ -39,7 +39,7 @@
 
     <properties>
         <openjpa.Log>DefaultLevel=WARN</openjpa.Log>
-        <checkstyle.suppressions.location>${project.basedir}${file.separator}..${file.separator}openjpa-project${file.separator}suppressions.xml</checkstyle.suppressions.location>
+        <checkstyle.suppressions.location>${project.basedir}${file.separator}..${file.separator}..${file.separator}openjpa-project${file.separator}suppressions.xml</checkstyle.suppressions.location>
     </properties>
 
     <modules>

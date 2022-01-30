@@ -423,9 +423,9 @@ public class ClassMetaData
             else {
                 List<ClassMetaData> mapped =
                 	new ArrayList<>(subs.length);
-                for (ClassMetaData sub : subs)
-                    if (sub.isMapped())
-                        mapped.add(sub);
+                for (int i = 0; i < subs.length; i++)
+                    if (subs[i].isMapped())
+                        mapped.add(subs[i]);
                 _mapSubMetas = mapped.toArray
                     (_repos.newClassMetaDataArray(mapped.size()));
             }
@@ -595,7 +595,7 @@ public class ClassMetaData
      */
     public boolean isObjectIdTypeShared() {
         if (_objectIdShared != null)
-            return _objectIdShared;
+            return _objectIdShared.booleanValue();
         if (_super != null)
             return getPCSuperclassMetaData().isObjectIdTypeShared();
         return isOpenJPAIdentity();
@@ -612,7 +612,7 @@ public class ClassMetaData
             _openjpaId = (OpenJPAId.class.isAssignableFrom(cls)) ? Boolean.TRUE
                 : Boolean.FALSE;
         }
-        return _openjpaId;
+        return _openjpaId.booleanValue();
     }
 
     /**
@@ -769,7 +769,7 @@ public class ClassMetaData
             else
                 _extent = Boolean.TRUE;
         }
-        return _extent;
+        return _extent.booleanValue();
     }
 
     /**
@@ -791,7 +791,7 @@ public class ClassMetaData
             else
                 _embedded = Boolean.FALSE;
         }
-        return _embedded;
+        return _embedded.booleanValue();
     }
 
     /**
@@ -831,7 +831,7 @@ public class ClassMetaData
     public boolean isManagedInterface() {
         if (!_type.isInterface())
             return false;
-        return _interface == null ? false : _interface;
+        return _interface == null ? false : _interface.booleanValue();
     }
 
     /**
@@ -903,7 +903,11 @@ public class ClassMetaData
     public void setInterfacePropertyAlias(Class<?> iface, String orig,
         String local) {
         synchronized (_ifaceMap) {
-            Map<String, String> fields = _ifaceMap.computeIfAbsent(iface, k -> new HashMap<>());
+            Map<String,String> fields = _ifaceMap.get(iface);
+            if (fields == null) {
+                fields = new HashMap<>();
+                _ifaceMap.put(iface, fields);
+            }
             if (fields.containsKey(orig))
                 throw new MetaDataException(_loc.get("duplicate-iface-alias",
                     this, orig, local));
@@ -991,9 +995,9 @@ public class ClassMetaData
             Field[] fields = AccessController.doPrivileged(
                 J2DoPrivHelper.getDeclaredFieldsAction(_type));
             Set<String> names = new HashSet<>();
-            for (Field value : fields)
-                if (Modifier.isStatic(value.getModifiers()))
-                    names.add(value.getName());
+            for (int i = 0; i < fields.length; i++)
+                if (Modifier.isStatic(fields[i].getModifiers()))
+                    names.add(fields[i].getName());
             _staticFields = names;
         }
         if (_staticFields.contains(field))
@@ -1047,7 +1051,7 @@ public class ClassMetaData
             }
             List<FieldMetaData> res = new ArrayList<>();
             for (FieldMetaData fmd : _allFields) {
-                if(fmd.isLRS()){
+                if(fmd.isLRS()==true){
                     res.add(fmd);
                 }
             }
@@ -1123,6 +1127,7 @@ public class ClassMetaData
         if (_fields == null) {
             List<FieldMetaData> fields =
             	new ArrayList<>(_fieldMap.size());
+            ;
             for (FieldMetaData fmd : _fieldMap.values()) {
                 if (fmd.getManagement() != FieldMetaData.MANAGE_NONE) {
                     fmd.setDeclaredIndex(fields.size());
@@ -1149,8 +1154,8 @@ public class ClassMetaData
         if (_allPKFields == null) {
             FieldMetaData[] fields = getFields();
             int num = 0;
-            for (FieldMetaData fieldMetaData : fields)
-                if (fieldMetaData.isPrimaryKey())
+            for (int i = 0; i < fields.length; i++)
+                if (fields[i].isPrimaryKey())
                     num++;
 
             if (num == 0)
@@ -1158,10 +1163,10 @@ public class ClassMetaData
             else {
                 FieldMetaData[] pks = _repos.newFieldMetaDataArray(num);
                 num = 0;
-                for (FieldMetaData field : fields) {
-                    if (field.isPrimaryKey()) {
-                        field.setPrimaryKeyIndex(num);
-                        pks[num] = field;
+                for (int i = 0; i < fields.length; i++) {
+                    if (fields[i].isPrimaryKey()) {
+                        fields[i].setPrimaryKeyIndex(num);
+                        pks[num] = fields[i];
                         num++;
                     }
                 }
@@ -1179,15 +1184,15 @@ public class ClassMetaData
         if (_allDFGFields == null) {
             FieldMetaData[] fields = getFields();
             int num = 0;
-            for (FieldMetaData fieldMetaData : fields)
-                if (fieldMetaData.isInDefaultFetchGroup())
+            for (int i = 0; i < fields.length; i++)
+                if (fields[i].isInDefaultFetchGroup())
                     num++;
 
             FieldMetaData[] dfgs = _repos.newFieldMetaDataArray(num);
             num = 0;
-            for (FieldMetaData field : fields)
-                if (field.isInDefaultFetchGroup())
-                    dfgs[num++] = field;
+            for (int i = 0; i < fields.length; i++)
+                if (fields[i].isInDefaultFetchGroup())
+                    dfgs[num++] = fields[i];
             _allDFGFields = dfgs;
         }
         return _allDFGFields;
@@ -1285,6 +1290,7 @@ public class ClassMetaData
     public FieldMetaData[] getDeclaredUnmanagedFields() {
         if (_unmgdFields == null) {
             List<FieldMetaData> unmanaged = new ArrayList<>(3);
+            ;
             for (FieldMetaData field : _fieldMap.values()) {
                 if (field.getManagement() == FieldMetaData.MANAGE_NONE)
                     unmanaged.add(field);
@@ -1373,11 +1379,11 @@ public class ClassMetaData
         if (isMapped() && sup != null) {
             // redefine all unmapped superclass fields
             FieldMetaData[] sups = sup.getFields();
-            for (FieldMetaData fieldMetaData : sups) {
-                if ((force || !fieldMetaData.getDefiningMetaData().isMapped())
-                        && getDefinedSuperclassField(fieldMetaData.getName()) == null) {
-                    addDefinedSuperclassField(fieldMetaData.getName(),
-                            fieldMetaData.getDeclaredType(), fieldMetaData.getDeclaringType());
+            for (int i = 0; i < sups.length; i++) {
+                if ((force || !sups[i].getDefiningMetaData().isMapped())
+                    && getDefinedSuperclassField(sups[i].getName()) == null) {
+                    addDefinedSuperclassField(sups[i].getName(),
+                        sups[i].getDeclaredType(), sups[i].getDeclaringType());
                 }
             }
         }
@@ -1580,7 +1586,7 @@ public class ClassMetaData
             else
                 _detachable = Boolean.FALSE;
         }
-        return _detachable;
+        return _detachable.booleanValue();
     }
 
     /**
@@ -1854,12 +1860,12 @@ public class ClassMetaData
             if (embed) {
                 // embedded instance always redefine all superclass fields
                 FieldMetaData[] sups = sup.getFields();
-                for (FieldMetaData fieldMetaData : sups) {
+                for (int i = 0; i < sups.length; i++) {
                     if (_supFieldMap == null
-                            || !_supFieldMap.containsKey(fieldMetaData.getName())) {
-                        addDefinedSuperclassField(fieldMetaData.getName(),
-                                fieldMetaData.getDeclaredType(),
-                                fieldMetaData.getDeclaringType());
+                        || !_supFieldMap.containsKey(sups[i].getName())) {
+                        addDefinedSuperclassField(sups[i].getName(),
+                            sups[i].getDeclaredType(),
+                            sups[i].getDeclaringType());
                     }
                 }
             }
@@ -2139,7 +2145,7 @@ public class ClassMetaData
                 }
             }
         }
-        return _useIdClassFromParent;
+        return _useIdClassFromParent.booleanValue();
     }
 
     /**
@@ -2202,13 +2208,13 @@ public class ClassMetaData
         Field f;
         Method m;
         Class<?> c;
-        for (FieldMetaData fmd : fmds) {
-            switch (fmd.getDeclaredTypeCode()) {
+        for (int i = 0; i < fmds.length; i++) {
+            switch (fmds[i].getDeclaredTypeCode()) {
                 case JavaTypes.ARRAY:
-                    c = fmd.getDeclaredType().getComponentType();
+                    c = fmds[i].getDeclaredType().getComponentType();
                     if (c == byte.class || c == Byte.class
-                            || c == char.class || c == Character.class) {
-                        c = fmd.getDeclaredType();
+                        || c == char.class || c == Character.class) {
+                        c = fmds[i].getDeclaredType();
                         break;
                     }
                     // else no break
@@ -2217,27 +2223,26 @@ public class ClassMetaData
                 case JavaTypes.MAP:
                 case JavaTypes.OID: // we're validating embedded fields
                     throw new MetaDataException(_loc.get("bad-pk-type",
-                            fmd));
+                        fmds[i]));
                 default:
-                    c = fmd.getObjectIdFieldType();
+                    c = fmds[i].getObjectIdFieldType();
             }
 
-            if (AccessCode.isField(fmd.getAccessType())) {
-                f = Reflection.findField(oid, fmd.getName(), false);
+            if (AccessCode.isField(fmds[i].getAccessType())) {
+                f = Reflection.findField(oid, fmds[i].getName(), false);
                 if (f == null || !f.getType().isAssignableFrom(c))
                     throw new MetaDataException(_loc.get("invalid-id",
-                            _type, fmd.getName()));
-            }
-            else if (AccessCode.isProperty(fmd.getAccessType())) {
-                m = Reflection.findGetter(oid, fmd.getName(), false);
+                        _type, fmds[i].getName()));
+            } else if (AccessCode.isProperty(fmds[i].getAccessType())) {
+                m = Reflection.findGetter(oid, fmds[i].getName(), false);
                 if (m == null || !m.getReturnType().isAssignableFrom(c))
                     throw new MetaDataException(_loc.get("invalid-id",
-                            _type, fmd.getName()));
-                m = Reflection.findSetter(oid, fmd.getName(),
-                        fmd.getObjectIdFieldType(), false);
+                        _type, fmds[i].getName()));
+                m = Reflection.findSetter(oid, fmds[i].getName(),
+                    fmds[i].getObjectIdFieldType(), false);
                 if (m == null || m.getReturnType() != void.class)
                     throw new MetaDataException(_loc.get("invalid-id",
-                            _type, fmd.getName()));
+                        _type, fmds[i].getName()));
             }
         }
     }
@@ -2247,9 +2252,9 @@ public class ClassMetaData
      */
     private void validateNoPKFields() {
         FieldMetaData[] fields = getDeclaredFields();
-        for (FieldMetaData field : fields)
-            if (field.isPrimaryKey())
-                throw new MetaDataException(_loc.get("bad-pk", field));
+        for (int i = 0; i < fields.length; i++)
+            if (fields[i].isPrimaryKey())
+                throw new MetaDataException(_loc.get("bad-pk", fields[i]));
     }
 
     /**
@@ -2326,13 +2331,13 @@ public class ClassMetaData
             ClassMetaData sup = getPCSuperclassMetaData();
             if (sup != null) {
                 FetchGroup[] supFGs = sup.getCustomFetchGroups();
-                for (FetchGroup supFG : supFGs) {
-                    fgs.put(supFG.getName(), supFG);
+                for (int i = 0; i < supFGs.length; i++) {
+                    fgs.put(supFGs[i].getName(), supFGs[i]);
                 }
             }
             FetchGroup[] decs = getDeclaredFetchGroups();
-            for (FetchGroup dec : decs) {
-                fgs.put(dec.getName(), dec);
+            for (int i = 0; i < decs.length; i++) {
+                fgs.put(decs[i].getName(), decs[i]);
             }
             // remove standard groups
             fgs.remove(FetchGroup.NAME_DEFAULT);
@@ -2558,22 +2563,22 @@ public class ClassMetaData
         // add copies of declared fields; other defined fields already copied
         FieldMetaData[] fields = meta.getDeclaredFields();
         FieldMetaData field;
-        for (FieldMetaData fieldMetaData : fields) {
-            field = getDeclaredField(fieldMetaData.getName());
+        for (int i = 0; i < fields.length; i++) {
+            field = getDeclaredField(fields[i].getName());
             if (field == null)
-                field = addDeclaredField(fieldMetaData.getName(),
-                        fieldMetaData.getDeclaredType());
+                field = addDeclaredField(fields[i].getName(),
+                    fields[i].getDeclaredType());
             field.setDeclaredIndex(-1);
             field.setIndex(-1);
-            field.copy(fieldMetaData);
+            field.copy(fields[i]);
         }
 
         // copy fetch groups
         FetchGroup[] fgs = meta.getDeclaredFetchGroups();
         FetchGroup fg;
-        for (FetchGroup fetchGroup : fgs) {
-            fg = addDeclaredFetchGroup(fetchGroup.getName());
-            fg.copy(fetchGroup);
+        for (int i = 0; i < fgs.length; i++) {
+            fg = addDeclaredFetchGroup(fgs[i].getName());
+            fg.copy(fgs[i]);
         }
 
         // copy interface re-mapping
@@ -2702,14 +2707,14 @@ public class ClassMetaData
      */
     public boolean hasAbstractPKField() {
         if (_hasAbstractPKField != null) {
-            return _hasAbstractPKField;
+            return _hasAbstractPKField.booleanValue();
         }
 
         // Default to false, set to true only if this type is abstract and
         // declares a PKField.
         Boolean temp = Boolean.FALSE;
 
-        if (isAbstract()) {
+        if (isAbstract() == true) {
             FieldMetaData[] declaredFields = getDeclaredFields();
             if (declaredFields != null && declaredFields.length != 0) {
                 for (FieldMetaData fmd : declaredFields) {
@@ -2722,7 +2727,7 @@ public class ClassMetaData
         }
         _hasAbstractPKField = temp;
 
-        return _hasAbstractPKField;
+        return _hasAbstractPKField.booleanValue();
     }
 
     /**
@@ -2737,7 +2742,7 @@ public class ClassMetaData
      */
     public boolean hasPKFieldsFromAbstractClass() {
         if (_hasPKFieldsFromAbstractClass != null) {
-            return _hasPKFieldsFromAbstractClass;
+            return _hasPKFieldsFromAbstractClass.booleanValue();
         }
 
         // Default to FALSE, until proven true.
@@ -2763,7 +2768,7 @@ public class ClassMetaData
         }
         _hasPKFieldsFromAbstractClass = temp;
 
-        return _hasPKFieldsFromAbstractClass;
+        return _hasPKFieldsFromAbstractClass.booleanValue();
     }
 
     /**
@@ -2801,7 +2806,7 @@ public class ClassMetaData
             int idsSize = ids.size();
             int[] temp = new int[idsSize];
             for (int i = 0; i < idsSize; i++) {
-                temp[i] = ids.get(i);
+                temp[i] = ids.get(i).intValue();
             }
             _pkAndNonPersistentManagedFmdIndexes = temp;
         }
@@ -2819,7 +2824,7 @@ public class ClassMetaData
             }
             inverseManagedFields = res;
         }
-        return inverseManagedFields;
+        return inverseManagedFields.booleanValue();
     }
 
     public List<FieldMetaData> getMappyedByIdFields() {

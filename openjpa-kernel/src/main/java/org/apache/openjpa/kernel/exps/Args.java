@@ -89,9 +89,8 @@ class Args
     @Override
     public void acceptVisit(ExpressionVisitor visitor) {
         visitor.enter(this);
-        for (Value arg : _args) {
-            ((Val) arg).acceptVisit(visitor);
-        }
+        for (int i = 0; i < _args.size(); i++)
+            ((Val) _args.get(i)).acceptVisit(visitor);
         visitor.exit(this);
     }
 }

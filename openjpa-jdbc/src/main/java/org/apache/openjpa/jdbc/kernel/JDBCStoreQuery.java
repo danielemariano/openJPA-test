@@ -318,10 +318,10 @@ public class JDBCStoreQuery
             return new ProjectionResultObjectProvider(union, exps, states, ctx);
 
         if (paged != null)
-            for (BitSet bitSet : paged)
-                if (bitSet != null)
+            for (int i = 0; i < paged.length; i++)
+                if (paged[i] != null)
                     return new PagingResultObjectProvider(union, mappings,
-                            _store, ctx.fetch, paged, Long.MAX_VALUE);
+                        _store, ctx.fetch, paged, Long.MAX_VALUE);
 
         return new InstanceResultObjectProvider(union, mappings[0], _store,
             ctx.fetch);
@@ -420,7 +420,8 @@ public class JDBCStoreQuery
             return null;
         int size = selectFrom.size();
         List retList = new ArrayList(size);
-        for (Object obj : selectFrom) {
+        for (int i = 0; i < size; i++) {
+            Object obj = selectFrom.get(i);
             if (!exSelectFrom.contains(obj))
                 retList.add(obj);
         }
@@ -464,9 +465,9 @@ public class JDBCStoreQuery
 
         // recurse on immediate subclasses
         ClassMapping[] subMappings = mapping.getJoinablePCSubclassMappings();
-        for (ClassMapping subMapping : subMappings)
-            if (subMapping.getJoinablePCSuperclassMapping() == mapping)
-                addSubclasses(subMapping, subs);
+        for (int i = 0; i < subMappings.length; i++)
+            if (subMappings[i].getJoinablePCSuperclassMapping() == mapping)
+                addSubclasses(subMappings[i], subs);
     }
 
     /**
@@ -474,8 +475,8 @@ public class JDBCStoreQuery
      */
     private static boolean hasVerticalSubclasses(ClassMapping mapping) {
         ClassMapping[] subs = mapping.getJoinablePCSubclassMappings();
-        for (ClassMapping sub : subs)
-            if (sub.getStrategy() instanceof VerticalClassStrategy)
+        for (int i = 0; i < subs.length; i++)
+            if (subs[i].getStrategy() instanceof VerticalClassStrategy)
                 return true;
         return false;
     }
@@ -527,16 +528,16 @@ public class JDBCStoreQuery
         // an update query; otherwise, this is a delete statement
         boolean isUpdate = updates != null && updates.size() > 0;
 
-        for (ClassMapping mapping : mappings) {
-            if (!isSingleTableMapping(mapping, subclasses) && !isUpdate)
+        for (int i = 0; i < mappings.length; i++) {
+            if (!isSingleTableMapping(mappings[i], subclasses) && !isUpdate)
                 return null;
 
             if (!isUpdate) {
                 // if there are any delete callbacks, we need to
                 // execute in-memory so the callbacks are invoked
                 LifecycleEventManager mgr = ctx.getStoreContext().getBroker()
-                        .getLifecycleEventManager();
-                if (mgr.hasDeleteListeners(null, mapping))
+                    .getLifecycleEventManager();
+                if (mgr.hasDeleteListeners(null, mappings[i]))
                     return null;
             }
         }
@@ -581,29 +582,24 @@ public class JDBCStoreQuery
         long count = 0;
         try {
             PreparedStatement stmnt;
-            for (SQLBuffer sqlBuffer : sql) {
+            for (int i = 0; i < sql.length; i++) {
                 stmnt = null;
                 try {
-                    stmnt = prepareStatement(conn, sqlBuffer);
+                    stmnt = prepareStatement(conn, sql[i]);
                     dict.setTimeouts(stmnt, fetch, true);
-                    count += executeUpdate(conn, stmnt, sqlBuffer, isUpdate);
-                }
-                catch (SQLException se) {
-                    throw SQLExceptions.getStore(se, sqlBuffer.getSQL(),
-                            _store.getDBDictionary());
-                }
-                finally {
+                    count += executeUpdate(conn, stmnt, sql[i], isUpdate);
+                } catch (SQLException se) {
+                    throw SQLExceptions.getStore(se, sql[i].getSQL(),
+                        _store.getDBDictionary());
+                } finally {
                     if (stmnt != null)
-                        try {
-                            stmnt.close();
-                        }
-                        catch (SQLException se) {
-                        }
+                        try { stmnt.close(); } catch (SQLException se) {}
                 }
             }
         } finally {
             try {
-                conn.close();
+            	if (conn.getAutoCommit())
+            		conn.close();
             } catch (SQLException se) {
 
             }
@@ -654,8 +650,8 @@ public class JDBCStoreQuery
      * use multiple tables.
      */
     private Table getTable(FieldMapping[] fields, Table table) {
-        for (FieldMapping field : fields) {
-            table = getTable(field, table);
+        for (int i = 0; i < fields.length; i++) {
+            table = getTable(fields[i], table);
             if (table == INVALID)
                 break;
         }
@@ -919,7 +915,7 @@ public class JDBCStoreQuery
         Boolean where = trimVal.getWhere();
         if (where == null) { //trim both
             return trimLeading(trimTrailing(valStr, trimCharObj), trimCharObj);
-        } else if (where) { // trim leading
+        } else if (where.booleanValue()) { // trim leading
             return trimLeading(valStr, trimCharObj);
         } else { // trim trailing
             return trimTrailing(valStr, trimCharObj);
@@ -968,13 +964,13 @@ public class JDBCStoreQuery
         Object val = getValue(absVal.getValue(), ob, params, sm);
         Class c = val.getClass();
         if (c == Integer.class)
-            return Math.abs(((Integer) val).intValue());
+            return Integer.valueOf(java.lang.Math.abs(((Integer) val).intValue()));
         else if (c == Float.class)
-            return Math.abs(((Float) val).floatValue());
+            return Float.valueOf(java.lang.Math.abs(((Float) val).floatValue()));
         else if (c == Double.class)
-            return Math.abs(((Double) val).doubleValue());
+            return Double.valueOf(java.lang.Math.abs(((Double) val).doubleValue()));
         else if (c == Long.class)
-            return Math.abs(((Long) val).longValue());
+            return Long.valueOf(java.lang.Math.abs(((Long) val).longValue()));
         throw new UnsupportedException();
     }
 
@@ -985,13 +981,13 @@ public class JDBCStoreQuery
         Object val = getValue(sqrtVal.getValue(), ob, params, sm);
         Class c = val.getClass();
         if (c == Integer.class)
-            return Math.sqrt(((Integer) val).doubleValue());
+            return Double.valueOf(java.lang.Math.sqrt(((Integer) val).doubleValue()));
         else if (c == Float.class)
-            return Math.sqrt(((Float) val).floatValue());
+            return Double.valueOf(java.lang.Math.sqrt(((Float) val).floatValue()));
         else if (c == Double.class)
-            return Math.sqrt(((Double) val).doubleValue());
+            return Double.valueOf(java.lang.Math.sqrt(((Double) val).doubleValue()));
         else if (c == Long.class)
-            return Math.sqrt(((Long) val).doubleValue());
+            return Double.valueOf(java.lang.Math.sqrt(((Long) val).doubleValue()));
         throw new UnsupportedException();
     }
 
@@ -1065,8 +1061,8 @@ public class JDBCStoreQuery
 
     public static Context getThreadLocalContext(Context orig) {
         Context[] root = localContext.get();
-        for (Context context : root) {
-            Context lctx = getThreadLocalContext(context, orig);
+        for (int i = 0; i < root.length; i++) {
+            Context lctx = getThreadLocalContext(root[i], orig);
             if (lctx != null)
                 return lctx;
         }
@@ -1078,10 +1074,10 @@ public class JDBCStoreQuery
             return null;
         Context[] lctx = JDBCStoreQuery.getThreadLocalContext();
         Context cloneFrom = select.ctx();
-        for (Context context : lctx) {
-            Context cloneTo = getThreadLocalContext(context, cloneFrom);
+        for (int i = 0; i < lctx.length; i++) {
+            Context cloneTo = getThreadLocalContext(lctx[i], cloneFrom);
             if (cloneTo != null)
-                return (Select) cloneTo.getSelect();
+                return (Select)cloneTo.getSelect();
         }
         return select;
     }

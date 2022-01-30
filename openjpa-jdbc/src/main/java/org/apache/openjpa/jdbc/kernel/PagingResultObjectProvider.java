@@ -92,16 +92,17 @@ public class PagingResultObjectProvider
         // are there any mappings that require batched selects?
         FieldMapping[] fms = mapping.getDefinedFieldMappings();
         BitSet paged = null;
-        for (FieldMapping fm : fms) {
-            if (fetch.requiresFetch(fm) != FetchConfiguration.FETCH_LOAD)
+        for (int i = 0; i < fms.length; i++) {
+            if (fetch.requiresFetch(fms[i]) != FetchConfiguration.FETCH_LOAD)
                 continue;
 
-            if (fm.supportsSelect(sel, Select.EAGER_PARALLEL, null, store,
-                    fetch) > 0 && (fm.isEagerSelectToMany() || fm.
-                    supportsSelect(sel, Select.EAGER_OUTER, null, store, fetch) == 0)) {
+            if (fms[i].supportsSelect(sel, Select.EAGER_PARALLEL, null, store,
+                fetch) > 0 && (fms[i].isEagerSelectToMany() || fms[i].
+                supportsSelect(sel, Select.EAGER_OUTER, null, store, fetch) == 0))
+            {
                 if (paged == null)
                     paged = new BitSet();
-                paged.set(fm.getIndex());
+                paged.set(fms[i].getIndex());
             }
         }
         return paged;
@@ -335,8 +336,8 @@ public class PagingResultObjectProvider
         // figure out how many batch selects to do on this mapping
         FieldMapping[] fms = mapping.getDefinedFieldMappings();
         int sels = 0;
-        for (FieldMapping fieldMapping : fms)
-            if (paged.get(fieldMapping.getIndex()))
+        for (int i = 0; i < fms.length; i++)
+            if (paged.get(fms[i].getIndex()))
                 sels++;
         if (sels == 0)
             return;
@@ -360,12 +361,12 @@ public class PagingResultObjectProvider
         int esels = 0;
         SelectExecutor esel;
         int unions;
-        for (FieldMapping fm : fms) {
-            if (!paged.get(fm.getIndex()))
+        for (int i = 0; i < fms.length; i++) {
+            if (!paged.get(fms[i].getIndex()))
                 continue;
 
-            unions = fm.supportsSelect(sel, Select.EAGER_PARALLEL, null,
-                    store, fetch);
+            unions = fms[i].supportsSelect(sel, Select.EAGER_PARALLEL, null,
+                store, fetch);
             if (unions == 0)
                 continue;
 
@@ -377,22 +378,17 @@ public class PagingResultObjectProvider
                 esel = sel;
 
             // get result
-            fm.selectEagerParallel(esel, null, store, fetch,
-                    EagerFetchModes.EAGER_PARALLEL);
+            fms[i].selectEagerParallel(esel, null, store, fetch,
+                EagerFetchModes.EAGER_PARALLEL);
             res = esel.execute(store, fetch);
             try {
                 // and load result into paged instances
                 for (int j = start; j < end && _page[j] != null; j++)
-                    res = fm.loadEagerParallel(ctx.getStateManager
-                            (_page[j]), store, fetch, res);
-            }
-            finally {
+                    res = fms[i].loadEagerParallel(ctx.getStateManager
+                        (_page[j]), store, fetch, res);
+            } finally {
                 if (res instanceof Closeable)
-                    try {
-                        ((Closeable) res).close();
-                    }
-                    catch (Exception e) {
-                    }
+                    try { ((Closeable) res).close(); } catch (Exception e) {}
             }
         }
     }

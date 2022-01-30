@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.EventObject;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -121,8 +122,8 @@ public class SchemaGenerator {
         Map<DBIdentifier, Collection<DBIdentifier>> schemas = new HashMap<>();
         DBIdentifier schema = DBIdentifier.NULL, table = DBIdentifier.NULL;
         Collection<DBIdentifier> tables = null;
-        for (DBIdentifier arg : args) {
-            QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(arg);
+        for (int i = 0; i < args.length; i++) {
+            QualifiedDBIdentifier path = QualifiedDBIdentifier.getPath(args[i]);
             schema = path.getSchemaName();
             table = path.getIdentifier();
 
@@ -130,7 +131,11 @@ public class SchemaGenerator {
             if (DBIdentifier.isNull(table) && !schemas.containsKey(schema))
                 schemas.put(schema, null);
             else if (!DBIdentifier.isNull(table)) {
-                tables = schemas.computeIfAbsent(schema, k -> new LinkedList<>());
+                tables = schemas.get(schema);
+                if (tables == null) {
+                    tables = new LinkedList<>();
+                    schemas.put(schema, tables);
+                }
                 tables.add(table);
             }
         }
@@ -138,8 +143,9 @@ public class SchemaGenerator {
         Object[][] parsed = new Object[schemas.size()][2];
         Map.Entry<DBIdentifier, Collection<DBIdentifier>> entry;
         int idx = 0;
-        for (Map.Entry<DBIdentifier, Collection<DBIdentifier>> dbIdentifierCollectionEntry : schemas.entrySet()) {
-            entry = dbIdentifierCollectionEntry;
+        for (Iterator<Map.Entry<DBIdentifier, Collection<DBIdentifier>>> itr = schemas.entrySet().iterator();
+            itr.hasNext();) {
+            entry = itr.next();
             tables = entry.getValue();
 
             parsed[idx][0] = entry.getKey();
@@ -293,22 +299,22 @@ public class SchemaGenerator {
                 return;
             }
 
-            for (Object[] value : schemaMap) {
-                generateSchema((DBIdentifier) value[0], (DBIdentifier[]) value[1]);
+            for (int i = 0; i < schemaMap.length; i++) {
+                generateSchema((DBIdentifier) schemaMap[i][0], (DBIdentifier[]) schemaMap[i][1]);
             }
 
             // generate pks, indexes, fks
             DBIdentifier schemaName = DBIdentifier.NULL;
             DBIdentifier[] tableNames;
-            for (Object[] objects : schemaMap) {
-                schemaName = (DBIdentifier) objects[0];
-                tableNames = (DBIdentifier[]) objects[1];
+            for (int i = 0; i < schemaMap.length; i++) {
+                schemaName = (DBIdentifier) schemaMap[i][0];
+                tableNames = (DBIdentifier[]) schemaMap[i][1];
 
                 // estimate the number of schema objects we will need to visit
                 // in order to estimate progress total for any listeners
                 int numTables = (tableNames != null) ? tableNames.length : getTables(schemaName).size();
                 _schemaObjects +=
-                        numTables + (_pks ? numTables : 0) + (_indexes ? numTables : 0) + (_fks ? numTables : 0);
+                    numTables + (_pks ? numTables : 0) + (_indexes ? numTables : 0) + (_fks ? numTables : 0);
 
                 if (_pks) {
                     generatePrimaryKeys(schemaName, tableNames);
@@ -358,9 +364,8 @@ public class SchemaGenerator {
             if (tableNames == null)
                 generateTables(name, DBIdentifier.NULL, _conn, meta);
             else
-                for (DBIdentifier tableName : tableNames) {
-                    generateTables(name, tableName, _conn, meta);
-                }
+                for (int i = 0; i < tableNames.length; i++)
+                    generateTables(name, tableNames[i], _conn, meta);
 
             if (_seqs) {
                 generateSequences(name, DBIdentifier.NULL, _conn, meta);
@@ -406,9 +411,8 @@ public class SchemaGenerator {
             if (tableNames == null)
                 generatePrimaryKeys(schemaName, null, _conn, meta);
             else
-                for (DBIdentifier tableName : tableNames) {
-                    generatePrimaryKeys(schemaName, tableName, _conn, meta);
-                }
+                for (int i = 0; i < tableNames.length; i++)
+                    generatePrimaryKeys(schemaName, tableNames[i], _conn, meta);
         } finally {
             // some databases require a commit after metadata to release locks
             try {
@@ -449,9 +453,8 @@ public class SchemaGenerator {
             if (tableNames == null)
                 generateIndexes(schemaName, null, _conn, meta);
             else
-                for (DBIdentifier tableName : tableNames) {
-                    generateIndexes(schemaName, tableName, _conn, meta);
-                }
+                for (int i = 0; i < tableNames.length; i++)
+                    generateIndexes(schemaName, tableNames[i], _conn, meta);
         } finally {
             // some databases require a commit after metadata to release locks
             try {
@@ -493,9 +496,8 @@ public class SchemaGenerator {
             if (tableNames == null)
                 generateForeignKeys(schemaName, null, _conn, meta);
             else
-                for (DBIdentifier tableName : tableNames) {
-                    generateForeignKeys(schemaName, tableName, _conn, meta);
-                }
+                for (int i = 0; i < tableNames.length; i++)
+                    generateForeignKeys(schemaName, tableNames[i], _conn, meta);
         } finally {
             // some databases require a commit after metadata to release locks
             try {
@@ -553,9 +555,8 @@ public class SchemaGenerator {
 
         // if database can't handle null table name, recurse on each known name
         if (cols == null && DBIdentifier.isNull(tableName)) {
-            for (DBIdentifier name : tableNames) {
-                generateTables(schemaName, name, conn, meta);
-            }
+            for (Iterator<DBIdentifier> itr = tableNames.iterator(); itr.hasNext();)
+                generateTables(schemaName, itr.next(), conn, meta);
             return;
         }
 
@@ -623,31 +624,31 @@ public class SchemaGenerator {
         // do case-insensitive comparison on allowed table and schema names
         DBIdentifier[] tables;
         DBIdentifier[] anySchemaTables = null;
-        for (Object[] objects : _allowed) {
-            if (objects[0] == null) {
-                anySchemaTables = (DBIdentifier[]) objects[1];
+        for (int i = 0; i < _allowed.length; i++) {
+            if (_allowed[i][0] == null) {
+                anySchemaTables = (DBIdentifier[]) _allowed[i][1];
                 if (schema == null)
                     break;
                 continue;
             }
-            if (!schema.equals(objects[0]))
+            if (!schema.equals(_allowed[i][0]))
                 continue;
 
             if (table == null)
                 return true;
-            tables = (DBIdentifier[]) objects[1];
+            tables = (DBIdentifier[]) _allowed[i][1];
             if (tables == null)
                 return true;
-            for (DBIdentifier dbIdentifier : tables)
-                if (table.equals(dbIdentifier))
+            for (int j = 0; j < tables.length; j++)
+                if (table.equals(tables[j]))
                     return true;
         }
 
         if (anySchemaTables != null) {
             if (table == null)
                 return true;
-            for (DBIdentifier anySchemaTable : anySchemaTables)
-                if (table.equals(anySchemaTable))
+            for (int i = 0; i < anySchemaTables.length; i++)
+                if (table.equals(anySchemaTables[i]))
                     return true;
         }
         return false;
@@ -687,10 +688,10 @@ public class SchemaGenerator {
         Table table;
         if (pks == null && tableName == null) {
             Collection<Table> tables = getTables(schemaName);
-            for (Table value : tables) {
-                table = value;
+            for (Iterator<Table> itr = tables.iterator(); itr.hasNext();) {
+                table = itr.next();
                 generatePrimaryKeys(table.getSchemaIdentifier(),
-                        table.getIdentifier(), conn, meta);
+                    table.getIdentifier(), conn, meta);
             }
             return;
         }
@@ -752,10 +753,10 @@ public class SchemaGenerator {
         Table table;
         if (idxs == null && tableName == null) {
             Collection<Table> tables = getTables(schemaName);
-            for (Table value : tables) {
-                table = value;
+            for (Iterator<Table> itr = tables.iterator(); itr.hasNext();) {
+                table = itr.next();
                 generateIndexes(table.getSchemaIdentifier(),
-                        table.getIdentifier(), conn, meta);
+                    table.getIdentifier(), conn, meta);
             }
             return;
         }
@@ -833,10 +834,10 @@ public class SchemaGenerator {
         Table table;
         if (fks == null && DBIdentifier.isNull(tableName)) {
             Collection<Table> tables = getTables(schemaName);
-            for (Table value : tables) {
-                table = value;
+            for (Iterator<Table> itr = tables.iterator(); itr.hasNext();) {
+                table = itr.next();
                 generateForeignKeys(table.getSchemaIdentifier(),
-                        table.getIdentifier(), conn, meta);
+                    table.getIdentifier(), conn, meta);
             }
             return;
         }
@@ -923,8 +924,8 @@ public class SchemaGenerator {
 
         // remove invalid fks
         if (invalids != null) {
-            for (ForeignKey invalid : invalids) {
-                fk = invalid;
+            for (Iterator<ForeignKey> itr = invalids.iterator(); itr.hasNext();) {
+                fk = itr.next();
                 fk.getTable().removeForeignKey(fk);
             }
         }
@@ -995,10 +996,11 @@ public class SchemaGenerator {
             return;
 
         Event e = new Event(schemaObject, _schemaObjects);
-        for (Listener l : _listeners) {
+        for (Iterator<Listener> i = _listeners.iterator(); i.hasNext();) {
+            Listener l = i.next();
             if (!l.schemaObjectGenerated(e))
                 throw new SQLException(_loc.get("refresh-cancelled")
-                        .getMessage());
+                    .getMessage());
         }
     }
 
@@ -1038,9 +1040,8 @@ public class SchemaGenerator {
 
         Schema[] schemas = group.getSchemas();
         Collection<Table> tables = new LinkedList<>();
-        for (Schema schema : schemas) {
-            tables.addAll(Arrays.asList(schema.getTables()));
-        }
+        for (int i = 0; i < schemas.length; i++)
+            tables.addAll(Arrays.asList(schemas[i].getTables()));
         return tables;
     }
 

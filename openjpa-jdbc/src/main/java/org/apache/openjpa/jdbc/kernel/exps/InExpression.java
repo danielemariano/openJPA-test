@@ -108,9 +108,9 @@ class InExpression
         Collection coll = getCollection(ctx, istate.constantState);
         if (coll != null) {
             list = new ArrayList(coll.size());
-            for (Object o : coll)
+            for (Iterator itr = coll.iterator(); itr.hasNext();)
                 list.add(_val.toDataStoreValue(sel, ctx, istate.valueState,
-                        o));
+                    itr.next()));
         }
 
         Column[] cols = null;

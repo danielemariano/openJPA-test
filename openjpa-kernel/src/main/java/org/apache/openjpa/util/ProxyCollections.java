@@ -152,9 +152,8 @@ public class ProxyCollections
      */
     public static boolean addAll(ProxyCollection coll, Collection values) {
         boolean added = false;
-        for (Object value : values) {
-            added |= coll.add(value);
-        }
+        for (Iterator<?> itr = values.iterator(); itr.hasNext();)
+            added |= coll.add(itr.next());
         return added;
     }
 
@@ -163,9 +162,8 @@ public class ProxyCollections
      */
     public static void beforeClear(ProxyCollection coll) {
         dirty(coll, true);
-        for (Object o : coll) {
-            removed(coll, o, false);
-        }
+        for (Iterator<?> itr = coll.iterator(); itr.hasNext();)
+            removed(coll, itr.next(), false);
     }
 
     /**
@@ -458,9 +456,8 @@ public class ProxyCollections
      */
     public static boolean removeAll(ProxyCollection coll, Collection<?> vals) {
         boolean removed = false;
-        for (Object val : vals) {
-            removed |= coll.remove(val);
-        }
+        for (Iterator<?> itr = vals.iterator(); itr.hasNext();)
+            removed |= coll.remove(itr.next());
         return removed;
     }
 
@@ -469,7 +466,9 @@ public class ProxyCollections
      */
     public static boolean retainAll(ProxyCollection coll, Collection<?> vals) {
         int size = coll.size();
-        coll.removeIf(o -> !vals.contains(o));
+        for (Iterator<?> itr = coll.iterator(); itr.hasNext();)
+            if (!vals.contains(itr.next()))
+                itr.remove();
         return coll.size() < size;
     }
 

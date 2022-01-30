@@ -97,20 +97,19 @@ public class VerticalClassStrategy
         // map joinables
         Joinable join;
         Column[] cols;
-        for (Column pkCol : pkCols) {
+        for (int i = 0; i < pkCols.length; i++) {
             // may have already registered a multi-column joinable
-            if (cls.getJoinable(pkCol) != null)
+            if (cls.getJoinable(pkCols[i]) != null)
                 continue;
 
             // create joinable that delegates all methods to the superclass'
             // joinable, but changes the columns as appropriate using
             // our superclass join fk
-            join = sup.assertJoinable(fk.getPrimaryKeyColumn(pkCol));
+            join = sup.assertJoinable(fk.getPrimaryKeyColumn(pkCols[i]));
             join = new DelegatingJoinable(join, fk);
             cols = join.getColumns();
-            for (Column col : cols) {
-                cls.setJoinable(col, join);
-            }
+            for (int j = 0; j < cols.length; j++)
+                cls.setJoinable(cols[j], join);
         }
     }
 

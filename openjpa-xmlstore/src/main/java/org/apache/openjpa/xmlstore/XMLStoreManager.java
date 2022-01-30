@@ -21,6 +21,7 @@ package org.apache.openjpa.xmlstore;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -93,7 +94,7 @@ public class XMLStoreManager
     private static void incrementVersion(OpenJPAStateManager sm) {
         long version = 0;
         if (sm.getVersion() != null)
-            version = (Long) sm.getVersion() + 1;
+            version = ((Long) sm.getVersion()).longValue() + 1;
         sm.setNextVersion(version);
     }
 
@@ -213,15 +214,16 @@ public class XMLStoreManager
         _deletes = new ArrayList<>(pDeleted.size());
 
         // convert additions
-        for (OpenJPAStateManager sm : pNew) {
+        for (Iterator itr = pNew.iterator(); itr.hasNext();) {
             // create new object data for instance
+            OpenJPAStateManager sm = (OpenJPAStateManager) itr.next();
             Object oid = sm.getObjectId();
             ObjectData data = _store.getData(sm.getMetaData(), oid);
             if (data != null)
                 throw new StoreException("Attempt to insert "
-                        + "new object " + sm.getManagedInstance()
-                        + "with the same oid as an existing instance: " + oid).
-                        setFatal(true);
+                    + "new object " + sm.getManagedInstance()
+                    + "with the same oid as an existing instance: " + oid).
+                    setFatal(true);
 
             data = new ObjectData(oid, sm.getMetaData());
             incrementVersion(sm);
@@ -230,15 +232,16 @@ public class XMLStoreManager
         }
 
         // convert updates
-        for (OpenJPAStateManager sm : pDirty) {
+        for (Iterator itr = pDirty.iterator(); itr.hasNext();) {
+            OpenJPAStateManager sm = (OpenJPAStateManager) itr.next();
             ObjectData data = _store.getData(sm.getMetaData(),
-                    sm.getObjectId());
+                sm.getObjectId());
 
             // if data has been deleted or has the wrong version, record
             // opt lock violation
             if (data == null || !data.getVersion().equals(sm.getVersion())) {
                 exceps.add(new OptimisticException
-                        (sm.getManagedInstance()));
+                    (sm.getManagedInstance()));
                 continue;
             }
 
@@ -250,9 +253,10 @@ public class XMLStoreManager
         }
 
         // convert deletes
-        for (OpenJPAStateManager sm : pDeleted) {
+        for (Iterator itr = pDeleted.iterator(); itr.hasNext();) {
+            OpenJPAStateManager sm = (OpenJPAStateManager) itr.next();
             ObjectData data = _store.getData(sm.getMetaData(),
-                    sm.getObjectId());
+                sm.getObjectId());
 
             // record delete
             if (data != null)
@@ -273,11 +277,11 @@ public class XMLStoreManager
         // create a list of the corresponding persistent objects that
         // match the type and subclasses criteria
         List pcs = new ArrayList(datas.length);
-        for (ObjectData data : datas) {
+        for (int i = 0; i < datas.length; i++) {
             // does this instance belong in the extent?
-            Class c = data.getMetaData().getDescribedType();
+            Class c = datas[i].getMetaData().getDescribedType();
             if (c != candidate && (!subclasses
-                    || !candidate.isAssignableFrom(c)))
+                || !candidate.isAssignableFrom(c)))
                 continue;
 
             // look up the pc instance for the data, passing in the data
@@ -287,7 +291,7 @@ public class XMLStoreManager
             // being passed through and save ourselves a trip to the store
             // if it is present; this is particularly important in systems
             // where a trip to the store can be expensive.
-            pcs.add(ctx.find(data.getId(), fetch, null, data, 0));
+            pcs.add(ctx.find(datas[i].getId(), fetch, null, datas[i], 0));
         }
         return new ListResultObjectProvider(pcs);
     }

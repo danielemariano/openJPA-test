@@ -233,8 +233,8 @@ public abstract class RelationToManyTableFieldStrategy
                 Row.ACTION_DELETE);
             delRow.whereForeignKey(field.getJoinForeignKey(), sm);
 
-            for (Object o : rem) {
-                esm = RelationStrategies.getStateManager(o, ctx);
+            for (Iterator itr = rem.iterator(); itr.hasNext();) {
+                esm = RelationStrategies.getStateManager(itr.next(), ctx);
                 elem.whereForeignKey(delRow, esm);
                 rm.flushSecondaryRow(delRow);
             }

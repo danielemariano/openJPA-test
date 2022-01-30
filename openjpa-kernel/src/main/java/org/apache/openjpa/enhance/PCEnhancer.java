@@ -161,12 +161,11 @@ public class PCEnhancer {
             AccessController.doPrivileged(
                 J2DoPrivHelper.getClassLoaderAction(AuxiliaryEnhancer.class)));
         List auxEnhancers = new ArrayList(classes.length);
-        for (Class aClass : classes) {
+        for (int i = 0; i < classes.length; i++) {
             try {
                 auxEnhancers.add(AccessController.doPrivileged(
-                        J2DoPrivHelper.newInstanceAction(aClass)));
-            }
-            catch (Throwable t) {
+                    J2DoPrivHelper.newInstanceAction(classes[i])));
+            } catch (Throwable t) {
                 // aux enhancer may rely on non-existant spec classes, etc
             }
         }
@@ -625,9 +624,8 @@ public class PCEnhancer {
             record(_managedType);
         record(_pc);
         if (_oids != null)
-            for (Object oid : _oids) {
-                record((BCClass) oid);
-            }
+            for (Iterator itr = _oids.iterator(); itr.hasNext();)
+                record((BCClass) itr.next());
     }
 
     /**
@@ -659,47 +657,46 @@ public class PCEnhancer {
         Method meth;
         BCMethod getter, setter;
         BCField returned, assigned = null;
-        for (FieldMetaData fmd : fmds) {
+        for (int i = 0; i < fmds.length; i++) {
 
-            if (!(fmd.getBackingMember() instanceof Method)) {
+            if (!(fmds[i].getBackingMember() instanceof Method) ) {
                 // If not mixed access is not defined, flag the field members,
                 // otherwise do not process them because they are valid
                 // persistent attributes.
                 if (!_meta.isMixedAccess()) {
                     addViolation("property-bad-member",
-                            new Object[]{fmd, fmd.getBackingMember()},
-                            true);
+                        new Object[]{ fmds[i], fmds[i].getBackingMember() },
+                        true);
                 }
                 continue;
             }
 
-            meth = (Method) fmd.getBackingMember();
+            meth = (Method) fmds[i].getBackingMember();
             // ##### this will fail if we override and don't call super.
             BCClass declaringType = _managedType.getProject()
-                    .loadClass(fmd.getDeclaringType());
+                .loadClass(fmds[i].getDeclaringType());
             getter = declaringType.getDeclaredMethod(meth.getName(),
-                    meth.getParameterTypes());
+                meth.getParameterTypes());
             if (getter == null) {
-                addViolation("property-no-getter", new Object[]{fmd},
-                        true);
+                addViolation("property-no-getter", new Object[]{ fmds[i] },
+                    true);
                 continue;
             }
             returned = getReturnedField(getter);
             if (returned != null)
-                registerBackingFieldInfo(fmd, getter, returned);
+                registerBackingFieldInfo(fmds[i], getter, returned);
 
-            setter = declaringType.getDeclaredMethod(getSetterName(fmd),
-                    new Class[]{fmd.getDeclaredType()});
+            setter = declaringType.getDeclaredMethod(getSetterName(fmds[i]),
+                new Class[]{ fmds[i].getDeclaredType() });
             if (setter == null) {
                 if (returned == null) {
                     addViolation("property-no-setter",
-                            new Object[]{fmd}, true);
+                        new Object[]{ fmds[i] }, true);
                     continue;
-                }
-                else if (!getRedefine()) {
+                } else if (!getRedefine()) {
                     // create synthetic setter
-                    setter = _managedType.declareMethod(getSetterName(fmd),
-                            void.class, new Class[]{fmd.getDeclaredType()});
+                    setter = _managedType.declareMethod(getSetterName(fmds[i]),
+                        void.class, new Class[]{ fmds[i].getDeclaredType() });
                     setter.makePrivate();
                     Code code = setter.getCode(true);
                     code.aload().setThis();
@@ -716,12 +713,12 @@ public class PCEnhancer {
 
             if (assigned != null) {
                 if (setter != null)
-                    registerBackingFieldInfo(fmd, setter, assigned);
+                    registerBackingFieldInfo(fmds[i], setter, assigned);
 
                 if (assigned != returned)
                     addViolation("property-setter-getter-mismatch", new Object[]
-                            {fmd, assigned.getName(), (returned == null)
-                                    ? null : returned.getName()}, false);
+                        { fmds[i], assigned.getName(), (returned == null)
+                        ? null : returned.getName() }, false);
             }
         }
     }
@@ -782,9 +779,9 @@ public class PCEnhancer {
 
             // case i:
             //     return <_attrsToFields.get(fmds[i].getName())>
-            for (FieldMetaData fmd : fmds) {
+            for (int i = 0; i < fmds.length; i++) {
                 tabins.addTarget(code.constant().setValue(
-                        _attrsToFields.get(fmd.getName())));
+                    _attrsToFields.get(fmds[i].getName())));
                 code.areturn();
             }
             // default: throw new IllegalArgumentException ()
@@ -959,11 +956,11 @@ public class PCEnhancer {
         // so we don't need to worry about excluding synthetic methods.
         BCMethod[] methods = _managedType.getDeclaredMethods();
         Code code;
-        for (BCMethod method : methods) {
-            code = method.getCode(false);
+        for (int i = 0; i < methods.length; i++) {
+            code = methods[i].getCode(false);
 
             // don't modify the methods specified by the auxiliary enhancers
-            if (code != null && !skipEnhance(method)) {
+            if (code != null && !skipEnhance(methods[i])) {
                 replaceAndValidateFieldAccess(code, get, true, stat);
                 replaceAndValidateFieldAccess(code, put, false, stat);
             }
@@ -1184,7 +1181,7 @@ public class PCEnhancer {
             addCopyKeyFieldsToObjectIdMethod(false);
             addCopyKeyFieldsFromObjectIdMethod(true);
             addCopyKeyFieldsFromObjectIdMethod(false);
-            if (_meta.hasAbstractPKField()) {
+            if (_meta.hasAbstractPKField() == true) {
                 addGetIDOwningClass();
             }
 
@@ -1222,12 +1219,12 @@ public class PCEnhancer {
         }
 
         FieldMetaData[] fmds = _meta.getDeclaredFields();
-        for (FieldMetaData fmd : fmds) {
-            if (fmd.getManagement() != FieldMetaData.MANAGE_PERSISTENT)
+        for (int i = 0; i < fmds.length; i++) {
+            if (fmds[i].getManagement() != FieldMetaData.MANAGE_PERSISTENT)
                 continue;
 
             loadManagedInstance(code, false);
-            switch (fmd.getDeclaredTypeCode()) {
+            switch (fmds[i].getDeclaredTypeCode()) {
                 case JavaTypes.BOOLEAN:
                 case JavaTypes.BYTE:
                 case JavaTypes.CHAR:
@@ -1249,7 +1246,7 @@ public class PCEnhancer {
                     break;
             }
 
-            addSetManagedValueCode(code, fmd);
+            addSetManagedValueCode(code, fmds[i]);
         }
 
         code.vreturn();
@@ -1378,15 +1375,15 @@ public class PCEnhancer {
 
             // <field> = pcStateManager.provided<type>Field
             //     (this, fieldNumber);
-            for (FieldMetaData fmd : fmds) {
+            for (int i = 0; i < fmds.length; i++) {
                 tabins.addTarget(loadManagedInstance(code, false));
                 code.getfield().setField(SM, SMTYPE);
                 loadManagedInstance(code, false);
                 code.iload().setParam(0);
                 loadManagedInstance(code, false);
-                addGetManagedValueCode(code, fmd);
+                addGetManagedValueCode(code, fmds[i]);
                 code.invokeinterface().setMethod(getStateManagerMethod
-                        (fmd.getDeclaredType(), "provided", false, false));
+                    (fmds[i].getDeclaredType(), "provided", false, false));
                 code.vreturn();
             }
 
@@ -1429,22 +1426,22 @@ public class PCEnhancer {
 
             // <field> = pcStateManager.replace<type>Field
             //  (this, fieldNumber);
-            for (FieldMetaData fmd : fmds) {
+            for (int i = 0; i < fmds.length; i++) {
                 // for the addSetManagedValueCode call below.
-                tabins.addTarget(loadManagedInstance(code, false, fmd));
+                tabins.addTarget(loadManagedInstance(code, false, fmds[i]));
 
-                loadManagedInstance(code, false, fmd);
+                loadManagedInstance(code, false, fmds[i]);
                 code.getfield().setField(SM, SMTYPE);
-                loadManagedInstance(code, false, fmd);
+                loadManagedInstance(code, false, fmds[i]);
                 code.iload().setParam(0);
                 code.invokeinterface().setMethod(getStateManagerMethod
-                        (fmd.getDeclaredType(), "replace", true, false));
-                if (!fmd.getDeclaredType().isPrimitive())
-                    code.checkcast().setType(fmd.getDeclaredType());
+                    (fmds[i].getDeclaredType(), "replace", true, false));
+                if (!fmds[i].getDeclaredType().isPrimitive())
+                    code.checkcast().setType(fmds[i].getDeclaredType());
 
-                addSetManagedValueCode(code, fmd);
-                if (_addVersionInitFlag) {
-                    if (fmd.isVersion()) {
+                addSetManagedValueCode(code, fmds[i]);
+                if(_addVersionInitFlag){
+                    if(fmds[i].isVersion()){
                         // If this case is setting the version field
                         // pcVersionInit = true;
                         loadManagedInstance(code, false);
@@ -1493,13 +1490,13 @@ public class PCEnhancer {
             tabins.setLow(0);
             tabins.setHigh(fmds.length - 1);
 
-            for (FieldMetaData fmd : fmds) {
+            for (int i = 0; i < fmds.length; i++) {
                 // <field> = other.<field>;
                 // or set<field> (other.get<field>);
-                tabins.addTarget(loadManagedInstance(code, false, fmd));
+                tabins.addTarget(loadManagedInstance(code, false, fmds[i]));
                 code.aload().setParam(0);
-                addGetManagedValueCode(code, fmd, false);
-                addSetManagedValueCode(code, fmd);
+                addGetManagedValueCode(code, fmds[i], false);
+                addSetManagedValueCode(code, fmds[i]);
 
                 // break;
                 code.vreturn();
@@ -2748,7 +2745,7 @@ public class PCEnhancer {
             // new ObjectId (cls, oid)
             code.anew().setType(ObjectId.class);
             code.dup();
-            if(_meta.isEmbeddedOnly() || _meta.hasAbstractPKField()) {
+            if(_meta.isEmbeddedOnly() || _meta.hasAbstractPKField() == true) {
                 code.aload().setThis();
                 code.invokevirtual().setMethod(PRE + "GetIDOwningClass",
                     Class.class, null);
@@ -2763,7 +2760,7 @@ public class PCEnhancer {
         if (_meta.isOpenJPAIdentity() || (obj && usesClsString == Boolean.TRUE)) {
             if ((_meta.isEmbeddedOnly()
                 && !(_meta.isEmbeddable() && _meta.getIdentityType() == ClassMetaData.ID_APPLICATION))
-                || _meta.hasAbstractPKField()) {
+                || _meta.hasAbstractPKField() == true) {
                 code.aload().setThis();
                 code.invokevirtual().setMethod(PRE + "GetIDOwningClass", Class.class, null);
             } else {
@@ -3185,15 +3182,15 @@ public class PCEnhancer {
         // copy all the fields.
         // ##### limiting to JPA @Transient limitations
         FieldMetaData[] fmds = _meta.getFields();
-        for (FieldMetaData fmd : fmds) {
-            if (fmd.isTransient())
+        for (int i = 0; i < fmds.length; i++) {
+            if (fmds[i].isTransient())
                 continue;
             // o.<field> = this.<field> (or reflective analog)
             code.dup(); // for putfield
             code.aload().setThis(); // for getfield
-            getfield(code, _managedType, fmd.getName());
-            putfield(code, _managedType, fmd.getName(),
-                    fmd.getDeclaredType());
+            getfield(code, _managedType, fmds[i].getName());
+            putfield(code, _managedType, fmds[i].getName(),
+                fmds[i].getDeclaredType());
         }
 
         code.areturn().setType(Object.class);
@@ -3435,8 +3432,8 @@ public class PCEnhancer {
             // if (<pk> != <default> [&& !"".equals (<pk>)])
             //		return Boolean.TRUE;
             FieldMetaData[] pks = _meta.getPrimaryKeyFields();
-            for (FieldMetaData pk : pks) {
-                if (pk.getValueStrategy() == ValueStrategies.NONE)
+            for (int i = 0; i < pks.length; i++) {
+                if (pks[i].getValueStrategy() == ValueStrategies.NONE)
                     continue;
 
                 target = loadManagedInstance(code, false);
@@ -3446,18 +3443,18 @@ public class PCEnhancer {
                     ifins2.setTarget(target);
                 ifins2 = null;
 
-                addGetManagedValueCode(code, pk);
-                ifins = ifDefaultValue(code, pk);
-                if (pk.getDeclaredTypeCode() == JavaTypes.STRING) {
+                addGetManagedValueCode(code, pks[i]);
+                ifins = ifDefaultValue(code, pks[i]);
+                if (pks[i].getDeclaredTypeCode() == JavaTypes.STRING) {
                     code.constant().setValue("");
                     loadManagedInstance(code, false);
-                    addGetManagedValueCode(code, pk);
+                    addGetManagedValueCode(code, pks[i]);
                     code.invokevirtual().setMethod(String.class, "equals",
-                            boolean.class, new Class[]{Object.class});
+                        boolean.class, new Class[]{ Object.class });
                     ifins2 = code.ifne();
                 }
                 code.getstatic().setField(Boolean.class, "TRUE",
-                        Boolean.class);
+                    Boolean.class);
                 code.areturn();
             }
         }
@@ -3673,9 +3670,8 @@ public class PCEnhancer {
      * Allow any registered auxiliary code generators to run.
      */
     private void runAuxiliaryEnhancers() {
-        for (AuxiliaryEnhancer auxEnhancer : _auxEnhancers) {
-            auxEnhancer.run(_pc, _meta);
-        }
+    	for (int i = 0; i < _auxEnhancers.length; i++)
+    		_auxEnhancers[i].run(_pc, _meta);
     }
 
     /**
@@ -3689,9 +3685,9 @@ public class PCEnhancer {
         if ("<init>".equals(method.getName()))
             return true;
 
-        for (AuxiliaryEnhancer auxEnhancer : _auxEnhancers)
-            if (auxEnhancer.skipEnhance(method))
-                return true;
+        for (int i = 0; i < _auxEnhancers.length; i++)
+    		if (_auxEnhancers[i].skipEnhance(method))
+    			return true;
 
         return false;
     }
@@ -3883,7 +3879,7 @@ public class PCEnhancer {
         loadManagedInstance(code, true, fmd);
         code.xload().setParam(firstParamOffset);
         addSetManagedValueCode(code, fmd);
-        if(fmd.isVersion() && _addVersionInitFlag){
+        if(fmd.isVersion()==true && _addVersionInitFlag){
             // if we are setting the version, flip the versionInit flag to true
             loadManagedInstance(code, true);
             code.constant().setValue(1);
@@ -4026,11 +4022,11 @@ public class PCEnhancer {
             BCField[] fields = AccessController
                 .doPrivileged(J2DoPrivHelper.getBCClassFieldsAction(bc,
                     fieldName));
-            for (BCField bcField : fields) {
-                field = bcField;
+            for (int i = 0; i < fields.length; i++) {
+                field = fields[i];
                 // if we reach a field declared in this type, then this is the
                 // most-masking field, and is the one that we want.
-                if (bcField.getDeclarer() == declarer) {
+                if (fields[i].getDeclarer() == declarer) {
                     break outer;
                 }
             }
@@ -4161,12 +4157,12 @@ public class PCEnhancer {
         // create list of all unmanaged serializable fields
         BCField[] fields = _managedType.getDeclaredFields();
         Collection unmgd = new ArrayList(fields.length);
-        for (BCField field : fields) {
-            if (!field.isTransient() && !field.isStatic()
-                    && !field.isFinal()
-                    && !field.getName().startsWith(PRE)
-                    && _meta.getDeclaredField(field.getName()) == null)
-                unmgd.add(field);
+        for (int i = 0; i < fields.length; i++) {
+            if (!fields[i].isTransient() && !fields[i].isStatic()
+                && !fields[i].isFinal()
+                && !fields[i].getName().startsWith(PRE)
+                && _meta.getDeclaredField(fields[i].getName()) == null)
+                unmgd.add(fields[i]);
         }
 
         addReadExternal(parentDetachable, detachedState);
@@ -4257,10 +4253,10 @@ public class PCEnhancer {
 
         // read managed fields
         FieldMetaData[] fmds = _meta.getDeclaredFields();
-        for (FieldMetaData fmd : fmds) {
-            if (!fmd.isTransient()) {
-                readExternal(code, fmd.getName(),
-                        fmd.getDeclaredType(), fmd);
+        for (int i = 0; i < fmds.length; i++) {
+            if (!fmds[i].isTransient()) {
+                readExternal(code, fmds[i].getName(),
+                    fmds[i].getDeclaredType(), fmds[i]);
             }
         }
 
@@ -4294,8 +4290,8 @@ public class PCEnhancer {
 
         // read declared unmanaged serializable fields
         BCField field;
-        for (Object o : unmgd) {
-            field = (BCField) o;
+        for (Iterator itr = unmgd.iterator(); itr.hasNext();) {
+            field = (BCField) itr.next();
             readExternal(code, field.getName(), field.getType(), null);
         }
         code.vreturn();
@@ -4446,10 +4442,10 @@ public class PCEnhancer {
         }
 
         FieldMetaData[] fmds = _meta.getDeclaredFields();
-        for (FieldMetaData fmd : fmds) {
-            if (!fmd.isTransient()) {
-                writeExternal(code, fmd.getName(),
-                        fmd.getDeclaredType(), fmd);
+        for (int i = 0; i < fmds.length; i++) {
+            if (!fmds[i].isTransient()) {
+                writeExternal(code, fmds[i].getName(),
+                    fmds[i].getDeclaredType(), fmds[i]);
             }
         }
 
@@ -4483,8 +4479,8 @@ public class PCEnhancer {
 
         // write declared unmanaged serializable fields
         BCField field;
-        for (Object o : unmgd) {
-            field = (BCField) o;
+        for (Iterator itr = unmgd.iterator(); itr.hasNext();) {
+            field = (BCField) itr.next();
             writeExternal(code, field.getName(), field.getType(), null);
         }
         code.vreturn();
@@ -4877,9 +4873,8 @@ public class PCEnhancer {
                 getMetaDataFactory().newClassArgParser();
             cap.setClassLoader(loader);
             classes = new HashSet();
-            for (String arg : args) {
-                classes.addAll(Arrays.asList(cap.parseTypes(arg)));
-            }
+            for (int i = 0; i < args.length; i++)
+                classes.addAll(Arrays.asList(cap.parseTypes(args[i])));
         }
 
         Project project = new Project();
@@ -4888,7 +4883,8 @@ public class PCEnhancer {
         Collection persAwareClasses = new HashSet();
 
         int status;
-        for (Object o : classes) {
+        for (Iterator itr = classes.iterator(); itr.hasNext();) {
+            Object o = itr.next();
             if (log.isInfoEnabled())
                 log.info(_loc.get("enhance-running", o));
 
@@ -4905,16 +4901,13 @@ public class PCEnhancer {
             if (status == ENHANCE_NONE) {
                 if (log.isTraceEnabled())
                     log.trace(_loc.get("enhance-norun"));
-            }
-            else if (status == ENHANCE_INTERFACE) {
+            } else if (status == ENHANCE_INTERFACE) {
                 if (log.isTraceEnabled())
                     log.trace(_loc.get("enhance-interface"));
-            }
-            else if (status == ENHANCE_AWARE) {
+            } else if (status == ENHANCE_AWARE) {
                 persAwareClasses.add(o);
                 enhancer.record();
-            }
-            else {
+            } else {
                 enhancer.record();
             }
             project.clear();

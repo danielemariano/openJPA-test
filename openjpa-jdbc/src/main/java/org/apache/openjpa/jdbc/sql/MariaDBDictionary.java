@@ -20,15 +20,11 @@ package org.apache.openjpa.jdbc.sql;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Time;
 import java.sql.Types;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Collection;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -136,34 +132,26 @@ public class MariaDBDictionary extends DBDictionary {
 
         // reservedWordSet subset that CANNOT be used as valid column names
         // (i.e., without surrounding them with double-quotes)
-        // generated at 2021-05-02T16:53:15.561 via org.apache.openjpa.reservedwords.ReservedWordsIT
-        invalidColumnWordSet.addAll(Arrays.asList(new String[] {
-            "ADD", "ALL", "ALTER", "ANALYZE", "AND", "AS", "ASC", "ASENSITIVE", "BEFORE", "BETWEEN", "BIGINT", "BINARY",
-            "BLOB", "BOTH", "BY", "CALL", "CASCADE", "CASE", "CHANGE", "CHAR", "CHARACTER", "CHECK", "COLLATE", "COLUMN", "CONDITION",
-            "CONSTRAINT", "CONTINUE", "CONVERT", "CREATE", "CROSS", "CURRENT_DATE", "CURRENT_ROLE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
-            "CURRENT_USER", "CURSOR", "DATABASE", "DATABASES", "DAY_HOUR", "DAY_MICROSECOND", "DAY_MINUTE", "DAY_SECOND", "DEC",
-            "DECIMAL", "DECLARE", "DEFAULT", "DELAYED", "DELETE", "DESC", "DESCRIBE", "DETERMINISTIC", "DISTINCT", "DISTINCTROW",
-            "DIV", "DOUBLE", "DROP", "DUAL", "EACH", "ELSE", "ELSEIF", "ENCLOSED", "END-EXEC", "ESCAPED", "EXCEPT", "EXISTS",
-            "EXIT", "EXPLAIN", "FALSE", "FETCH", "FLOAT", "FLOAT4", "FLOAT8", "FOR", "FORCE", "FOREIGN", "FROM", "FULLTEXT",
-            "GRANT", "GROUP", "HAVING", "HIGH_PRIORITY", "HOUR_MICROSECOND", "HOUR_MINUTE", "HOUR_SECOND", "IF", "IGNORE",
-            "IN", "INDEX", "INFILE", "INNER", "INOUT", "INSENSITIVE", "INSERT", "INT", "INT1", "INT2", "INT3", "INT4", "INT8",
-            "INTEGER", "INTERSECT", "INTERVAL", "INTO", "IS", "ITERATE", "JOIN", "KEY", "KEYS", "KILL", "LEADING", "LEAVE",
-            "LEFT", "LIKE", "LIMIT", "LINES", "LOAD", "LOCALTIME", "LOCALTIMESTAMP", "LOCK", "LONG", "LONGBLOB", "LONGTEXT",
-            "LOOP", "LOW_PRIORITY", "MATCH", "MAXVALUE", "MEDIUMBLOB", "MEDIUMINT", "MEDIUMTEXT", "MIDDLEINT", "MINUTE_MICROSECOND",
-            "MINUTE_SECOND", "MOD", "MODIFIES", "NATURAL", "NO_WRITE_TO_BINLOG", "NOT", "NULL", "NUMERIC", "ON", "OPTIMIZE",
-            "OPTIONALLY", "OR", "ORDER", "OUT", "OUTER", "OUTFILE", "OVER", "PARTITION", "PRECISION", "PRIMARY", "PROCEDURE",
-            "PURGE", "RANGE", "READ", "READS", "REAL", "RECURSIVE", "REFERENCES", "REGEXP", "RELEASE", "RENAME", "REPEAT",
-            "REPLACE", "REQUIRE", "RESIGNAL", "RESTRICT", "RETURN", "REVOKE", "RIGHT", "RLIKE", "ROWS", "SCHEMA", "SCHEMAS",
-            "SECOND_MICROSECOND", "SENSITIVE", "SEPARATOR", "SET", "SHOW", "SIGNAL", "SMALLINT", "SPATIAL", "SPECIFIC", "SQL",
-            "SQL_BIG_RESULT", "SQL_CALC_FOUND_ROWS", "SQL_SMALL_RESULT", "SQLEXCEPTION", "SQLSTATE", "SQLWARNING", "SSL", "STARTING",
-            "STRAIGHT_JOIN", "TABLE", "TERMINATED", "THEN", "TINYBLOB", "TINYINT", "TINYTEXT", "TO", "TRAILING", "TRIGGER",
-            "TRUE", "UNDO", "UNION", "UNIQUE", "UNLOCK", "UNSIGNED", "UPDATE", "USAGE", "USE", "USING", "UTC_DATE", "UTC_TIME",
-            "UTC_TIMESTAMP", "VALUES", "VARBINARY", "VARCHAR", "VARCHARACTER", "VARYING", "WHEN", "WHERE", "WHILE", "WITH",
-            "WRITE", "XOR", "YEAR_MONTH", "ZEROFILL",
-            // end generated.
-            // the following keywords used to be defined as reserved words in the past, but now seem to work
-            // we still add them for compat reasons
-            "OPTION", "SELECT",
+        invalidColumnWordSet.addAll(Arrays.asList(new String[]{
+            "ADD", "ALL", "ALTER", "AND", "AS", "ASC", "BETWEEN", "BINARY",
+            "BLOB", "BOTH", "BY", "CASCADE", "CASE", "CHANGE", "CHAR",
+            "CHARACTER", "CHECK", "COLLATE", "COLUMN", "CONSTRAINT", "CONTINUE",
+            "CONVERT", "CREATE", "CROSS", "CURRENT_DATE", "CURRENT_TIME",
+            "CURRENT_TIMESTAMP", "CURRENT_USER", "CURSOR", "DEC", "DECIMAL",
+            "DECLARE", "DEFAULT", "DELETE", "DESC", "DESCRIBE", "DISTINCT",
+            "DOUBLE", "DROP", "ELSE", "END-EXEC", "EXISTS", "FALSE", "FETCH",
+            "FLOAT", "FLOAT4", "FOR", "FOREIGN", "FROM", "GRANT", "GROUP",
+            "HAVING", "IN", "INFILE", "INNER", "INSENSITIVE", "INSERT", "INT",
+            "INT1", "INT2", "INT4", "INTEGER", "INTERVAL", "INTO", "IS", "JOIN",
+            "KEY", "LEADING", "LEFT", "LIKE", "LOAD", "MATCH", "MEDIUMINT",
+            "NATURAL", "NOT", "NULL", "NUMERIC", "ON", "OPTION", "OR", "ORDER",
+            "OUTER", "OUTFILE", "PRECISION", "PRIMARY", "PROCEDURE", "READ",
+            "REAL", "REFERENCES", "REPLACE", "RESTRICT", "REVOKE", "RIGHT",
+            "SCHEMA", "SELECT", "SET", "SMALLINT", "SQL", "SQLSTATE",
+            "STARTING", "TABLE", "THEN", "TO", "TRAILING", "TRUE", "UNION",
+            "UNIQUE", "UNSIGNED", "UPDATE", "USAGE", "USING", "VALUES",
+            "VARCHAR", "VARYING", "WHEN", "WHERE", "WITH", "WRITE", "ZEROFILL",
+            "INDEX",
         }));
 
         requiresSearchStringEscapeForLike = true;
@@ -208,13 +196,6 @@ public class MariaDBDictionary extends DBDictionary {
             timestampTypeName = "DATETIME{0}";
             fixedSizeTypeNameSet.remove(timestampTypeName);
             fractionalTypeNameSet.add(timestampTypeName);
-
-            // also TIME type now has optional fraction digits
-
-            if (dateFractionDigits > 0 ) {
-                timeTypeName = "TIME{0}";
-                fractionalTypeNameSet.add(timeTypeName);
-            }
         }
     }
 
@@ -477,8 +458,7 @@ public class MariaDBDictionary extends DBDictionary {
 
     @Override
     public boolean isFatalException(int subtype, SQLException ex) {
-        if ((subtype == StoreException.LOCK  && ex.getErrorCode() == 1205) // ER_LOCK_WAIT_TIMEOUT
-          ||(subtype == StoreException.LOCK  && ex.getErrorCode() == 1969) // general ER_STATEMENT_TIMEOUT
+        if ((subtype == StoreException.LOCK  && ex.getErrorCode() == 1205)
           ||(subtype == StoreException.LOCK  && "JZ0002".equalsIgnoreCase(ex.getSQLState()))
           ||(subtype == StoreException.QUERY && ex.getErrorCode() == 1317)) {
             return false;
@@ -535,17 +515,5 @@ public class MariaDBDictionary extends DBDictionary {
             start.appendTo(buf);
         }
         buf.append(")");
-    }
-
-    @Override
-    public void setTime(PreparedStatement stmnt, int idx, Time val, Calendar cal, Column col) throws SQLException {
-        // nail down to Jan 1st 1970, because MariaDB uses getTime LONG  and freaks out.
-        final Date date = new Date(val.getTime());
-        date.setYear(70);
-        date.setMonth(0);
-        date.setDate(1);
-        val = new Time(date.getTime());
-
-        super.setTime(stmnt, idx, val, cal, col);
     }
 }

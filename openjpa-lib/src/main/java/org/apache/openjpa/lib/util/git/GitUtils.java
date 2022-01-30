@@ -36,7 +36,7 @@ public class GitUtils {
      *  @return The formatted int version, or -1 if gitinfo is null or unparsable.
      */
     public static int convertGitInfoToPCEnhancerVersion(String gitinfo) {
-        if (gitinfo == null || !fullRevisionPattern.matcher(gitinfo).matches()) {
+        if (gitinfo == null || fullRevisionPattern.matcher(gitinfo).matches() == false) {
             return -1;
         }
         

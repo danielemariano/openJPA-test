@@ -1186,15 +1186,6 @@ database foreign key. Defaults to true.
                     </listitem>
                     <listitem>
                         <para>
-<literal>IndexPhysicalForeignKeys</literal>: Boolean property controlling
-whether to create explicit indexes for real physical foreign keys depending on
-the corresponding <literal>DBDictionary</literal> attribute.
-Set this to <litreral>true</litreral> if you want to make sure that foreign keys are indexed.
-Defaults to false for backward compatibility reasons.
-                        </para>
-                    </listitem>
-                    <listitem>
-                        <para>
 <literal>DataStoreIdColumnName</literal>: The default name of datastore
 identity columns.
                         </para>

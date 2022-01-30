@@ -186,12 +186,10 @@ public class RelationFieldStrategy
         if (field.isPrimaryKey()) {
             Column[] cols = field.getColumns();
             if (pk != null && (adapt || pk.isLogical()))
-                for (Column col : cols) {
-                    pk.addColumn(col);
-                }
-            for (Column col : cols) {
-                field.getDefiningMapping().setJoinable(col, this);
-            }
+                for (int i = 0; i < cols.length; i++)
+                    pk.addColumn(cols[i]);
+            for (int i = 0; i < cols.length; i++)
+                field.getDefiningMapping().setJoinable(cols[i], this);
         }
 
         // map constraints after pk so we don't re-index / re-unique pk col
@@ -207,8 +205,8 @@ public class RelationFieldStrategy
     private void setMappedByIdColumns() {
         ClassMetaData owner = field.getDefiningMetaData();
         FieldMetaData[] pks = owner.getPrimaryKeyFields();
-        for (FieldMetaData pk : pks) {
-            FieldMapping fm = (FieldMapping) pk;
+        for (int i = 0; i < pks.length; i++) {
+            FieldMapping fm = (FieldMapping) pks[i];
             ValueMappingImpl val = (ValueMappingImpl) field.getValue();
             ValueMappingInfo info = val.getValueInfo();
             if (info.getColumns().size() == 0)
@@ -224,16 +222,15 @@ public class RelationFieldStrategy
         String mappedByIdValue = field.getMappedByIdValue();
         if (embeddedId != null) {
             FieldMetaData[] fmds = embeddedId.getFields();
-            for (FieldMetaData fmd : fmds) {
-                if ((fmd.getName().equals(mappedByIdValue)) ||
-                        mappedByIdValue.length() == 0) {
-                    if (fmd.getValue().getEmbeddedMetaData() != null) {
+            for (int i = 0; i < fmds.length; i++) {
+                if ((fmds[i].getName().equals(mappedByIdValue)) ||
+                    mappedByIdValue.length() == 0) {
+                    if (fmds[i].getValue().getEmbeddedMetaData() != null) {
                         EmbedValueHandler.getEmbeddedIdCols(
-                                (FieldMapping) fmd, cols);
-                    }
-                    else
+                                (FieldMapping)fmds[i], cols);
+                    } else
                         EmbedValueHandler.getIdColumns(
-                                (FieldMapping) fmd, cols);
+                                (FieldMapping)fmds[i], cols);
                 }
             }
             return cols;
@@ -244,9 +241,8 @@ public class RelationFieldStrategy
             if (pks.length != 1 || pks[0].getDeclaredType() != pkType)
                 return Collections.EMPTY_LIST;
             pkCols = pk.getColumns();
-            for (Column pkCol : pkCols) {
-                cols.add(pkCol);
-            }
+            for (int i = 0; i < pkCols.length; i++)
+                cols.add(pkCols[i]);
             return cols;
         }
     }
@@ -349,11 +345,11 @@ public class RelationFieldStrategy
 
     private FieldMapping getMapField(ClassMetaData meta) {
         FieldMapping[] fields = ((ClassMapping)meta).getFieldMappings();
-        for (FieldMapping fieldMapping : fields) {
-            FieldMetaData mappedBy = fieldMapping.getMappedByMetaData();
-            if (fieldMapping.getDeclaredTypeCode() == JavaTypes.MAP &&
-                    mappedBy == field)
-                return fieldMapping;
+        for (int i = 0; i < fields.length; i++) {
+            FieldMetaData mappedBy = fields[i].getMappedByMetaData();
+            if (fields[i].getDeclaredTypeCode() == JavaTypes.MAP &&
+                mappedBy == field)
+                return fields[i];
         }
         return null;
     }
@@ -510,10 +506,10 @@ public class RelationFieldStrategy
         // table if there is a field controlling the foreign key
         Row row = null;
         FieldMapping[] invs = field.getInverseMappings();
-        for (FieldMapping inv : invs) {
-            if (inv.getMappedByMetaData() == field
-                    && inv.getTypeCode() == JavaTypes.PC) {
-                row = inv.getRow(rel, store, rm, action);
+        for (int i = 0; i < invs.length; i++) {
+            if (invs[i].getMappedByMetaData() == field
+                && invs[i].getTypeCode() == JavaTypes.PC) {
+                row = invs[i].getRow(rel, store, rm, action);
                 break;
             }
         }

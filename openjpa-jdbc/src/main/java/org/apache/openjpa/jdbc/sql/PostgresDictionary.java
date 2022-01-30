@@ -38,7 +38,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.time.OffsetTime;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
@@ -176,6 +175,7 @@ public class PostgresDictionary extends DBDictionary {
         booleanRepresentation = BooleanRepresentationFactory.BOOLEAN;
 
         supportsLockingWithDistinctClause = false;
+        supportsQueryTimeout = false;
         supportsLockingWithOuterJoin = false;
 
         reservedWordSet.addAll(Arrays.asList(new String[]{
@@ -191,34 +191,25 @@ public class PostgresDictionary extends DBDictionary {
 
         // reservedWordSet subset that CANNOT be used as valid column names
         // (i.e., without surrounding them with double-quotes)
-        // generated at 2021-05-03T10:44:58.562 via org.apache.openjpa.reservedwords.ReservedWordsIT
         invalidColumnWordSet.addAll(Arrays.asList(new String[] {
-            "ALL", "ANALYSE", "ANALYZE", "AND", "ANY", "ARRAY", "AS", "ASC", "ASYMMETRIC", "AUTHORIZATION", "BINARY", "BOTH",
-            "CASE", "CAST", "CHECK", "COLLATE", "COLLATION", "COLUMN", "CONSTRAINT", "CREATE", "CROSS", "CURRENT_DATE", "CURRENT_ROLE",
-            "CURRENT_TIME", "CURRENT_TIMESTAMP", "CURRENT_USER", "DEFAULT", "DEFERRABLE", "DESC", "DISTINCT", "DO", "ELSE",
-            "END", "END-EXEC", "EXCEPT", "FALSE", "FETCH", "FOR", "FOREIGN", "FREEZE", "FROM", "FULL", "GRANT", "GROUP", "HAVING",
-            "ILIKE", "IN", "INITIALLY", "INNER", "INTERSECT", "INTO", "IS", "ISNULL", "JOIN", "LATERAL", "LEADING", "LEFT",
-            "LIKE", "LIMIT", "LOCALTIME", "LOCALTIMESTAMP", "NATURAL", "NOT", "NOTNULL", "NULL", "OFFSET", "ON", "ONLY", "OR",
-            "ORDER", "OUTER", "OVERLAPS", "PLACING", "PRIMARY", "REFERENCES", "RIGHT", "SELECT", "SESSION_USER", "SIMILAR",
-            "SOME", "SYMMETRIC", "TABLE", "TABLESAMPLE", "THEN", "TO", "TRAILING", "TRUE", "UNION", "UNIQUE", "USER", "USING",
-            "VERBOSE", "WHEN", "WHERE", "WINDOW", "WITH",
-            // end generated.
-            // The following keywords used to be defined as reserved words in the past, but now seem to work
-            // we still add them for compat reasons
-            "BETWEEN",
+            "ALL", "AND", "ANY", "AS", "ASC", "AUTHORIZATION", "BETWEEN",
+            "BINARY", "BOTH", "CASE", "CAST", "CHECK", "COLLATE", "COLUMN",
+            "CONSTRAINT", "CREATE", "CROSS", "CURRENT_DATE", "CURRENT_TIME",
+            "CURRENT_TIMESTAMP", "CURRENT_USER", "DEFAULT", "DEFERRABLE",
+            "DESC", "DISTINCT", "DO", "ELSE", "END", "END", "EXCEPT", "FALSE",
+            "FOR", "FOREIGN", "FROM", "FULL", "GRANT", "GROUP", "HAVING", "IN",
+            "INITIALLY", "INNER", "INTERSECT", "INTO", "IS", "ISNULL", "JOIN",
+            "LEADING", "LEFT", "LIKE", "NATURAL", "NOT", "NOTNULL", "NULL",
+            "ON", "ONLY", "OR", "ORDER", "OUTER", "OVERLAPS", "PRIMARY",
+            "REFERENCES", "RIGHT", "SELECT", "SESSION_USER", "SOME", "TABLE",
+            "THEN", "TO", "TRAILING", "TRUE", "UNION", "UNIQUE", "USER",
+            "USING", "VERBOSE", "WHEN", "WHERE",
         }));
 
         _timestampTypes.add("ABSTIME");
         _timestampTypes.add("TIMESTAMP");
         _timestampTypes.add(timestampTypeName.toUpperCase(Locale.ENGLISH)); // handle user configured timestamp types.
-
-        indexPhysicalForeignKeys = true; // PostgreSQL does not automatically create an index for a foreign key so we will
-
-        // PostgreSQL requires to escape search strings
-        requiresSearchStringEscapeForLike = true;
     }
-
-
 
     @Override
     public Date getDate(ResultSet rs, int column)
@@ -417,8 +408,8 @@ public class PostgresDictionary extends DBDictionary {
 
         if(namePairs != null) { // unable to parse strName.
             try {
-                for (String[] namePair : namePairs) {
-                    if (queryOwnership(conn, namePair, schema)) {
+                for (int i = 0; i < namePairs.length; i++) {
+                    if (queryOwnership(conn, namePairs[i], schema)) {
                         return true;
                     }
                 }
@@ -757,30 +748,6 @@ public class PostgresDictionary extends DBDictionary {
         return rs.getObject(column, OffsetDateTime.class);
     }
 
-    /**
-     * default column type for OffsetTime is 'time with time zone'.
-     * But opposed to the name PostgreSQL internally stores those values in UTC time
-     * without any timezone.
-     */
-    @Override
-    public void setOffsetTime(PreparedStatement stmnt, int idx, OffsetTime val, Column col) throws SQLException {
-        // this is really a whacky hack somehow
-        // PostgreSQL doesn't support OffsetTime natively.
-        // The JDBC driver will automatically convert this to UTC which is the
-        // internal normalised TimeZone PostgreSQL uses.
-        LocalTime utcTime = val.withOffsetSameInstant(OffsetDateTime.now().getOffset()).toLocalTime();
-        stmnt.setTime(idx, java.sql.Time.valueOf(utcTime));
-    }
-
-    @Override
-    public OffsetTime getOffsetTime(ResultSet rs, int column) throws SQLException {
-        final java.sql.Time utcTime = rs.getTime(column);
-        if (utcTime != null) {
-            return utcTime.toLocalTime().atOffset(OffsetDateTime.now().getOffset());
-        }
-        return null;
-    }
-
     @Override
     public void setLocalDate(PreparedStatement stmnt, int idx, LocalDate val, Column col) throws SQLException {
         stmnt.setObject(idx, val);
@@ -802,7 +769,7 @@ public class PostgresDictionary extends DBDictionary {
     }
 
     /**
-     * Determine XML column support and backslash handling, etc
+     * Determine XML column support and backslash handling.
      */
     @Override
     public void connectedConfiguration(Connection conn) throws SQLException {
@@ -831,23 +798,14 @@ public class PostgresDictionary extends DBDictionary {
         if ((maj >= 9 || (maj == 8 && min >= 3))) {
             supportsXMLColumn = true;
         }
-        if (maj < 10) {
-            // setQueryTimeout only got implemented pretty late
-            supportsQueryTimeout = false;
-        }
+
+        // PostgreSQL requires to escape search strings
+        requiresSearchStringEscapeForLike = true;
 
         // Old PostgreSQL requires double-escape for strings.
         if ((maj <= 8 || (maj == 9 && min == 0))) {
             searchStringEscape = "\\\\";
         }
-    }
-
-    @Override
-    public boolean isFatalException(int subtype, SQLException ex) {
-        if ((subtype == StoreException.LOCK  && "57014".equals(ex.getSQLState()))) {
-            return false;
-        }
-        return super.isFatalException(subtype, ex);
     }
 
     /**

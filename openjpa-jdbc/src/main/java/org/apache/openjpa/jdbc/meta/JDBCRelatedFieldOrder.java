@@ -96,14 +96,13 @@ class JDBCRelatedFieldOrder implements JDBCOrder {
             return elem.getFieldMapping(_fm.getIndex());
         else {
             FieldMapping fms[] = elem.getFieldMappings();
-            for (FieldMapping fieldMapping : fms) {
-                ValueMapping vm = (ValueMapping) fieldMapping.getValue();
-                ClassMapping clm = (ClassMapping) vm.getEmbeddedMetaData();
+            for (int i = 0; i < fms.length; i++) {
+                ValueMapping vm = (ValueMapping)fms[i].getValue();
+                ClassMapping clm = (ClassMapping)vm.getEmbeddedMetaData();
                 if (clm != null) {
                     if (clm.getDescribedType() == owner.getDescribedType()) {
                         return owner.getFieldMapping(_fm.getIndex());
-                    }
-                    else {
+                    } else {
                         FieldMapping fm1 = getOrderByField(clm, fm);
                         if (fm1 != null)
                             return fm1;

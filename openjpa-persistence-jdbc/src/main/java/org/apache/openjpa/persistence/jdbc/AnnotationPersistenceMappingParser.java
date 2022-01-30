@@ -624,12 +624,12 @@ public class AnnotationPersistenceMappingParser
             throw new UserException(_loc.get("unique-no-column", ctx));
         DBIdentifier[] sColNames = DBIdentifier.toArray(columnNames,DBIdentifierType.COLUMN, delimit());
         Unique uniqueConstraint = new Unique();
-        for (DBIdentifier sColName : sColNames) {
-            if (DBIdentifier.isEmpty(sColName))
+        for (int i = 0; i < sColNames.length; i++) {
+            if (DBIdentifier.isEmpty(sColNames[i]))
                 throw new UserException(_loc.get("unique-empty-column",
                         Arrays.toString(sColNames), ctx));
             Column column = new Column();
-            column.setIdentifier(sColName);
+            column.setIdentifier(sColNames[i]);
             uniqueConstraint.addColumn(column);
         }
         if (!StringUtil.isEmpty(anno.name())) {
@@ -661,12 +661,12 @@ public class AnnotationPersistenceMappingParser
 
         DBIdentifier[] sColNames = DBIdentifier.toArray(columnNames.split(","), DBIdentifierType.COLUMN, delimit());
         org.apache.openjpa.jdbc.schema.Index indx = new org.apache.openjpa.jdbc.schema.Index();
-        for (DBIdentifier sColName : sColNames) {
-            if (DBIdentifier.isEmpty(sColName))
+        for (int i = 0; i < sColNames.length; i++) {
+            if (DBIdentifier.isEmpty(sColNames[i]))
                 throw new UserException(_loc.get("index-empty-column",
                         Arrays.toString(sColNames), ctx));
             Column column = new Column();
-            column.setIdentifier(sColName);
+            column.setIdentifier(sColNames[i]);
             indx.addColumn(column);
         }
         indx.setUnique(anno.unique());
@@ -1059,9 +1059,9 @@ public class AnnotationPersistenceMappingParser
 
         List<Column> cols = new ArrayList<>(pcols.length);
         int unique = 0;
-        for (ElementColumn pcol : pcols) {
-            cols.add(newColumn(pcol, delimit()));
-            unique |= (pcol.unique()) ? TRUE : FALSE;
+        for (int i = 0; i < pcols.length; i++) {
+            cols.add(newColumn(pcols[i], delimit()));
+            unique |= (pcols[i].unique()) ? TRUE : FALSE;
         }
         setColumns(fm, fm.getElementMapping().getValueInfo(), cols, unique);
     }
@@ -1095,9 +1095,9 @@ public class AnnotationPersistenceMappingParser
 
         List<Column> cols = new ArrayList<>(joins.length);
         int unique = 0;
-        for (KeyJoinColumn join : joins) {
-            cols.add(newColumn(join, delimit()));
-            unique |= (join.unique()) ? TRUE : FALSE;
+        for (int i = 0; i < joins.length; i++) {
+            cols.add(newColumn(joins[i], delimit()));
+            unique |= (joins[i].unique()) ? TRUE : FALSE;
         }
         setColumns(fm, fm.getKeyMapping().getValueInfo(), cols, unique);
     }
@@ -1589,7 +1589,7 @@ public class AnnotationPersistenceMappingParser
      */
     private void parseEnumerated(FieldMapping fm, Enumerated anno) {
         String strat = EnumValueHandler.class.getName() + "(StoreOrdinal="
-            + (anno.value() == EnumType.ORDINAL) + ")";
+            + String.valueOf(anno.value() == EnumType.ORDINAL) + ")";
         if (fm.isElementCollection())
             fm.getElementMapping().getValueInfo().setStrategy(strat);
         else
@@ -1601,7 +1601,7 @@ public class AnnotationPersistenceMappingParser
      */
     private void parseMapKeyEnumerated(FieldMapping fm, MapKeyEnumerated anno) {
         String strat = EnumValueHandler.class.getName() + "(StoreOrdinal="
-            + (anno.value() == EnumType.ORDINAL) + ")";
+            + String.valueOf(anno.value() == EnumType.ORDINAL) + ")";
         fm.getKeyMapping().getValueInfo().setStrategy(strat);
     }
 
@@ -1699,9 +1699,9 @@ public class AnnotationPersistenceMappingParser
             }
             if (xmlRootElementClass != null
                 && StringUtil.isEmpty(pcols[i].columnDefinition())
-                && AccessController.doPrivileged(J2DoPrivHelper
+                && (AccessController.doPrivileged(J2DoPrivHelper
                     .isAnnotationPresentAction(fm.getDeclaredType(),
-                            (Class<? extends Annotation>) xmlRootElementClass))) {
+                        (Class<? extends Annotation>) xmlRootElementClass))).booleanValue()) {
                 DBDictionary dict = ((MappingRepository) getRepository())
                     .getDBDictionary();
                 if (dict.supportsXMLColumn)
@@ -1894,9 +1894,9 @@ public class AnnotationPersistenceMappingParser
 
         List<Column> cols = new ArrayList<>(pcols.length);
         int unique = 0;
-        for (KeyColumn pcol : pcols) {
-            cols.add(newColumn(pcol, delimit()));
-            unique |= (pcol.unique()) ? TRUE : FALSE;
+        for (int i = 0; i < pcols.length; i++) {
+            cols.add(newColumn(pcols[i], delimit()));
+            unique |= (pcols[i].unique()) ? TRUE : FALSE;
         }
         setColumns(fm, fm.getKeyMapping().getValueInfo(), cols, unique);
     }
@@ -2122,9 +2122,9 @@ public class AnnotationPersistenceMappingParser
 
         List<Column> cols = new ArrayList<>(joins.length);
         int unique = 0;
-        for (ElementJoinColumn join : joins) {
-            cols.add(newColumn(join, delimit()));
-            unique |= (join.unique()) ? TRUE : FALSE;
+        for (int i = 0; i < joins.length; i++) {
+            cols.add(newColumn(joins[i], delimit()));
+            unique |= (joins[i].unique()) ? TRUE : FALSE;
         }
         setColumns(fm, fm.getElementMapping().getValueInfo(), cols, unique);
     }
@@ -2210,9 +2210,9 @@ public class AnnotationPersistenceMappingParser
 
         List<Column> cols = new ArrayList<>(joins.length);
         int unique = 0;
-        for (MapKeyJoinColumn join : joins) {
-            cols.add(newColumn(join));
-            unique |= (join.unique()) ? TRUE : FALSE;
+        for (int i = 0; i < joins.length; i++) {
+            cols.add(newColumn(joins[i]));
+            unique |= (joins[i].unique()) ? TRUE : FALSE;
         }
         setColumns(fm, fm.getKeyMapping().getValueInfo(), cols, unique);
     }

@@ -152,9 +152,9 @@ public class ExpressionStoreQuery
 
     @Override
     public FilterListener getFilterListener(String tag) {
-        for (FilterListener listener : _listeners)
-            if (listener.getTag().equals(tag))
-                return listener;
+        for (int i = 0; i < _listeners.length; i++)
+            if (_listeners[i].getTag().equals(tag))
+                return _listeners[i];
         return null;
     }
 
@@ -369,7 +369,9 @@ public class ExpressionStoreQuery
                     range.end = ((Number) ((Constant) exps.range[1]).
                         getValue(params)).longValue();
                     return;
-                } catch (ClassCastException | NullPointerException cce) {
+                } catch (ClassCastException cce) {
+                    // fall through to exception below
+                } catch (NullPointerException npe) {
                     // fall through to exception below
                 }
             }
@@ -446,7 +448,7 @@ public class ExpressionStoreQuery
             for(Entry<?, Class<?>> entry : paramTypes.entrySet()){
                 Object key = entry.getKey();
                 int idx = (key instanceof Integer)
-                    ? (Integer) key - base
+                    ? ((Integer)key).intValue() - base
                     : paramTypes.indexOf(key);
                 if (idx >= arr.length || idx < 0)
                         throw new UserException(_loc.get("gap-query-param",
@@ -466,8 +468,8 @@ public class ExpressionStoreQuery
             int low = Integer.MAX_VALUE;
             Object obj;
             int val;
-            for (Object param : params) {
-                obj = param;
+            for (Iterator itr = params.iterator(); itr.hasNext();) {
+                obj = itr.next();
                 if (!(obj instanceof Number))
                     return 0; // use 0 base when params are mixed types
 
@@ -510,9 +512,9 @@ public class ExpressionStoreQuery
                 return exps[0].accessPath;
 
             List<ClassMetaData> metas = null;
-            for (QueryExpressions exp : exps)
+            for (int i = 0; i < exps.length; i++)
                 metas = Filters.addAccessPathMetaDatas(metas,
-                        exp.accessPath);
+                    exps[i].accessPath);
             if (metas == null)
                 return StoreQuery.EMPTY_METAS;
             return (ClassMetaData[]) metas.toArray
@@ -560,7 +562,11 @@ public class ExpressionStoreQuery
                         getValue2 = cls.getMethod("getValue2");
                         getValue2.setAccessible(true);
                         value2 = getValue2.invoke(exps.having, (Object[]) null);
-                    } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException name) {
+                    } catch (NoSuchMethodException name) {
+                        // skip
+                    } catch (IllegalAccessException iae) {
+                        // skip
+                    } catch (InvocationTargetException ite) {
                         // skip
                     }
                     if (value2 != null && value2 instanceof Subquery)

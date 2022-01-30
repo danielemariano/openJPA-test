@@ -291,7 +291,7 @@ public class DetachManager
             _copy = false;
         }
         else {
-            _copy = compatibility.getCopyOnDetach();
+            _copy = compatibility.getCopyOnDetach();;
         }
     }
 
@@ -329,8 +329,8 @@ public class DetachManager
         boolean failFast = false;
         try {
             Object detach;
-            for (Object instance : instances) {
-                detach = detachInternal(instance);
+            for (Iterator itr = instances.iterator(); itr.hasNext();) {
+                detach = detachInternal(itr.next());
                 if (_copy)
                     detached.add(detach);
             }
@@ -625,9 +625,8 @@ public class DetachManager
                 // equals and hashCode methods, and this ensures that pk fields
                 // are set properly if we return any partially-detached objects
                 // due to reentrant calls when traversing relations
-                for (FieldMetaData pk : pks) {
-                    detachField(from, pk.getIndex(), true);
-                }
+                for (int i = 0; i < pks.length; i++)
+                    detachField(from, pks[i].getIndex(), true);
                 detachVersion();
                 for (int i = 0; i < fmds.length; i++)
                     if (!fmds[i].isPrimaryKey() && !fmds[i].isVersion())
@@ -842,8 +841,8 @@ public class DetachManager
             if (_copy)
                 coll.clear();
             Object detached;
-            for (Object o : orig) {
-                detached = detachInternal(o);
+            for (Iterator itr = orig.iterator(); itr.hasNext();) {
+                detached = detachInternal(itr.next());
                 if (_copy)
                     coll.add(detached);
             }
@@ -868,8 +867,8 @@ public class DetachManager
                 if (_copy)
                     map.clear();
                 Object key, val;
-                for (Object o : orig.entrySet()) {
-                    entry = (Map.Entry) o;
+                for (Iterator itr = orig.entrySet().iterator(); itr.hasNext();){
+                    entry = (Map.Entry) itr.next();
                     key = entry.getKey();
                     if (keyPC)
                         key = detachInternal(key);
@@ -880,10 +879,10 @@ public class DetachManager
                         map.put(key, val);
                 }
             } else {
-                for (Object o : map.entrySet()) {
-                    entry = (Map.Entry) o;
-                    entry.setValue(detachInternal(entry.getValue()));
-                }
+                for (Iterator itr = map.entrySet().iterator(); itr.hasNext();) {
+                    entry = (Map.Entry) itr.next ();
+                    entry.setValue (detachInternal (entry.getValue ()));
+				}
 			}
 		}
 	}

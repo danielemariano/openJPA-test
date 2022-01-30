@@ -149,14 +149,6 @@ public abstract class AbstractJDBCSeq
         return (JDBCStore) ctx.getStoreManager().getInnermostDelegate();
     }
 
-
-    /**
-     * @see #getConnection(JDBCStore, boolean) but without forcing a connection.
-     */
-    protected Connection getConnection(JDBCStore store) throws SQLException {
-        return getConnection(store, false);
-    }
-
     /**
      * <P>Return the connection to use based on the type of sequence. This
      * connection will automatically be closed; do not close it.</P>
@@ -168,11 +160,10 @@ public abstract class AbstractJDBCSeq
      * <P>Otherwise a new connection will be obtained using DataSource2 from the
      * current configuration. In this case autocommit is set to false prior to
      * returning the connection.</P>
-     * @param forceNewConnection if {@code true} a new connection will be forced
      */
-    protected Connection getConnection(JDBCStore store, boolean forceNewConnection)
+    protected Connection getConnection(JDBCStore store)
         throws SQLException {
-        if (!forceNewConnection && (type == TYPE_TRANSACTIONAL || type == TYPE_CONTIGUOUS)) {
+        if (type == TYPE_TRANSACTIONAL || type == TYPE_CONTIGUOUS) {
             // Also increments ref count.
             return store.getConnection();
         }

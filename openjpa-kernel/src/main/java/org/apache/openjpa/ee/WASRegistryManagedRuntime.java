@@ -18,9 +18,11 @@
  */
 package org.apache.openjpa.ee;
 
+import com.ibm.websphere.uow.UOWSynchronizationRegistry;
 import com.ibm.wsspi.uow.UOWAction;
-
-import java.lang.reflect.Method;
+import com.ibm.wsspi.uow.UOWActionException;
+import com.ibm.wsspi.uow.UOWException;
+import com.ibm.wsspi.uow.UOWManagerFactory;
 
 /**
  * WASRegistryManagedRuntime provides WebSphere specific extensions to
@@ -28,26 +30,6 @@ import java.lang.reflect.Method;
  * the WebSphere UOWManager interface to submit non transactional work.
  */
 public class WASRegistryManagedRuntime extends RegistryManagedRuntime {
-
-    // value taken from com.ibm.websphere.uow.UOWSynchronizationRegistry
-    private static final int WEBSPHERE_UOW_TYPE_LOCAL_TRANSACTION = 0;
-
-    private final Method getUOWManager;
-    private final Method runUnderUOW;
-
-    public WASRegistryManagedRuntime() {
-        try {
-            Class classUOWManagerFactory = Class.forName("com.ibm.wsspi.uow.UOWManagerFactory");
-            getUOWManager = classUOWManagerFactory.getMethod("getUOWManager");
-
-            Class classUOWManager = Class.forName("com.ibm.wsspi.uow.UOWManager");
-            runUnderUOW = classUOWManager.getMethod("runUnderUOW", new Class[]{int.class, boolean.class, UOWAction.class});
-        }
-        catch (Exception e) {
-            throw new RuntimeException("Problem while creating WASManagedRuntime", e);
-        }
-    }
-
     /**
      * <P>
      * RegistryManagedRuntime cannot suspend transactions, but WebSphere
@@ -58,13 +40,18 @@ public class WASRegistryManagedRuntime extends RegistryManagedRuntime {
     public void doNonTransactionalWork(Runnable runnable)
             throws RuntimeException, UnsupportedOperationException {
         try {
-            Object uowManager = getUOWManager.invoke(null);
-
-            runUnderUOW.invoke(uowManager, WEBSPHERE_UOW_TYPE_LOCAL_TRANSACTION, false, new DelegatingUOWAction(runnable));
-
+            UOWManagerFactory.getUOWManager().runUnderUOW(
+                UOWSynchronizationRegistry.UOW_TYPE_LOCAL_TRANSACTION, false,
+                new DelegatingUOWAction(runnable));
         }
-        catch(Exception e ) {
-            RuntimeException re = new RuntimeException(e.getMessage(), e);
+        catch(UOWActionException e ) {
+            RuntimeException re = new RuntimeException(e.getMessage());
+            re.initCause(e);
+            throw re;
+        }
+        catch(UOWException e ) {
+            RuntimeException re = new RuntimeException(e.getMessage());
+            re.initCause(e);
             throw re;
         }
     }

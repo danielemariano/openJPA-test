@@ -186,9 +186,9 @@ public class SQLFormatter {
         StringBuilder clause;
         List<StringBuilder> clauses = new ArrayList<>();
         clauses.add(new StringBuilder());
-        for (String separator : separators) {
-            end = lowerCaseSql.indexOf(" " + separator.toLowerCase(),
-                    start);
+        for (int i = 0; i < separators.length; i++) {
+            end = lowerCaseSql.indexOf(" " + separators[i].toLowerCase(),
+                start);
             if (end == -1)
                 break;
 
@@ -198,9 +198,9 @@ public class SQLFormatter {
             clause = new StringBuilder();
             clauses.add(clause);
             clause.append(clauseIndent);
-            clause.append(separator);
+            clause.append(separators[i]);
 
-            start = end + 1 + separator.length();
+            start = end + 1 + separators[i].length();
         }
 
         clause = clauses.get(clauses.size() - 1);
@@ -265,9 +265,9 @@ public class SQLFormatter {
 
     public static void main(String [] args) {
         SQLFormatter formatter = new SQLFormatter();
-        for (String arg : args) {
+        for (int i = 0; i < args.length; i++) {
             // START - ALLOW PRINT STATEMENTS
-            System.out.println(formatter.prettyPrint(arg));
+            System.out.println(formatter.prettyPrint(args[i]));
             // STOP - ALLOW PRINT STATEMENTS
         }
     }

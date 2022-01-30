@@ -353,22 +353,26 @@ public class PersistenceMetaDataFactory
             return null;
         Collection<Class<?>> classes = repos.loadPersistentTypes(false, loader);
         for (Class<?> cls :  classes) {
-            if (AccessController.doPrivileged(J2DoPrivHelper
-                    .isAnnotationPresentAction(cls, NamedQuery.class)) && hasNamedQuery
+            if ((AccessController.doPrivileged(J2DoPrivHelper
+                .isAnnotationPresentAction(cls, NamedQuery.class)))
+                .booleanValue() && hasNamedQuery
                 (queryName, (NamedQuery) cls.getAnnotation(NamedQuery.class)))
                 return cls;
-            if (AccessController.doPrivileged(J2DoPrivHelper
-                    .isAnnotationPresentAction(cls, NamedQueries.class)) &&
+            if ((AccessController.doPrivileged(J2DoPrivHelper
+                .isAnnotationPresentAction(cls, NamedQueries.class)))
+                .booleanValue() &&
                 hasNamedQuery(queryName, ((NamedQueries) cls.
                     getAnnotation(NamedQueries.class)).value()))
                 return cls;
-            if (AccessController.doPrivileged(J2DoPrivHelper
-                    .isAnnotationPresentAction(cls, NamedNativeQuery.class)) &&
+            if ((AccessController.doPrivileged(J2DoPrivHelper
+                .isAnnotationPresentAction(cls, NamedNativeQuery.class)))
+                .booleanValue() &&
                 hasNamedNativeQuery(queryName, (NamedNativeQuery) cls.
                     getAnnotation(NamedNativeQuery.class)))
                 return cls;
-            if (AccessController.doPrivileged(J2DoPrivHelper
-                    .isAnnotationPresentAction(cls, NamedNativeQueries.class)) &&
+            if ((AccessController.doPrivileged(J2DoPrivHelper
+                .isAnnotationPresentAction(cls, NamedNativeQueries.class)))
+                .booleanValue() &&
                 hasNamedNativeQuery(queryName, ((NamedNativeQueries) cls.
                     getAnnotation(NamedNativeQueries.class)).value()))
                 return cls;
@@ -395,14 +399,16 @@ public class PersistenceMetaDataFactory
         Collection<Class<?>> classes = repos.loadPersistentTypes(false, loader);
         for (Class<?> cls : classes) {
 
-            if (AccessController.doPrivileged(J2DoPrivHelper
-                    .isAnnotationPresentAction(cls, SqlResultSetMapping.class)) &&
+            if ((AccessController.doPrivileged(J2DoPrivHelper
+                .isAnnotationPresentAction(cls, SqlResultSetMapping.class)))
+                .booleanValue() &&
                 hasRSMapping(rsMappingName, (SqlResultSetMapping) cls.
                 getAnnotation(SqlResultSetMapping.class)))
                 return cls;
 
-            if (AccessController.doPrivileged(J2DoPrivHelper
-                    .isAnnotationPresentAction(cls, SqlResultSetMappings.class)) &&
+            if ((AccessController.doPrivileged(J2DoPrivHelper
+                .isAnnotationPresentAction(cls, SqlResultSetMappings.class)))
+                .booleanValue() &&
                 hasRSMapping(rsMappingName, ((SqlResultSetMappings) cls.
                 getAnnotation(SqlResultSetMappings.class)).value()))
                 return cls;
@@ -540,8 +546,8 @@ public class PersistenceMetaDataFactory
             J2DoPrivHelper.getResourceAction(loader, "META-INF/orm.xml"));
         if (rsrc != null) {
             File file = new File(rsrc.getFile());
-            if (AccessController.doPrivileged(
-                    J2DoPrivHelper.existsAction(file)))
+            if ((AccessController.doPrivileged(
+                J2DoPrivHelper.existsAction(file))).booleanValue())
                 return file;
         }
         return new File(dir, "orm.xml");

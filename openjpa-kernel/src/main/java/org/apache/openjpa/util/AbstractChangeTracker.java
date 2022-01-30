@@ -18,13 +18,13 @@
  */
 package org.apache.openjpa.util;
 
-import org.apache.openjpa.lib.util.collections.MapBackedSet;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Set;
+
+import org.apache.commons.collections4.set.MapBackedSet;
 
 /**
  * Base class that provides utilities to change trackers.
@@ -213,9 +213,9 @@ public abstract class AbstractChangeTracker
         else
             _identity = Boolean.FALSE;
 
-        add = switchStructure(add, _identity);
-        rem = switchStructure(rem, _identity);
-        change = switchStructure(change, _identity);
+        add = switchStructure(add, _identity.booleanValue());
+        rem = switchStructure(rem, _identity.booleanValue());
+        change = switchStructure(change, _identity.booleanValue());
     }
 
     /**

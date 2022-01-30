@@ -346,7 +346,8 @@ abstract class AttachStrategy
 
         // now add all elements that are in frmc but not toc
         if (frmc.size() != toc.size()) {
-            for (Object ob : frmc) {
+            for (Iterator i = frmc.iterator(); i.hasNext();) {
+                Object ob = i.next();
                 if (!toc.contains(ob))
                     toc.add(ob);
             }
@@ -437,10 +438,10 @@ abstract class AttachStrategy
         // the end, make the changes directly in tol
         if (frml.size() >= tol.size()) {
             Iterator frmi = frml.iterator();
-            for (Object o : tol) {
+            for (Iterator toi = tol.iterator(); toi.hasNext();) {
                 // if there's an incompatibility, just return a copy of frml
                 // (it's already copied if we attached it)
-                if (!equals(frmi.next(), o, pc))
+                if (!equals(frmi.next(), toi.next(), pc))
                     return (pc) ? frml : copyCollection(manager, frml, fmd, sm);
             }
 
@@ -474,10 +475,10 @@ abstract class AttachStrategy
 
         // make sure all the keys in the from map are in the two map, and
         // that they have the same values
-        for (Object o : frmm.entrySet()) {
-            Entry entry = (Entry) o;
+        for (Iterator i = frmm.entrySet().iterator(); i.hasNext();) {
+            Map.Entry entry = (Map.Entry) i.next();
             if (!tom.containsKey(entry.getKey())
-                    || !equals(tom.get(entry.getKey()), entry.getValue(), valPC)) {
+                || !equals(tom.get(entry.getKey()), entry.getValue(), valPC)) {
                 tom.put(entry.getKey(), entry.getValue());
             }
         }
@@ -511,8 +512,8 @@ abstract class AttachStrategy
         if (keymd.isDeclaredTypePC()) {
             map.clear();
             Object key, val;
-            for (Object o : orig.entrySet()) {
-                entry = (Entry) o;
+            for (Iterator itr = orig.entrySet().iterator(); itr.hasNext();) {
+                entry = (Map.Entry) itr.next();
                 key = entry.getKey();
                 if (keymd.getCascadeAttach() == ValueMetaData.CASCADE_NONE)
                     key = getReference(manager, key, sm, keymd);
@@ -529,13 +530,13 @@ abstract class AttachStrategy
             }
         } else {
             Object val;
-            for (Object o : map.entrySet()) {
-                entry = (Entry) o;
+            for (Iterator itr = map.entrySet().iterator(); itr.hasNext();) {
+                entry = (Map.Entry) itr.next();
                 if (valmd.getCascadeAttach() == ValueMetaData.CASCADE_NONE)
                     val = getReference(manager, entry.getValue(), sm, valmd);
                 else
                     val = manager.attach(entry.getValue(), null, sm, valmd,
-                            false);
+                        false);
                 entry.setValue(val);
             }
         }

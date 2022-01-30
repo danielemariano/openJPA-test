@@ -86,25 +86,25 @@ public class ObjectIdValueHandler
         }
 
         FieldMapping[] fmds = embeddedMeta.getFieldMappings();
-        for (FieldMapping fmd : fmds) {
-            mapsIdColList = fmd.getValueInfo().getMapsIdColumns();
+        for (int i = 0; i < fmds.length; i++) {
+            mapsIdColList = fmds[i].getValueInfo().getMapsIdColumns();
             if (mapsIdColList.size() == 0)
                 continue;
-            ClassMapping embeddedMeta1 = (ClassMapping) fmd.getEmbeddedMetaData();
+            ClassMapping embeddedMeta1 = (ClassMapping)fmds[i].getEmbeddedMetaData();
             if (embeddedMeta1 != null)
                 setMapsIdCols(mapsIdColList, embeddedMeta1);
             else
-                setMapsIdCols(mapsIdColList, fmd);
+                setMapsIdCols(mapsIdColList, fmds[i]);
         }
     }
 
     private void setMapsIdCols(List cols, ClassMapping cm) {
-        for (Object col : cols) {
-            DBIdentifier refColName = ((Column) col).getTargetIdentifier();
+        for (int i = 0; i < cols.size(); i++) {
+            DBIdentifier refColName = ((Column)cols.get(i)).getTargetIdentifier();
             FieldMapping fm = getReferenceField(cm, refColName);
             if (fm != null) {
                 List colList1 = new ArrayList();
-                colList1.add(col);
+                colList1.add(cols.get(i));
                 fm.setMapsIdCols(true);
                 fm.getValueInfo().setMapsIdColumns(colList1);
             }
@@ -118,11 +118,11 @@ public class ObjectIdValueHandler
             return;
         }
 
-        for (Object col : cols) {
-            DBIdentifier refColName = ((Column) col).getTargetIdentifier();
+        for (int i = 0; i < cols.size(); i++) {
+            DBIdentifier refColName = ((Column)cols.get(i)).getTargetIdentifier();
             if (isReferenceField(fm, refColName)) {
                 List colList1 = new ArrayList();
-                colList1.add(col);
+                colList1.add(cols.get(i));
                 fm.setMapsIdCols(true);
                 fm.getValueInfo().setMapsIdColumns(colList1);
             }
@@ -131,9 +131,9 @@ public class ObjectIdValueHandler
 
     private FieldMapping getReferenceField(ClassMapping cm, DBIdentifier refColName) {
         FieldMapping[] fmds = cm.getFieldMappings();
-        for (FieldMapping fmd : fmds) {
-            if (isReferenceField(fmd, refColName))
-                return fmd;
+        for (int i = 0; i < fmds.length; i++) {
+            if (isReferenceField(fmds[i], refColName))
+                return fmds[i];
         }
         return null;
     }

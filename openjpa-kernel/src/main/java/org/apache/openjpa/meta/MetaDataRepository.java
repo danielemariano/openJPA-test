@@ -112,22 +112,22 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
     // to metadatas
     private Map<Class<?>, ClassMetaData> _metas = new HashMap<>();
     private Map<String, ClassMetaData> _metaStringMap = new ConcurrentHashMap<>();
-    private Map<Class<?>, Class<?>> _oids = Collections.synchronizedMap(new HashMap<>());
+    private Map<Class<?>, Class<?>> _oids = Collections.synchronizedMap(new HashMap<Class<?>, Class<?>>());
     private Map<Class<?>, Collection<Class<?>>> _impls =
-        Collections.synchronizedMap(new HashMap<>());
-    private Map<Class<?>, Class<?>> _ifaces = Collections.synchronizedMap(new HashMap<>());
+        Collections.synchronizedMap(new HashMap<Class<?>, Collection<Class<?>>>());
+    private Map<Class<?>, Class<?>> _ifaces = Collections.synchronizedMap(new HashMap<Class<?>, Class<?>>());
     private Map<String, QueryMetaData> _queries = new HashMap<>();
     private Map<String, SequenceMetaData> _seqs = new HashMap<>();
-    private Map<String, List<Class<?>>> _aliases = Collections.synchronizedMap(new HashMap<>());
+    private Map<String, List<Class<?>>> _aliases = Collections.synchronizedMap(new HashMap<String, List<Class<?>>>());
     private Map<Class<?>, NonPersistentMetaData> _pawares =
-        Collections.synchronizedMap(new HashMap<>());
+        Collections.synchronizedMap(new HashMap<Class<?>, NonPersistentMetaData>());
     private Map<Class<?>, NonPersistentMetaData> _nonMapped =
-        Collections.synchronizedMap(new HashMap<>());
-    private Map<Class<?>, Class<?>> _metamodel = Collections.synchronizedMap(new HashMap<>());
+        Collections.synchronizedMap(new HashMap<Class<?>, NonPersistentMetaData>());
+    private Map<Class<?>, Class<?>> _metamodel = Collections.synchronizedMap(new HashMap<Class<?>, Class<?>>());
 
     // map of classes to lists of their subclasses
     private Map<Class<?>, Collection<Class<?>>> _subs =
-            Collections.synchronizedMap(new HashMap<>());
+            Collections.synchronizedMap(new HashMap<Class<?>, Collection<Class<?>>>());
 
     // xml mapping
     protected final XMLMetaData[] EMPTY_XMLMETAS;
@@ -314,11 +314,11 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
      * MetaData for all persistent classes and will remove locking from this class.
      */
     public synchronized void preload() {
-        if (!_preload) {
+        if (_preload == false) {
             return;
         }
         // If pooling EMFs, this method may be invoked more than once. Only perform this work once.
-        if (_preloadComplete) {
+        if (_preloadComplete == true) {
             return;
         }
 
@@ -341,7 +341,7 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
         if (classes == null || classes.size() == 0) {
             throw new MetaDataException(_loc.get("repos-initializeEager-none"));
         }
-        if (_log.isTraceEnabled()) {
+        if (_log.isTraceEnabled() == true) {
             _log.trace(_loc.get("repos-initializeEager-found", classes));
         }
 
@@ -657,19 +657,16 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
             return;
 
         // load mapping data
-        for (ClassMetaData data : resolved) {
-            loadMapping(data);
-        }
-        for (ClassMetaData metaData : resolved) {
-            preMapping(metaData);
-        }
+        for (int i = 0; i < resolved.size(); i++)
+            loadMapping(resolved.get(i));
+        for (int i = 0; i < resolved.size(); i++)
+            preMapping(resolved.get(i));
 
         // resolve mappings
         boolean err = true;
         if ((_resMode & MODE_MAPPING) != 0)
-            for (ClassMetaData classMetaData : resolved) {
-                err &= resolveMapping(classMetaData);
-            }
+            for (int i = 0; i < resolved.size(); i++)
+                err &= resolveMapping(resolved.get(i));
 
         // throw errors encountered
         // OPENJPA-1535 Always throw a MetaDataException because callers
@@ -709,8 +706,8 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
             }
             if (meta.getDescribedType().isInterface()) {
                 Class<?>[] sups = meta.getDescribedType().getInterfaces();
-                for (Class<?> aClass : sups) {
-                    supMeta = getMetaData(aClass, meta.getEnvClassLoader(), false);
+                for (int i = 0; i < sups.length; i++) {
+                    supMeta = getMetaData(sups[i], meta.getEnvClassLoader(), false);
                     if (supMeta != null) {
                         meta.setPCSuperclass(sup);
                         meta.setPCSuperclassMetaData(supMeta);
@@ -724,9 +721,9 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
 
         // resolve relation primary key fields for mapping dependencies
         FieldMetaData[] fmds = meta.getDeclaredFields();
-        for (FieldMetaData fmd : fmds)
-            if (fmd.isPrimaryKey())
-                getMetaData(fmd.getDeclaredType(), meta.getEnvClassLoader(), false);
+        for (int i = 0; i < fmds.length; i++)
+            if (fmds[i].isPrimaryKey())
+                getMetaData(fmds[i].getDeclaredType(), meta.getEnvClassLoader(), false);
 
         // resolve metadata; if we're not in the process of resolving
         // others, this will return the set of interrelated metas that
@@ -795,12 +792,11 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
 
         // initialize mapping for runtime use
         if ((_resMode & MODE_MAPPING_INIT) != 0) {
-            for (ClassMetaData classMetaData : mapped) {
-                meta = classMetaData;
+            for (int i = 0; i < mapped.size(); i++) {
+                meta = mapped.get(i);
                 try {
                     meta.resolve(MODE_MAPPING_INIT);
-                }
-                catch (RuntimeException re) {
+                } catch (RuntimeException re) {
                     removeMetaData(meta);
                     _errs.add(re);
                 }
@@ -875,9 +871,9 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
             // prevent concurrent mod errors when resolving one metadata
             // introduces others
             ClassMetaData[] metas = _metas.values().toArray(new ClassMetaData[_metas.size()]);
-        for (ClassMetaData classMetaData : metas)
-            if (classMetaData != null)
-                getMetaData(classMetaData.getDescribedType(), classMetaData.getEnvClassLoader(), true);
+            for (int i = 0; i < metas.length; i++)
+                if (metas[i] != null)
+                    getMetaData(metas[i].getDescribedType(), metas[i].getEnvClassLoader(), true);
 
             List<ClassMetaData> resolved = new ArrayList<>(_metas.size());
             for (ClassMetaData meta : _metas.values()) {
@@ -1635,11 +1631,10 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
      */
     private void loadRegisteredClassMetaData(ClassLoader envLoader) {
         Class<?>[] reg = processRegisteredClasses(envLoader);
-        for (Class<?> aClass : reg) {
+        for (int i = 0; i < reg.length; i++) {
             try {
-                getMetaData(aClass, envLoader, false);
-            }
-            catch (MetaDataException me) {
+                getMetaData(reg[i], envLoader, false);
+            } catch (MetaDataException me) {
                 if (_log.isWarnEnabled())
                     _log.warn(me);
             }
@@ -1671,9 +1666,9 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
 
         Collection<String> pcNames = getPersistentTypeNames(false, envLoader);
         Collection<Class<?>> failed = null;
-        for (Class<?> aClass : reg) {
+        for (int i = 0; i < reg.length; i++) {
             // Don't process types that aren't listed by the user; it may belong to a different persistence unit.
-            if (pcNames != null && !pcNames.isEmpty() && !pcNames.contains(aClass.getName())) {
+            if (pcNames != null && !pcNames.isEmpty() && !pcNames.contains(reg[i].getName())) {
                 continue;
             }
 
@@ -1682,46 +1677,44 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
             if (_filterRegisteredClasses) {
                 Log log = (_conf == null) ? null : _conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);
                 ClassLoader loadCL = (envLoader != null) ?
-                        envLoader :
-                        AccessController.doPrivileged(J2DoPrivHelper.getContextClassLoaderAction());
+                    envLoader :
+                    AccessController.doPrivileged(J2DoPrivHelper.getContextClassLoaderAction());
 
                 try {
-                    Class<?> classFromAppClassLoader = Class.forName(aClass.getName(), true, loadCL);
+                    Class<?> classFromAppClassLoader = Class.forName(reg[i].getName(), true, loadCL);
 
-                    if (!aClass.equals(classFromAppClassLoader)) {
+                    if (!reg[i].equals(classFromAppClassLoader)) {
                         // This is a class that belongs to a ClassLoader not associated with the Application,
                         // so it should be processed.
                         if (log != null && log.isTraceEnabled()) {
                             log.trace(
-                                    "Metadata Repository will ignore Class " + aClass.getName() +
-                                            ", since it originated from a ClassLoader not associated with the application.");
+                                "Metadata Repository will ignore Class " + reg[i].getName() +
+                                ", since it originated from a ClassLoader not associated with the application.");
                         }
                         continue;
                     }
-                }
-                catch (ClassNotFoundException cnfe) {
+                } catch (ClassNotFoundException cnfe) {
                     // Catch exception and log its occurrence, and permit MDR processing to continue to preserve
                     // original behavior.
                     if (log != null && log.isTraceEnabled()) {
-                        log.trace("The Class " + aClass.getName() + " was identified as a persistent class " +
-                                "by configuration, but the Class could not be found.");
+                        log.trace("The Class " + reg[i].getName() + " was identified as a persistent class " +
+                            "by configuration, but the Class could not be found.");
                     }
                 }
             }
 
-            checkEnhancementLevel(aClass);
+            checkEnhancementLevel(reg[i]);
             try {
-                processRegisteredClass(aClass);
-            }
-            catch (Throwable t) {
+                processRegisteredClass(reg[i]);
+            } catch (Throwable t) {
                 if (!_conf.getRetryClassRegistration())
-                    throw new MetaDataException(_loc.get("error-registered", aClass), t);
+                    throw new MetaDataException(_loc.get("error-registered", reg[i]), t);
 
                 if (_log.isWarnEnabled())
-                    _log.warn(_loc.get("failed-registered", aClass), t);
+                    _log.warn(_loc.get("failed-registered", reg[i]), t);
                 if (failed == null)
                     failed = new ArrayList<>();
-                failed.add(aClass);
+                failed.add(reg[i]);
             }
         }
         if (failed != null) {
@@ -1842,15 +1835,15 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
         if (!_factory.getDefaults().isDeclaredInterfacePersistent())
             return;
         Class<?>[] ints = check.getInterfaces();
-        for (Class<?> anInt : ints) {
+        for (int i = 0; i < ints.length; i++) {
             // don't map java-standard interfaces
-            if (anInt.getName().startsWith("java."))
+            if (ints[i].getName().startsWith("java."))
                 continue;
 
             // only map least-derived interface implementors
-            if (leastDerived == cls || isLeastDerivedImpl(anInt, cls)) {
-                addToCollection(_impls, anInt, cls, false);
-                updateImpls(cls, leastDerived, anInt);
+            if (leastDerived == cls || isLeastDerivedImpl(ints[i], cls)) {
+                addToCollection(_impls, ints[i], cls, false);
+                updateImpls(cls, leastDerived, ints[i]);
             }
         }
     }
@@ -1892,7 +1885,7 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
                 comp.setBase(key);
                 coll = new TreeSet<Class<?>>(comp);
             } else
-                coll = new LinkedList<>();
+                coll = new LinkedList<Class<?>>();
             map.put(key, coll);
         }
         coll.add(value);
@@ -1967,7 +1960,7 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
         initializeMetaDataFactory();
         if (_implGen == null)
             _implGen = new InterfaceImplGenerator(this);
-        if (_preload) {
+        if (_preload == true) {
             _oids = new HashMap<>();
             _impls = new HashMap<>();
             _ifaces = new HashMap<>();
@@ -2427,10 +2420,9 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
 
     private void closeInternal() {
             SequenceMetaData[] smds = getSequenceMetaDatas();
-        for (SequenceMetaData smd : smds) {
-            smd.close();
-        }
-        clear();
+            for (int i = 0; i < smds.length; i++)
+                smds[i].close();
+            clear();
     }
 
     /**
@@ -2541,7 +2533,7 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
         if (conf == null)
             return false;
         Options o = Configurations.parseProperties(Configurations.getProperties(conf.getMetaDataRepository()));
-        if (o.getBooleanProperty(PRELOAD_STR) || o.getBooleanProperty(PRELOAD_STR.toLowerCase())) {
+        if (o.getBooleanProperty(PRELOAD_STR) == true || o.getBooleanProperty(PRELOAD_STR.toLowerCase()) == true) {
             return true;
         }
         return false;
@@ -2552,12 +2544,12 @@ public class MetaDataRepository implements PCRegistry.RegisterClassListener, Con
      * is older than the current version.
      */
     private void checkEnhancementLevel(Class<?> cls) {
-        if (!_logEnhancementLevel) {
+        if (_logEnhancementLevel == false) {
             return;
         }
         Log log = _conf.getLog(OpenJPAConfiguration.LOG_RUNTIME);
         boolean res = PCEnhancer.checkEnhancementLevel(cls, _conf.getLog(OpenJPAConfiguration.LOG_RUNTIME));
-        if (!log.isTraceEnabled() && res) {
+        if (log.isTraceEnabled() == false && res == true) {
             // Since trace isn't enabled flip the flag so we only log this once.
             _logEnhancementLevel = false;
             log.info(_loc.get("down-level-entity"));

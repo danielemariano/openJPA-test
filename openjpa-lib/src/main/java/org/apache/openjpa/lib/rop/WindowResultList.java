@@ -20,6 +20,7 @@ package org.apache.openjpa.lib.rop;
 
 import java.io.ObjectStreamException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -171,9 +172,8 @@ public class WindowResultList extends AbstractNonSequentialResultList {
 
         // load results into list
         List list = new ArrayList();
-        for (Object o : this) {
-            list.add(o);
-        }
+        for (Iterator itr = iterator(); itr.hasNext();)
+            list.add(itr.next());
         return list;
     }
 }

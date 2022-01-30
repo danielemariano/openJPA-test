@@ -100,35 +100,35 @@ public class ReflectingPersistenceCapable
         switch (meta.getField(i).getDeclaredTypeCode()) {
             case JavaTypes.BOOLEAN:
                 sm.providedBooleanField(this, i, value == null ? false :
-                        (Boolean) value);
+                    ((Boolean) value).booleanValue());
                 break;
             case JavaTypes.BYTE:
                 sm.providedByteField(this, i, value == null ? 0 :
-                        (Byte) value);
+                    ((Byte) value).byteValue());
                 break;
             case JavaTypes.CHAR:
                 sm.providedCharField(this, i, value == null ? 0 :
-                        (Character) value);
+                    ((Character) value).charValue());
                 break;
             case JavaTypes.DOUBLE:
                 sm.providedDoubleField(this, i, value == null ? 0 :
-                        (Double) value);
+                    ((Double) value).doubleValue());
                 break;
             case JavaTypes.FLOAT:
                 sm.providedFloatField(this, i, value == null ? 0 :
-                        (Float) value);
+                    ((Float) value).floatValue());
                 break;
             case JavaTypes.INT:
                 sm.providedIntField(this, i, value == null ? 0 :
-                        (Integer) value);
+                    ((Integer) value).intValue());
                 break;
             case JavaTypes.LONG:
                 sm.providedLongField(this, i, value == null ? 0 :
-                        (Long) value);
+                    ((Long) value).longValue());
                 break;
             case JavaTypes.SHORT:
                 sm.providedShortField(this, i, value == null ? 0 :
-                        (Short) value);
+                    ((Short) value).shortValue());
                 break;
             case JavaTypes.STRING:
                 sm.providedStringField(this, i, (String) value);
@@ -141,37 +141,37 @@ public class ReflectingPersistenceCapable
 
     @Override
     public void pcProvideFields(int[] fieldIndices) {
-        for (int fieldIndex : fieldIndices) {
-            pcProvideField(fieldIndex);
-        }
+        for(int i = 0; i < fieldIndices.length; i++)
+            pcProvideField(fieldIndices[i]);
     }
 
     @Override
     public void pcReplaceField(int i) {
         switch(meta.getField(i).getDeclaredTypeCode()) {
             case JavaTypes.BOOLEAN:
-                setValue(i, o, sm.replaceBooleanField(this, i));
+                setValue(i, o, Boolean.valueOf(
+                    sm.replaceBooleanField(this, i)));
                 break;
             case JavaTypes.BYTE:
-                setValue(i, o, sm.replaceByteField(this, i));
+                setValue(i, o, Byte.valueOf(sm.replaceByteField(this, i)));
                 break;
             case JavaTypes.CHAR:
-                setValue(i, o, sm.replaceCharField(this, i));
+                setValue(i, o, Character.valueOf(sm.replaceCharField(this, i)));
                 break;
             case JavaTypes.DOUBLE:
-                setValue(i, o, sm.replaceDoubleField(this, i));
+                setValue(i, o, new Double(sm.replaceDoubleField(this, i)));
                 break;
             case JavaTypes.FLOAT:
-                setValue(i, o, sm.replaceFloatField(this, i));
+                setValue(i, o, new Float(sm.replaceFloatField(this, i)));
                 break;
             case JavaTypes.INT:
-                setValue(i, o, sm.replaceIntField(this, i));
+                setValue(i, o, Integer.valueOf(sm.replaceIntField(this, i)));
                 break;
             case JavaTypes.LONG:
-                setValue(i, o, sm.replaceLongField(this, i));
+                setValue(i, o, Long.valueOf(sm.replaceLongField(this, i)));
                 break;
             case JavaTypes.SHORT:
-                setValue(i, o, sm.replaceShortField(this, i));
+                setValue(i, o, Short.valueOf(sm.replaceShortField(this, i)));
                 break;
             case JavaTypes.STRING:
                 setValue(i, o, sm.replaceStringField(this, i));
@@ -184,9 +184,8 @@ public class ReflectingPersistenceCapable
 
     @Override
     public void pcReplaceFields(int[] fieldIndices) {
-        for (int fieldIndex : fieldIndices) {
-            pcReplaceField(fieldIndex);
-        }
+        for(int i = 0; i < fieldIndices.length; i++)
+            pcReplaceField(fieldIndices[i]);
     }
 
     public void pcCopyField(Object fromObject, int i) {
@@ -201,9 +200,8 @@ public class ReflectingPersistenceCapable
             fromObject = ((ReflectingPersistenceCapable) fromObject)
                 .getManagedInstance();
 
-        for (int fieldIndex : fieldIndices) {
-            pcCopyField(fromObject, fieldIndex);
-        }
+        for(int i = 0; i < fieldIndices.length; i++)
+            pcCopyField(fromObject, fieldIndices[i]);
     }
 
     @Override
@@ -275,7 +273,7 @@ public class ReflectingPersistenceCapable
     @Override
     public Boolean pcIsDetached() {
         if (sm != null)
-            return sm.isDetached();
+            return Boolean.valueOf(sm.isDetached());
 
         // ##### we could do a lot more here if a detached state field
         // ##### was specified.
@@ -316,10 +314,10 @@ public class ReflectingPersistenceCapable
             target = oid;
 
         FieldMetaData[] pks = meta.getPrimaryKeyFields();
-        for (FieldMetaData pk : pks) {
-            Object val = getValue(pk.getIndex(), o);
-            Field f = Reflection.findField(target.getClass(), pk.getName(),
-                    true);
+        for (int i = 0; i < pks.length; i++) {
+            Object val = getValue(pks[i].getIndex(), o);
+            Field f = Reflection.findField(target.getClass(), pks[i].getName(),
+                true);
             Reflection.set(target, f, val);
         }
     }

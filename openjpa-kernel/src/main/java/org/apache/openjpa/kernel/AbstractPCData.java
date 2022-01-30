@@ -25,6 +25,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 
@@ -90,7 +91,9 @@ public abstract class AbstractPCData
                 Collection keys = new ArrayList (m.size());
                 Collection values = new ArrayList(m.size());
 
-                for (Map.Entry e : (Iterable<Map.Entry>) m.entrySet()) {
+                for (Iterator<Map.Entry> mi = m.entrySet().iterator();
+                    mi.hasNext();) {
+                    Map.Entry e = mi.next();
                     keys.add(e.getKey());
                     values.add(e.getValue());
                 }
@@ -167,20 +170,18 @@ public abstract class AbstractPCData
         Collection ret = new ArrayList(data.size());
         switch (vmd.getDeclaredTypeCode()) {
             case JavaTypes.DATE:
-                for (Object item : data) {
-                    ret.add(((Date) item).clone());
-                }
+                for (Iterator itr=data.iterator(); itr.hasNext();)
+                    ret.add(((Date)itr.next()).clone());
                 return ret;
             case JavaTypes.LOCALE:
-                for (Object value : data) {
-                    ret.add((Locale) value);
-                }
+                for (Iterator itr=data.iterator(); itr.hasNext();)
+                    ret.add((Locale) itr.next());
                 return ret;
             case JavaTypes.PC:
                 if (vmd.isEmbedded()) {
-                    for (Object datum : data) {
-                        ret.add(toEmbeddedField(sm, vmd, datum, fetch
-                                , context));
+                    for (Iterator itr=data.iterator(); itr.hasNext();) {
+                        ret.add(toEmbeddedField(sm, vmd, itr.next(), fetch
+                            , context));
                     }
                     return ret;
                 }
@@ -188,13 +189,13 @@ public abstract class AbstractPCData
             case JavaTypes.PC_UNTYPED:
                 Object[] r = toRelationFields(sm, data, fetch);
                 if (r != null) {
-                    for (Object o : r)
-                        if (o != null)
-                            ret.add(o);
+                    for (int i = 0; i < r.length; i++)
+                        if (r[i] != null)
+                            ret.add(r[i]);
                         else {
-                            ret.add(sm.getContext().getConfiguration().
-                                    getOrphanedKeyActionInstance().
-                                    orphan(data, sm, vmd));
+                           ret.add(sm.getContext().getConfiguration().
+                               getOrphanedKeyActionInstance().
+                               orphan(data, sm, vmd));
                         }
                     return ret;
                 }
@@ -251,8 +252,8 @@ public abstract class AbstractPCData
                     return ProxyDataList.EMPTY_LIST;
                 ProxyDataList c2 = null;
                 int size;
-                for (Object value : c) {
-                    val = toNestedData(fmd.getElement(), value, ctx);
+                for (Iterator ci = c.iterator(); ci.hasNext();) {
+                    val = toNestedData(fmd.getElement(), ci.next(), ctx);
                     if (val == NULL)
                         return NULL;
                     if (c2 == null) {
@@ -262,8 +263,7 @@ public abstract class AbstractPCData
                             ChangeTracker ct = ((Proxy) c).getChangeTracker();
                             if (ct != null)
                                 c2.nextSequence = ct.getNextSequence();
-                        }
-                        else
+                        } else
                             c2.nextSequence = size;
                     }
                     c2.add(val);
@@ -276,8 +276,8 @@ public abstract class AbstractPCData
                 Map m2 = null;
                 Map.Entry e;
                 Object val2;
-                for (Object o : m.entrySet()) {
-                    e = (Map.Entry) o;
+                for (Iterator mi = m.entrySet().iterator(); mi.hasNext();) {
+                    e = (Map.Entry) mi.next();
                     val = toNestedData(fmd.getKey(), e.getKey(), ctx);
                     if (val == NULL)
                         return NULL;

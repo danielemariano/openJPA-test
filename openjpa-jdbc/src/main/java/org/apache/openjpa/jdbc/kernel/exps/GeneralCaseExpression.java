@@ -69,9 +69,9 @@ public class GeneralCaseExpression
         if (_cast != null)
             return _cast;
         Class type = _val.getType();
-        for (Exp exp : _exp)
+        for (int i = 0; i < _exp.length; i++)
             type = Filters.promote(type,
-                    ((WhenCondition) exp).getVal().getType());
+                ((WhenCondition) _exp[i]).getVal().getType());
         if (type == Raw.class)
             return String.class;
         return type;
@@ -137,9 +137,8 @@ public class GeneralCaseExpression
     @Override
     public void acceptVisit(ExpressionVisitor visitor) {
         visitor.enter(this);
-        for (Exp exp : _exp) {
-            exp.acceptVisit(visitor);
-        }
+        for (int i = 0; i < _exp.length; i++)
+            _exp[i].acceptVisit(visitor);
         _val.acceptVisit(visitor);
         visitor.exit(this);
     }

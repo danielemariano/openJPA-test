@@ -38,12 +38,14 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
 
+import org.apache.commons.collections4.comparators.ComparatorChain;
 import org.apache.openjpa.conf.OpenJPAConfiguration;
 import org.apache.openjpa.kernel.OpenJPAStateManager;
 import org.apache.openjpa.kernel.StoreContext;
@@ -55,7 +57,6 @@ import org.apache.openjpa.lib.util.JavaVersions;
 import org.apache.openjpa.lib.util.Localizer;
 import org.apache.openjpa.lib.util.Options;
 import org.apache.openjpa.lib.util.StringUtil;
-import org.apache.openjpa.lib.util.collections.ComparatorChain;
 import org.apache.openjpa.lib.xml.Commentable;
 import org.apache.openjpa.util.Exceptions;
 import org.apache.openjpa.util.ImplHelper;
@@ -658,7 +659,7 @@ public class FieldMetaData
             _enumField =  Enum.class.isAssignableFrom(decl)
                 ? Boolean.TRUE : Boolean.FALSE;
         }
-        return _enumField;
+        return _enumField.booleanValue();
     }
 
     private boolean isSerializable() {
@@ -669,7 +670,7 @@ public class FieldMetaData
             else
                 _serializableField = Boolean.FALSE;
         }
-        return _serializableField;
+        return _serializableField.booleanValue();
     }
 
     private boolean isLobArray() {
@@ -682,7 +683,7 @@ public class FieldMetaData
             else
                 _lobField = Boolean.FALSE;
         }
-        return _lobField;
+        return _lobField.booleanValue();
     }
 
     /**
@@ -972,17 +973,17 @@ public class FieldMetaData
                 // scan rel type for fields that name this field as an inverse
                 FieldMetaData[] fields = meta.getFields();
                 Class<?> type = getDeclaringMetaData().getDescribedType();
-                for (FieldMetaData fieldMetaData : fields) {
+                for (int i = 0; i < fields.length; i++) {
                     // skip fields that aren't compatible with our owning class
-                    switch (fieldMetaData.getTypeCode()) {
+                    switch (fields[i].getTypeCode()) {
                         case JavaTypes.PC:
-                            if (!type.isAssignableFrom(fieldMetaData.getType()))
+                            if (!type.isAssignableFrom(fields[i].getType()))
                                 continue;
                             break;
                         case JavaTypes.COLLECTION:
                         case JavaTypes.ARRAY:
-                            if (!type.isAssignableFrom(fieldMetaData.
-                                    getElement().getType()))
+                            if (!type.isAssignableFrom(fields[i].
+                                getElement().getType()))
                                 continue;
                             break;
                         default:
@@ -992,12 +993,12 @@ public class FieldMetaData
                     // if the field declares us as its inverse and we haven't
                     // already added it (we might have if we also declared it
                     // as our inverse), add it now
-                    if (_name.equals(fieldMetaData.getMappedBy())
-                            || _name.equals(fieldMetaData.getInverse())) {
+                    if (_name.equals(fields[i].getMappedBy())
+                        || _name.equals(fields[i].getInverse())) {
                         if (inverses == null)
                             inverses = new ArrayList<>(3);
-                        if (!inverses.contains(fieldMetaData))
-                            inverses.add(fieldMetaData);
+                        if (!inverses.contains(fields[i]))
+                            inverses.add(fields[i]);
                     }
                 }
             }
@@ -1490,10 +1491,10 @@ public class FieldMetaData
         Map fieldValues = new HashMap((int) (values.size() * 1.33 + 1));
         Map.Entry entry;
         Object extValue, fieldValue;
-        for (Map.Entry<Object, Object> objectObjectEntry : values.entrySet()) {
-            entry = (Map.Entry) objectObjectEntry;
+        for (Iterator itr = values.entrySet().iterator(); itr.hasNext();) {
+            entry = (Map.Entry) itr.next();
             fieldValue = transform((String) entry.getKey(),
-                    getDeclaredTypeCode());
+                getDeclaredTypeCode());
             extValue = transform((String) entry.getValue(), getTypeCode());
 
             extValues.put(fieldValue, extValue);
@@ -1536,7 +1537,7 @@ public class FieldMetaData
                 return Float.valueOf(val);
             case JavaTypes.CHAR:
             case JavaTypes.CHAR_OBJ:
-                return val.charAt(0);
+                return Character.valueOf(val.charAt(0));
             case JavaTypes.STRING:
                 return val;
             case JavaTypes.ENUM:
@@ -1642,27 +1643,26 @@ public class FieldMetaData
         // find the named method
         Method[] methods = cls.getMethods();
         Class<?>[] params;
-        for (Method value : methods) {
-            if (value.getName().equals(methodName)) {
-                params = value.getParameterTypes();
+        for (int i = 0; i < methods.length; i++) {
+            if (methods[i].getName().equals(methodName)) {
+                params = methods[i].getParameterTypes();
 
                 // static factory methods require one argument or one argument
                 // plus a context; non-static methods require zero arguments or
                 // just a context
-                if (Modifier.isStatic(value.getModifiers())
-                        && (params.length == 1 || (params.length == 2
-                        && isStoreContextParameter(params[1]))))
+                if (Modifier.isStatic(methods[i].getModifiers())
+                    && (params.length == 1 || (params.length == 2
+                    && isStoreContextParameter(params[1]))))
 
-                    if (type == null) {
-                        return value;
-                    }
-                    else if (isConvertibleToByMethodInvocationConversion(type, params[0])) {
-                        return value;
-                    }
-                if (!Modifier.isStatic(value.getModifiers())
-                        && (params.length == 0 || (params.length == 1
-                        && isStoreContextParameter(params[0]))))
-                    return value;
+                	if (type == null) {
+                		return methods[i];
+                	} else if (isConvertibleToByMethodInvocationConversion(type, params[0])) {
+                		return methods[i];
+                	}
+                if (!Modifier.isStatic(methods[i].getModifiers())
+                    && (params.length == 0 || (params.length == 1
+                    && isStoreContextParameter(params[0]))))
+                    return methods[i];
             }
         }
 
@@ -2362,11 +2362,13 @@ public class FieldMetaData
                             cls, memberName, parameterTypes));
                 }
             } catch (SecurityException e) {
-                IOException ioe = new IOException(e.getMessage(), e);
+                IOException ioe = new IOException(e.getMessage());
+                ioe.initCause(e);
                 throw ioe;
             } catch (PrivilegedActionException pae) {
                 IOException ioe = new IOException(
-                    pae.getException().getMessage(), pae);
+                    pae.getException().getMessage());
+                ioe.initCause(pae);
                 throw ioe;
             }
         }
@@ -2463,11 +2465,11 @@ public class FieldMetaData
     	}
     	return _relationType;
     }
-    private class Unknown{}
+    private class Unknown{};
 
     public boolean isDelayCapable() {
         if (_delayCapable != null) {
-            return _delayCapable;
+            return _delayCapable.booleanValue();
         }
         if (getTypeCode() != JavaTypes.COLLECTION || isLRS()) {
            _delayCapable = Boolean.FALSE;

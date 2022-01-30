@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -215,15 +216,14 @@ public class ClassMappingInfo
         int pts = 0;
         DBIdentifier fullJoin = DBIdentifier.NULL;
         DBIdentifier join = DBIdentifier.NULL;
-        for (DBIdentifier dbIdentifier : _seconds.keySet()) {
+        for (Iterator<DBIdentifier> itr = _seconds.keySet().iterator(); itr.hasNext();) {
             // award a caseless match without schema 2 points
-            fullJoin = dbIdentifier;
+            fullJoin = itr.next();
             QualifiedDBIdentifier joinPath = QualifiedDBIdentifier.getPath(fullJoin);
             if (joinPath.isUnqualifiedObject() && pts < 2 && fullJoin.equalsIgnoreCase(tableName)) {
                 best = fullJoin;
                 pts = 2;
-            }
-            else if (joinPath.isUnqualifiedObject())
+            } else if (joinPath.isUnqualifiedObject())
                 continue;
 
             // immediately return an exact match with schema
@@ -446,8 +446,9 @@ public class ClassMappingInfo
             if (_seconds == null)
                 _seconds = new HashMap<>();
             DBIdentifier key;
-            for (DBIdentifier dbIdentifier : cinfo._seconds.keySet()) {
-                key = dbIdentifier;
+            for (Iterator<DBIdentifier> itr = cinfo._seconds.keySet().iterator();
+                itr.hasNext();) {
+                key = itr.next();
                 if (!_seconds.containsKey(key))
                     _seconds.put(key, cinfo._seconds.get(key));
             }

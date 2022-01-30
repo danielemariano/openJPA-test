@@ -51,7 +51,7 @@ public class DetachManagerLite {
             ClassMetaData cmd = sm.getMetaData();
             if (sm.isPersistent() && cmd.isDetachable()) {
                 PersistenceCapable pc = sm.getPersistenceCapable();
-                if (!pc.pcIsDetached()) {
+                if (pc.pcIsDetached() == false) {
                     // Detach proxy fields.
                     BitSet loaded = sm.getLoaded();
                     for (FieldMetaData fmd : cmd.getProxyFields()) {
@@ -79,7 +79,7 @@ public class DetachManagerLite {
         StateManagerImpl sm, TransferFieldManager fm) {
 
         int fieldIndex = fmd.getIndex();
-        if (fmd.isLRS()) {
+        if (fmd.isLRS() == true) {
             // need to null out LRS fields.
             nullField(fieldIndex, pc, sm, fm);
         } else {

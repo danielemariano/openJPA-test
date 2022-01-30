@@ -38,9 +38,8 @@ public class MultiLoaderClassResolver implements ClassResolver {
     }
 
     public MultiLoaderClassResolver(ClassLoader[] loaders) {
-        for (ClassLoader loader : loaders) {
-            _loader.addClassLoader(loader);
-        }
+        for (int i = 0; i < loaders.length; i++)
+            _loader.addClassLoader(loaders[i]);
     }
 
     public boolean addClassLoader(ClassLoader loader) {

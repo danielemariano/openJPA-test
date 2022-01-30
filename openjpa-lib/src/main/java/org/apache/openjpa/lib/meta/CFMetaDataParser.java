@@ -359,11 +359,10 @@ public class CFMetaDataParser extends XMLMetaDataParser {
 
         // try with standard packages
         if (!fullName) {
-            for (String aPackage : PACKAGES) {
+            for (int i = 0; i < PACKAGES.length; i++) {
                 try {
-                    return ClassUtil.toClass(aPackage + name, resolve, loader);
-                }
-                catch (RuntimeException re) {
+                    return ClassUtil.toClass(PACKAGES[i] + name, resolve, loader);
+                } catch (RuntimeException re) {
                 }
             }
         }

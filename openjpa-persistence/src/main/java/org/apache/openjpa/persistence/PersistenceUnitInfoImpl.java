@@ -284,16 +284,17 @@ public class PersistenceUnitInfoImpl
         }
         String[] cp = classPath.split(J2DoPrivHelper.getPathSeparator());
 
-        for (String s : cp) {
-            if (s.equals(name)
-                    || s.endsWith(File.separatorChar + name)) {
+        for (int i = 0; i < cp.length; i++) {
+            if (cp[i].equals(name)
+                || cp[i].endsWith(File.separatorChar + name)) {
                 try {
                     addJarFile(AccessController
-                            .doPrivileged(J2DoPrivHelper
-                                    .toURLAction(new File(s))));
+                        .doPrivileged(J2DoPrivHelper
+                            .toURLAction(new File(cp[i]))));
                     return;
-                }
-                catch (PrivilegedActionException | MalformedURLException pae) {
+                } catch (PrivilegedActionException pae) {
+                    break;
+                } catch (MalformedURLException mue) {
                     break;
                 }
             }

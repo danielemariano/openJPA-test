@@ -146,11 +146,19 @@ public class Graph {
         if (!containsNode(edge.getFrom()))
             throw new IllegalArgumentException(edge.getFrom().toString());
 
-        Collection<Edge> from = _nodes.computeIfAbsent(edge.getFrom(), k -> new ArrayList<>(3));
+        Collection<Edge> from = _nodes.get(edge.getFrom());
+        if (from == null) {
+            from = new ArrayList<>(3);
+            _nodes.put(edge.getFrom(), from);
+        }
         from.add(edge);
 
         if (!edge.isDirected() && !edge.getFrom().equals(edge.getTo())) {
-            Collection<Edge> to = _nodes.computeIfAbsent(edge.getTo(), k -> new ArrayList<>(3));
+            Collection<Edge> to = _nodes.get(edge.getTo());
+            if (to == null) {
+                to = new ArrayList<>(3);
+                _nodes.put(edge.getTo(), to);
+            }
             to.add(edge);
         }
     }

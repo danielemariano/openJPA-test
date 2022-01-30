@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<project name="maven-antrun-" default="main"  >
-<target name="main">
-  <java classname="org.apache.openjpa.util.ProxyManagerImpl" classpathref="maven.runtime.classpath">
-    <arg line="-utils 5"/>
-  </java>
-</target>
-</project>

@@ -184,11 +184,11 @@ public class ValueMappingImpl
         if (embeddedMeta != null) {
             FieldMapping[] fields = embeddedMeta.getFieldMappings();
             int j = 0;
-            for (FieldMapping field : fields) {
-                ValueMapping val = field.getValueMapping();
+            for (int i = 0; i < fields.length; i++) {
+                ValueMapping val = fields[i].getValueMapping();
                 if (val.getDeclaredTypeMapping() == target)
                     if (targetNumber == j)
-                        return val.getForeignKey();
+                    return val.getForeignKey();
                     else
                         j++;
             }
@@ -258,14 +258,13 @@ public class ValueMappingImpl
         newfk.setJoins(cols, tcols);
         if (_fk != null) {
             cols = _fk.getConstantColumns();
-            for (Column column : cols) {
-                newfk.joinConstant(column, _fk.getConstant(column));
-            }
+            for (int i = 0; i < cols.length; i++)
+                newfk.joinConstant(cols[i], _fk.getConstant(cols[i]));
 
             cols = _fk.getConstantPrimaryKeyColumns();
-            for (Column col : cols)
-                newfk.joinConstant(_fk.getPrimaryKeyConstant(col),
-                        getEquivalentColumn(col.getIdentifier(), target, true));
+            for (int i = 0; i < cols.length; i++)
+                newfk.joinConstant(_fk.getPrimaryKeyConstant(cols[i]),
+                    getEquivalentColumn(cols[i].getIdentifier(), target, true));
         }
         return newfk;
     }
@@ -383,9 +382,8 @@ public class ValueMappingImpl
         else if (_fk != null)
             row.whereForeignKey(_fk, null);
         else
-            for (Column col : _cols) {
-                row.whereNull(col);
-            }
+            for (int i = 0; i < _cols.length; i++)
+                row.whereNull(_cols[i]);
     }
 
     @Override
@@ -469,10 +467,8 @@ public class ValueMappingImpl
 
     @Override
     public void refSchemaComponents() {
-        for (Column col : _cols) {
-            col.ref();
-        }
-
+        for (int i = 0; i < _cols.length; i++)
+            _cols[i].ref();
         if (_fk != null) {
             _fk.ref();
             _fk.refColumns();

@@ -28,7 +28,6 @@ public class IdentifierImpl implements Identifier, Serializable {
     
     private static final long serialVersionUID = 1L;
     private String _name = null;
-    private boolean nameDelimited = false;
 
     protected IdentifierImpl() {}
 
@@ -44,14 +43,6 @@ public class IdentifierImpl implements Identifier, Serializable {
     @Override
     public String getName() {
         return _name;
-    }
-
-    public boolean isNameDelimited() {
-        return nameDelimited;
-    }
-
-    public void setNameDelimited(boolean nameDelimited) {
-        this.nameDelimited = nameDelimited;
     }
 
     @Override

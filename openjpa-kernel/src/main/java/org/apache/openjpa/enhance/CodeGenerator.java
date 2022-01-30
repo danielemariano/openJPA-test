@@ -21,6 +21,7 @@ package org.apache.openjpa.enhance;
 import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -192,10 +193,10 @@ public class CodeGenerator {
         CodeFormat imports = newCodeFormat();
         String base = ClassUtil.getPackageName(_type);
         String pkg;
-        for (Object o : pkgs) {
-            pkg = (String) o;
+        for (Iterator itr = pkgs.iterator(); itr.hasNext();) {
+            pkg = (String) itr.next();
             if (pkg.length() > 0 && !"java.lang".equals(pkg)
-                    && !base.equals(pkg)) {
+                && !base.equals(pkg)) {
                 if (imports.length() > 0)
                     imports.endl();
                 imports.append("import ").append(pkg).append(".*;");
@@ -212,14 +213,12 @@ public class CodeGenerator {
         pkgs.add(ClassUtil.getPackageName(_type.getSuperclass()));
 
         FieldMetaData[] fields = _meta.getDeclaredFields();
-        for (FieldMetaData fieldMetaData : fields) {
-            pkgs.add(ClassUtil.getPackageName(fieldMetaData.getDeclaredType()));
-        }
+        for (int i = 0; i < fields.length; i++)
+            pkgs.add(ClassUtil.getPackageName(fields[i].getDeclaredType()));
 
         fields = _meta.getPrimaryKeyFields();
-        for (FieldMetaData field : fields) {
-            pkgs.add(ClassUtil.getPackageName(field.getDeclaredType()));
-        }
+        for (int i = 0; i < fields.length; i++)
+            pkgs.add(ClassUtil.getPackageName(fields[i].getDeclaredType()));
 
         return pkgs;
     }
@@ -288,13 +287,11 @@ public class CodeGenerator {
         CodeFormat code = newCodeFormat();
 
         FieldMetaData[] fields = _meta.getDeclaredFields();
-        for (FieldMetaData fieldMetaData : fields) {
-            appendFieldCode(fieldMetaData, decs, code);
-        }
+        for (int i = 0; i < fields.length; i++)
+            appendFieldCode(fields[i], decs, code);
         fields = _meta.getDeclaredUnmanagedFields();
-        for (FieldMetaData field : fields) {
-            appendFieldCode(field, decs, code);
-        }
+        for (int i = 0; i < fields.length; i++)
+            appendFieldCode(fields[i], decs, code);
         return new String[]{ decs.toString(), code.toString() };
     }
 
@@ -478,10 +475,10 @@ public class CodeGenerator {
         int tabLevel) {
         if (ann == null || ann.size() == 0)
             return;
-        for (Object o : ann) {
+        for (Iterator i = ann.iterator(); i.hasNext();) {
             if (tabLevel > 0)
                 code.tab(tabLevel);
-            String s = (String) o;
+            String s = (String) i.next();
             code.append(s).endl();
         }
     }

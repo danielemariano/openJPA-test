@@ -37,7 +37,9 @@ public class BundleUtils {
             c = Class.forName("org.osgi.framework.BundleContext");
             c = Class.forName("org.osgi.framework.ServiceRegistration");
             return true;
-        } catch (ClassNotFoundException | NoClassDefFoundError e) {
+        } catch (ClassNotFoundException e) {
+            // no-op - catch, eat and return false below
+        } catch (NoClassDefFoundError e) {
             // no-op - catch, eat and return false below
         }
         return false;

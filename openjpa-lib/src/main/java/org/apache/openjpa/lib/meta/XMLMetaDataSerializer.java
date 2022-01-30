@@ -122,8 +122,10 @@ public abstract class XMLMetaDataSerializer implements MetaDataSerializer {
 
                 if (output != null)
                     output.put(file, ((StringWriter) writer).toString());
-            } catch (SAXException | TransformerConfigurationException se) {
+            } catch (SAXException se) {
                 throw new IOException(se.toString());
+            } catch (TransformerConfigurationException tce) {
+                throw new IOException(tce.toString());
             }
         }
     }
@@ -136,8 +138,8 @@ public abstract class XMLMetaDataSerializer implements MetaDataSerializer {
         File backup = Files.backup(file, false);
         if (backup == null) {
             File parent = file.getParentFile();
-            if (parent != null && !AccessController.doPrivileged(
-                    J2DoPrivHelper.existsAction(parent)))
+            if (parent != null && !(AccessController.doPrivileged(
+                J2DoPrivHelper.existsAction(parent))).booleanValue())
                 AccessController.doPrivileged(
                     J2DoPrivHelper.mkdirsAction(parent));
         }
@@ -323,8 +325,8 @@ public abstract class XMLMetaDataSerializer implements MetaDataSerializer {
 
         LexicalHandler lh = (LexicalHandler) _handler;
         char[] chars;
-        for (String comment : comments) {
-            chars = comment.toCharArray();
+        for (int i = 0; i < comments.length; i++) {
+            chars = comments[i].toCharArray();
             lh.comment(chars, 0, chars.length);
         }
     }

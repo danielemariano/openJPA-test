@@ -27,6 +27,7 @@ import java.io.StringWriter;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -113,7 +114,7 @@ public class LogFactoryImpl
             l = newLogImpl();
             l.setChannel(channel);  // TODO add to interface?
             Short lvl = _configuredLevels.get(shorten(channel));
-            l.setLevel(lvl == null ? _defaultLogLevel : lvl);
+            l.setLevel(lvl == null ? _defaultLogLevel : lvl.shortValue());
             _logs.put(channel, l);
         }
         return l;
@@ -278,9 +279,10 @@ public class LogFactoryImpl
     public void setInto(Options opts) {
         if (!opts.isEmpty()) {
             Map.Entry<Object, Object> e;
-            for (Map.Entry<Object, Object> objectObjectEntry : opts.entrySet()) {
-                e = objectObjectEntry;
-                _configuredLevels.put(shorten((String) e.getKey()), getLevel((String) e.getValue()));
+            for (Iterator<Map.Entry<Object, Object>> iter =
+                opts.entrySet().iterator(); iter.hasNext();) {
+                e = iter.next();
+                _configuredLevels.put(shorten((String) e.getKey()), Short.valueOf(getLevel((String) e.getValue())));
             }
             opts.clear();
         }

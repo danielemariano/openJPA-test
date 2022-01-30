@@ -127,44 +127,44 @@ public class Column extends ReferenceCounter {
             ForeignKey[] fks;
             Column[] cols;
             Column[] pks;
-            for (Schema value : schemas) {
-                tabs = value.getTables();
-                for (Table tab : tabs) {
-                    fks = tab.getForeignKeys();
-                    for (ForeignKey fk : fks) {
-                        cols = fk.getColumns();
-                        pks = fk.getPrimaryKeyColumns();
+            for (int i = 0; i < schemas.length; i++) {
+                tabs = schemas[i].getTables();
+                for (int j = 0; j < tabs.length; j++) {
+                    fks = tabs[j].getForeignKeys();
+                    for (int k = 0; k < fks.length; k++) {
+                        cols = fks[k].getColumns();
+                        pks = fks[k].getPrimaryKeyColumns();
                         for (int l = 0; l < cols.length; l++)
                             if (this.equals(cols[l]) || this.equals(pks[l]))
-                                fk.removeJoin(cols[l]);
+                                fks[k].removeJoin(cols[l]);
 
-                        cols = fk.getConstantColumns();
-                        for (Column col : cols)
-                            if (this.equals(col))
-                                fk.removeJoin(col);
+                        cols = fks[k].getConstantColumns();
+                        for (int l = 0; l < cols.length; l++)
+                            if (this.equals(cols[l]))
+                                fks[k].removeJoin(cols[l]);
 
-                        pks = fk.getConstantPrimaryKeyColumns();
-                        for (Column pk : pks)
-                            if (this.equals(pk))
-                                fk.removeJoin(pk);
+                        pks = fks[k].getConstantPrimaryKeyColumns();
+                        for (int l = 0; l < pks.length; l++)
+                            if (this.equals(pks[l]))
+                                fks[k].removeJoin(pks[l]);
 
-                        if (fk.getColumns().length == 0
-                                && fk.getConstantColumns().length == 0)
-                            tab.removeForeignKey(fk);
+                        if (fks[k].getColumns().length == 0
+                            && fks[k].getConstantColumns().length == 0)
+                            tabs[j].removeForeignKey(fks[k]);
                     }
                 }
             }
         }
 
         Index[] idxs = table.getIndexes();
-        for (Index idx : idxs)
-            if (idx.removeColumn(this) && idx.getColumns().length == 0)
-                table.removeIndex(idx);
+        for (int i = 0; i < idxs.length; i++)
+            if (idxs[i].removeColumn(this) && idxs[i].getColumns().length == 0)
+                table.removeIndex(idxs[i]);
 
         Unique[] unqs = table.getUniques();
-        for (Unique unq : unqs)
-            if (unq.removeColumn(this) && unq.getColumns().length == 0)
-                table.removeUnique(unq);
+        for (int i = 0; i < unqs.length; i++)
+            if (unqs[i].removeColumn(this) && unqs[i].getColumns().length == 0)
+                table.removeUnique(unqs[i]);
 
         PrimaryKey pk = table.getPrimaryKey();
         if (pk != null && pk.removeColumn(this) && pk.getColumns().length == 0)
@@ -451,7 +451,7 @@ public class Column extends ReferenceCounter {
                 break;
             case JavaTypes.CHAR:
             case JavaTypes.CHAR_OBJ:
-                _default = _defaultStr.charAt(0);
+                _default = Character.valueOf(_defaultStr.charAt(0));
                 break;
             case JavaTypes.DOUBLE:
             case JavaTypes.DOUBLE_OBJ:
@@ -762,29 +762,10 @@ public class Column extends ReferenceCounter {
                     case Types.DATE:
                     case Types.TIME:
                     case Types.TIMESTAMP:
-                    case Types.TIMESTAMP_WITH_TIMEZONE:
                         return true;
                     default:
                         return false;
                 }
-            case Types.TIMESTAMP_WITH_TIMEZONE:
-                switch (type) {
-                    case Types.DATE:
-                    case Types.TIMESTAMP:
-                        return true;
-                    default:
-                        return false;
-                }
-            case Types.TIME_WITH_TIMEZONE:
-                switch (type) {
-                    case Types.DATE:
-                    case Types.TIME:
-                    case Types.TIMESTAMP:
-                        return true;
-                    default:
-                        return false;
-                }
-
             case Types.SQLXML:  // All XML Types
             case 2007:          // Oracle-defined opaque type code for XMLType treated the same way
                 switch (type) {

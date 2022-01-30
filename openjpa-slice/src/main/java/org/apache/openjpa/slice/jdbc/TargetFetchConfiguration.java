@@ -18,8 +18,6 @@
  */
 package org.apache.openjpa.slice.jdbc;
 
-import java.util.Arrays;
-
 import org.apache.openjpa.jdbc.kernel.JDBCFetchConfigurationImpl;
 import org.apache.openjpa.kernel.FetchConfiguration;
 import org.apache.openjpa.slice.SlicePersistence;
@@ -92,7 +90,7 @@ public class TargetFetchConfiguration extends JDBCFetchConfigurationImpl impleme
     void assertTargets(String[] targets, boolean user) {
         if (targets != null && targets.length == 0) {
             if (user) {
-                throw new UserException("Hint values " + Arrays.toString(targets) + " are empty");
+                throw new UserException("Hint values " + targets + " are empty");
             }
         }
     }

@@ -99,7 +99,7 @@ public class QueryExpressions implements Serializable {
         if (_aggregate == null)
             _aggregate = (AggregateExpressionVisitor.isAggregate(projections))
                 ? Boolean.TRUE : Boolean.FALSE;
-        return _aggregate;
+        return _aggregate.booleanValue();
     }
 
     public boolean isDistinct() {

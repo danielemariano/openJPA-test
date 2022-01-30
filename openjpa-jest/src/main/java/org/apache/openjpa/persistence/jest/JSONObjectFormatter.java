@@ -99,13 +99,13 @@ public class JSONObjectFormatter implements ObjectFormatter<JSON> {
      * @param parent the parent node to which the new node be attached.
      */
     private JSON encodeManagedInstance(final OpenJPAStateManager sm, Metamodel model) {
-        return encodeManagedInstance(sm, new HashSet<>(), 0, false, model);
+        return encodeManagedInstance(sm, new HashSet<OpenJPAStateManager>(), 0, false, model);
     }
 
     private JSON encodeManagedInstances(final Collection<OpenJPAStateManager> sms, Metamodel model) {
         JSONObject.Array result = new JSONObject.Array();
         for (OpenJPAStateManager sm : sms) {
-            result.add(encodeManagedInstance(sm, new HashSet<>(), 0, false, model));
+            result.add(encodeManagedInstance(sm, new HashSet<OpenJPAStateManager>(), 0, false, model));
         }
         return result;
     }
@@ -131,7 +131,7 @@ public class JSONObjectFormatter implements ObjectFormatter<JSON> {
         }
 
         boolean ref = !visited.add(sm);
-        JSONObject root =  new JSONObject(typeOf(sm), sm.getObjectId(), ref);
+        JSONObject root =  new JSONObject(typeOf(sm), sm.getObjectId(), ref);;
         if (ref) {
             return root;
         }
@@ -140,8 +140,8 @@ public class JSONObjectFormatter implements ObjectFormatter<JSON> {
         StoreContext ctx = (StoreContext)sm.getGenericContext();
         List<Attribute<?, ?>> attrs = MetamodelHelper.getAttributesInOrder(sm.getMetaData(), model);
 
-        for (Attribute<?, ?> attr : attrs) {
-            FieldMetaData fmd = ((Members.Member<?, ?>) attr).fmd;
+        for (int i = 0; i < attrs.size(); i++) {
+            FieldMetaData fmd = ((Members.Member<?, ?>) attrs.get(i)).fmd;
             if (!loaded.get(fmd.getIndex()))
                 continue;
             Object value = sm.fetch(fmd.getIndex());
@@ -172,29 +172,28 @@ public class JSONObjectFormatter implements ObjectFormatter<JSON> {
                 case JavaTypes.LOCALE:
                 case JavaTypes.STRING:
                 case JavaTypes.ENUM:
-                    root.set(fmd.getName(), value);
-                    break;
+                         root.set(fmd.getName(),value);
+                break;
 
                 case JavaTypes.PC:
                     if (value == null) {
                         root.set(fmd.getName(), null);
-                    }
-                    else {
-                        root.set(fmd.getName(), encodeManagedInstance(ctx.getStateManager(value), visited,
-                                indent + 1, false, model));
+                    } else {
+                        root.set(fmd.getName(),encodeManagedInstance(ctx.getStateManager(value), visited,
+                            indent+1, false, model));
                     }
                     break;
 
                 case JavaTypes.ARRAY:
-                    Object[] values = (Object[]) value;
+                    Object[] values = (Object[])value;
                     value = Arrays.asList(values);
-                    // no break;
+                // no break;
                 case JavaTypes.COLLECTION:
                     if (value == null) {
                         root.set(fmd.getName(), null);
                         break;
                     }
-                    Collection<?> members = (Collection<?>) value;
+                    Collection<?> members = (Collection<?>)value;
                     JSONObject.Array array = new JSONObject.Array();
                     root.set(fmd.getName(), array);
                     if (members.isEmpty()) {
@@ -204,14 +203,12 @@ public class JSONObjectFormatter implements ObjectFormatter<JSON> {
                     for (Object o : members) {
                         if (o == null) {
                             array.add(null);
-                        }
-                        else {
+                        } else {
                             if (basic) {
                                 array.add(o);
-                            }
-                            else {
-                                array.add(encodeManagedInstance(ctx.getStateManager(o), visited, indent + 1, true,
-                                        model));
+                            } else {
+                                array.add(encodeManagedInstance(ctx.getStateManager(o), visited, indent+1, true,
+                                    model));
                             }
                         }
                     }
@@ -221,26 +218,26 @@ public class JSONObjectFormatter implements ObjectFormatter<JSON> {
                         root.set(fmd.getName(), null);
                         break;
                     }
-                    Set<Map.Entry> entries = ((Map) value).entrySet();
+                    Set<Map.Entry> entries = ((Map)value).entrySet();
                     JSONObject.KVMap map = new JSONObject.KVMap();
                     root.set(fmd.getName(), map);
                     if (entries.isEmpty()) {
                         break;
                     }
 
-                    boolean basicKey = fmd.getElement().getTypeMetaData() == null;
+                    boolean basicKey   = fmd.getElement().getTypeMetaData() == null;
                     boolean basicValue = fmd.getValue().getTypeMetaData() == null;
-                    for (Map.Entry<?, ?> e : entries) {
+                    for (Map.Entry<?,?> e : entries) {
                         Object k = e.getKey();
                         Object v = e.getValue();
                         if (!basicKey) {
-                            k = encodeManagedInstance(ctx.getStateManager(k), visited, indent + 1, true, model);
+                            k = encodeManagedInstance(ctx.getStateManager(k), visited, indent+1, true, model);
                         }
                         if (!basicValue) {
                             v = encodeManagedInstance(ctx.getStateManager(e.getValue()), visited,
-                                    indent + 1, false, model);
+                                indent+1, false, model);
                         }
-                        map.put(k, v);
+                        map.put(k,v);
                     }
                     break;
 

@@ -38,7 +38,7 @@
     <properties>
         <sonar.coverage.jacoco.xmlReportPaths>${basedir}/../${aggregate.report.dir}</sonar.coverage.jacoco.xmlReportPaths>
         <mockito.version>2.23.0</mockito.version>
-        <surefire.version>3.0.0-M4</surefire.version>
+        <!--<surefire.version>3.0.0-M4</surefire.version>-->
     </properties>
 
     <dependencies>

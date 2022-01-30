@@ -27,7 +27,7 @@ import javax.naming.NamingException;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Query;
-import javax.rmi.PortableRemoteObject;
+//import javax.rmi.PortableRemoteObject;
 
 import org.apache.openjpa.enhance.PersistenceCapable;
 import org.apache.openjpa.kernel.Bootstrap;
@@ -138,7 +138,7 @@ public class OpenJPAPersistence {
      */
     public static OpenJPAEntityManagerFactory createEntityManagerFactory
         (String jndiLocation, Context context) {
-        if (jndiLocation == null)
+        /*if (jndiLocation == null)
             throw new NullPointerException("jndiLocation == null");
 
         try {
@@ -151,7 +151,8 @@ public class OpenJPAPersistence {
         } catch (NamingException ne) {
             throw new ArgumentException(_loc.get("naming-exception",
                 jndiLocation), new Throwable[]{ ne }, null, true);
-        }
+        }*/
+    	return null;
     }
 
     /**

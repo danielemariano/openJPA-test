@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/openjpa-examples/openbooks/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-examples/openbooks/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-examples/simple/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-examples/simple/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-jdbc/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-jdbc/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-jest/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-jest/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-junit5/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-kernel/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-kernel/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-kubernetes/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-kubernetes/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-lib/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-lib/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-persistence-jdbc/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-persistence-jdbc/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-persistence/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-persistence/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-slice/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-slice/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-tools/openjpa-fetch-statistics-was/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-tools/openjpa-fetch-statistics/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-tools/openjpa-fetch-statistics/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-tools/openjpa-maven-plugin/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa-xmlstore/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/openjpa/src/main/resources" charset="UTF-8" />
+  </component>
+</project>

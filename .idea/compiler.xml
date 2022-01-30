@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="openjpa-junit5" />
+        <module name="openjpa-integration-validation" />
+        <module name="openjpa" />
+        <module name="openjpa-lib" />
+        <module name="openjpa-jest" />
+        <module name="openjpa-jdbc" />
+        <module name="openjpa-all" />
+        <module name="simple" />
+        <module name="openjpa-xmlstore" />
+        <module name="openjpa-kernel" />
+        <module name="openjpa-persistence" />
+        <module name="openjpa-slice" />
+        <module name="openjpa-maven-plugin" />
+        <module name="openjpa-integration-jmx" />
+        <module name="openbooks" />
+        <module name="openjpa-fetch-statistics" />
+        <module name="openjpa-integration-daytrader" />
+        <module name="image-gallery" />
+        <module name="openjpa-integration-slf4j" />
+        <module name="openjpa-persistence-jdbc" />
+        <module name="openjpa-kubernetes" />
+        <module name="openjpa-persistence-locking" />
+        <module name="openjpa-fetch-statistics-was" />
+      </profile>
+    </annotationProcessing>
+  </component>
+</project>

@@ -1,5 +1,9 @@
 language: java
 
+before_install:
+  - mkdir -p $HOME/.m2
+  - cp my-settings.xml $HOME/.m2/settings.xml
+
 addons:
   sonarcloud:
     organization: "danielemariano"
@@ -12,4 +16,5 @@ script:
   #mvn clean verify sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test
   #mvn package
   #mvn clean verify
-  mvn -U clean install
+  #mvn -U clean install
+  - mvn install

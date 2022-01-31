@@ -32,5 +32,36 @@
         <module name="openjpa-fetch-statistics-was" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="apache-openjpa" target="1.8" />
+      <module name="image-gallery" target="1.8" />
+      <module name="openbooks" target="1.8" />
+      <module name="openjpa" target="1.8" />
+      <module name="openjpa-all" target="1.8" />
+      <module name="openjpa-examples" target="1.8" />
+      <module name="openjpa-features" target="1.8" />
+      <module name="openjpa-fetch-statistics" target="1.8" />
+      <module name="openjpa-fetch-statistics-was" target="1.8" />
+      <module name="openjpa-integration" target="1.8" />
+      <module name="openjpa-integration-daytrader" target="1.8" />
+      <module name="openjpa-integration-examples" target="1.8" />
+      <module name="openjpa-integration-jmx" target="1.8" />
+      <module name="openjpa-integration-slf4j" target="1.8" />
+      <module name="openjpa-integration-tck" target="1.8" />
+      <module name="openjpa-integration-validation" target="1.8" />
+      <module name="openjpa-jest" target="1.8" />
+      <module name="openjpa-junit5" target="1.8" />
+      <module name="openjpa-kernel" target="1.8" />
+      <module name="openjpa-kubernetes" target="1.8" />
+      <module name="openjpa-maven-plugin" target="1.8" />
+      <module name="openjpa-persistence" target="1.8" />
+      <module name="openjpa-persistence-jdbc" target="1.8" />
+      <module name="openjpa-persistence-locking" target="1.8" />
+      <module name="openjpa-slice" target="1.8" />
+      <module name="openjpa-tools" target="1.8" />
+      <module name="openjpa-xmlstore" target="1.8" />
+      <module name="simple" target="1.8" />
+      <module name="tests" target="1.8" />
+    </bytecodeTargetLevel>
   </component>
 </project>

@@ -142,7 +142,7 @@
     </plugins>
     </build>
 
-    <!--<profiles>
+    <profiles>
         <profile>
             <id>pit</id>
             <build>
@@ -183,5 +183,5 @@
                 </plugins>
             </build>
         </profile>
-    </profiles>-->
+    </profiles>
 </project>

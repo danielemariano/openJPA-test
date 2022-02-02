@@ -165,8 +165,7 @@
                             </targetClasses>
                             <targetTests>
                                 <param>
-                                    org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifierSplitPathTest
-                                    org.apache.openjpa.jdbc.identifier.QualifiedDBIdentifierSetPathTest
+                                    org.apache.openjpa.jdbc.identifier.MyQualifiedDBIdentifierTest
                                 </param>
 
                             </targetTests>

@@ -7,10 +7,11 @@ addons:
   sonarcloud:
     organization: "danielemariano"
     token:
-      secure: "NVEh+0uWqeVyjNSfjNyvQfWmXkeQOOikky+0cKD54OstrsoXtp1Dk2l7scDKG0YMbYv45pXq+xQo8rOD+VKg8VNZl/tXFk75SGIPBTkD2wnz/xeOra3yAwEK34DvJarxwq6CWukz/biNIsRDhiJtidHx+qOBjCV7b1XYH8d/jMaAPAl0pTOw6VKxskX/6EX/BMIn0o7+donLGK0YUhYmZTY3Vs8aqlLwrGS/UgXWSq/GTwQSI/Cesczev8QkZn4ax4xo4bOy31VNsotWITt6a3Xf41g46+5ATKC0zHfGYkgtaqP7E6S4Oez+AWxU/vxSewM/0BWPPZ5VxfW6GbjaZbkfiQzKVq80qQSszq2/wA125+1dB3LDkAbvnpmSvrKUrqhDCMToJDmba0VTwd6FYPg1aa3QvgxquGYesSlh62T2aOHEpVIv+6PPn+ShO96TSb6ygGIrmNcMSRdt/MQEkh3Zqwa1x2cEX7wBnbC72t3ZS+YEzQpiZcozvRTiSGqDlMZxP4Qnw/txm33h9AYkQTYHkRKlb6j3N/0LCysB7+ubDUKWq914408uj+xK2kmtrpP5PIoO2zAvgUN4W+Lg9rzydCbzA/GGphKpN/Y8rxBDd8tSKYqpggVw5DTHjPztvm3ucdh+2vm9P+27TWHXSgfWuZiw9LnAgPlTZ5GxBf0="
+      secure: "ePgfcObfLMknIloC5o9tnVyFCyvlVUvQzBFQ79T3/woAVEy1N2SyMgrpULfCHPRld3FDsb2XUSNxqgcwfFLHL2RXDIO6PlO21t3z5zDx9dyMZKDwJ57O912XPia62Ux1fii37GXH6L8herFiBc9qoqYOCf/G3b/1xQb/Ci/IXV2B1j/D+RHlhXn9qw3gq+WYyqTTF5qFR8/++5IhRNBH9y0EOfasZCa8WhMadxgTwuFbjsTrWDbgEyO/yYhXsEtMPJV5KNFeCrI/XzsT85MZGJBeLHckDvAVhZ6DBM7hme4ORqgrc4grEZn44l0HOV3VMTCes5AZm/C6gLr/Q+g5cK0WcVKTw1wX60Il71ESfgyFRod/4KYlf5umTS+K1xV5YtFF8FtsZ0pGL2EPLCzAy0q4rEgo01JKlMi4Eoe6V6mNHjNx2RQKvaFY7D4IZrYjdD0tjl+7p9NolLn8rktNSeHWWJqi0Z8H96sFKM0hqe2VVB2Fm7h2j76MP1zl4CeoqUUB0YoWkWjik8IuOSJGTbhlCjYG3YyHLD+ij3yY3iY23Y+URJLs1+FJAi1bIfYynRgpaHG+3r0nn+23b3ZwKaSvJwzZ9aZy1llIun6AGxroYjZlkjtvA3nSeOj9tcmGOZSOkFMUqtS3beq1b9O7t/l5q4pIDNYpfQRgZ03Rq+s="
 
 script:
   # the following command line builds the project, runs the tests with coverage and then execute the SonarCloud analysis
+  #- sonar-scanner
   #- mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test
   #- mvn clean verify sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test
   - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent verify sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test && cd openjpa-jdbc && mvn org.pitest:pitest-maven:mutationCoverage surefire:test -Dtest=MyQualifiedDBIdentifierTest

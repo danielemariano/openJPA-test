@@ -14,6 +14,6 @@ script:
   #- sonar-scanner
   #- mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test
   #- mvn clean verify sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test
-  #- mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent verify sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test && cd openjpa-jdbc && mvn org.pitest:pitest-maven:mutationCoverage surefire:test -Dtest=MyQualifiedDBIdentifierTest
-  - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent verify sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test && cd openjpa-jdbc && mvn org.pitest:pitest-maven:mutationCoverage surefire:test -Dtest=MyClassUtilTest
+  - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent verify sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test && cd openjpa-jdbc && mvn org.pitest:pitest-maven:mutationCoverage surefire:test -Dtest=MyQualifiedDBIdentifierTest
+  #- mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent verify sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test && cd openjpa-jdbc && mvn org.pitest:pitest-maven:mutationCoverage surefire:test -Dtest=MyClassUtilTest
   #- mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent verify sonar:sonar -Dsonar.projectKey=danielemariano_openJPA-test && cd openjpa-jdbc && mvn org.pitest:pitest-maven:mutationCoverage surefire:test -Dtest=MyClassUtilSecondTest
